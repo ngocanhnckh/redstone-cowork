@@ -17,16 +17,20 @@ export default function Home() {
   const [decisions, setDecisions] = useState<Decision[]>([]);
 
   const refresh = useCallback(async () => {
-    const [s, d] = await Promise.all([
-      fetch("/api/proxy/sessions"),
-      fetch("/api/proxy/decisions?status=pending"),
-    ]);
-    if (s.status === 401 || d.status === 401) {
-      window.location.href = "/login";
-      return;
+    try {
+      const [s, d] = await Promise.all([
+        fetch("/api/proxy/sessions"),
+        fetch("/api/proxy/decisions?status=pending"),
+      ]);
+      if (s.status === 401 || d.status === 401) {
+        window.location.href = "/login";
+        return;
+      }
+      setSessions(await s.json());
+      setDecisions(await d.json());
+    } catch {
+      // ignore errors, keep last good state
     }
-    setSessions(await s.json());
-    setDecisions(await d.json());
   }, []);
 
   useEffect(() => {

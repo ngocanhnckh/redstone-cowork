@@ -4,7 +4,7 @@ const ALLOWED = [
   /^sessions$/,
   /^decisions$/,
   /^decisions\/[\w-]+\/resolve$/,
-  /^sessions\/[^/]+\/instruct$/,
+  /^sessions\/[\w-]+\/instruct$/,
 ];
 
 async function forward(req: Request, params: Promise<{ path: string[] }>, method: string) {
