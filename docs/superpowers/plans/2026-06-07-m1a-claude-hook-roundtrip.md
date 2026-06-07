@@ -2,7 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Attach a Claude Code session on any machine with one command; its permission prompts and `AskUserQuestion`s appear live in the Redstone web UI (phone browser included); answering there returns the decision to the blocked session. Stop/idle events surface as notifications.
+> **REVISION 2026-06-07 (after Task 4, user decision):** blocking hooks are OUT — they hold the terminal hostage for local-first users. New mechanism: hooks are **notification-only** (never block, 10s timeout), and answers/commands are **delivered via tmux** into a Claude session started by our own `redstone-claude` wrapper. Tasks 1–5 unchanged; Tasks 5b–10 below in the **REVISED TASKS** section at the end of this file supersede the original Tasks 6–8 bodies (kept for history, marked SUPERSEDED).
+
+**Goal:** Launch Claude via `redstone-claude` (tmux-owned session, args passed through); permission prompts and questions appear live in the Redstone web UI; answering there (or typing a brand-new command) is delivered into the session via `tmux send-keys`. The local terminal is NEVER blocked — local answering always works instantly, and locally-answered cards auto-resolve on the web.
 
 **Architecture:** Stateless **blocking-hook gate** (per spike, `docs/research/2026-06-07-claude-code-hook-surface.md`): a `redstone` CLI installs inert hooks into `.claude/settings.local.json`; the handler no-ops for unattached sessions, attaches armed ones, POSTs events to the API, and for decision-bearing events long-polls `/decisions/:id/await` until the user resolves from the web — then emits the hook JSON answer. Server adds `sessions` + `decisions` modules (hexagonal, same port/adapter pattern as `EventStore`) and an SSE stream for live UI. Web adds cookie login (instance token, httpOnly) + proxy route handlers + a decisions/sessions UI.
 
@@ -853,7 +855,7 @@ Emit from services: `DecisionsService.create` → `bus.emit({type:"decision.crea
 
 ---
 
-### Task 6: hook-cli — scaffold, config, installer, arming
+### [SUPERSEDED by REVISED TASKS section] Task 6: hook-cli — scaffold, config, installer, arming
 
 **Files:**
 - Create: `apps/hook-cli/package.json`, `apps/hook-cli/tsconfig.json`, `apps/hook-cli/vitest.config.ts`
@@ -1053,7 +1055,7 @@ main().catch(() => exit(0)); // never propagate failures into a Claude session
 
 ---
 
-### Task 7: hook-cli — handler: attach/heartbeat + non-blocking events
+### [SUPERSEDED by REVISED TASKS section] Task 7: hook-cli — handler: attach/heartbeat + non-blocking events
 
 **Files:**
 - Create: `apps/hook-cli/src/api-client.ts`, `apps/hook-cli/src/handler.ts`
@@ -1254,7 +1256,7 @@ export async function handle(): Promise<void> {
 
 ---
 
-### Task 8: hook-cli — blocking decisions (permission + AskUserQuestion)
+### [SUPERSEDED by REVISED TASKS section] Task 8: hook-cli — blocking decisions (permission + AskUserQuestion)
 
 **Files:**
 - Create (replace stub): `apps/hook-cli/src/hook-output.ts`
@@ -1643,3 +1645,431 @@ export default function Home() {
 - **Spec coverage:** PRD 001 FR-1..FR-12 — FR-1/2 (init + per-session attach via arming) T6; FR-3 (hooks install, no inbound ports — outbound long-poll only) T6-8; FR-4 (registry with machine/cwd, liveness semantics revised per spike) T2; FR-5/6 (capture: completed/question/permission; options incl. custom) T7/8; FR-7 (project mapping) deferred to M2/M3 — sessions render unmapped, per plan scope; FR-8 web SSE ✓ T5/T9, mobile push → M1b; FR-9 exactly-once T4; FR-10/11 revised by spike (hook-gate; timeout → terminal fallback instead of "injection failed" reporting) — documented in PRD amendment; FR-12 sessions list T9 (web; mobile M1b).
 - **Types consistent** across tasks (Decision/Resolution from @rcw/shared everywhere; handler Deps narrow interface).
 - **Placeholder scan:** hook-output.ts is explicitly a verify-live deviation point (Task 10 Step 4), not a TBD.
+
+---
+
+# REVISED TASKS (2026-06-07 pivot: notify-only hooks + tmux delivery)
+
+**Revised conventions:**
+- Hooks NEVER block: handler does its API calls (≤3s timeouts) and exits; settings hook `timeout: 10`.
+- Installed hook events now: `SessionStart`, `UserPromptSubmit`, `Stop`, `Notification`, `PermissionRequest`, `PostToolUse`, `SessionEnd`.
+- Delivery channel: a poller (hidden tmux window, started by `redstone-claude`) long-polls `GET /sessions/by-wrapper/:wrapperId/deliveries` and executes `tmux send-keys`.
+- `apps/hook-cli/src/keymap.ts` is the ONLY module that knows terminal keystroke mappings — it is the verify-live deviation point (Task 10).
+- Wrapper sessions are identified by `RCW_WRAPPER_ID` env (set on the tmux session; inherited by claude; inherited by hook commands).
+- Non-wrapper sessions (attached via `redstone hook` arming) get info-only decision cards (`deliverable: false` in body) — visible, not remotely answerable.
+- Windows: `redstone-claude` requires tmux → document WSL2; `redstone hook` (notify-only) works everywhere.
+
+### Task 5b: API — delivery queue (instructions, undelivered resolutions, local auto-resolve)
+
+**Files:**
+- Modify: `packages/shared/src/decisions/decision.ts` (add `"instruction"` kind; add `deliveredAt`), `packages/shared/src/sessions/agent-session.ts` (add `wrapperId` nullable to both schemas), `packages/shared/test/decision.test.ts` (extend)
+- Create: `apps/api/migrations/003_deliveries.sql`, `apps/api/src/application/delivery-waiters.ts`
+- Modify: decision-store port + both adapters (`listUndelivered`, `markDelivered`, `resolveAllPendingLocal`), session-store port + adapters (`getByWrapper`), `decisions.service.ts`, `sessions.controller.ts`, `decisions.controller.ts`, `app.module.ts`
+- Test: `apps/api/test/deliveries.e2e.test.ts`
+
+- [ ] **Step 1: Migration** — `apps/api/migrations/003_deliveries.sql`
+
+```sql
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS wrapper_id TEXT;
+CREATE INDEX IF NOT EXISTS idx_sessions_wrapper ON sessions (wrapper_id);
+ALTER TABLE decisions ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_decisions_undelivered ON decisions (session_id) WHERE status = 'resolved' AND delivered_at IS NULL;
+```
+
+- [ ] **Step 2: Shared schema changes (failing test first)** — extend `packages/shared/test/decision.test.ts`:
+
+```ts
+it("accepts instruction kind and deliveredAt", () => {
+  const d = DecisionSchema.parse({
+    id: "9f3b8c1e-2a4d-4f6a-9c0d-1e2f3a4b5c6d", sessionId: "s", kind: "instruction",
+    title: "run tests", body: {}, options: [], status: "resolved",
+    createdAt: "2026-06-07T10:00:00Z", resolvedAt: "2026-06-07T10:00:01Z",
+    resolution: { choice: null, answers: null, custom: "pnpm test" }, deliveredAt: null,
+  });
+  expect(d.deliveredAt).toBeNull();
+});
+it("agent session carries optional wrapperId", () => {
+  const s = NewAgentSessionSchema.parse({ id: "x", machine: "m", cwd: "/p", gitBranch: null, wrapperId: "ab12" });
+  expect(s.wrapperId).toBe("ab12");
+});
+```
+Schema edits: `DecisionKindSchema` → `z.enum(["permission","question","completion","notification","instruction"])`; `DecisionSchema` gains `deliveredAt: z.coerce.date().nullable().default(null)`; `AgentSessionSchema` gains `wrapperId: z.string().nullable().default(null)` and `NewAgentSessionSchema` picks it too.
+
+- [ ] **Step 3: API failing test** — `apps/api/test/deliveries.e2e.test.ts`:
+
+```ts
+import { Test } from "@nestjs/testing";
+import { INestApplication } from "@nestjs/common";
+import request from "supertest";
+import { AppModule } from "../src/app.module";
+
+const auth = { Authorization: "Bearer test-token" };
+
+describe("delivery queue", () => {
+  let app: INestApplication;
+  beforeAll(async () => {
+    process.env.INSTANCE_TOKEN = "test-token";
+    const mod = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    app = mod.createNestApplication();
+    await app.init();
+    await request(app.getHttpServer()).post("/sessions").set(auth)
+      .send({ id: "sess-w", machine: "m", cwd: "/p", gitBranch: null, wrapperId: "wrap1" });
+  });
+  afterAll(() => app.close());
+
+  it("finds session by wrapper id", async () => {
+    const r = await request(app.getHttpServer()).get("/sessions/by-wrapper/wrap1").set(auth).expect(200);
+    expect(r.body.id).toBe("sess-w");
+    await request(app.getHttpServer()).get("/sessions/by-wrapper/nope").set(auth).expect(404);
+  });
+
+  it("instruct creates a pre-resolved instruction that appears in deliveries, ack removes it", async () => {
+    await request(app.getHttpServer()).post("/sessions/sess-w/instruct").set(auth)
+      .send({ text: "pnpm test" }).expect(201);
+    const del = await request(app.getHttpServer())
+      .get("/sessions/by-wrapper/wrap1/deliveries?timeoutMs=500").set(auth).expect(200);
+    expect(del.body[0].kind).toBe("instruction");
+    expect(del.body[0].resolution.custom).toBe("pnpm test");
+    await request(app.getHttpServer()).post(`/decisions/${del.body[0].id}/delivered`).set(auth).expect(200);
+    await request(app.getHttpServer())
+      .get("/sessions/by-wrapper/wrap1/deliveries?timeoutMs=300").set(auth).expect(204);
+  });
+
+  it("resolving a pending decision wakes the deliveries long-poll", async () => {
+    const d = await request(app.getHttpServer()).post("/decisions").set(auth)
+      .send({ sessionId: "sess-w", kind: "permission", title: "t", options: [{ label: "Allow" }] });
+    const poll = request(app.getHttpServer())
+      .get("/sessions/by-wrapper/wrap1/deliveries?timeoutMs=5000").set(auth);
+    await new Promise((r) => setTimeout(r, 150));
+    await request(app.getHttpServer()).post(`/decisions/${d.body.id}/resolve`).set(auth).send({ choice: "Allow" });
+    const res = await poll;
+    expect(res.status).toBe(200);
+    expect(res.body.some((x: { id: string }) => x.id === d.body.id)).toBe(true);
+    await request(app.getHttpServer()).post(`/decisions/${d.body.id}/delivered`).set(auth);
+  });
+
+  it("resolve-local resolves all pending permission/question decisions as answered-at-terminal and marks them delivered", async () => {
+    const d = await request(app.getHttpServer()).post("/decisions").set(auth)
+      .send({ sessionId: "sess-w", kind: "permission", title: "t2", options: [{ label: "Allow" }] });
+    await request(app.getHttpServer()).post("/sessions/sess-w/resolve-local").set(auth).expect(200);
+    await request(app.getHttpServer())
+      .get("/sessions/by-wrapper/wrap1/deliveries?timeoutMs=300").set(auth).expect(204);
+    const pending = await request(app.getHttpServer()).get("/decisions?status=pending").set(auth);
+    expect(pending.body.some((x: { id: string }) => x.id === d.body.id)).toBe(false);
+  });
+});
+```
+
+- [ ] **Step 4: Implement**
+
+`apps/api/src/application/delivery-waiters.ts` (mirror of DecisionWaiters keyed by sessionId):
+```ts
+import { Injectable } from "@nestjs/common";
+import { EventEmitter } from "node:events";
+
+@Injectable()
+export class DeliveryWaiters {
+  private readonly emitter = new EventEmitter().setMaxListeners(1000);
+  notify(sessionId: string) { this.emitter.emit(sessionId); }
+  wait(sessionId: string, ms: number): Promise<boolean> {
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => { this.emitter.off(sessionId, on); resolve(false); }, ms);
+      const on = () => { clearTimeout(timer); resolve(true); };
+      this.emitter.once(sessionId, on);
+    });
+  }
+}
+```
+
+DecisionStore port additions (+ both adapters):
+```ts
+listUndelivered(sessionId: string): Promise<Decision[]>;           // status='resolved' AND deliveredAt null AND kind IN permission|question|instruction
+markDelivered(id: string, at: Date): Promise<void>;
+resolveAllPendingLocal(sessionId: string, at: Date): Promise<number>; // pending permission|question -> resolved {choice:"__local__"} + delivered_at=at
+```
+Postgres `resolveAllPendingLocal`:
+```sql
+UPDATE decisions SET status='resolved', resolution='{"choice":"__local__","answers":null,"custom":null}'::jsonb,
+  resolved_at=$2, delivered_at=$2
+WHERE session_id=$1 AND status='pending' AND kind IN ('permission','question')
+```
+SessionStore addition: `getByWrapper(wrapperId: string): Promise<AgentSession | null>` (both adapters; pg: `WHERE wrapper_id=$1 ORDER BY last_seen_at DESC LIMIT 1`). Postgres session ROW/INSERT/UPDATE gains `wrapper_id`.
+
+`DecisionsService` additions (inject DeliveryWaiters; resolve() now also `deliveryWaiters.notify(resolved.sessionId)`):
+```ts
+async instruct(sessionId: string, input: unknown): Promise<Decision> {
+  const { text } = z.object({ text: z.string().min(1) }).parse(input);
+  if (!(await this.sessions.get(sessionId))) throw new NotFoundException("unknown session");
+  const now = new Date();
+  const decision: Decision = {
+    sessionId, kind: "instruction", title: text.slice(0, 120), body: {}, options: [],
+    id: randomUUID(), status: "resolved", createdAt: now, resolvedAt: now,
+    resolution: { choice: null, answers: null, custom: text }, deliveredAt: null,
+  };
+  const created = await this.store.create(decision);
+  this.deliveryWaiters.notify(sessionId);
+  this.bus.emit({ type: "decision.created", payload: created });
+  return created;
+}
+async deliveries(sessionId: string, timeoutMs: number): Promise<Decision[]> {
+  const existing = await this.store.listUndelivered(sessionId);
+  if (existing.length > 0) return existing;
+  await this.deliveryWaiters.wait(sessionId, Math.min(timeoutMs, 30_000));
+  return this.store.listUndelivered(sessionId);
+}
+markDelivered(id: string) { return this.store.markDelivered(id, new Date()); }
+resolveLocal(sessionId: string) { return this.store.resolveAllPendingLocal(sessionId, new Date()); }
+```
+(Note: `create` for instruction must persist `resolution`/`resolvedAt`/`deliveredAt` — extend the Postgres `create` INSERT to include `resolution`, `resolved_at`, `delivered_at` columns.)
+
+Controllers:
+- `SessionsController`: `GET by-wrapper/:wrapperId` (404 when none), `GET :id/deliveries?timeoutMs` (200 array | 204 via @Res), `POST :id/instruct`, `POST :id/resolve-local` (@HttpCode(200), returns `{resolved: n}`). NOTE route order: declare `by-wrapper/:wrapperId` BEFORE `:id/...` routes.
+- `DecisionsController`: `POST :id/delivered` (@HttpCode(200)).
+
+- [ ] **Step 5:** shared + api tests all pass; builds clean.
+- [ ] **Step 6: Commit** `feat(api): delivery queue (instructions, undelivered resolutions, local auto-resolve)`
+
+### Task 6R: hook-cli — scaffold, installer, arming, `redstone-claude` wrapper
+
+Same scaffold/config/state/installer as the superseded Task 6 with these changes, plus the wrapper:
+- `installer.ts` `HOOK_EVENTS` = `["SessionStart","UserPromptSubmit","Stop","Notification","PermissionRequest","PostToolUse","SessionEnd"]`, `HOOK_TIMEOUT_S = 10`.
+- `package.json` bin: `{ "redstone": "./dist/main.js", "redstone-claude": "./dist/claude-wrapper.js" }`.
+- `main.ts` router gains `poll` subcommand (Task 8R) — for THIS task add the case with a stub that exits 0.
+- Keep installer/arming tests from the superseded task (they remain valid, with the new event list asserted).
+
+Additional file `apps/hook-cli/src/claude-wrapper.ts`:
+```ts
+#!/usr/bin/env node
+import { execFileSync, spawnSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
+import { realpathSync } from "node:fs";
+import { argv, exit } from "node:process";
+import { loadCliConfig } from "./config";
+import { installHooks } from "./installer";
+
+const shq = (a: string) => `'${a.replace(/'/g, `'\\''`)}'`;
+
+function main() {
+  if (!loadCliConfig()) { console.error("run `redstone init --server <url> --token <token>` first"); exit(1); }
+  if (spawnSync("tmux", ["-V"], { stdio: "ignore" }).error) {
+    console.error("redstone-claude requires tmux (on Windows: run inside WSL2). Install tmux and retry."); exit(1);
+  }
+  const wrapperId = randomBytes(4).toString("hex");
+  const session = `rcw-${wrapperId}`;
+  const wrapperBin = realpathSync(argv[1]);
+  const mainBin = wrapperBin.replace(/claude-wrapper\.js$/, "main.js");
+  installHooks(process.cwd(), `node ${mainBin}`);
+  const claudeCmd = `RCW_WRAPPER_ID=${wrapperId} claude ${argv.slice(2).map(shq).join(" ")}`;
+  execFileSync("tmux", ["new-session", "-d", "-s", session, "-c", process.cwd(), claudeCmd]);
+  execFileSync("tmux", ["set-option", "-t", session, "status", "off"]);
+  execFileSync("tmux", ["new-window", "-d", "-t", session,
+    `node ${mainBin} poll --wrapper ${wrapperId} --tmux ${session}:0`]);
+  // foreground: user lives inside the claude window; on exit, clean up the whole session
+  spawnSync("tmux", ["attach", "-t", `${session}:0`], { stdio: "inherit" });
+  spawnSync("tmux", ["kill-session", "-t", session], { stdio: "ignore" });
+}
+main();
+```
+Wrapper test (`test/claude-wrapper.test.ts`): unit-test `shq` quoting via export, and that the module composes the expected tmux args (refactor arg-building into exported `buildTmuxCommands(wrapperId, cwd, args, mainBin)` returning the arg arrays, so it's testable without tmux; `main()` just executes them).
+
+Commit: `feat(hook-cli): scaffold, installer, redstone-claude tmux wrapper`
+
+### Task 7R: hook-cli — notify-only handler
+
+Same `api-client.ts` + `handler.ts` structure as the superseded Task 7, with these changes:
+- ApiClient drops `awaitResolution`, gains `resolveLocal(sessionId)` (POST `/sessions/:id/resolve-local`, 2s timeout) — and `attach` payload includes `wrapperId: string | null`.
+- `Deps` gains `wrapperId: string | null` (from `process.env.RCW_WRAPPER_ID ?? null` in `handle()`).
+- `processEvent` logic:
+  - unknown session → attach when `deps.wrapperId` is set OR `isArmed(cwd)` (disarm after armed attach); else silent null.
+  - `PermissionRequest` → `createDecision` (kind `question` if `tool_name === "AskUserQuestion"` with title/options extracted from `tool_input.questions[0]`, else kind `permission` with `[Allow, Deny]` options and `${tool_name}: <160-char input summary>` title; body includes `tool_input` and `deliverable: !!deps.wrapperId`) → **return null immediately** (never block).
+  - `PostToolUse` → `api.resolveLocal(session_id)` → null. (Covers "user answered at the terminal" — any pending permission/question cards for this session resolve as `__local__`.)
+  - `Stop` → completion notification decision (as before). `Notification` → notification decision (as before). Others → heartbeat only.
+- The decision-spec extraction lives in `apps/hook-cli/src/decision-spec.ts` (exported `buildDecisionSpec(event)`) — unit-tested with the same cases as the superseded Task 8's `buildBlockingDecision` tests (permission → Allow/Deny; AskUserQuestion → options carried; returns null when no questions).
+- Handler tests: adapt the superseded Task 7 tests (unattached+unarmed no-op; armed attach+disarm; NEW: wrapperId attach without arming; Stop → completion; PostToolUse → resolveLocal called; PermissionRequest → createDecision called AND returns null without awaiting; api down → silent null).
+
+Commit: `feat(hook-cli): notify-only handler with local auto-resolve`
+
+### Task 8R: hook-cli — keymap + delivery poller
+
+**Files:**
+- Create: `apps/hook-cli/src/keymap.ts`, `apps/hook-cli/src/poller.ts`
+- Modify: `apps/hook-cli/src/main.ts` (wire `poll`), `apps/hook-cli/src/api-client.ts`
+- Test: `apps/hook-cli/test/keymap.test.ts`, `apps/hook-cli/test/poller.test.ts`
+
+- [ ] **Step 1: Failing tests**
+
+`test/keymap.test.ts`:
+```ts
+import { deliveryToKeys } from "../src/keymap";
+
+const base = { id: "d1", sessionId: "s", title: "t", body: {}, status: "resolved", createdAt: new Date().toISOString(), resolvedAt: null, deliveredAt: null };
+
+describe("deliveryToKeys", () => {
+  it("instruction -> literal text + Enter", () => {
+    expect(deliveryToKeys({ ...base, kind: "instruction", options: [], resolution: { choice: null, answers: null, custom: "pnpm test" } } as never))
+      .toEqual([["-l", "pnpm test"], ["Enter"]]);
+  });
+  it("permission Allow -> digit of the option position", () => {
+    expect(deliveryToKeys({ ...base, kind: "permission", options: [{ label: "Allow" }, { label: "Deny" }], resolution: { choice: "Allow", answers: null, custom: null } } as never))
+      .toEqual([["1"]]);
+  });
+  it("question option pick -> its digit", () => {
+    expect(deliveryToKeys({ ...base, kind: "question", options: [{ label: "A" }, { label: "B" }], resolution: { choice: "B", answers: null, custom: null } } as never))
+      .toEqual([["2"]]);
+  });
+  it("local-answered or unmapped -> null (skip)", () => {
+    expect(deliveryToKeys({ ...base, kind: "permission", options: [{ label: "Allow" }], resolution: { choice: "__local__", answers: null, custom: null } } as never)).toBeNull();
+    expect(deliveryToKeys({ ...base, kind: "question", options: [], resolution: { choice: null, answers: null, custom: "free text" } } as never)).toBeNull();
+  });
+});
+```
+
+`test/poller.test.ts` (inject deps; no real tmux):
+```ts
+import { pollOnce } from "../src/poller";
+
+describe("pollOnce", () => {
+  it("sends keys for each delivery and acks", async () => {
+    const sent: string[][][] = [];
+    const acked: string[] = [];
+    const deps = {
+      api: {
+        deliveries: vi.fn().mockResolvedValue([
+          { id: "d1", kind: "instruction", options: [], resolution: { choice: null, answers: null, custom: "hello" } },
+        ]),
+        markDelivered: vi.fn().mockImplementation(async (id: string) => { acked.push(id); }),
+      },
+      sendKeys: async (keys: string[]) => { sent.push([keys]); },
+      wrapperId: "w1",
+    } as never;
+    await pollOnce(deps);
+    expect(sent.length).toBeGreaterThan(0);
+    expect(acked).toEqual(["d1"]);
+  });
+  it("acks but does not send for skipped deliveries", async () => {
+    const deps = {
+      api: {
+        deliveries: vi.fn().mockResolvedValue([
+          { id: "d2", kind: "question", options: [], resolution: { choice: null, answers: null, custom: "free" } },
+        ]),
+        markDelivered: vi.fn(),
+      },
+      sendKeys: vi.fn(),
+      wrapperId: "w1",
+    } as never;
+    await pollOnce(deps);
+    expect((deps as never as { sendKeys: ReturnType<typeof vi.fn> }).sendKeys).not.toHaveBeenCalled();
+  });
+});
+```
+
+- [ ] **Step 2: Implement**
+
+`src/keymap.ts`:
+```ts
+// ⚠️ The ONLY module that knows Claude Code's terminal keystroke mappings.
+// Verified live in Task 10 — adjust HERE if the real dialogs differ.
+type Option = { label: string };
+type Delivery = { kind: string; options: Option[]; resolution: { choice: string | null; answers: Record<string, string> | null; custom: string | null } | null };
+
+export function deliveryToKeys(d: Delivery): string[][] | null {
+  const r = d.resolution;
+  if (!r || r.choice === "__local__") return null;
+  if (d.kind === "instruction" && r.custom) return [["-l", r.custom], ["Enter"]];
+  if ((d.kind === "permission" || d.kind === "question") && r.choice) {
+    const idx = d.options.findIndex((o) => o.label === r.choice);
+    if (idx >= 0) return [[String(idx + 1)]];
+  }
+  return null; // unmapped (e.g. free-text answer to a dialog) — M1a limitation, ack + skip
+}
+```
+
+`src/api-client.ts` additions:
+```ts
+async sessionByWrapper(wrapperId: string): Promise<{ id: string } | null> {
+  const r = await this.req(`/sessions/by-wrapper/${encodeURIComponent(wrapperId)}`, { headers: json(this.cfg.token) }, 3000);
+  return r.ok ? r.json() : null;
+}
+async deliveries(sessionId: string, timeoutMs: number): Promise<Array<Record<string, unknown>>> {
+  const r = await this.req(`/sessions/${encodeURIComponent(sessionId)}/deliveries?timeoutMs=${timeoutMs}`,
+    { headers: json(this.cfg.token) }, timeoutMs + 5000);
+  return r.status === 200 ? r.json() : [];
+}
+async markDelivered(id: string): Promise<void> {
+  await this.req(`/decisions/${id}/delivered`, { method: "POST", headers: json(this.cfg.token) }, 3000);
+}
+```
+
+`src/poller.ts`:
+```ts
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import { deliveryToKeys } from "./keymap";
+import type { ApiClient } from "./api-client";
+const execFileP = promisify(execFile);
+
+export type PollerDeps = {
+  api: Pick<ApiClient, "deliveries" | "markDelivered"> & { sessionId: string };
+  sendKeys: (keys: string[]) => Promise<void>;
+};
+
+export async function pollOnce(deps: { api: { deliveries(s: string, t: number): Promise<never[]>; markDelivered(id: string): Promise<void> }; sendKeys: (k: string[]) => Promise<void>; sessionId: string }) {
+  const items = await deps.api.deliveries(deps.sessionId, 25_000);
+  for (const d of items as Array<{ id: string } & Parameters<typeof deliveryToKeys>[0]>) {
+    const keys = deliveryToKeys(d);
+    if (keys) for (const k of keys) await deps.sendKeys(k);
+    await deps.api.markDelivered(d.id);
+  }
+}
+
+export async function runPoller(opts: { wrapperId: string; tmuxTarget: string; api: ApiClient }) {
+  const sendKeys = async (keys: string[]) => {
+    await execFileP("tmux", ["send-keys", "-t", opts.tmuxTarget, ...keys]);
+  };
+  // wait for the hook handler to register the session (first claude activity)
+  let sessionId: string | null = null;
+  while (!sessionId) {
+    const s = await opts.api.sessionByWrapper(opts.wrapperId).catch(() => null);
+    if (s) sessionId = s.id;
+    else await new Promise((r) => setTimeout(r, 3000));
+  }
+  for (;;) {
+    try { await pollOnce({ api: { deliveries: (s, t) => opts.api.deliveries(s, t) as never, markDelivered: (id) => opts.api.markDelivered(id) }, sendKeys, sessionId }); }
+    catch { await new Promise((r) => setTimeout(r, 5000)); }
+  }
+}
+```
+(Implementer may simplify the pollOnce/PollerDeps typing — keep the two unit tests passing and the runPoller loop semantics: register-wait → infinite poll with 5s error backoff.)
+
+`main.ts` `poll` case:
+```ts
+} else if (cmd === "poll") {
+  const cfg = loadCliConfig();
+  const wrapper = argv[argv.indexOf("--wrapper") + 1];
+  const tmux = argv[argv.indexOf("--tmux") + 1];
+  if (!cfg || !wrapper || !tmux) exit(0);
+  const { runPoller } = await import("./poller");
+  const { ApiClient } = await import("./api-client");
+  await runPoller({ wrapperId: wrapper, tmuxTarget: tmux, api: new ApiClient(cfg) });
+}
+```
+
+- [ ] **Step 3:** all hook-cli tests pass, build clean.
+- [ ] **Step 4: Commit** `feat(hook-cli): keystroke keymap + tmux delivery poller`
+
+### Task 9R: web — as original Task 9 PLUS per-session command box
+
+Implement the original Task 9 in full, with these additions:
+1. Proxy `ALLOWED` regexes add: `/^sessions\/[^/]+\/instruct$/`.
+2. `SessionRow` gains an inline "send command" form (input + Send button) that POSTs `{text}` to `/api/proxy/sessions/<id>/instruct` — only rendered when `s.wrapperId` is truthy (sessions API now returns it).
+3. `DecisionCard`: cards whose `body.deliverable === false` render options as disabled with a hint "attach via redstone-claude to answer remotely"; `completion`/`notification` cards keep Acknowledge.
+
+Commit: `feat(web): token login + live decisions UI + remote command box`
+
+### Task 10R: deploy + live tmux round-trip + report
+
+- [ ] Local: `pnpm build && pnpm test` all green.
+- [ ] `deploy/remote.sh up` + `smoke` (M0 regression).
+- [ ] Scripted API check on server: attach fake session w/ wrapperId via curl, instruct, poll deliveries, ack (curl loop).
+- [ ] **Live round-trip (with the user, on their Mac):** build hook-cli; `node dist/main.js init --server <url> --token <token>`; run `node dist/claude-wrapper.js` (or linked `redstone-claude`) in a test project; trigger a permission prompt; verify: card appears on web AND terminal dialog shows instantly (no blocking); answer from web → tmux receives the digit and Claude proceeds; answer another one locally → card auto-resolves "answered at terminal"; use the command box → text lands in the Claude prompt. **Adjust `keymap.ts` to observed dialog behavior** (digit vs arrow/enter — expected deviation point), commit fixes.
+- [ ] Update PRD 001 amendment if mappings changed; update docs/TECH-DEBT.md; push; Jira RCW-3 + Mattermost updates.

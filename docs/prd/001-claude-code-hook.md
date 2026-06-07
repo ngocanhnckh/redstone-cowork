@@ -47,12 +47,13 @@ Attach any Claude Code session, on any machine, to the user's Redstone Cowork se
 
 ## 5. Technical Notes
 
-> **Amended 2026-06-07 after M1 spike** (see [research](../research/2026-06-07-claude-code-hook-surface.md)): Claude Code offers no channel to inject messages into a live interactive session. The original "relay holds session stdin over WebSocket" design is replaced by a **stateless blocking-hook gate**.
+> **Amended 2026-06-07 (rev 2, user decision)** (see [research](../research/2026-06-07-claude-code-hook-surface.md)): Claude Code offers no channel to inject messages into a live interactive session, and blocking hooks hold the local terminal hostage — rejected. Final design: **notify-only hooks + tmux-wrapper delivery**.
 
-- **Mechanism:** Claude Code hooks (`PermissionRequest`, `PreToolUse`, `Stop`, `Notification`, `SessionStart`, `UserPromptSubmit`) invoke our handler, which POSTs the event to the server and — for decision-bearing events — **blocks** (within the hook's ~600s budget) long-polling for the user's resolution, then returns it as the hook's JSON output (permission allow/deny; `AskUserQuestion` answers via `updatedInput`). No daemon, no WebSocket on the dev machine.
-- **Liveness:** hook events double as heartbeats; an actively-blocked long-poll IS the heartbeat for `waiting` sessions. Idle sessions decay to `stale`/`lost` honestly.
-- **Per-session attach:** hooks are file-scoped, so they're installed inert (`.claude/settings.local.json`); the handler no-ops unless the `session_id` is registered. `redstone hook` arms attach for that cwd; the next event from an unattached session registers it.
-- **Timeout fallback:** if the user doesn't answer within the hook budget, the handler exits silently and the question falls back to the local terminal. The hook gate must never break a session.
+- **Launch:** `redstone-claude [args…]` starts `claude` inside a tmux session the wrapper owns (args passed through; `RCW_WRAPPER_ID` env links Claude's `session_id` to the tmux session; hooks auto-installed; a delivery poller runs in a hidden tmux window and survives detach). Windows via WSL2.
+- **Capture:** hooks (`SessionStart`, `UserPromptSubmit`, `Stop`, `Notification`, `PermissionRequest`, `PostToolUse`, `SessionEnd`) are **notification-only** — ≤10s, never block, terminal dialogs always appear instantly.
+- **Delivery:** resolving a decision on web/mobile queues it; the wrapper's poller long-polls the server and injects keystrokes via `tmux send-keys` (option digit for dialogs; literal text + Enter for brand-new instructions — full remote control, including sending Claude its next task).
+- **Local-answer loop closure:** `PostToolUse` auto-resolves pending cards as "answered at terminal" — no ghost cards.
+- **Liveness:** hook events + the poller's long-poll double as heartbeats. Sessions attached without the wrapper (`redstone hook` arming) get info-only cards (no remote delivery).
 - **Security:** instance token authenticates the handler; the server never sees the user's Anthropic credentials — those stay on the dev machine.
 - **Hexagonal fit:** `SessionStorePort` + `DecisionStorePort` (Postgres adapters); `NotifierPort` (SSE/web in M1a, FCM/APNs in M1b).
 - Decision summaries via conversational tier (LangChain) using prompts from `prompts/decisions/*.md` (M2+; raw titles in M1a).

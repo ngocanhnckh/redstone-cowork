@@ -29,3 +29,7 @@
 - Injecting arbitrary new user messages into a running interactive session
 - Simultaneous `--resume` against an open session
 - `PermissionRequest` hooks in headless mode
+
+## Addendum (rev 2, same day): blocking rejected → tmux wrapper
+
+User rejected the blocking-hook gate (holds the local terminal for up to ~10 min when the dev is sitting right there). Final architecture: hooks are notification-only; remote answers/commands are injected via `tmux send-keys` into a Claude session started by our own `redstone-claude` wrapper (we own the pane, set `RCW_WRAPPER_ID` env for session linking, and run the delivery poller in a hidden tmux window). The spike's "tmux is fragile" caveat applies to *attaching to arbitrary sessions*; owning the session removes the discovery/targeting fragility, leaving only keystroke-mapping risk (isolated in `keymap.ts`, verified live). Bonus over blocking: we can send Claude *new* prompts when idle — true remote control — which blocking hooks could never do.
