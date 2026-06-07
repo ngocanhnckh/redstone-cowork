@@ -1,0 +1,10 @@
+{
+  "name": "@rcw/hook-cli",
+  "version": "0.0.1",
+  "bin": {
+    "redstone": "./dist/main.js",
+    "redstone-claude": "./dist/claude-wrapper.js"
+  },
+  "scripts": { "build": "tsc -p tsconfig.json", "test": "vitest run" },
+  "devDependencies": { "@types/node": "^22.0.0", "vitest": "^3.1.0" }
+}
