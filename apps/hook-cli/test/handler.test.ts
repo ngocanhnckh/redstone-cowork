@@ -1,0 +1,112 @@
+import { describe, it, expect, vi } from "vitest";
+import { processEvent, type Deps } from "../src/handler";
+
+const makeApi = (overrides: Partial<Deps["api"]> = {}): Deps["api"] => ({
+  heartbeat: vi.fn().mockResolvedValue(true),
+  attach: vi.fn().mockResolvedValue(undefined),
+  createDecision: vi.fn().mockResolvedValue({ id: "d1" }),
+  resolveLocal: vi.fn().mockResolvedValue(undefined),
+  ...overrides,
+});
+
+const baseDeps = (overrides: Partial<Deps> = {}): Deps => ({
+  api: makeApi(),
+  isArmed: vi.fn().mockReturnValue(false),
+  disarm: vi.fn(),
+  machine: "testbox",
+  wrapperId: null,
+  ...overrides,
+});
+
+const ev = (name: string, extra: object = {}) =>
+  ({ hook_event_name: name, session_id: "s1", cwd: "/p", ...extra });
+
+describe("processEvent", () => {
+  it("unattached + unarmed + no wrapper → no-op, no attach", async () => {
+    const deps = baseDeps({
+      api: makeApi({ heartbeat: vi.fn().mockResolvedValue(false) }),
+      isArmed: vi.fn().mockReturnValue(false),
+      wrapperId: null,
+    });
+    const out = await processEvent(ev("UserPromptSubmit"), deps);
+    expect(out).toBeNull();
+    expect(deps.api.attach).not.toHaveBeenCalled();
+  });
+
+  it("unattached + armed → attaches and disarms", async () => {
+    const api = makeApi({ heartbeat: vi.fn().mockResolvedValue(false) });
+    const deps = baseDeps({
+      api,
+      isArmed: vi.fn().mockReturnValue(true),
+      wrapperId: null,
+    });
+    await processEvent(ev("UserPromptSubmit"), deps);
+    expect(deps.api.attach).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "s1", cwd: "/p" })
+    );
+    expect(deps.disarm).toHaveBeenCalled();
+  });
+
+  it("unattached + wrapperId set → attaches WITHOUT arming (attach payload contains wrapperId)", async () => {
+    const api = makeApi({ heartbeat: vi.fn().mockResolvedValue(false) });
+    const disarm = vi.fn();
+    const deps = baseDeps({
+      api,
+      isArmed: vi.fn().mockReturnValue(false),
+      disarm,
+      wrapperId: "wrap-abc",
+    });
+    await processEvent(ev("UserPromptSubmit"), deps);
+    expect(deps.api.attach).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "s1", wrapperId: "wrap-abc" })
+    );
+    // disarm should NOT be called since we didn't use arming
+    expect(disarm).not.toHaveBeenCalled();
+  });
+
+  it("attached Stop → createDecision kind completion, returns null", async () => {
+    const deps = baseDeps();
+    const out = await processEvent(ev("Stop"), deps);
+    expect(deps.api.createDecision).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: "completion" })
+    );
+    expect(out).toBeNull();
+  });
+
+  it("Notification with message → kind notification", async () => {
+    const deps = baseDeps();
+    const out = await processEvent(
+      ev("Notification", { message: "Claude finished" }),
+      deps
+    );
+    expect(deps.api.createDecision).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: "notification", title: "Claude finished" })
+    );
+    expect(out).toBeNull();
+  });
+
+  it("PostToolUse → resolveLocal called, returns null", async () => {
+    const deps = baseDeps();
+    const out = await processEvent(ev("PostToolUse"), deps);
+    expect(deps.api.resolveLocal).toHaveBeenCalledWith("s1");
+    expect(out).toBeNull();
+  });
+
+  it("PermissionRequest → createDecision called AND returns null immediately (non-blocking)", async () => {
+    const deps = baseDeps({ wrapperId: "wrap1" });
+    const out = await processEvent(
+      ev("PermissionRequest", { tool_name: "Bash", tool_input: { command: "ls" } }),
+      deps
+    );
+    expect(deps.api.createDecision).toHaveBeenCalled();
+    // Verify no awaitResolution method exists on deps.api
+    expect((deps.api as Record<string, unknown>)["awaitResolution"]).toBeUndefined();
+    expect(out).toBeNull();
+  });
+
+  it("api down (heartbeat rejects) → resolves null, never throws", async () => {
+    const api = makeApi({ heartbeat: vi.fn().mockRejectedValue(new Error("ECONNREFUSED")) });
+    const deps = baseDeps({ api });
+    await expect(processEvent(ev("Stop"), deps)).resolves.toBeNull();
+  });
+});
