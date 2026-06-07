@@ -47,11 +47,15 @@ Attach any Claude Code session, on any machine, to the user's Redstone Cowork se
 
 ## 5. Technical Notes
 
-- **Protocol:** versioned JSON over WebSocket (`hook-protocol v1`); the relay is intentionally thin — capture, forward, inject. All intelligence lives server-side. This isolates us from Claude Code version churn.
-- **Injection mechanism:** prefer Claude Code's native mechanisms for responding to a prompt within an existing session; the relay holds the session's stdin/control channel. Validate against current Claude Code hook capabilities during M1 spike (first task of the milestone).
-- **Security:** instance token authenticates the relay; per-session secrets rotate on attach. The server never sees the user's Anthropic credentials — those stay on the dev machine.
-- **Hexagonal fit:** `AgentSessionPort` (attach, heartbeat, inject) with the WebSocket relay adapter; `NotifierPort` with WS + FCM/APNs adapters.
-- Decision summaries via conversational tier (LangChain) using prompts from `prompts/decisions/*.md`.
+> **Amended 2026-06-07 after M1 spike** (see [research](../research/2026-06-07-claude-code-hook-surface.md)): Claude Code offers no channel to inject messages into a live interactive session. The original "relay holds session stdin over WebSocket" design is replaced by a **stateless blocking-hook gate**.
+
+- **Mechanism:** Claude Code hooks (`PermissionRequest`, `PreToolUse`, `Stop`, `Notification`, `SessionStart`, `UserPromptSubmit`) invoke our handler, which POSTs the event to the server and — for decision-bearing events — **blocks** (within the hook's ~600s budget) long-polling for the user's resolution, then returns it as the hook's JSON output (permission allow/deny; `AskUserQuestion` answers via `updatedInput`). No daemon, no WebSocket on the dev machine.
+- **Liveness:** hook events double as heartbeats; an actively-blocked long-poll IS the heartbeat for `waiting` sessions. Idle sessions decay to `stale`/`lost` honestly.
+- **Per-session attach:** hooks are file-scoped, so they're installed inert (`.claude/settings.local.json`); the handler no-ops unless the `session_id` is registered. `redstone hook` arms attach for that cwd; the next event from an unattached session registers it.
+- **Timeout fallback:** if the user doesn't answer within the hook budget, the handler exits silently and the question falls back to the local terminal. The hook gate must never break a session.
+- **Security:** instance token authenticates the handler; the server never sees the user's Anthropic credentials — those stay on the dev machine.
+- **Hexagonal fit:** `SessionStorePort` + `DecisionStorePort` (Postgres adapters); `NotifierPort` (SSE/web in M1a, FCM/APNs in M1b).
+- Decision summaries via conversational tier (LangChain) using prompts from `prompts/decisions/*.md` (M2+; raw titles in M1a).
 
 ## 6. Acceptance Criteria
 
