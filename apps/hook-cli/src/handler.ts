@@ -90,12 +90,8 @@ export async function processEvent(
         const deliverable = !!deps.wrapperId;
         const spec = buildDecisionSpec(event, deliverable);
         if (!spec) return null;
-        // Fire-and-forget: create decision and return null immediately (non-blocking)
-        deps.api
-          .createDecision({ sessionId: event.session_id, ...spec })
-          .catch(() => {
-            /* swallow — must not break session */
-          });
+        // Await decision creation; errors flow to outer try/catch
+        await deps.api.createDecision({ sessionId: event.session_id, ...spec });
         return null;
       }
 

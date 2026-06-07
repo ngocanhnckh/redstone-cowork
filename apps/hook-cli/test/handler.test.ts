@@ -109,4 +109,25 @@ describe("processEvent", () => {
     const deps = baseDeps({ api });
     await expect(processEvent(ev("Stop"), deps)).resolves.toBeNull();
   });
+
+  it("PermissionRequest createDecision rejection → silent null", async () => {
+    const api = makeApi({ createDecision: vi.fn().mockRejectedValue(new Error("boom")) });
+    const deps = baseDeps({ api, wrapperId: "wrap1" });
+    const out = await processEvent(
+      ev("PermissionRequest", { tool_name: "Bash", tool_input: { command: "ls" } }),
+      deps
+    );
+    expect(deps.api.createDecision).toHaveBeenCalled();
+    expect(out).toBeNull();
+  });
+
+  it("Notification with empty message → no decision created", async () => {
+    const deps = baseDeps();
+    const out = await processEvent(
+      ev("Notification", { message: "" }),
+      deps
+    );
+    expect(deps.api.createDecision).not.toHaveBeenCalled();
+    expect(out).toBeNull();
+  });
 });
