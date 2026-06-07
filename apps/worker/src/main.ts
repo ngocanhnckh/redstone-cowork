@@ -2,7 +2,8 @@ import type { NewDomainEvent } from "@rcw/shared";
 
 const API_URL = process.env.API_URL ?? "http://api:3001";
 const TOKEN = process.env.INSTANCE_TOKEN ?? "dev-token";
-const INTERVAL = Number(process.env.HEARTBEAT_INTERVAL_MS ?? 60000);
+const parsedInterval = Number(process.env.HEARTBEAT_INTERVAL_MS ?? 60000);
+const INTERVAL = Number.isFinite(parsedInterval) && parsedInterval >= 1000 ? parsedInterval : 60000;
 
 async function beat() {
   const event: NewDomainEvent = {
