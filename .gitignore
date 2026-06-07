@@ -2,6 +2,7 @@
 .creds
 .env
 .env.*
+!.env.example
 *.pem
 *.key
 
