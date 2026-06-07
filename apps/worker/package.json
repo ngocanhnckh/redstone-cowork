@@ -1,0 +1,7 @@
+{
+  "name": "@rcw/worker",
+  "version": "0.0.1",
+  "scripts": { "build": "tsc -p tsconfig.json", "start": "node dist/main.js", "test": "echo no tests yet" },
+  "dependencies": { "@rcw/shared": "workspace:*" },
+  "devDependencies": { "@types/node": "^22.0.0" }
+}
