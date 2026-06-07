@@ -1,0 +1,7 @@
+{
+  "name": "@rcw/web",
+  "version": "0.0.1",
+  "scripts": { "build": "next build", "start": "next start -p 3000", "dev": "next dev -p 3000", "test": "echo no tests yet" },
+  "dependencies": { "next": "^15.3.0", "react": "^19.0.0", "react-dom": "^19.0.0" },
+  "devDependencies": { "@types/react": "^19.0.0", "@types/node": "^22.0.0" }
+}
