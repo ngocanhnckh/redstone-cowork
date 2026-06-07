@@ -30,7 +30,7 @@ A `deploy/` toolkit where a single instance is one command, and a fleet of emplo
 ## 4. Functional Requirements
 
 ### Parameterized instance (M0)
-- **FR-1** Every externally visible resource derives from env: `INSTANCE_ID` (names containers/volumes/network: `rcw-<id>-*`) and `PORT_BASE` (web = `PORT_BASE`, API = `+1`, anything else exposed = `+2…`). Defaults (`rcw-default`, `8100`) make single-user setup zero-config.
+- **FR-1** Every externally visible resource derives from env: `INSTANCE_ID` (names containers/volumes/network: `rcw-<id>-*`) and `PORT_BASE` (web = `PORT_BASE`, API = `+1`, anything else exposed = `+2…`). Defaults (`rcw-default`, `47100`) make single-user setup zero-config.
 - **FR-2** Single `.env` file per instance holds all configuration; `.env.example` documents every variable. Credentials (`.creds`-style files, Claude credentials mount path) are referenced, never baked into images.
 - **FR-3** Claude Agent SDK credential mount: the instance mounts the owner's Claude credentials read-only from a configured host path; documented per-OS. The server software never proxies or stores Anthropic credentials beyond that mount.
 - **FR-4** Healthcheck endpoint per service; `docker compose ps` reflects real readiness.
