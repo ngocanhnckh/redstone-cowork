@@ -31,12 +31,13 @@ async function main() {
     const { handle } = await import("./handler");
     await handle();
   } else if (cmd === "poll") {
-    // Task 8R fills this; stub exits 0 for now
     const cfg = loadCliConfig();
     const wrapper = argv[argv.indexOf("--wrapper") + 1];
     const tmux = argv[argv.indexOf("--tmux") + 1];
     if (!cfg || !wrapper || !tmux) exit(0);
-    exit(0);
+    const { runPoller } = await import("./poller");
+    const { ApiClient } = await import("./api-client");
+    await runPoller({ wrapperId: wrapper, tmuxTarget: tmux, api: new ApiClient(cfg) });
   } else if (cmd === "status") {
     console.log(JSON.stringify({ config: loadCliConfig() }, null, 2));
   } else {
