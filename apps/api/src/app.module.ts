@@ -1,23 +1,38 @@
 import { Module } from "@nestjs/common";
 import { HealthController } from "./adapters/http/health.controller";
 import { EventsController } from "./adapters/http/events.controller";
+import { SessionsController } from "./adapters/http/sessions.controller";
 import { RecordEventUseCase } from "./application/record-event.use-case";
+import { SessionsService } from "./application/sessions.service";
 import { EVENT_STORE } from "./domain/events/event-store.port";
+import { SESSION_STORE } from "./domain/sessions/session-store.port";
 import { InMemoryEventStore } from "./adapters/persistence/in-memory-event-store";
 import { PostgresEventStore } from "./adapters/persistence/postgres-event-store";
-import { createPool } from "./infrastructure/db";
-import { loadConfig } from "./infrastructure/config";
+import { InMemorySessionStore } from "./adapters/persistence/in-memory-session-store";
+import { PostgresSessionStore } from "./adapters/persistence/postgres-session-store";
+import { PG_POOL, pgPoolProvider, PoolShutdown } from "./infrastructure/pg-pool.provider";
+import type { Pool } from "pg";
 
 @Module({
-  controllers: [HealthController, EventsController],
+  controllers: [HealthController, EventsController, SessionsController],
   providers: [
     RecordEventUseCase,
+    SessionsService,
+    // Single shared pool — null when DATABASE_URL is unset (tests run without DB)
+    pgPoolProvider,
+    // Graceful shutdown: ends the pool when the module is destroyed
+    PoolShutdown,
     {
       provide: EVENT_STORE,
-      useFactory: () => {
-        const { DATABASE_URL } = loadConfig();
-        return DATABASE_URL ? new PostgresEventStore(createPool(DATABASE_URL)) : new InMemoryEventStore();
-      },
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresEventStore(pool) : new InMemoryEventStore(),
+    },
+    {
+      provide: SESSION_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresSessionStore(pool) : new InMemorySessionStore(),
     },
   ],
 })
