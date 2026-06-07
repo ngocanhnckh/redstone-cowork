@@ -17,4 +17,10 @@ export class InMemorySessionStore implements SessionStore {
   }
   async get(id: string) { return this.sessions.get(id) ?? null; }
   async list() { return [...this.sessions.values()]; }
+  async getByWrapper(wrapperId: string): Promise<AgentSession | null> {
+    const matches = [...this.sessions.values()]
+      .filter((s) => s.wrapperId === wrapperId)
+      .sort((a, b) => b.lastSeenAt.getTime() - a.lastSeenAt.getTime());
+    return matches[0] ?? null;
+  }
 }

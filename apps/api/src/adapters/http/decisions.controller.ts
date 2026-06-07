@@ -45,4 +45,11 @@ export class DecisionsController {
     if (!d) return res.status(204).send();
     return res.status(200).json(d);
   }
+
+  @Post(":id/delivered")
+  @HttpCode(200)
+  async markDelivered(@Param("id") id: string) {
+    await this.decisions.markDelivered(id);
+    return { ok: true };
+  }
 }

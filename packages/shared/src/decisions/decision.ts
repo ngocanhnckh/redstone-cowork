@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const DecisionKindSchema = z.enum(["permission", "question", "completion", "notification"]);
+export const DecisionKindSchema = z.enum(["permission", "question", "completion", "notification", "instruction"]);
 export const DecisionOptionSchema = z.object({ label: z.string().min(1), description: z.string().optional() });
 
 export const ResolutionSchema = z.object({
@@ -25,5 +25,6 @@ export const DecisionSchema = NewDecisionSchema.extend({
   createdAt: z.coerce.date(),
   resolvedAt: z.coerce.date().nullable().default(null),
   resolution: ResolutionSchema.nullable().default(null),
+  deliveredAt: z.coerce.date().nullable().default(null),
 });
 export type Decision = z.infer<typeof DecisionSchema>;

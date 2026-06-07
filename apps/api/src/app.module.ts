@@ -8,6 +8,7 @@ import { RecordEventUseCase } from "./application/record-event.use-case";
 import { SessionsService } from "./application/sessions.service";
 import { DecisionsService } from "./application/decisions.service";
 import { DecisionWaiters } from "./application/decision-waiters";
+import { DeliveryWaiters } from "./application/delivery-waiters";
 import { EventsBus } from "./application/events-bus";
 import { EVENT_STORE } from "./domain/events/event-store.port";
 import { SESSION_STORE } from "./domain/sessions/session-store.port";
@@ -28,6 +29,7 @@ import type { Pool } from "pg";
     SessionsService,
     DecisionsService,
     DecisionWaiters,
+    DeliveryWaiters,
     EventsBus,
     // Single shared pool — null when DATABASE_URL is unset (tests run without DB)
     pgPoolProvider,

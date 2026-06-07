@@ -44,4 +44,5 @@ export class SessionsService {
     }));
   }
   get(id: string) { return this.store.get(id); }
+  getByWrapper(wrapperId: string) { return this.store.getByWrapper(wrapperId); }
 }

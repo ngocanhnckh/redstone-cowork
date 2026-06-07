@@ -1,6 +1,8 @@
 import type { Decision, Resolution } from "@rcw/shared";
 import type { DecisionStore } from "../../domain/decisions/decision-store.port";
 
+const DELIVERABLE_KINDS = new Set(["permission", "question", "instruction"]);
+
 export class InMemoryDecisionStore implements DecisionStore {
   private decisions = new Map<string, Decision>();
   async create(d: Decision) { this.decisions.set(d.id, d); return d; }
@@ -21,5 +23,30 @@ export class InMemoryDecisionStore implements DecisionStore {
     for (const d of this.decisions.values())
       if (d.status === "pending") counts[d.sessionId] = (counts[d.sessionId] ?? 0) + 1;
     return counts;
+  }
+  async listUndelivered(sessionId: string): Promise<Decision[]> {
+    return [...this.decisions.values()].filter(
+      (d) => d.sessionId === sessionId && d.status === "resolved" && d.deliveredAt === null && DELIVERABLE_KINDS.has(d.kind)
+    ).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  }
+  async markDelivered(id: string, at: Date): Promise<void> {
+    const d = this.decisions.get(id);
+    if (d) this.decisions.set(id, { ...d, deliveredAt: at });
+  }
+  async resolveAllPendingLocal(sessionId: string, at: Date): Promise<number> {
+    let count = 0;
+    for (const d of this.decisions.values()) {
+      if (d.sessionId === sessionId && d.status === "pending" && (d.kind === "permission" || d.kind === "question")) {
+        this.decisions.set(d.id, {
+          ...d,
+          status: "resolved",
+          resolution: { choice: "__local__", answers: null, custom: null },
+          resolvedAt: at,
+          deliveredAt: at,
+        });
+        count++;
+      }
+    }
+    return count;
   }
 }

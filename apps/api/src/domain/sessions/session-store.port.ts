@@ -5,5 +5,6 @@ export interface SessionStore {
   touch(id: string, at: Date): Promise<boolean>;      // false = unknown id
   get(id: string): Promise<AgentSession | null>;
   list(): Promise<AgentSession[]>;
+  getByWrapper(wrapperId: string): Promise<AgentSession | null>;
 }
 export const SESSION_STORE = Symbol("SessionStore");

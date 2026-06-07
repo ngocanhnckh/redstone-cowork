@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { DecisionSchema, NewDecisionSchema, ResolutionSchema } from "../src/decisions/decision";
-import { AgentSessionSchema } from "../src/sessions/agent-session";
+import { AgentSessionSchema, NewAgentSessionSchema } from "../src/sessions/agent-session";
 
 describe("Decision schemas", () => {
   it("accepts a new permission decision", () => {
@@ -31,5 +31,18 @@ describe("Decision schemas", () => {
       attachedAt: "2026-06-07T10:00:00Z", lastSeenAt: "2026-06-07T10:01:00Z",
     });
     expect(s.lastSeenAt.getTime()).toBeGreaterThan(s.attachedAt.getTime());
+  });
+  it("accepts instruction kind and deliveredAt", () => {
+    const d = DecisionSchema.parse({
+      id: "9f3b8c1e-2a4d-4f6a-9c0d-1e2f3a4b5c6d", sessionId: "s", kind: "instruction",
+      title: "run tests", body: {}, options: [], status: "resolved",
+      createdAt: "2026-06-07T10:00:00Z", resolvedAt: "2026-06-07T10:00:01Z",
+      resolution: { choice: null, answers: null, custom: "pnpm test" }, deliveredAt: null,
+    });
+    expect(d.deliveredAt).toBeNull();
+  });
+  it("agent session carries optional wrapperId", () => {
+    const s = NewAgentSessionSchema.parse({ id: "x", machine: "m", cwd: "/p", gitBranch: null, wrapperId: "ab12" });
+    expect(s.wrapperId).toBe("ab12");
   });
 });
