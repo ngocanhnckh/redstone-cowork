@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { DECISION_STORE, type DecisionStore } from "../domain/decisions/decision-store.port";
 import { SESSION_STORE, type SessionStore } from "../domain/sessions/session-store.port";
 import { DecisionWaiters } from "./decision-waiters";
+import { EventsBus } from "./events-bus";
 
 @Injectable()
 export class DecisionsService {
@@ -11,6 +12,7 @@ export class DecisionsService {
     @Inject(DECISION_STORE) private readonly store: DecisionStore,
     @Inject(SESSION_STORE) private readonly sessions: SessionStore,
     private readonly waiters: DecisionWaiters,
+    private readonly bus: EventsBus,
   ) {}
 
   async create(input: unknown): Promise<Decision> {
@@ -20,7 +22,9 @@ export class DecisionsService {
       ...parsed, id: randomUUID(), status: "pending",
       createdAt: new Date(), resolvedAt: null, resolution: null,
     };
-    return this.store.create(decision);
+    const stored = await this.store.create(decision);
+    this.bus.emit({ type: "decision.created", payload: stored });
+    return stored;
   }
 
   listPending() { return this.store.listPending(); }
@@ -36,6 +40,7 @@ export class DecisionsService {
       throw new ConflictException("already resolved");
     }
     this.waiters.notify(resolved);
+    this.bus.emit({ type: "decision.resolved", payload: resolved });
     return resolved;
   }
 

@@ -1,6 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { NewAgentSessionSchema, type AgentSession, type SessionStatus } from "@rcw/shared";
 import { SESSION_STORE, type SessionStore } from "../domain/sessions/session-store.port";
+import { EventsBus } from "./events-bus";
 
 export type SessionView = AgentSession & { status: SessionStatus; pendingDecisions: number };
 
@@ -17,15 +18,22 @@ export const sessionStatus = (s: AgentSession, pending: number, now: Date): Sess
 
 @Injectable()
 export class SessionsService {
-  constructor(@Inject(SESSION_STORE) private readonly store: SessionStore) {}
+  constructor(
+    @Inject(SESSION_STORE) private readonly store: SessionStore,
+    private readonly bus: EventsBus,
+  ) {}
 
   async attach(input: unknown): Promise<AgentSession> {
     const parsed = NewAgentSessionSchema.parse(input);
     const now = new Date();
-    return this.store.upsert({ ...parsed, attachedAt: now, lastSeenAt: now });
+    const session = await this.store.upsert({ ...parsed, attachedAt: now, lastSeenAt: now });
+    this.bus.emit({ type: "session.updated", payload: { id: session.id } });
+    return session;
   }
   async heartbeat(id: string): Promise<boolean> {
-    return this.store.touch(id, new Date());
+    const ok = await this.store.touch(id, new Date());
+    if (ok) this.bus.emit({ type: "session.updated", payload: { id } });
+    return ok;
   }
   async listViews(pendingBySession: Record<string, number>): Promise<SessionView[]> {
     const now = new Date();

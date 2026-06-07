@@ -3,10 +3,12 @@ import { HealthController } from "./adapters/http/health.controller";
 import { EventsController } from "./adapters/http/events.controller";
 import { SessionsController } from "./adapters/http/sessions.controller";
 import { DecisionsController } from "./adapters/http/decisions.controller";
+import { StreamController } from "./adapters/http/stream.controller";
 import { RecordEventUseCase } from "./application/record-event.use-case";
 import { SessionsService } from "./application/sessions.service";
 import { DecisionsService } from "./application/decisions.service";
 import { DecisionWaiters } from "./application/decision-waiters";
+import { EventsBus } from "./application/events-bus";
 import { EVENT_STORE } from "./domain/events/event-store.port";
 import { SESSION_STORE } from "./domain/sessions/session-store.port";
 import { DECISION_STORE } from "./domain/decisions/decision-store.port";
@@ -20,12 +22,13 @@ import { PG_POOL, pgPoolProvider, PoolShutdown } from "./infrastructure/pg-pool.
 import type { Pool } from "pg";
 
 @Module({
-  controllers: [HealthController, EventsController, SessionsController, DecisionsController],
+  controllers: [HealthController, EventsController, SessionsController, DecisionsController, StreamController],
   providers: [
     RecordEventUseCase,
     SessionsService,
     DecisionsService,
     DecisionWaiters,
+    EventsBus,
     // Single shared pool — null when DATABASE_URL is unset (tests run without DB)
     pgPoolProvider,
     // Graceful shutdown: ends the pool when the module is destroyed
