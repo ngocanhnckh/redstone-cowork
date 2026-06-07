@@ -6,6 +6,7 @@ import { DecisionsController } from "./adapters/http/decisions.controller";
 import { RecordEventUseCase } from "./application/record-event.use-case";
 import { SessionsService } from "./application/sessions.service";
 import { DecisionsService } from "./application/decisions.service";
+import { DecisionWaiters } from "./application/decision-waiters";
 import { EVENT_STORE } from "./domain/events/event-store.port";
 import { SESSION_STORE } from "./domain/sessions/session-store.port";
 import { DECISION_STORE } from "./domain/decisions/decision-store.port";
@@ -24,6 +25,7 @@ import type { Pool } from "pg";
     RecordEventUseCase,
     SessionsService,
     DecisionsService,
+    DecisionWaiters,
     // Single shared pool — null when DATABASE_URL is unset (tests run without DB)
     pgPoolProvider,
     // Graceful shutdown: ends the pool when the module is destroyed
