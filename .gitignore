@@ -1,0 +1,19 @@
+# Credentials — never commit
+.creds
+.env
+.env.*
+*.pem
+*.key
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+.next/
+.turbo/
+
+# OS / editor
+.DS_Store
+*.log
