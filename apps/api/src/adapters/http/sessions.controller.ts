@@ -2,12 +2,16 @@ import { Body, Controller, Get, HttpCode, NotFoundException, Param, Post, UseGua
 import { BadRequestException } from "@nestjs/common";
 import { ZodError } from "zod";
 import { SessionsService } from "../../application/sessions.service";
+import { DecisionsService } from "../../application/decisions.service";
 import { InstanceTokenGuard } from "./instance-token.guard";
 
 @Controller("sessions")
 @UseGuards(InstanceTokenGuard)
 export class SessionsController {
-  constructor(private readonly sessions: SessionsService) {}
+  constructor(
+    private readonly sessions: SessionsService,
+    private readonly decisions: DecisionsService,
+  ) {}
 
   @Post()
   async attach(@Body() body: unknown) {
@@ -27,7 +31,7 @@ export class SessionsController {
   }
 
   @Get()
-  list() {
-    return this.sessions.listViews({});
+  async list() {
+    return this.sessions.listViews(await this.decisions.countPendingBySession());
   }
 }
