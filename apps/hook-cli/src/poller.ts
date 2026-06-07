@@ -64,14 +64,12 @@ export async function runPoller(opts: {
     }
   }
 
-  const capturedSessionId = sessionId;
-
   // Infinite poll loop with 5s error back-off
   for (;;) {
     try {
       await pollOnce({
         deliveries: () =>
-          api.deliveries(capturedSessionId, 25_000) as Promise<Delivery[]>,
+          api.deliveries(wrapperId, 25_000) as Promise<Delivery[]>,
         markDelivered: (id) => api.markDelivered(id),
         sendKeys,
       });

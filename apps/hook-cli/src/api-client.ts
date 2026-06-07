@@ -84,11 +84,11 @@ export class ApiClient {
   }
 
   async deliveries(
-    sessionId: string,
+    wrapperId: string,
     timeoutMs: number
   ): Promise<Array<Record<string, unknown>>> {
     const r = await this.req(
-      `/sessions/${encodeURIComponent(sessionId)}/deliveries?timeoutMs=${timeoutMs}`,
+      `/sessions/by-wrapper/${encodeURIComponent(wrapperId)}/deliveries?timeoutMs=${timeoutMs}`,
       { headers: json(this.cfg.token) },
       timeoutMs + 5000
     );
