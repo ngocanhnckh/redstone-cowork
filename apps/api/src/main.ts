@@ -9,4 +9,7 @@ async function bootstrap() {
   await app.listen(config.PORT);
   console.log(`[api] listening on :${config.PORT}`);
 }
-bootstrap();
+bootstrap().catch((err) => {
+  console.error("[api] fatal:", err);
+  process.exit(1);
+});
