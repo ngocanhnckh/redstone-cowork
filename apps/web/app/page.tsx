@@ -1,28 +1,68 @@
-const API_URL = process.env.API_INTERNAL_URL ?? "http://api:3001";
-const TOKEN = process.env.INSTANCE_TOKEN ?? "dev-token";
+"use client";
+import { useCallback, useEffect, useState } from "react";
+import { DecisionCard, type Decision } from "../components/DecisionCard";
+import { SessionRow } from "../components/SessionRow";
 
-export const dynamic = "force-dynamic";
+type Session = {
+  id: string;
+  machine: string;
+  cwd: string;
+  status: string;
+  pendingDecisions: number;
+  wrapperId?: string | null;
+};
 
-async function getStatus() {
-  try {
-    const health = await fetch(`${API_URL}/health`, { cache: "no-store" }).then((r) => r.json());
-    const events = await fetch(`${API_URL}/events`, {
-      headers: { Authorization: `Bearer ${TOKEN}` }, cache: "no-store",
-    }).then((r) => (r.ok ? r.json() : []));
-    return { health, eventCount: events.length, latest: events[0] ?? null };
-  } catch {
-    return { health: { status: "unreachable" }, eventCount: 0, latest: null };
-  }
-}
+export default function Home() {
+  const [sessions, setSessions] = useState<Session[]>([]);
+  const [decisions, setDecisions] = useState<Decision[]>([]);
 
-export default async function Home() {
-  const s = await getStatus();
+  const refresh = useCallback(async () => {
+    const [s, d] = await Promise.all([
+      fetch("/api/proxy/sessions"),
+      fetch("/api/proxy/decisions?status=pending"),
+    ]);
+    if (s.status === 401 || d.status === 401) {
+      window.location.href = "/login";
+      return;
+    }
+    setSessions(await s.json());
+    setDecisions(await d.json());
+  }, []);
+
+  useEffect(() => {
+    refresh();
+    const es = new EventSource("/api/stream");
+    es.onmessage = () => refresh();
+    const poll = setInterval(refresh, 30_000); // safety net
+    return () => {
+      es.close();
+      clearInterval(poll);
+    };
+  }, [refresh]);
+
   return (
-    <main>
-      <h1>Redstone Cowork</h1>
-      <p>API: <strong>{s.health.status}</strong></p>
-      <p>Domain events recorded: <strong>{s.eventCount}</strong></p>
-      {s.latest && <pre style={{ background: "#131a2e", padding: "1rem", borderRadius: 8 }}>{JSON.stringify(s.latest, null, 2)}</pre>}
+    <main style={{ maxWidth: 720, margin: "0 auto" }}>
+      <h1>
+        Situation Room{" "}
+        <span style={{ fontSize: 14, opacity: 0.5 }}>(M1 preview)</span>
+      </h1>
+      <h2 style={{ fontSize: 16, opacity: 0.8 }}>
+        Decisions waiting on you{" "}
+        {decisions.length > 0 && `(${decisions.length})`}
+      </h2>
+      {decisions.length === 0 && <p style={{ opacity: 0.5 }}>All clear, boss.</p>}
+      {decisions.map((d) => (
+        <DecisionCard key={d.id} decision={d} onResolved={() => refresh()} />
+      ))}
+      <h2 style={{ fontSize: 16, opacity: 0.8, marginTop: 32 }}>Sessions</h2>
+      {sessions.length === 0 && (
+        <p style={{ opacity: 0.5 }}>
+          No sessions attached. Run <code>redstone hook</code> in a project.
+        </p>
+      )}
+      {sessions.map((s) => (
+        <SessionRow key={s.id} s={s} />
+      ))}
     </main>
   );
 }
