@@ -1,6 +1,7 @@
 services:
   postgres:
     image: postgres:16-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_USER: rcw
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -15,6 +16,7 @@ services:
 
   qdrant:
     image: qdrant/qdrant:v1.13.4
+    restart: unless-stopped
     volumes:
       - qdrantdata:/qdrant/storage
     healthcheck:
@@ -25,6 +27,7 @@ services:
 
   api:
     build: { context: ., dockerfile: apps/api/Dockerfile }
+    restart: unless-stopped
     environment:
       PORT: 3001
       DATABASE_URL: postgres://rcw:${POSTGRES_PASSWORD}@postgres:5432/rcw
@@ -41,6 +44,7 @@ services:
 
   worker:
     build: { context: ., dockerfile: apps/worker/Dockerfile }
+    restart: unless-stopped
     environment:
       API_URL: http://api:3001
       INSTANCE_TOKEN: ${INSTANCE_TOKEN}
@@ -50,6 +54,7 @@ services:
 
   web:
     build: { context: ., dockerfile: apps/web/Dockerfile }
+    restart: unless-stopped
     environment:
       API_INTERNAL_URL: http://api:3001
       INSTANCE_TOKEN: ${INSTANCE_TOKEN}
