@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const COLORS: Record<string, string> = {
   active: "#3ddc84",
@@ -37,6 +37,12 @@ export function SessionRow({ s }: { s: Session }) {
   // optimistic mode state: null means "follow server value"
   const [optimisticMode, setOptimisticMode] = useState<string | null>(null);
   const [switching, setSwitching] = useState(false);
+
+  // Once the server reports a mode, clear the optimistic shadow so server truth
+  // wins — otherwise a switch that doesn't land as expected would display a lie.
+  useEffect(() => {
+    setOptimisticMode(null);
+  }, [s.permissionMode]);
 
   const activeMode = optimisticMode ?? s.permissionMode ?? "default";
 
