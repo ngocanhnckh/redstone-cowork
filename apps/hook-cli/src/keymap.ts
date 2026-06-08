@@ -30,10 +30,13 @@ export function deliveryToKeys(d: Delivery): string[][] | null {
     return [["-l", r.custom], ["Enter"]];
   }
 
-  // permission or question: send the 1-based digit of the chosen option
+  // permission or question: highlight the option by its 1-based digit, then
+  // Enter to confirm. Claude's question dialog selects on the digit but needs
+  // Enter to submit; for prompts that auto-act on the digit the trailing Enter
+  // is a harmless no-op (Claude ignores Enter on empty input).
   if ((d.kind === "permission" || d.kind === "question") && r.choice) {
     const idx = d.options.findIndex((o) => o.label === r.choice);
-    if (idx >= 0) return [[String(idx + 1)]];
+    if (idx >= 0) return [[String(idx + 1)], ["Enter"]];
   }
 
   // unmapped (e.g. free-text answer to a question dialog, no matching option) — ack + skip

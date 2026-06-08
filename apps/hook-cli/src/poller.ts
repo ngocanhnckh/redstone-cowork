@@ -34,6 +34,9 @@ export function pasteSettleMs(text: string): number {
   return Math.min(1500, 250 + text.length * 3);
 }
 
+/** Small gap between ordinary keystrokes (e.g. an option digit and its Enter). */
+export const KEY_SETTLE_MS = 120;
+
 /**
  * Fetch one batch of deliveries, send keystrokes for mapped items,
  * and acknowledge every item (mapped or not).
@@ -44,11 +47,16 @@ export async function pollOnce(deps: PollOnceDeps): Promise<void> {
   for (const d of items) {
     const keySequences = deliveryToKeys(d);
     if (keySequences) {
-      for (const keys of keySequences) {
+      for (let i = 0; i < keySequences.length; i++) {
+        const keys = keySequences[i];
         await deps.sendKeys(keys);
-        // After a literal paste (`-l <text>`), let Claude's paste buffer settle
-        // before the following Enter, or the Enter is absorbed as a newline.
-        if (keys[0] === "-l") await sleep(pasteSettleMs(keys[1] ?? ""));
+        // Let the keystroke register before the next one. After a literal paste
+        // (`-l <text>`) Claude's paste buffer needs to settle or the following
+        // Enter is absorbed as a newline; between ordinary keys (option digit →
+        // Enter) a short gap lets the selection register before we confirm.
+        if (i < keySequences.length - 1) {
+          await sleep(keys[0] === "-l" ? pasteSettleMs(keys[1] ?? "") : KEY_SETTLE_MS);
+        }
       }
     }
     await deps.markDelivered(d.id);
