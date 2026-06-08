@@ -17,14 +17,33 @@ describe("deliveryToKeys", () => {
       .toEqual([["2"], ["Enter"]]);
   });
 
-  it("multi-question answers -> one digit per question in order, then a single Enter", () => {
+  it("multi-question answers -> per question: chosen digit then Enter to advance", () => {
     const body = { tool_input: { questions: [
       { question: "Framework?", options: [{ label: "React" }, { label: "Vue" }] },
       { question: "Bundler?", options: [{ label: "Vite" }, { label: "Webpack" }, { label: "esbuild" }] },
     ] } };
     expect(deliveryToKeys({ ...base, kind: "question", options: [{ label: "React" }, { label: "Vue" }],
       body, resolution: { choice: null, answers: { "Framework?": "Vue", "Bundler?": "esbuild" }, custom: null } } as never))
-      .toEqual([["2"], ["3"], ["Enter"]]);
+      .toEqual([["2"], ["Enter"], ["3"], ["Enter"]]);
+  });
+
+  it("multiSelect question -> a digit per chosen option, then one Enter to advance", () => {
+    const body = { tool_input: { questions: [
+      { question: "Weekend?", multiSelect: true, options: [{ label: "Reading" }, { label: "Hiking" }, { label: "Gaming" }, { label: "Movies" }] },
+    ] } };
+    expect(deliveryToKeys({ ...base, kind: "question", options: [],
+      body, resolution: { choice: null, answers: { "Weekend?": ["Reading", "Gaming"] }, custom: null } } as never))
+      .toEqual([["1"], ["3"], ["Enter"]]);
+  });
+
+  it("mixed single + multiSelect questions -> correct interleaved sequence", () => {
+    const body = { tool_input: { questions: [
+      { question: "Season?", options: [{ label: "Spring" }, { label: "Summer" }, { label: "Autumn" }, { label: "Winter" }] },
+      { question: "Weekend?", multiSelect: true, options: [{ label: "Reading" }, { label: "Hiking" }, { label: "Gaming" }] },
+    ] } };
+    expect(deliveryToKeys({ ...base, kind: "question", options: [],
+      body, resolution: { choice: null, answers: { "Season?": "Autumn", "Weekend?": ["Hiking", "Gaming"] }, custom: null } } as never))
+      .toEqual([["3"], ["Enter"], ["2"], ["3"], ["Enter"]]);
   });
 
   it("multi-question with a missing answer -> null (never half-drive the form)", () => {

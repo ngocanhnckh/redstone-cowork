@@ -5,7 +5,9 @@ export const DecisionOptionSchema = z.object({ label: z.string().min(1), descrip
 
 export const ResolutionSchema = z.object({
   choice: z.string().nullable().default(null),                       // picked option label
-  answers: z.record(z.string()).nullable().default(null),            // AskUserQuestion: question -> answer
+  // AskUserQuestion: question text -> answer. A single label for single-select
+  // questions, an array of labels for multiSelect ("select all that apply").
+  answers: z.record(z.union([z.string(), z.array(z.string())])).nullable().default(null),
   custom: z.string().nullable().default(null),                       // free-text reply
 });
 export type Resolution = z.infer<typeof ResolutionSchema>;

@@ -2,10 +2,10 @@
 // Verified live in Task 10R — adjust HERE if the real dialogs differ.
 
 type Option = { label: string };
-type Question = { question: string; options?: Option[] };
+type Question = { question: string; options?: Option[]; multiSelect?: boolean };
 type Resolution = {
   choice: string | null;
-  answers: Record<string, string> | null;
+  answers: Record<string, string | string[]> | null;
   custom: string | null;
 } | null;
 
@@ -40,23 +40,30 @@ export function deliveryToKeys(d: Delivery): string[][] | null {
     return [["-l", r.custom], ["Enter"]];
   }
 
-  // multi-question AskUserQuestion answer: Claude renders each question as a
-  // sequential panel. Pressing the chosen option's 1-based digit selects it AND
-  // advances to the next question; a single final Enter submits the completed
-  // form. (For one question this reduces to [digit, Enter] — the confirmed
-  // single-question path.) Drive every question, then submit once.
+  // AskUserQuestion answer: Claude renders each question as a sequential panel.
+  // Per question, press the 1-based digit of every chosen option (one for a
+  // single-select question, several for a multiSelect one), then Enter to
+  // confirm that question and advance to the next. For one single-select
+  // question this reduces to [digit, Enter] — the confirmed single-question
+  // path. Bail to null on any incomplete/unmatched answer so we never
+  // half-drive the form and leave the terminal wedged.
   if (d.kind === "question" && r.answers) {
     const questions = d.body?.tool_input?.questions ?? [];
     if (questions.length === 0) return null;
     const keys: string[][] = [];
     for (const q of questions) {
       const answer = r.answers[q.question];
-      if (answer === undefined) return null; // incomplete — never half-drive the form
-      const idx = (q.options ?? []).findIndex((o) => o.label === answer);
-      if (idx < 0) return null; // free-text answer with no matching option — skip
-      keys.push([String(idx + 1)]);
+      if (answer === undefined) return null; // unanswered question
+      const labels = Array.isArray(answer) ? answer : [answer];
+      if (labels.length === 0) return null; // multiSelect with nothing picked
+      const options = q.options ?? [];
+      for (const label of labels) {
+        const idx = options.findIndex((o) => o.label === label);
+        if (idx < 0) return null; // answer with no matching option
+        keys.push([String(idx + 1)]); // digit toggles/selects this option
+      }
+      keys.push(["Enter"]); // confirm this question and advance
     }
-    keys.push(["Enter"]);
     return keys;
   }
 

@@ -12,22 +12,39 @@ export type Decision = {
   body?: Record<string, unknown>;
 };
 
-type Question = { question: string; options?: Option[] };
+type Question = { question: string; options?: Option[]; multiSelect?: boolean };
 
 export function DecisionCard({ decision, onResolved }: { decision: Decision; onResolved: (id: string) => void }) {
   const [custom, setCustom] = useState("");
   const [busy, setBusy] = useState(false);
-  // multi-question form: question text -> chosen option label
-  const [answers, setAnswers] = useState<Record<string, string>>({});
+  // question form state: question text -> chosen label (single-select) or labels (multiSelect)
+  const [answers, setAnswers] = useState<Record<string, string | string[]>>({});
 
   const deliverable = decision.body?.deliverable !== false;
 
-  // AskUserQuestion can carry up to 4 questions; the hook stores them all in body.
+  // AskUserQuestion can carry up to 4 questions (each single- or multi-select);
+  // the hook stores them all in body. Drive the whole form, not just question 1.
   const questions = (decision.body?.tool_input as { questions?: Question[] } | undefined)?.questions;
-  const isMulti = decision.kind === "question" && Array.isArray(questions) && questions.length > 1;
-  const allAnswered = isMulti && questions!.every((q) => answers[q.question]);
+  const isForm = decision.kind === "question" && Array.isArray(questions) && questions.length >= 1;
+  const answered = (q: Question) => {
+    const a = answers[q.question];
+    return Array.isArray(a) ? a.length > 0 : Boolean(a);
+  };
+  const isPicked = (q: Question, label: string) => {
+    const a = answers[q.question];
+    return Array.isArray(a) ? a.includes(label) : a === label;
+  };
+  const toggle = (q: Question, label: string) =>
+    setAnswers((prev) => {
+      if (q.multiSelect) {
+        const cur = Array.isArray(prev[q.question]) ? (prev[q.question] as string[]) : [];
+        return { ...prev, [q.question]: cur.includes(label) ? cur.filter((l) => l !== label) : [...cur, label] };
+      }
+      return { ...prev, [q.question]: label };
+    });
+  const allAnswered = isForm && questions!.every(answered);
 
-  const resolve = async (choice: string | null, answerMap: Record<string, string> | null = null) => {
+  const resolve = async (choice: string | null, answerMap: Record<string, string | string[]> | null = null) => {
     setBusy(true);
     const r = await fetch(`/api/proxy/decisions/${decision.id}/resolve`, {
       method: "POST",
@@ -52,7 +69,7 @@ export function DecisionCard({ decision, onResolved }: { decision: Decision; onR
         {decision.kind} · session {decision.sessionId.slice(0, 8)} · {new Date(decision.createdAt).toLocaleTimeString()}
       </div>
       <div style={{ margin: "8px 0", fontWeight: 600 }}>{decision.title}</div>
-      {isMulti ? (
+      {isForm ? (
         <>
           {!deliverable && (
             <p style={{ fontSize: 12, opacity: 0.6, margin: "0 0 8px", fontStyle: "italic" }}>
@@ -63,15 +80,18 @@ export function DecisionCard({ decision, onResolved }: { decision: Decision; onR
             <div key={qi} style={{ margin: "0 0 14px" }}>
               <div style={{ fontSize: 13, opacity: 0.85, margin: "0 0 6px" }}>
                 {qi + 1}. {q.question}
+                {q.multiSelect && (
+                  <span style={{ fontSize: 11, opacity: 0.5 }}> · select all that apply</span>
+                )}
               </div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 {(q.options ?? []).map((o) => {
-                  const picked = answers[q.question] === o.label;
+                  const picked = isPicked(q, o.label);
                   return (
                     <button
                       key={o.label}
                       disabled={busy || !deliverable}
-                      onClick={() => setAnswers((a) => ({ ...a, [q.question]: o.label }))}
+                      onClick={() => toggle(q, o.label)}
                       title={o.description}
                       style={{
                         padding: "8px 14px",
@@ -83,7 +103,7 @@ export function DecisionCard({ decision, onResolved }: { decision: Decision; onR
                         cursor: !deliverable ? "not-allowed" : "pointer",
                       }}
                     >
-                      {o.label}
+                      {q.multiSelect ? `${picked ? "☑" : "☐"} ${o.label}` : o.label}
                     </button>
                   );
                 })}
@@ -103,7 +123,11 @@ export function DecisionCard({ decision, onResolved }: { decision: Decision; onR
               cursor: busy || !deliverable || !allAnswered ? "not-allowed" : "pointer",
             }}
           >
-            {allAnswered ? "Submit answers" : `Answer all ${questions!.length} questions`}
+            {allAnswered
+              ? "Submit answers"
+              : questions!.length > 1
+                ? `Answer all ${questions!.length} questions`
+                : "Pick an answer"}
           </button>
         </>
       ) : decision.kind === "permission" || decision.kind === "question" ? (
