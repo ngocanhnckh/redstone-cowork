@@ -17,19 +17,38 @@ export type PollOnceDeps = {
   markDelivered(id: string): Promise<void>;
   /** Execute a single send-keys argument list against the tmux target. */
   sendKeys(keys: string[]): Promise<void>;
+  /** Pause (ms). Optional so tests run instantly; runPoller injects a real sleep. */
+  sleep?(ms: number): Promise<void>;
 };
+
+/**
+ * Delay between pasting literal text and pressing Enter.
+ *
+ * Claude Code's TUI runs a paste-detection heuristic: a fast burst of characters
+ * is buffered as a "paste" and the input settles a few ms later. An Enter that
+ * arrives during that window is swallowed into the paste as a newline instead of
+ * submitting. Short text never trips the heuristic (works at 0ms); long text does.
+ * Scale the wait to text length so the buffer has settled before we submit.
+ */
+export function pasteSettleMs(text: string): number {
+  return Math.min(1500, 250 + text.length * 3);
+}
 
 /**
  * Fetch one batch of deliveries, send keystrokes for mapped items,
  * and acknowledge every item (mapped or not).
  */
 export async function pollOnce(deps: PollOnceDeps): Promise<void> {
+  const sleep = deps.sleep ?? (() => Promise.resolve());
   const items = await deps.deliveries();
   for (const d of items) {
     const keySequences = deliveryToKeys(d);
     if (keySequences) {
       for (const keys of keySequences) {
         await deps.sendKeys(keys);
+        // After a literal paste (`-l <text>`), let Claude's paste buffer settle
+        // before the following Enter, or the Enter is absorbed as a newline.
+        if (keys[0] === "-l") await sleep(pasteSettleMs(keys[1] ?? ""));
       }
     }
     await deps.markDelivered(d.id);
@@ -72,6 +91,7 @@ export async function runPoller(opts: {
           api.deliveries(wrapperId, 25_000) as Promise<Delivery[]>,
         markDelivered: (id) => api.markDelivered(id),
         sendKeys,
+        sleep: (ms) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
       });
     } catch {
       await new Promise<void>((resolve) => setTimeout(resolve, 5000));
