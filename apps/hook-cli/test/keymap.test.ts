@@ -16,6 +16,35 @@ describe("deliveryToKeys", () => {
     expect(deliveryToKeys({ ...base, kind: "question", options: [{ label: "A" }, { label: "B" }], resolution: { choice: "B", answers: null, custom: null } } as never))
       .toEqual([["2"], ["Enter"]]);
   });
+
+  it("multi-question answers -> one digit per question in order, then a single Enter", () => {
+    const body = { tool_input: { questions: [
+      { question: "Framework?", options: [{ label: "React" }, { label: "Vue" }] },
+      { question: "Bundler?", options: [{ label: "Vite" }, { label: "Webpack" }, { label: "esbuild" }] },
+    ] } };
+    expect(deliveryToKeys({ ...base, kind: "question", options: [{ label: "React" }, { label: "Vue" }],
+      body, resolution: { choice: null, answers: { "Framework?": "Vue", "Bundler?": "esbuild" }, custom: null } } as never))
+      .toEqual([["2"], ["3"], ["Enter"]]);
+  });
+
+  it("multi-question with a missing answer -> null (never half-drive the form)", () => {
+    const body = { tool_input: { questions: [
+      { question: "Framework?", options: [{ label: "React" }, { label: "Vue" }] },
+      { question: "Bundler?", options: [{ label: "Vite" }, { label: "Webpack" }] },
+    ] } };
+    expect(deliveryToKeys({ ...base, kind: "question", options: [],
+      body, resolution: { choice: null, answers: { "Framework?": "React" }, custom: null } } as never))
+      .toBeNull();
+  });
+
+  it("single-question answers map -> [digit, Enter] (same as the choice path)", () => {
+    const body = { tool_input: { questions: [
+      { question: "Proceed?", options: [{ label: "Yes" }, { label: "No" }] },
+    ] } };
+    expect(deliveryToKeys({ ...base, kind: "question", options: [{ label: "Yes" }, { label: "No" }],
+      body, resolution: { choice: null, answers: { "Proceed?": "No" }, custom: null } } as never))
+      .toEqual([["2"], ["Enter"]]);
+  });
   it("local-answered or unmapped -> null (skip)", () => {
     expect(deliveryToKeys({ ...base, kind: "permission", options: [{ label: "Allow" }], resolution: { choice: "__local__", answers: null, custom: null } } as never)).toBeNull();
     expect(deliveryToKeys({ ...base, kind: "question", options: [], resolution: { choice: null, answers: null, custom: "free text" } } as never)).toBeNull();

@@ -2,6 +2,7 @@
 // Verified live in Task 10R — adjust HERE if the real dialogs differ.
 
 type Option = { label: string };
+type Question = { question: string; options?: Option[] };
 type Resolution = {
   choice: string | null;
   answers: Record<string, string> | null;
@@ -12,7 +13,7 @@ type Delivery = {
   kind: string;
   options: Option[];
   resolution: Resolution;
-  body?: { btabs?: number };
+  body?: { btabs?: number; tool_input?: { questions?: Question[] } };
 };
 
 /**
@@ -37,6 +38,26 @@ export function deliveryToKeys(d: Delivery): string[][] | null {
   // instruction: type the text literally then press Enter
   if (d.kind === "instruction" && r.custom) {
     return [["-l", r.custom], ["Enter"]];
+  }
+
+  // multi-question AskUserQuestion answer: Claude renders each question as a
+  // sequential panel. Pressing the chosen option's 1-based digit selects it AND
+  // advances to the next question; a single final Enter submits the completed
+  // form. (For one question this reduces to [digit, Enter] — the confirmed
+  // single-question path.) Drive every question, then submit once.
+  if (d.kind === "question" && r.answers) {
+    const questions = d.body?.tool_input?.questions ?? [];
+    if (questions.length === 0) return null;
+    const keys: string[][] = [];
+    for (const q of questions) {
+      const answer = r.answers[q.question];
+      if (answer === undefined) return null; // incomplete — never half-drive the form
+      const idx = (q.options ?? []).findIndex((o) => o.label === answer);
+      if (idx < 0) return null; // free-text answer with no matching option — skip
+      keys.push([String(idx + 1)]);
+    }
+    keys.push(["Enter"]);
+    return keys;
   }
 
   // permission or question: highlight the option by its 1-based digit, then

@@ -64,4 +64,23 @@ describe("buildDecisionSpec", () => {
     const spec = buildDecisionSpec(questionEventNoQuestions, false);
     expect(spec).toBeNull();
   });
+
+  it("multi-question AskUserQuestion → body retains ALL questions for the web + keymap", () => {
+    const multi = {
+      hook_event_name: "PermissionRequest",
+      session_id: "s",
+      cwd: "/p",
+      tool_name: "AskUserQuestion",
+      tool_input: {
+        questions: [
+          { question: "Framework?", options: [{ label: "React" }, { label: "Vue" }] },
+          { question: "Bundler?", options: [{ label: "Vite" }, { label: "Webpack" }] },
+        ],
+      },
+    };
+    const spec = buildDecisionSpec(multi, true);
+    expect(spec).not.toBeNull();
+    const questions = (spec!.body.tool_input as { questions: unknown[] }).questions;
+    expect(questions).toHaveLength(2);
+  });
 });
