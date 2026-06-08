@@ -10,6 +10,8 @@ type Session = {
   status: string;
   pendingDecisions: number;
   wrapperId?: string | null;
+  permissionMode?: string | null;
+  autoModeEnabled?: boolean;
 };
 
 export default function Home() {
