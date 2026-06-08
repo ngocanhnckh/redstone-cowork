@@ -16,6 +16,7 @@ const baseDeps = (overrides: Partial<Deps> = {}): Deps => ({
   machine: "testbox",
   wrapperId: null,
   autoModeEnabled: false,
+  lastAssistantText: vi.fn().mockReturnValue(null),
   ...overrides,
 });
 
@@ -82,6 +83,22 @@ describe("processEvent", () => {
       expect.objectContaining({ kind: "completion" })
     );
     expect(out).toBeNull();
+  });
+
+  it("attaches the latest assistant prose as body.lastMessage on a permission card", async () => {
+    const deps = baseDeps({
+      wrapperId: "wrap1",
+      lastAssistantText: vi.fn().mockReturnValue("I'm about to install deps, ok?"),
+    });
+    await processEvent(
+      ev("PermissionRequest", { tool_name: "Bash", tool_input: { command: "npm install" } }),
+      deps
+    );
+    expect(deps.api.createDecision).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: expect.objectContaining({ lastMessage: "I'm about to install deps, ok?" }),
+      })
+    );
   });
 
   it("Notification with message → kind notification", async () => {

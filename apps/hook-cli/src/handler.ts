@@ -3,6 +3,7 @@ import { loadCliConfig } from "./config";
 import { ApiClient } from "./api-client";
 import { isArmed as isArmedFs, disarm as disarmFs } from "./state";
 import { buildDecisionSpec } from "./decision-spec";
+import { readLastAssistantText } from "./transcript";
 
 export type HookEvent = {
   hook_event_name: string;
@@ -11,6 +12,7 @@ export type HookEvent = {
   tool_name?: string;
   tool_input?: Record<string, unknown>;
   permission_mode?: string;
+  transcript_path?: string;
   [k: string]: unknown;
 };
 
@@ -24,6 +26,8 @@ export type Deps = {
   machine: string;
   wrapperId: string | null;
   autoModeEnabled: boolean;
+  /** Latest assistant prose from the session transcript — the context the user saw. */
+  lastAssistantText: (event: HookEvent) => string | null;
 };
 
 export async function processEvent(
@@ -75,7 +79,7 @@ export async function processEvent(
           sessionId: event.session_id,
           kind: "completion",
           title: "Claude finished a task",
-          body: {},
+          body: { lastMessage: deps.lastAssistantText(event) },
           options: [],
         });
         return null;
@@ -87,7 +91,7 @@ export async function processEvent(
           sessionId: event.session_id,
           kind: "notification",
           title: message.slice(0, 200),
-          body: { message },
+          body: { message, lastMessage: deps.lastAssistantText(event) },
           options: [],
         });
         return null;
@@ -102,8 +106,10 @@ export async function processEvent(
         const deliverable = !!deps.wrapperId;
         const spec = buildDecisionSpec(event, deliverable);
         if (!spec) return null;
+        // Attach the prose the user just saw so the web card carries context.
+        const body = { ...spec.body, lastMessage: deps.lastAssistantText(event) };
         // Await decision creation; errors flow to outer try/catch
-        await deps.api.createDecision({ sessionId: event.session_id, ...spec });
+        await deps.api.createDecision({ sessionId: event.session_id, ...spec, body });
         return null;
       }
 
@@ -137,6 +143,7 @@ export async function handle(): Promise<void> {
     machine: hostname(),
     wrapperId,
     autoModeEnabled,
+    lastAssistantText: (e) => readLastAssistantText(e.transcript_path),
   });
   if (out) process.stdout.write(JSON.stringify(out));
 }

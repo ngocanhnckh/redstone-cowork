@@ -17,10 +17,18 @@ type Question = { question: string; options?: Option[]; multiSelect?: boolean };
 export function DecisionCard({ decision, onResolved }: { decision: Decision; onResolved: (id: string) => void }) {
   const [custom, setCustom] = useState("");
   const [busy, setBusy] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   // question form state: question text -> chosen label (single-select) or labels (multiSelect)
   const [answers, setAnswers] = useState<Record<string, string | string[]>>({});
 
   const deliverable = decision.body?.deliverable !== false;
+
+  // Latest prose Claude sent, captured from the session transcript — context for
+  // what you're being asked. Shown truncated with a Show more / less toggle.
+  const lastMessage = typeof decision.body?.lastMessage === "string" ? decision.body.lastMessage.trim() : "";
+  const COLLAPSE_AT = 220;
+  const isLong = lastMessage.length > COLLAPSE_AT;
+  const shownMessage = expanded || !isLong ? lastMessage : lastMessage.slice(0, COLLAPSE_AT).trimEnd() + "…";
 
   // AskUserQuestion can carry up to 4 questions (each single- or multi-select);
   // the hook stores them all in body. Drive the whole form, not just question 1.
@@ -68,6 +76,40 @@ export function DecisionCard({ decision, onResolved }: { decision: Decision; onR
       <div style={{ fontSize: 12, opacity: 0.6 }}>
         {decision.kind} · session {decision.sessionId.slice(0, 8)} · {new Date(decision.createdAt).toLocaleTimeString()}
       </div>
+      {lastMessage && (
+        <div
+          style={{
+            margin: "8px 0",
+            padding: "8px 10px",
+            borderLeft: "3px solid #2a3550",
+            background: "#0e1424",
+            borderRadius: 6,
+            fontSize: 12.5,
+            lineHeight: 1.5,
+            color: "rgba(255,255,255,0.75)",
+            whiteSpace: "pre-wrap",
+          }}
+        >
+          {shownMessage}
+          {isLong && (
+            <button
+              onClick={() => setExpanded((v) => !v)}
+              style={{
+                display: "block",
+                marginTop: 4,
+                padding: 0,
+                border: 0,
+                background: "none",
+                color: "#3b82f6",
+                cursor: "pointer",
+                fontSize: 12,
+              }}
+            >
+              {expanded ? "Show less" : "Show more"}
+            </button>
+          )}
+        </div>
+      )}
       <div style={{ margin: "8px 0", fontWeight: 600 }}>{decision.title}</div>
       {isForm ? (
         <>
