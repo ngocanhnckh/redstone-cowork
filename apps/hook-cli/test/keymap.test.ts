@@ -17,33 +17,50 @@ describe("deliveryToKeys", () => {
       .toEqual([["2"], ["Enter"]]);
   });
 
-  it("multi-question answers -> per question: chosen digit then Enter to advance", () => {
+  it("two single-select questions -> a digit each (auto-advance), then one Enter to submit review", () => {
     const body = { tool_input: { questions: [
       { question: "Framework?", options: [{ label: "React" }, { label: "Vue" }] },
       { question: "Bundler?", options: [{ label: "Vite" }, { label: "Webpack" }, { label: "esbuild" }] },
     ] } };
     expect(deliveryToKeys({ ...base, kind: "question", options: [{ label: "React" }, { label: "Vue" }],
       body, resolution: { choice: null, answers: { "Framework?": "Vue", "Bundler?": "esbuild" }, custom: null } } as never))
-      .toEqual([["2"], ["Enter"], ["3"], ["Enter"]]);
+      .toEqual([["2"], ["3"], ["Enter"]]);
   });
 
-  it("multiSelect question -> a digit per chosen option, then one Enter to advance", () => {
+  it("single multiSelect question -> toggle digits, Down past every row (K+1) to Submit, Enter to advance, Enter to submit", () => {
     const body = { tool_input: { questions: [
       { question: "Weekend?", multiSelect: true, options: [{ label: "Reading" }, { label: "Hiking" }, { label: "Gaming" }, { label: "Movies" }] },
     ] } };
+    // K=4 options -> 5 Downs to reach the Submit button
     expect(deliveryToKeys({ ...base, kind: "question", options: [],
       body, resolution: { choice: null, answers: { "Weekend?": ["Reading", "Gaming"] }, custom: null } } as never))
-      .toEqual([["1"], ["3"], ["Enter"]]);
+      .toEqual([["1"], ["3"], ["Down"], ["Down"], ["Down"], ["Down"], ["Down"], ["Enter"], ["Enter"]]);
   });
 
-  it("mixed single + multiSelect questions -> correct interleaved sequence", () => {
+  it("mixed single + multiSelect (last) -> single auto-advances, multi walks to Submit, then final submit", () => {
     const body = { tool_input: { questions: [
       { question: "Season?", options: [{ label: "Spring" }, { label: "Summer" }, { label: "Autumn" }, { label: "Winter" }] },
       { question: "Weekend?", multiSelect: true, options: [{ label: "Reading" }, { label: "Hiking" }, { label: "Gaming" }] },
     ] } };
+    // Season=Autumn -> "3" (auto-advances); Weekend toggles "2","3"; K=3 -> 4 Downs; Enter advances to review; Enter submits
     expect(deliveryToKeys({ ...base, kind: "question", options: [],
       body, resolution: { choice: null, answers: { "Season?": "Autumn", "Weekend?": ["Hiking", "Gaming"] }, custom: null } } as never))
-      .toEqual([["3"], ["Enter"], ["2"], ["3"], ["Enter"]]);
+      .toEqual([["3"], ["2"], ["3"], ["Down"], ["Down"], ["Down"], ["Down"], ["Enter"], ["Enter"]]);
+  });
+
+  it("option beyond position 9 -> null (not digit-addressable)", () => {
+    const opts = Array.from({ length: 10 }, (_, i) => ({ label: `o${i}` }));
+    const body = { tool_input: { questions: [{ question: "Q?", options: opts }] } };
+    expect(deliveryToKeys({ ...base, kind: "question", options: [],
+      body, resolution: { choice: null, answers: { "Q?": "o9" }, custom: null } } as never))
+      .toBeNull();
+  });
+
+  it("multiSelect with nothing picked -> null", () => {
+    const body = { tool_input: { questions: [{ question: "Q?", multiSelect: true, options: [{ label: "A" }] }] } };
+    expect(deliveryToKeys({ ...base, kind: "question", options: [],
+      body, resolution: { choice: null, answers: { "Q?": [] }, custom: null } } as never))
+      .toBeNull();
   });
 
   it("multi-question with a missing answer -> null (never half-drive the form)", () => {

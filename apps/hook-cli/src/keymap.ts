@@ -40,13 +40,24 @@ export function deliveryToKeys(d: Delivery): string[][] | null {
     return [["-l", r.custom], ["Enter"]];
   }
 
-  // AskUserQuestion answer: Claude renders each question as a sequential panel.
-  // Per question, press the 1-based digit of every chosen option (one for a
-  // single-select question, several for a multiSelect one), then Enter to
-  // confirm that question and advance to the next. For one single-select
-  // question this reduces to [digit, Enter] — the confirmed single-question
-  // path. Bail to null on any incomplete/unmatched answer so we never
-  // half-drive the form and leave the terminal wedged.
+  // AskUserQuestion answer. Claude renders the questions sequentially, one panel
+  // at a time, and the keyboard protocol differs by question type (verified
+  // against the Claude Code TUI source):
+  //
+  //   single-select: pressing an option's 1-based digit SELECTS it AND
+  //     auto-advances to the next question. (No Enter — an Enter here would
+  //     confirm the *next* question's default option.)
+  //   multiSelect: a digit TOGGLES that option without moving focus. To advance
+  //     you must walk focus down past every list row — the K options plus an
+  //     appended hidden "Other" row, so K+1 Downs — onto the Submit/Next button,
+  //     then press Enter to activate it.
+  //   final submit: once the last question is answered, a review screen appears
+  //     with "Submit answers" pre-focused, so a single trailing Enter submits.
+  //
+  // Digits only address rows 1..K (row K+1 is "Other", K+2 is "Chat about
+  // this"), and only single ASCII digits work, so any chosen option beyond
+  // position 9 is unreachable. Bail to null on anything we can't drive cleanly
+  // rather than half-drive the form and wedge the terminal.
   if (d.kind === "question" && r.answers) {
     const questions = d.body?.tool_input?.questions ?? [];
     if (questions.length === 0) return null;
@@ -59,11 +70,17 @@ export function deliveryToKeys(d: Delivery): string[][] | null {
       const options = q.options ?? [];
       for (const label of labels) {
         const idx = options.findIndex((o) => o.label === label);
-        if (idx < 0) return null; // answer with no matching option
-        keys.push([String(idx + 1)]); // digit toggles/selects this option
+        if (idx < 0 || idx + 1 > 9) return null; // unmatched or not digit-addressable
+        keys.push([String(idx + 1)]); // digit selects (single) or toggles (multi)
       }
-      keys.push(["Enter"]); // confirm this question and advance
+      if (q.multiSelect) {
+        // step focus past every list row onto the Submit/Next button, then activate it
+        for (let i = 0; i < options.length + 1; i++) keys.push(["Down"]);
+        keys.push(["Enter"]);
+      }
+      // single-select: the digit already selected and auto-advanced.
     }
+    keys.push(["Enter"]); // review screen: "Submit answers" is pre-focused
     return keys;
   }
 

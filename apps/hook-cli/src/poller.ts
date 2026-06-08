@@ -34,8 +34,14 @@ export function pasteSettleMs(text: string): number {
   return Math.min(1500, 250 + text.length * 3);
 }
 
-/** Small gap between ordinary keystrokes (e.g. an option digit and its Enter). */
-export const KEY_SETTLE_MS = 120;
+/**
+ * Small gap between ordinary keystrokes (e.g. an option digit and its Enter, or
+ * the Down-walk + Enter that drives a multi-question AskUserQuestion form). Each
+ * keystroke can trigger a panel transition (question → next question → review
+ * screen) that must finish rendering before the next key lands, so keep a little
+ * headroom above a bare frame.
+ */
+export const KEY_SETTLE_MS = 180;
 
 /**
  * Fetch one batch of deliveries, send keystrokes for mapped items,
