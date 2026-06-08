@@ -18,6 +18,7 @@ export function DecisionCard({ decision, onResolved }: { decision: Decision; onR
   const [custom, setCustom] = useState("");
   const [busy, setBusy] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [replying, setReplying] = useState(false);
   // question form state: question text -> chosen label (single-select) or labels (multiSelect)
   const [answers, setAnswers] = useState<Record<string, string | string[]>>({});
 
@@ -58,6 +59,26 @@ export function DecisionCard({ decision, onResolved }: { decision: Decision; onR
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ choice, answers: answerMap, custom: custom || null }),
+    });
+    if (r.ok || r.status === 409) onResolved(decision.id);
+    setBusy(false);
+  };
+
+  // Reply to a notification/completion: send the text into the session as an
+  // instruction (delivered to Claude as keystrokes), then ack this card so it
+  // leaves the queue.
+  const reply = async () => {
+    if (!custom.trim()) return;
+    setBusy(true);
+    await fetch(`/api/proxy/sessions/${decision.sessionId}/instruct`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: custom }),
+    });
+    const r = await fetch(`/api/proxy/decisions/${decision.id}/resolve`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ choice: "Replied", answers: null, custom }),
     });
     if (r.ok || r.status === 409) onResolved(decision.id);
     setBusy(false);
@@ -219,13 +240,43 @@ export function DecisionCard({ decision, onResolved }: { decision: Decision; onR
           )}
         </>
       ) : (
-        <button
-          disabled={busy}
-          onClick={() => resolve("Acknowledged")}
-          style={{ padding: "8px 16px", borderRadius: 8, border: 0, background: "#2a3550", color: "white", cursor: busy ? "not-allowed" : "pointer" }}
-        >
-          Acknowledge
-        </button>
+        <>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button
+              disabled={busy}
+              onClick={() => resolve("Acknowledged")}
+              style={{ padding: "8px 16px", borderRadius: 8, border: 0, background: "#2a3550", color: "white", cursor: busy ? "not-allowed" : "pointer" }}
+            >
+              Acknowledge
+            </button>
+            <button
+              disabled={busy}
+              onClick={() => setReplying((v) => !v)}
+              style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid #2a3550", background: replying ? "#1d3a7a" : "transparent", color: "white", cursor: busy ? "not-allowed" : "pointer" }}
+            >
+              Reply
+            </button>
+          </div>
+          {replying && (
+            <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+              <input
+                autoFocus
+                placeholder="Type a reply to Claude…"
+                value={custom}
+                onChange={(e) => setCustom(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && reply()}
+                style={{ flex: 1, padding: 10, borderRadius: 8, border: "1px solid #2a3550", background: "#0e1424", color: "inherit" }}
+              />
+              <button
+                disabled={busy || !custom.trim()}
+                onClick={reply}
+                style={{ padding: "10px 16px", borderRadius: 8, border: 0, background: "#3b6ef6", color: "white", cursor: busy || !custom.trim() ? "not-allowed" : "pointer" }}
+              >
+                Send
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
