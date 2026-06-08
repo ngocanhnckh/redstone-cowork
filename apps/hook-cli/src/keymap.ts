@@ -12,6 +12,7 @@ type Delivery = {
   kind: string;
   options: Option[];
   resolution: Resolution;
+  body?: { btabs?: number };
 };
 
 /**
@@ -21,6 +22,14 @@ type Delivery = {
  * Returns null when no keystroke mapping is applicable (caller should ack and skip).
  */
 export function deliveryToKeys(d: Delivery): string[][] | null {
+  // mode: inject N Shift+Tab presses to cycle Claude Code's permission mode.
+  // Handled before the resolution guard because mode deliveries carry no resolution.
+  if (d.kind === "mode") {
+    const n = d.body?.btabs ?? 0;
+    if (n > 0) return Array.from({ length: n }, () => ["BTab"]);
+    return null;
+  }
+
   const r = d.resolution;
   if (!r) return null;
   if (r.choice === "__local__") return null;

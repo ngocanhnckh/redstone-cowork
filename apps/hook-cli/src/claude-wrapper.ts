@@ -25,7 +25,11 @@ export function buildTmuxCommands(
   mainBin: string,
 ): string[][] {
   const session = `rcw-${wrapperId}`;
-  const claudeCmd = `RCW_WRAPPER_ID=${wrapperId} claude ${args.map(shq).join(" ")}`;
+  const autoMode = args.includes("--enable-auto-mode");
+  const envPrefix = autoMode
+    ? `RCW_WRAPPER_ID=${wrapperId} RCW_AUTO_MODE=1`
+    : `RCW_WRAPPER_ID=${wrapperId}`;
+  const claudeCmd = `${envPrefix} claude ${args.map(shq).join(" ")}`;
   const pollCmd = `node ${mainBin} poll --wrapper ${wrapperId} --tmux ${session}:0`;
 
   return [

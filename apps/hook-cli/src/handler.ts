@@ -10,6 +10,7 @@ export type HookEvent = {
   cwd: string;
   tool_name?: string;
   tool_input?: Record<string, unknown>;
+  permission_mode?: string;
   [k: string]: unknown;
 };
 
@@ -22,6 +23,7 @@ export type Deps = {
   disarm: (cwd: string) => void;
   machine: string;
   wrapperId: string | null;
+  autoModeEnabled: boolean;
 };
 
 export async function processEvent(
@@ -42,6 +44,8 @@ export async function processEvent(
         cwd: event.cwd,
         gitBranch: null,
         wrapperId: deps.wrapperId,
+        permissionMode: event.permission_mode ?? null,
+        autoModeEnabled: deps.autoModeEnabled,
       });
     } else {
       const known = await deps.api.heartbeat(event.session_id);
@@ -54,6 +58,8 @@ export async function processEvent(
             cwd: event.cwd,
             gitBranch: null,
             wrapperId: null,
+            permissionMode: event.permission_mode ?? null,
+            autoModeEnabled: deps.autoModeEnabled,
           });
           deps.disarm(event.cwd);
         } else {
@@ -123,12 +129,14 @@ export async function handle(): Promise<void> {
   const cfg = loadCliConfig();
   if (!cfg) return;
   const wrapperId = process.env.RCW_WRAPPER_ID ?? null;
+  const autoModeEnabled = process.env.RCW_AUTO_MODE === "1";
   const out = await processEvent(event, {
     api: new ApiClient(cfg),
     isArmed: isArmedFs,
     disarm: disarmFs,
     machine: hostname(),
     wrapperId,
+    autoModeEnabled,
   });
   if (out) process.stdout.write(JSON.stringify(out));
 }

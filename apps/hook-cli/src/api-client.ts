@@ -37,6 +37,8 @@ export class ApiClient {
     cwd: string;
     gitBranch: string | null;
     wrapperId: string | null;
+    permissionMode: string | null;
+    autoModeEnabled: boolean;
   }): Promise<void> {
     const r = await this.req(
       "/sessions",

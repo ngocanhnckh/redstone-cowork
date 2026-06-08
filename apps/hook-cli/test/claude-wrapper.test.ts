@@ -85,4 +85,36 @@ describe("buildTmuxCommands", () => {
     expect(kill).toBeDefined();
     expect(kill).toContain(`rcw-${wrapperId}`);
   });
+
+  it("without --enable-auto-mode, RCW_AUTO_MODE is NOT in the claude command", () => {
+    const cmds = buildTmuxCommands(wrapperId, cwd, args, mainBin);
+    const newSession = cmds.find((c) => c[0] === "new-session");
+    const joined = newSession!.join(" ");
+    expect(joined).not.toContain("RCW_AUTO_MODE");
+  });
+
+  it("with --enable-auto-mode, RCW_AUTO_MODE=1 is in the claude command", () => {
+    const autoArgs = [...args, "--enable-auto-mode"];
+    const cmds = buildTmuxCommands(wrapperId, cwd, autoArgs, mainBin);
+    const newSession = cmds.find((c) => c[0] === "new-session");
+    const joined = newSession!.join(" ");
+    expect(joined).toContain("RCW_AUTO_MODE=1");
+  });
+
+  it("with --enable-auto-mode, RCW_WRAPPER_ID still present alongside RCW_AUTO_MODE", () => {
+    const autoArgs = [...args, "--enable-auto-mode"];
+    const cmds = buildTmuxCommands(wrapperId, cwd, autoArgs, mainBin);
+    const newSession = cmds.find((c) => c[0] === "new-session");
+    const joined = newSession!.join(" ");
+    expect(joined).toContain(`RCW_WRAPPER_ID=${wrapperId}`);
+    expect(joined).toContain("RCW_AUTO_MODE=1");
+  });
+
+  it("--enable-auto-mode is still passed through to claude in args", () => {
+    const autoArgs = [...args, "--enable-auto-mode"];
+    const cmds = buildTmuxCommands(wrapperId, cwd, autoArgs, mainBin);
+    const newSession = cmds.find((c) => c[0] === "new-session");
+    const joined = newSession!.join(" ");
+    expect(joined).toContain("--enable-auto-mode");
+  });
 });

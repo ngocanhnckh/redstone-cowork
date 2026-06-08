@@ -20,4 +20,24 @@ describe("deliveryToKeys", () => {
     expect(deliveryToKeys({ ...base, kind: "permission", options: [{ label: "Allow" }], resolution: { choice: "__local__", answers: null, custom: null } } as never)).toBeNull();
     expect(deliveryToKeys({ ...base, kind: "question", options: [], resolution: { choice: null, answers: null, custom: "free text" } } as never)).toBeNull();
   });
+
+  it("mode delivery with btabs=2 -> two BTab sequences", () => {
+    expect(deliveryToKeys({ ...base, kind: "mode", options: [], resolution: null, body: { btabs: 2 } } as never))
+      .toEqual([["BTab"], ["BTab"]]);
+  });
+
+  it("mode delivery with btabs=0 -> null", () => {
+    expect(deliveryToKeys({ ...base, kind: "mode", options: [], resolution: null, body: { btabs: 0 } } as never))
+      .toBeNull();
+  });
+
+  it("mode delivery with missing body -> null", () => {
+    expect(deliveryToKeys({ ...base, kind: "mode", options: [], resolution: null } as never))
+      .toBeNull();
+  });
+
+  it("mode delivery with btabs=1 -> single BTab", () => {
+    expect(deliveryToKeys({ ...base, kind: "mode", options: [], resolution: null, body: { btabs: 1 } } as never))
+      .toEqual([["BTab"]]);
+  });
 });

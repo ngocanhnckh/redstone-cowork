@@ -15,6 +15,7 @@ const baseDeps = (overrides: Partial<Deps> = {}): Deps => ({
   disarm: vi.fn(),
   machine: "testbox",
   wrapperId: null,
+  autoModeEnabled: false,
   ...overrides,
 });
 
@@ -139,5 +140,37 @@ describe("processEvent", () => {
     );
     expect(deps.api.createDecision).not.toHaveBeenCalled();
     expect(out).toBeNull();
+  });
+
+  it("event with permission_mode + autoModeEnabled=true → attach carries both", async () => {
+    const api = makeApi();
+    const deps = baseDeps({ api, wrapperId: "wrap-mode", autoModeEnabled: true });
+    await processEvent(ev("UserPromptSubmit", { permission_mode: "plan" }), deps);
+    expect(deps.api.attach).toHaveBeenCalledWith(
+      expect.objectContaining({ permissionMode: "plan", autoModeEnabled: true })
+    );
+  });
+
+  it("event without permission_mode → attach carries permissionMode: null", async () => {
+    const api = makeApi();
+    const deps = baseDeps({ api, wrapperId: "wrap-nomode", autoModeEnabled: false });
+    await processEvent(ev("UserPromptSubmit"), deps);
+    expect(deps.api.attach).toHaveBeenCalledWith(
+      expect.objectContaining({ permissionMode: null, autoModeEnabled: false })
+    );
+  });
+
+  it("armed path also sends permissionMode + autoModeEnabled on attach", async () => {
+    const api = makeApi({ heartbeat: vi.fn().mockResolvedValue(false) });
+    const deps = baseDeps({
+      api,
+      isArmed: vi.fn().mockReturnValue(true),
+      wrapperId: null,
+      autoModeEnabled: true,
+    });
+    await processEvent(ev("UserPromptSubmit", { permission_mode: "acceptEdits" }), deps);
+    expect(deps.api.attach).toHaveBeenCalledWith(
+      expect.objectContaining({ permissionMode: "acceptEdits", autoModeEnabled: true })
+    );
   });
 });
