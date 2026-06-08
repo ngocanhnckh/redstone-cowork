@@ -29,31 +29,37 @@ export async function processEvent(
   deps: Deps
 ): Promise<object | null> {
   try {
-    const known = await deps.api.heartbeat(event.session_id);
-    if (!known) {
-      // Attach if we have a wrapperId OR if the session is armed
-      if (deps.wrapperId) {
-        // wrapper sessions attach without requiring arming
-        await deps.api.attach({
-          id: event.session_id,
-          machine: deps.machine,
-          cwd: event.cwd,
-          gitBranch: null,
-          wrapperId: deps.wrapperId,
-        });
-      } else if (deps.isArmed(event.cwd)) {
-        // armed sessions attach and disarm
-        await deps.api.attach({
-          id: event.session_id,
-          machine: deps.machine,
-          cwd: event.cwd,
-          gitBranch: null,
-          wrapperId: null,
-        });
-        deps.disarm(event.cwd);
-      } else {
-        // Not ours — stay silent
-        return null;
+    if (deps.wrapperId) {
+      // Wrapper-launched: ALWAYS (re)link this session to the CURRENT wrapper run.
+      // Essential for `claude --continue`/`--resume`, which reuse an existing
+      // session id that may still point at a previous (now-dead) wrapper. Skipping
+      // this on a "known" session would leave wrapper_id stale, so the live poller
+      // (polling the current wrapper id) never sees the session's deliveries.
+      // attach() upserts: refreshes wrapper_id + last_seen, preserves attachedAt.
+      await deps.api.attach({
+        id: event.session_id,
+        machine: deps.machine,
+        cwd: event.cwd,
+        gitBranch: null,
+        wrapperId: deps.wrapperId,
+      });
+    } else {
+      const known = await deps.api.heartbeat(event.session_id);
+      if (!known) {
+        if (deps.isArmed(event.cwd)) {
+          // armed (`redstone hook`) session attaches and disarms
+          await deps.api.attach({
+            id: event.session_id,
+            machine: deps.machine,
+            cwd: event.cwd,
+            gitBranch: null,
+            wrapperId: null,
+          });
+          deps.disarm(event.cwd);
+        } else {
+          // Not ours — stay silent
+          return null;
+        }
       }
     }
 

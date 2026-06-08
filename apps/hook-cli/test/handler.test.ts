@@ -64,6 +64,16 @@ describe("processEvent", () => {
     expect(disarm).not.toHaveBeenCalled();
   });
 
+  it("known wrapper session still re-attaches to refresh the wrapper link (--continue fix)", async () => {
+    // heartbeat would say "known", but a resumed session may point at a dead wrapper.
+    const api = makeApi({ heartbeat: vi.fn().mockResolvedValue(true) });
+    const deps = baseDeps({ api, wrapperId: "new-wrap" });
+    await processEvent(ev("UserPromptSubmit"), deps);
+    expect(deps.api.attach).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "s1", wrapperId: "new-wrap" })
+    );
+  });
+
   it("attached Stop → createDecision kind completion, returns null", async () => {
     const deps = baseDeps();
     const out = await processEvent(ev("Stop"), deps);
