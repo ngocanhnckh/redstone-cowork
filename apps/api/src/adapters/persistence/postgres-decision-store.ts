@@ -48,7 +48,7 @@ export class PostgresDecisionStore implements DecisionStore {
   async listUndelivered(sessionId: string): Promise<Decision[]> {
     const { rows } = await this.pool.query(
       `SELECT ${ROW} FROM decisions
-       WHERE session_id=$1 AND status='resolved' AND delivered_at IS NULL AND kind IN ('permission','question','instruction')
+       WHERE session_id=$1 AND status='resolved' AND delivered_at IS NULL AND kind IN ('permission','question','instruction','mode')
        ORDER BY created_at ASC`,
       [sessionId]
     );

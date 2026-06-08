@@ -1,7 +1,7 @@
 import type { Decision, Resolution } from "@rcw/shared";
 import type { DecisionStore } from "../../domain/decisions/decision-store.port";
 
-const DELIVERABLE_KINDS = new Set(["permission", "question", "instruction"]);
+const DELIVERABLE_KINDS = new Set(["permission", "question", "instruction", "mode"]);
 
 export class InMemoryDecisionStore implements DecisionStore {
   private decisions = new Map<string, Decision>();

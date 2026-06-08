@@ -1,4 +1,4 @@
-import { ConflictException, Inject, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { NewDecisionSchema, ResolutionSchema, type Decision } from "@rcw/shared";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
@@ -79,4 +79,40 @@ export class DecisionsService {
 
   markDelivered(id: string) { return this.store.markDelivered(id, new Date()); }
   resolveLocal(sessionId: string) { return this.store.resolveAllPendingLocal(sessionId, new Date()); }
+
+  async switchMode(sessionId: string, target: string): Promise<{ switched: boolean; btabs: number; mode: string }> {
+    const session = await this.sessions.get(sessionId);
+    if (!session) throw new NotFoundException("unknown session");
+
+    const cycle = session.autoModeEnabled
+      ? ["default", "acceptEdits", "plan", "auto"]
+      : ["default", "acceptEdits", "plan"];
+
+    if (!cycle.includes(target)) throw new BadRequestException("mode not available");
+
+    const current =
+      session.permissionMode && cycle.includes(session.permissionMode)
+        ? session.permissionMode
+        : "default";
+
+    const n = (cycle.indexOf(target) - cycle.indexOf(current) + cycle.length) % cycle.length;
+
+    if (n === 0) {
+      await this.sessions.setPermissionMode(sessionId, target);
+      return { switched: false, btabs: 0, mode: target };
+    }
+
+    const now = new Date();
+    const decision: Decision = {
+      sessionId, kind: "mode", title: `Switch to ${target} mode`,
+      body: { btabs: n, target }, options: [],
+      id: randomUUID(), status: "resolved", createdAt: now, resolvedAt: now,
+      resolution: { choice: null, answers: null, custom: null }, deliveredAt: null,
+    };
+    await this.store.create(decision);
+    await this.sessions.setPermissionMode(sessionId, target);
+    this.deliveryWaiters.notify(sessionId);
+    this.bus.emit({ type: "session.updated", payload: { id: sessionId } });
+    return { switched: true, btabs: n, mode: target };
+  }
 }

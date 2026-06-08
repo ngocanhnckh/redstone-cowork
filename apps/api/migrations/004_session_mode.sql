@@ -1,0 +1,2 @@
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS permission_mode TEXT;
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS auto_mode_enabled BOOLEAN NOT NULL DEFAULT false;

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const DecisionKindSchema = z.enum(["permission", "question", "completion", "notification", "instruction"]);
+export const DecisionKindSchema = z.enum(["permission", "question", "completion", "notification", "instruction", "mode"]);
 export const DecisionOptionSchema = z.object({ label: z.string().min(1), description: z.string().optional() });
 
 export const ResolutionSchema = z.object({

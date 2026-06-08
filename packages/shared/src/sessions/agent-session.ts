@@ -8,11 +8,16 @@ export const AgentSessionSchema = z.object({
   attachedAt: z.coerce.date(),
   lastSeenAt: z.coerce.date(),
   wrapperId: z.string().nullable().default(null),
+  permissionMode: z.string().nullable().default(null),
+  autoModeEnabled: z.boolean().default(false),
 });
 export type AgentSession = z.infer<typeof AgentSessionSchema>;
 
 export const SessionStatusSchema = z.enum(["active", "waiting", "stale", "lost"]);
 export type SessionStatus = z.infer<typeof SessionStatusSchema>;
 
-export const NewAgentSessionSchema = AgentSessionSchema.pick({ id: true, machine: true, cwd: true, gitBranch: true, wrapperId: true });
+export const NewAgentSessionSchema = AgentSessionSchema.pick({
+  id: true, machine: true, cwd: true, gitBranch: true, wrapperId: true,
+  permissionMode: true, autoModeEnabled: true,
+});
 export type NewAgentSession = z.infer<typeof NewAgentSessionSchema>;

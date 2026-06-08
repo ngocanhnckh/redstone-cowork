@@ -5,7 +5,15 @@ export class InMemorySessionStore implements SessionStore {
   private sessions = new Map<string, AgentSession>();
   async upsert(s: AgentSession) {
     const existing = this.sessions.get(s.id);
-    const merged = existing ? { ...existing, ...s, attachedAt: existing.attachedAt } : s;
+    const merged = existing
+      ? {
+          ...existing,
+          ...s,
+          attachedAt: existing.attachedAt,
+          // PRESERVE permissionMode when the incoming value is null (events without a mode must not wipe it)
+          permissionMode: s.permissionMode ?? existing.permissionMode,
+        }
+      : s;
     this.sessions.set(s.id, merged);
     return merged;
   }
@@ -22,5 +30,9 @@ export class InMemorySessionStore implements SessionStore {
       .filter((s) => s.wrapperId === wrapperId)
       .sort((a, b) => b.lastSeenAt.getTime() - a.lastSeenAt.getTime());
     return matches[0] ?? null;
+  }
+  async setPermissionMode(id: string, mode: string): Promise<void> {
+    const s = this.sessions.get(id);
+    if (s) this.sessions.set(id, { ...s, permissionMode: mode });
   }
 }

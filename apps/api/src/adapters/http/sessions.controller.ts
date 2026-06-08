@@ -1,7 +1,7 @@
 import { Body, Controller, Get, HttpCode, NotFoundException, Param, Post, Query, Res, UseGuards } from "@nestjs/common";
 import { BadRequestException } from "@nestjs/common";
 import type { Response } from "express";
-import { ZodError } from "zod";
+import { z, ZodError } from "zod";
 import { SessionsService } from "../../application/sessions.service";
 import { DecisionsService } from "../../application/decisions.service";
 import { InstanceTokenGuard } from "./instance-token.guard";
@@ -68,6 +68,18 @@ export class SessionsController {
   async resolveLocal(@Param("id") id: string) {
     const resolved = await this.decisions.resolveLocal(id);
     return { resolved };
+  }
+
+  @Post(":id/mode")
+  @HttpCode(200)
+  async switchMode(@Param("id") id: string, @Body() body: unknown) {
+    try {
+      const { mode } = z.object({ mode: z.string().min(1) }).parse(body);
+      return await this.decisions.switchMode(id, mode);
+    } catch (e) {
+      if (e instanceof ZodError) throw new BadRequestException(e.issues);
+      throw e;
+    }
   }
 
   @Get()

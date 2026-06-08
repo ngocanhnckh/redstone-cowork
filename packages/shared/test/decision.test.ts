@@ -45,4 +45,38 @@ describe("Decision schemas", () => {
     const s = NewAgentSessionSchema.parse({ id: "x", machine: "m", cwd: "/p", gitBranch: null, wrapperId: "ab12" });
     expect(s.wrapperId).toBe("ab12");
   });
+  it("agent session parses permissionMode and autoModeEnabled with defaults", () => {
+    const full = AgentSessionSchema.parse({
+      id: "abc", machine: "devbox", cwd: "/home/u/p", gitBranch: null,
+      attachedAt: "2026-06-07T10:00:00Z", lastSeenAt: "2026-06-07T10:01:00Z",
+      permissionMode: "plan", autoModeEnabled: true,
+    });
+    expect(full.permissionMode).toBe("plan");
+    expect(full.autoModeEnabled).toBe(true);
+  });
+  it("agent session defaults permissionMode to null and autoModeEnabled to false", () => {
+    const s = AgentSessionSchema.parse({
+      id: "abc", machine: "devbox", cwd: "/home/u/p", gitBranch: null,
+      attachedAt: "2026-06-07T10:00:00Z", lastSeenAt: "2026-06-07T10:01:00Z",
+    });
+    expect(s.permissionMode).toBeNull();
+    expect(s.autoModeEnabled).toBe(false);
+  });
+  it("NewAgentSession accepts permissionMode and autoModeEnabled optionally", () => {
+    const s = NewAgentSessionSchema.parse({ id: "x", machine: "m", cwd: "/p", permissionMode: "plan", autoModeEnabled: true });
+    expect(s.permissionMode).toBe("plan");
+    expect(s.autoModeEnabled).toBe(true);
+    const s2 = NewAgentSessionSchema.parse({ id: "x", machine: "m", cwd: "/p" });
+    expect(s2.permissionMode).toBeNull();
+    expect(s2.autoModeEnabled).toBe(false);
+  });
+  it("mode kind decision parses", () => {
+    const d = DecisionSchema.parse({
+      id: "9f3b8c1e-2a4d-4f6a-9c0d-1e2f3a4b5c6d", sessionId: "s", kind: "mode",
+      title: "Switch to plan mode", body: { btabs: 2, target: "plan" }, options: [], status: "resolved",
+      createdAt: "2026-06-07T10:00:00Z", resolvedAt: "2026-06-07T10:00:01Z",
+      resolution: { choice: null, answers: null, custom: null }, deliveredAt: null,
+    });
+    expect(d.kind).toBe("mode");
+  });
 });

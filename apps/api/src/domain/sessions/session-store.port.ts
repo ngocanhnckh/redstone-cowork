@@ -6,5 +6,6 @@ export interface SessionStore {
   get(id: string): Promise<AgentSession | null>;
   list(): Promise<AgentSession[]>;
   getByWrapper(wrapperId: string): Promise<AgentSession | null>;
+  setPermissionMode(id: string, mode: string): Promise<void>;
 }
 export const SESSION_STORE = Symbol("SessionStore");

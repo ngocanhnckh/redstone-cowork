@@ -26,7 +26,13 @@ export class SessionsService {
   async attach(input: unknown): Promise<AgentSession> {
     const parsed = NewAgentSessionSchema.parse(input);
     const now = new Date();
-    const session = await this.store.upsert({ ...parsed, attachedAt: now, lastSeenAt: now });
+    const session = await this.store.upsert({
+      ...parsed,
+      attachedAt: now,
+      lastSeenAt: now,
+      permissionMode: parsed.permissionMode ?? null,
+      autoModeEnabled: parsed.autoModeEnabled ?? false,
+    });
     this.bus.emit({ type: "session.updated", payload: { id: session.id } });
     return session;
   }

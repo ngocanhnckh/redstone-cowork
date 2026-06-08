@@ -2,18 +2,22 @@ import type { Pool } from "pg";
 import { AgentSessionSchema, type AgentSession } from "@rcw/shared";
 import type { SessionStore } from "../../domain/sessions/session-store.port";
 
-const ROW = `id, machine, cwd, git_branch AS "gitBranch", attached_at AS "attachedAt", last_seen_at AS "lastSeenAt", wrapper_id AS "wrapperId"`;
+const ROW = `id, machine, cwd, git_branch AS "gitBranch", attached_at AS "attachedAt", last_seen_at AS "lastSeenAt",
+             wrapper_id AS "wrapperId", permission_mode AS "permissionMode", auto_mode_enabled AS "autoModeEnabled"`;
 
 export class PostgresSessionStore implements SessionStore {
   constructor(private readonly pool: Pool) {}
 
   async upsert(s: AgentSession): Promise<AgentSession> {
     const { rows } = await this.pool.query(
-      `INSERT INTO sessions (id, machine, cwd, git_branch, attached_at, last_seen_at, wrapper_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7)
-       ON CONFLICT (id) DO UPDATE SET machine=$2, cwd=$3, git_branch=$4, last_seen_at=$6, wrapper_id=$7
+      `INSERT INTO sessions (id, machine, cwd, git_branch, attached_at, last_seen_at, wrapper_id, permission_mode, auto_mode_enabled)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+       ON CONFLICT (id) DO UPDATE SET machine=$2, cwd=$3, git_branch=$4, last_seen_at=$6, wrapper_id=$7,
+         permission_mode = COALESCE($8, sessions.permission_mode),
+         auto_mode_enabled = $9
        RETURNING ${ROW}`,
-      [s.id, s.machine, s.cwd, s.gitBranch, s.attachedAt, s.lastSeenAt, s.wrapperId ?? null]
+      [s.id, s.machine, s.cwd, s.gitBranch, s.attachedAt, s.lastSeenAt, s.wrapperId ?? null,
+       s.permissionMode ?? null, s.autoModeEnabled ?? false]
     );
     return AgentSessionSchema.parse(rows[0]);
   }
@@ -35,5 +39,8 @@ export class PostgresSessionStore implements SessionStore {
       [wrapperId]
     );
     return rows[0] ? AgentSessionSchema.parse(rows[0]) : null;
+  }
+  async setPermissionMode(id: string, mode: string): Promise<void> {
+    await this.pool.query(`UPDATE sessions SET permission_mode=$2 WHERE id=$1`, [id, mode]);
   }
 }
