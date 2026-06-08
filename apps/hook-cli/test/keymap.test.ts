@@ -48,6 +48,46 @@ describe("deliveryToKeys", () => {
       .toEqual([["3"], ["2"], ["3"], ["Down"], ["Down"], ["Down"], ["Down"], ["Enter"], ["Enter"]]);
   });
 
+  it("single-select CUSTOM answer -> Down past options to Other, type, Enter", () => {
+    const body = { tool_input: { questions: [
+      { question: "Framework?", options: [{ label: "React" }, { label: "Vue" }] },
+    ] } };
+    // "Svelte" is not an option -> custom: K=2 Downs to the Other row, type, commit
+    expect(deliveryToKeys({ ...base, kind: "question", options: [],
+      body, resolution: { choice: null, answers: { "Framework?": "Svelte" }, custom: null } } as never))
+      .toEqual([["Down"], ["Down"], ["-l", "Svelte"], ["Enter"], ["Enter"]]);
+  });
+
+  it("single-select custom among multiple questions -> custom drives Other, preset uses digit", () => {
+    const body = { tool_input: { questions: [
+      { question: "Season?", options: [{ label: "Spring" }, { label: "Summer" }] },
+      { question: "Framework?", options: [{ label: "React" }, { label: "Vue" }] },
+    ] } };
+    expect(deliveryToKeys({ ...base, kind: "question", options: [],
+      body, resolution: { choice: null, answers: { "Season?": "Spring", "Framework?": "Svelte" }, custom: null } } as never))
+      .toEqual([["1"], ["Down"], ["Down"], ["-l", "Svelte"], ["Enter"], ["Enter"]]);
+  });
+
+  it("multiSelect CUSTOM (no presets) -> Down to Other, type, check, Down to Submit, submit", () => {
+    const body = { tool_input: { questions: [
+      { question: "Weekend?", multiSelect: true, options: [{ label: "Reading" }, { label: "Hiking" }] },
+    ] } };
+    // K=2 Downs to Other, type, Enter (check box), Down (-> Submit), Enter (advance), Enter (review)
+    expect(deliveryToKeys({ ...base, kind: "question", options: [],
+      body, resolution: { choice: null, answers: { "Weekend?": ["Bowling"] }, custom: null } } as never))
+      .toEqual([["Down"], ["Down"], ["-l", "Bowling"], ["Enter"], ["Down"], ["Enter"], ["Enter"]]);
+  });
+
+  it("multiSelect preset + CUSTOM -> toggle preset digit, then drive Other", () => {
+    const body = { tool_input: { questions: [
+      { question: "Weekend?", multiSelect: true, options: [{ label: "Reading" }, { label: "Hiking" }, { label: "Gaming" }] },
+    ] } };
+    // toggle Hiking (digit 2); K=3 Downs to Other; type; check; Down to Submit; submit; review
+    expect(deliveryToKeys({ ...base, kind: "question", options: [],
+      body, resolution: { choice: null, answers: { "Weekend?": ["Hiking", "Knitting"] }, custom: null } } as never))
+      .toEqual([["2"], ["Down"], ["Down"], ["Down"], ["-l", "Knitting"], ["Enter"], ["Down"], ["Enter"], ["Enter"]]);
+  });
+
   it("option beyond position 9 -> null (not digit-addressable)", () => {
     const opts = Array.from({ length: 10 }, (_, i) => ({ label: `o${i}` }));
     const body = { tool_input: { questions: [{ question: "Q?", options: opts }] } };

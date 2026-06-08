@@ -21,6 +21,8 @@ export function DecisionCard({ decision, onResolved }: { decision: Decision; onR
   const [replying, setReplying] = useState(false);
   // question form state: question text -> chosen label (single-select) or labels (multiSelect)
   const [answers, setAnswers] = useState<Record<string, string | string[]>>({});
+  // per-question free-text "Other" answer (driven via the question's Other row)
+  const [otherText, setOtherText] = useState<Record<string, string>>({});
 
   const deliverable = decision.body?.deliverable !== false;
 
@@ -35,7 +37,9 @@ export function DecisionCard({ decision, onResolved }: { decision: Decision; onR
   // the hook stores them all in body. Drive the whole form, not just question 1.
   const questions = (decision.body?.tool_input as { questions?: Question[] } | undefined)?.questions;
   const isForm = decision.kind === "question" && Array.isArray(questions) && questions.length >= 1;
+  const otherFor = (q: Question) => (otherText[q.question] ?? "").trim();
   const answered = (q: Question) => {
+    if (otherFor(q)) return true;
     const a = answers[q.question];
     return Array.isArray(a) ? a.length > 0 : Boolean(a);
   };
@@ -49,8 +53,30 @@ export function DecisionCard({ decision, onResolved }: { decision: Decision; onR
         const cur = Array.isArray(prev[q.question]) ? (prev[q.question] as string[]) : [];
         return { ...prev, [q.question]: cur.includes(label) ? cur.filter((l) => l !== label) : [...cur, label] };
       }
+      // single-select: picking an option clears any custom text (they're exclusive)
+      setOtherText((o) => ({ ...o, [q.question]: "" }));
       return { ...prev, [q.question]: label };
     });
+  const setOther = (q: Question, text: string) => {
+    setOtherText((o) => ({ ...o, [q.question]: text }));
+    // single-select: typing a custom answer clears any selected option
+    if (!q.multiSelect && text.trim()) setAnswers((prev) => ({ ...prev, [q.question]: "" }));
+  };
+  // Final answer per question: a multiSelect carries its toggles plus any custom
+  // text; a single-select carries the custom text if present, else the option.
+  const composeAnswer = (q: Question): string | string[] => {
+    const c = otherFor(q);
+    if (q.multiSelect) {
+      const sel = Array.isArray(answers[q.question]) ? (answers[q.question] as string[]) : [];
+      return c ? [...sel, c] : sel;
+    }
+    return c || ((answers[q.question] as string) ?? "");
+  };
+  const submitForm = () => {
+    const map: Record<string, string | string[]> = {};
+    for (const q of questions!) map[q.question] = composeAnswer(q);
+    resolve(null, map);
+  };
   const allAnswered = isForm && questions!.every(answered);
 
   const resolve = async (choice: string | null, answerMap: Record<string, string | string[]> | null = null) => {
@@ -171,11 +197,30 @@ export function DecisionCard({ decision, onResolved }: { decision: Decision; onR
                   );
                 })}
               </div>
+              {/* Free-text custom answer, driven via the question's "Other" row */}
+              <input
+                disabled={busy || !deliverable}
+                placeholder="Other… (type a custom answer)"
+                value={otherText[q.question] ?? ""}
+                onChange={(e) => setOther(q, e.target.value)}
+                style={{
+                  marginTop: 8,
+                  width: "100%",
+                  boxSizing: "border-box",
+                  padding: "7px 10px",
+                  borderRadius: 8,
+                  border: otherFor(q) ? "2px solid #3b6ef6" : "1px solid #2a3550",
+                  background: "#0e1424",
+                  color: "inherit",
+                  fontSize: 12.5,
+                  opacity: !deliverable ? 0.5 : 1,
+                }}
+              />
             </div>
           ))}
           <button
             disabled={busy || !deliverable || !allAnswered}
-            onClick={() => resolve(null, answers)}
+            onClick={submitForm}
             style={{
               padding: "10px 18px",
               borderRadius: 8,

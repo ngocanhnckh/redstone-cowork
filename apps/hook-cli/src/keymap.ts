@@ -68,17 +68,46 @@ export function deliveryToKeys(d: Delivery): string[][] | null {
       const labels = Array.isArray(answer) ? answer : [answer];
       if (labels.length === 0) return null; // multiSelect with nothing picked
       const options = q.options ?? [];
+      const K = options.length;
+
+      // Split chosen labels into preset options (addressable by digit) and any
+      // free-text answer that isn't one of the options — that one is driven via
+      // the appended "Other" input row (rendered last, at list index K).
+      const presetIdx: number[] = [];
+      const customs: string[] = [];
       for (const label of labels) {
         const idx = options.findIndex((o) => o.label === label);
-        if (idx < 0 || idx + 1 > 9) return null; // unmatched or not digit-addressable
-        keys.push([String(idx + 1)]); // digit selects (single) or toggles (multi)
+        if (idx >= 0) presetIdx.push(idx);
+        else customs.push(label);
       }
-      if (q.multiSelect) {
-        // step focus past every list row onto the Submit/Next button, then activate it
-        for (let i = 0; i < options.length + 1; i++) keys.push(["Down"]);
-        keys.push(["Enter"]);
+      if (presetIdx.some((i) => i + 1 > 9)) return null; // not digit-addressable
+      if (customs.length > 1) return null; // only one Other field per question
+      const custom = customs[0];
+
+      if (!q.multiSelect) {
+        if (custom !== undefined) {
+          // focus the Other input (Down past the K options), type, commit+advance
+          for (let i = 0; i < K; i++) keys.push(["Down"]);
+          keys.push(["-l", custom]);
+          keys.push(["Enter"]);
+        } else {
+          keys.push([String(presetIdx[0] + 1)]); // digit selects and auto-advances
+        }
+      } else {
+        // toggle each preset option (focus stays on the first row)
+        for (const idx of presetIdx) keys.push([String(idx + 1)]);
+        if (custom !== undefined) {
+          for (let i = 0; i < K; i++) keys.push(["Down"]); // focus the Other row
+          keys.push(["-l", custom]); // type the custom text
+          keys.push(["Enter"]); // check the Other box (includes the text)
+          keys.push(["Down"]); // Other row -> Submit button
+          keys.push(["Enter"]); // activate Submit -> advance
+        } else {
+          // walk past every list row (options + Other) onto Submit, then activate
+          for (let i = 0; i < K + 1; i++) keys.push(["Down"]);
+          keys.push(["Enter"]);
+        }
       }
-      // single-select: the digit already selected and auto-advanced.
     }
     keys.push(["Enter"]); // review screen: "Submit answers" is pre-focused
     return keys;
