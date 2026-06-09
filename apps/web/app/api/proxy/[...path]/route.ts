@@ -6,6 +6,9 @@ const ALLOWED = [
   /^decisions\/[\w-]+\/resolve$/,
   /^sessions\/[\w-]+\/instruct$/,
   /^sessions\/[\w-]+\/mode$/,
+  /^push\/vapid$/,
+  /^push\/subscriptions$/,
+  /^push\/subscriptions\/remove$/,
 ];
 
 async function forward(req: Request, params: Promise<{ path: string[] }>, method: string) {

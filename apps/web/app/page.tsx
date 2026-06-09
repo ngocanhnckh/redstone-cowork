@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { DecisionCard, type Decision } from "../components/DecisionCard";
 import { SessionRow } from "../components/SessionRow";
+import { NotificationsToggle } from "../components/NotificationsToggle";
 
 type Session = {
   id: string;
@@ -67,6 +68,8 @@ export default function Home() {
       <h1 style={{ marginBottom: 4 }}>
         Situation Room <span style={{ fontSize: 14, opacity: 0.5 }}>(M1 preview)</span>
       </h1>
+
+      <NotificationsToggle />
 
       {/* ── Focus queue: one decision at a time ─────────────────────────── */}
       <section style={{ marginTop: 20 }}>

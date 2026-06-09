@@ -19,15 +19,24 @@ import { InMemorySessionStore } from "./adapters/persistence/in-memory-session-s
 import { PostgresSessionStore } from "./adapters/persistence/postgres-session-store";
 import { InMemoryDecisionStore } from "./adapters/persistence/in-memory-decision-store";
 import { PostgresDecisionStore } from "./adapters/persistence/postgres-decision-store";
+import { PushController } from "./adapters/http/push.controller";
+import { PushService } from "./application/push.service";
+import { PUSH_SUBSCRIPTION_STORE } from "./domain/push/push-subscription-store.port";
+import { PUSH_SENDER } from "./domain/push/push-sender.port";
+import { InMemoryPushSubscriptionStore } from "./adapters/persistence/in-memory-push-subscription-store";
+import { PostgresPushSubscriptionStore } from "./adapters/persistence/postgres-push-subscription-store";
+import { WebPushSender } from "./adapters/push/web-push-sender";
+import { NoopPushSender } from "./adapters/push/noop-push-sender";
 import { PG_POOL, pgPoolProvider, PoolShutdown } from "./infrastructure/pg-pool.provider";
 import type { Pool } from "pg";
 
 @Module({
-  controllers: [HealthController, EventsController, SessionsController, DecisionsController, StreamController],
+  controllers: [HealthController, EventsController, SessionsController, DecisionsController, StreamController, PushController],
   providers: [
     RecordEventUseCase,
     SessionsService,
     DecisionsService,
+    PushService,
     DecisionWaiters,
     DeliveryWaiters,
     EventsBus,
@@ -52,6 +61,22 @@ import type { Pool } from "pg";
       inject: [PG_POOL],
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresDecisionStore(pool) : new InMemoryDecisionStore(),
+    },
+    {
+      provide: PUSH_SUBSCRIPTION_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresPushSubscriptionStore(pool) : new InMemoryPushSubscriptionStore(),
+    },
+    {
+      // Web Push when VAPID keys are configured; otherwise push is disabled (noop).
+      provide: PUSH_SENDER,
+      useFactory: () => {
+        const pub = process.env.VAPID_PUBLIC_KEY;
+        const priv = process.env.VAPID_PRIVATE_KEY;
+        const subject = process.env.VAPID_SUBJECT ?? "mailto:admin@example.com";
+        return pub && priv ? new WebPushSender(pub, priv, subject) : new NoopPushSender();
+      },
     },
   ],
 })
