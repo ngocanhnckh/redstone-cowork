@@ -9,6 +9,11 @@ const ALLOWED = [
   /^push\/vapid$/,
   /^push\/subscriptions$/,
   /^push\/subscriptions\/remove$/,
+  /^connections$/,
+  /^connections\/[\w-]+$/,
+  /^connections\/[\w-]+\/sync$/,
+  /^connections\/sync-due$/,
+  /^events\/recent$/,
 ];
 
 async function forward(req: Request, params: Promise<{ path: string[] }>, method: string) {
@@ -25,4 +30,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ path: string[] 
 }
 export async function POST(req: Request, ctx: { params: Promise<{ path: string[] }> }) {
   return forward(req, ctx.params, "POST");
+}
+export async function DELETE(req: Request, ctx: { params: Promise<{ path: string[] }> }) {
+  return forward(req, ctx.params, "DELETE");
 }

@@ -27,16 +27,32 @@ import { InMemoryPushSubscriptionStore } from "./adapters/persistence/in-memory-
 import { PostgresPushSubscriptionStore } from "./adapters/persistence/postgres-push-subscription-store";
 import { WebPushSender } from "./adapters/push/web-push-sender";
 import { NoopPushSender } from "./adapters/push/noop-push-sender";
+import { ConnectionsController } from "./adapters/http/connections.controller";
+import { ConnectionsService } from "./application/connections.service";
+import { SyncService } from "./application/sync.service";
+import { CredentialCipher } from "./infrastructure/credential-cipher";
+import { CONNECTION_STORE } from "./domain/integrations/connection-store.port";
+import { INGESTED_EVENT_STORE } from "./domain/integrations/ingested-event-store.port";
+import { CONNECTORS } from "./domain/integrations/connector.port";
+import { InMemoryConnectionStore } from "./adapters/persistence/in-memory-connection-store";
+import { PostgresConnectionStore } from "./adapters/persistence/postgres-connection-store";
+import { InMemoryIngestedEventStore } from "./adapters/persistence/in-memory-ingested-event-store";
+import { PostgresIngestedEventStore } from "./adapters/persistence/postgres-ingested-event-store";
+import { JiraConnector } from "./adapters/connectors/jira.connector";
+import { MattermostConnector } from "./adapters/connectors/mattermost.connector";
 import { PG_POOL, pgPoolProvider, PoolShutdown } from "./infrastructure/pg-pool.provider";
 import type { Pool } from "pg";
 
 @Module({
-  controllers: [HealthController, EventsController, SessionsController, DecisionsController, StreamController, PushController],
+  controllers: [HealthController, EventsController, SessionsController, DecisionsController, StreamController, PushController, ConnectionsController],
   providers: [
     RecordEventUseCase,
     SessionsService,
     DecisionsService,
     PushService,
+    ConnectionsService,
+    SyncService,
+    CredentialCipher,
     DecisionWaiters,
     DeliveryWaiters,
     EventsBus,
@@ -77,6 +93,22 @@ import type { Pool } from "pg";
         const subject = process.env.VAPID_SUBJECT ?? "mailto:admin@example.com";
         return pub && priv ? new WebPushSender(pub, priv, subject) : new NoopPushSender();
       },
+    },
+    {
+      provide: CONNECTION_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresConnectionStore(pool) : new InMemoryConnectionStore(),
+    },
+    {
+      provide: INGESTED_EVENT_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresIngestedEventStore(pool) : new InMemoryIngestedEventStore(),
+    },
+    {
+      provide: CONNECTORS,
+      useFactory: () => [new JiraConnector(), new MattermostConnector()],
     },
   ],
 })

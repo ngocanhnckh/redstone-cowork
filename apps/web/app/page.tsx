@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { DecisionCard, type Decision } from "../components/DecisionCard";
 import { SessionRow } from "../components/SessionRow";
 import { NotificationsToggle } from "../components/NotificationsToggle";
+import { Connections } from "../components/Connections";
 
 type Session = {
   id: string;
@@ -117,6 +118,8 @@ export default function Home() {
           <SessionRow key={s.id} s={s} />
         ))}
       </section>
+
+      <Connections />
     </main>
   );
 }
