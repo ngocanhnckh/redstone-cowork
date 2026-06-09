@@ -18,9 +18,17 @@ export class DecisionsService {
     private readonly bus: EventsBus,
   ) {}
 
+  // Passive cards (a finished-task ping, a notification) carry no action and only
+  // the latest matters — keep at most one per session so the Situation Room stays
+  // clean. A continued session reuses its id, so this dedupes across --continue too.
+  private static readonly PASSIVE_KINDS = ["notification", "completion"];
+
   async create(input: unknown): Promise<Decision> {
     const parsed = NewDecisionSchema.parse(input);
     if (!(await this.sessions.get(parsed.sessionId))) throw new NotFoundException("unknown session");
+    if (DecisionsService.PASSIVE_KINDS.includes(parsed.kind)) {
+      await this.store.supersedePending(parsed.sessionId, DecisionsService.PASSIVE_KINDS, new Date());
+    }
     const decision: Decision = {
       ...parsed, id: randomUUID(), status: "pending",
       createdAt: new Date(), resolvedAt: null, resolution: null, deliveredAt: null,

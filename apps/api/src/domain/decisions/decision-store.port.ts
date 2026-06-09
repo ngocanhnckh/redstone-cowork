@@ -12,5 +12,7 @@ export interface DecisionStore {
   markDelivered(id: string, at: Date): Promise<void>;
   /** Resolves pending permission|question decisions as __local__ and marks them delivered. Returns count. */
   resolveAllPendingLocal(sessionId: string, at: Date): Promise<number>;
+  /** Resolves prior pending decisions of the given kinds for a session, superseded by a newer one. Returns count. */
+  supersedePending(sessionId: string, kinds: string[], at: Date): Promise<number>;
 }
 export const DECISION_STORE = Symbol("DecisionStore");

@@ -67,4 +67,15 @@ export class PostgresDecisionStore implements DecisionStore {
     );
     return rowCount ?? 0;
   }
+  async supersedePending(sessionId: string, kinds: string[], at: Date): Promise<number> {
+    if (kinds.length === 0) return 0;
+    const { rowCount } = await this.pool.query(
+      `UPDATE decisions SET status='resolved',
+        resolution='{"choice":"__superseded__","answers":null,"custom":null}'::jsonb,
+        resolved_at=$3, delivered_at=$3
+       WHERE session_id=$1 AND status='pending' AND kind = ANY($2)`,
+      [sessionId, kinds, at]
+    );
+    return rowCount ?? 0;
+  }
 }

@@ -69,6 +69,56 @@ describe("/decisions", () => {
     expect(resolved.body.resolution.answers["Weekend?"]).toEqual(["Reading", "Hiking"]);
   });
 
+  it("keeps only the latest passive card per session — a new one supersedes the old", async () => {
+    const srv = app.getHttpServer();
+    await request(srv).post("/sessions").set(auth).send({ id: "sess-notif", machine: "m", cwd: "/p" });
+
+    const first = await request(srv).post("/decisions").set(auth).send({
+      sessionId: "sess-notif", kind: "completion", title: "Claude finished task A", body: {}, options: [],
+    }).expect(201);
+    const second = await request(srv).post("/decisions").set(auth).send({
+      sessionId: "sess-notif", kind: "notification", title: "Claude needs your permission", body: {}, options: [],
+    }).expect(201);
+
+    const list = await request(srv).get("/decisions?status=pending").set(auth).expect(200);
+    const mine = list.body.filter((d: { sessionId: string }) => d.sessionId === "sess-notif");
+    expect(mine).toHaveLength(1);
+    expect(mine[0].id).toBe(second.body.id);
+    // the older one is no longer pending
+    expect(list.body.some((d: { id: string }) => d.id === first.body.id)).toBe(false);
+  });
+
+  it("superseding is scoped to the session — other sessions' notifications are untouched", async () => {
+    const srv = app.getHttpServer();
+    await request(srv).post("/sessions").set(auth).send({ id: "sess-a", machine: "m", cwd: "/p" });
+    await request(srv).post("/sessions").set(auth).send({ id: "sess-b", machine: "m", cwd: "/p" });
+
+    const a = await request(srv).post("/decisions").set(auth).send({
+      sessionId: "sess-a", kind: "notification", title: "A1", body: {}, options: [],
+    }).expect(201);
+    await request(srv).post("/decisions").set(auth).send({
+      sessionId: "sess-b", kind: "notification", title: "B1", body: {}, options: [],
+    }).expect(201);
+
+    const list = await request(srv).get("/decisions?status=pending").set(auth).expect(200);
+    // sess-a's notification survives because only sess-b got a new one
+    expect(list.body.some((d: { id: string }) => d.id === a.body.id)).toBe(true);
+  });
+
+  it("does NOT supersede actionable question/permission cards", async () => {
+    const srv = app.getHttpServer();
+    await request(srv).post("/sessions").set(auth).send({ id: "sess-keep", machine: "m", cwd: "/p" });
+    const q = await request(srv).post("/decisions").set(auth).send({
+      sessionId: "sess-keep", kind: "question", title: "Pick one", body: {}, options: [{ label: "A" }],
+    }).expect(201);
+    await request(srv).post("/decisions").set(auth).send({
+      sessionId: "sess-keep", kind: "notification", title: "ping", body: {}, options: [],
+    }).expect(201);
+
+    const list = await request(srv).get("/decisions?status=pending").set(auth).expect(200);
+    expect(list.body.some((d: { id: string }) => d.id === q.body.id)).toBe(true);
+  });
+
   it("400s invalid kind", async () => {
     await request(app.getHttpServer()).post("/decisions").set(auth)
       .send({ sessionId: "sess-d", kind: "bogus", title: "x" }).expect(400);

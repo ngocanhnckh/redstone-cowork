@@ -49,4 +49,21 @@ export class InMemoryDecisionStore implements DecisionStore {
     }
     return count;
   }
+  async supersedePending(sessionId: string, kinds: string[], at: Date): Promise<number> {
+    const kindSet = new Set(kinds);
+    let count = 0;
+    for (const d of this.decisions.values()) {
+      if (d.sessionId === sessionId && d.status === "pending" && kindSet.has(d.kind)) {
+        this.decisions.set(d.id, {
+          ...d,
+          status: "resolved",
+          resolution: { choice: "__superseded__", answers: null, custom: null },
+          resolvedAt: at,
+          deliveredAt: at,
+        });
+        count++;
+      }
+    }
+    return count;
+  }
 }
