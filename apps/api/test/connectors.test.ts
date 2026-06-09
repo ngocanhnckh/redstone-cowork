@@ -55,9 +55,10 @@ describe("MattermostConnector", () => {
     expect(fetchImpl.mock.calls[0][0]).toBe("https://mm.example/api/v4/users/me");
   });
 
-  it("pull returns mention events newer than the cursor and advances it", async () => {
+  it("pull searches each team, returns mentions newer than the cursor, advances it", async () => {
     const fetchImpl = vi.fn(async (url: string) => {
       if (url.endsWith("/users/me")) return res(true, { id: "u1", username: "boss" });
+      if (url.endsWith("/users/me/teams")) return res(true, [{ id: "t1" }]);
       return res(true, {
         order: ["p1", "p2"],
         posts: {
@@ -70,5 +71,7 @@ describe("MattermostConnector", () => {
     expect(out.events).toHaveLength(1); // p1 (1000) filtered out, p2 (3000) kept
     expect(out.events[0].sourceId).toBe("p2");
     expect(out.cursor.lastCreateAt).toBe(3000);
+    // confirm it used the team-scoped search endpoint
+    expect(fetchImpl.mock.calls.some(([u]) => String(u).includes("/teams/t1/posts/search"))).toBe(true);
   });
 });

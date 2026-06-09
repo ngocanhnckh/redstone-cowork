@@ -28,35 +28,45 @@ export class MattermostConnector implements Connector {
   async pull(cfg: ConnectorConfig, cursor: Record<string, unknown>): Promise<PullResult> {
     const base = cfg.endpoint.replace(/\/$/, "");
     const since = typeof cursor.lastCreateAt === "number" ? cursor.lastCreateAt : 0;
+    const headers = this.headers(cfg.token);
 
-    // Resolve the current user so we can search for their mentions.
-    const meRes = await this.fetchImpl(`${base}/api/v4/users/me`, { headers: this.headers(cfg.token) });
+    // Resolve the current user, then search each of their teams for mentions.
+    const meRes = await this.fetchImpl(`${base}/api/v4/users/me`, { headers });
     if (!meRes.ok) throw new Error(`Mattermost me ${meRes.status}`);
     const me = (await meRes.json()) as { id: string; username: string };
 
-    const searchRes = await this.fetchImpl(`${base}/api/v4/users/${me.id}/posts/search`, {
-      method: "POST",
-      headers: this.headers(cfg.token),
-      body: JSON.stringify({ terms: `@${me.username}`, is_or_search: true }),
-    });
-    if (!searchRes.ok) throw new Error(`Mattermost search ${searchRes.status}`);
-    const data = (await searchRes.json()) as { order?: string[]; posts?: Record<string, MmPost> };
+    const teamsRes = await this.fetchImpl(`${base}/api/v4/users/me/teams`, { headers });
+    if (!teamsRes.ok) throw new Error(`Mattermost teams ${teamsRes.status}`);
+    const teams = (await teamsRes.json()) as Array<{ id: string }>;
 
     const events: IngestedEvent[] = [];
+    const seen = new Set<string>();
     let maxCreate = since;
-    for (const id of data.order ?? []) {
-      const p = data.posts?.[id];
-      if (!p || p.create_at <= since) continue;
-      events.push({
-        source: "mattermost",
-        sourceId: p.id,
-        type: "mattermost.mention",
-        occurredAt: new Date(p.create_at),
-        actor: p.user_id,
-        payload: { message: p.message, channelId: p.channel_id },
-        links: [],
+    for (const team of teams) {
+      // Team-scoped search is supported across Mattermost versions (the user-scoped
+      // endpoint isn't on all of them). Skip a team that errors rather than fail the pull.
+      const searchRes = await this.fetchImpl(`${base}/api/v4/teams/${team.id}/posts/search`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ terms: `@${me.username}`, is_or_search: true }),
       });
-      if (p.create_at > maxCreate) maxCreate = p.create_at;
+      if (!searchRes.ok) continue;
+      const data = (await searchRes.json()) as { order?: string[]; posts?: Record<string, MmPost> };
+      for (const id of data.order ?? []) {
+        const p = data.posts?.[id];
+        if (!p || p.create_at <= since || seen.has(p.id)) continue;
+        seen.add(p.id);
+        events.push({
+          source: "mattermost",
+          sourceId: p.id,
+          type: "mattermost.mention",
+          occurredAt: new Date(p.create_at),
+          actor: p.user_id,
+          payload: { message: p.message, channelId: p.channel_id, teamId: team.id },
+          links: [],
+        });
+        if (p.create_at > maxCreate) maxCreate = p.create_at;
+      }
     }
     return { events, cursor: { lastCreateAt: maxCreate } };
   }
