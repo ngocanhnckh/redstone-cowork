@@ -40,11 +40,14 @@ import { InMemoryIngestedEventStore } from "./adapters/persistence/in-memory-ing
 import { PostgresIngestedEventStore } from "./adapters/persistence/postgres-ingested-event-store";
 import { JiraConnector } from "./adapters/connectors/jira.connector";
 import { MattermostConnector } from "./adapters/connectors/mattermost.connector";
+import { GoogleConnector } from "./adapters/connectors/google.connector";
+import { GoogleOAuthService } from "./application/google-oauth.service";
+import { OAuthController } from "./adapters/http/oauth.controller";
 import { PG_POOL, pgPoolProvider, PoolShutdown } from "./infrastructure/pg-pool.provider";
 import type { Pool } from "pg";
 
 @Module({
-  controllers: [HealthController, EventsController, SessionsController, DecisionsController, StreamController, PushController, ConnectionsController],
+  controllers: [HealthController, EventsController, SessionsController, DecisionsController, StreamController, PushController, ConnectionsController, OAuthController],
   providers: [
     RecordEventUseCase,
     SessionsService,
@@ -108,7 +111,29 @@ import type { Pool } from "pg";
     },
     {
       provide: CONNECTORS,
-      useFactory: () => [new JiraConnector(), new MattermostConnector()],
+      useFactory: () => [
+        new JiraConnector(),
+        new MattermostConnector(),
+        new GoogleConnector({
+          clientId: process.env.GOOGLE_CLIENT_ID ?? "",
+          clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
+        }),
+      ],
+    },
+    {
+      provide: GoogleOAuthService,
+      inject: [ConnectionsService],
+      useFactory: (connections: ConnectionsService) => {
+        const base = process.env.OAUTH_REDIRECT_BASE ?? "https://cowork.example.com";
+        return new GoogleOAuthService(
+          {
+            clientId: process.env.GOOGLE_CLIENT_ID ?? "",
+            clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
+            redirectUri: `${base}/api/oauth/google/callback`,
+          },
+          connections,
+        );
+      },
     },
   ],
 })
