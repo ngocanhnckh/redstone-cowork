@@ -16,6 +16,16 @@ Items found in milestone-close reviews, to be addressed in the noted milestone. 
 | P3 | Move hardcoded dev-server address out of `deploy/remote.sh` (use env/SSH config default) | M1+ |
 | P3 | Qdrant healthcheck → `curl -sf localhost:6333/readyz` instead of bash `/dev/tcp` | M2 |
 
+## Logged at M2 Slice 2 (2026-06-13)
+
+| Priority | Item | Target |
+|---|---|---|
+| P2 | `GoogleConnector` swallows per-source pull errors silently (gmail/calendar try/catch with empty body) — record the failure on the connection (`lastError`) so a broken source is visible, not silent | M2 Slice 3 |
+| P2 | Push sender also swallows send failures silently (no logs) — add prune/error logging + a "Send test notification" button | M2 Slice 3 |
+| P3 | Calendar pull is `orderBy=updated` ascending, 25/sync — back-catalogue accounts catch up to "now" only after many syncs; consider seeding `updatedMin` to recent on first connect | M2+ |
+| P3 | OAuth `state` is generated but not verified on callback (flow is already behind the instance bearer, so low risk) — persist + check state for defense-in-depth | M2+ |
+| P3 | Gmail pull fetches each message individually (1 list + N metadata GETs) — batch or use `history.list` for incremental | M2+ |
+
 ## Logged at M1a (2026-06-07)
 
 | Priority | Item | Target |
