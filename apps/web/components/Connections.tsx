@@ -23,6 +23,15 @@ export function Connections() {
   const [token, setToken] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [googleNotice, setGoogleNotice] = useState<string | null>(null);
+
+  // Surface the OAuth round-trip result (?google=connected|error) then clean the URL.
+  useEffect(() => {
+    const g = new URLSearchParams(window.location.search).get("google");
+    if (!g) return;
+    setGoogleNotice(g);
+    window.history.replaceState({}, "", window.location.pathname);
+  }, []);
 
   const refresh = useCallback(async () => {
     try {
@@ -81,6 +90,22 @@ export function Connections() {
   return (
     <section style={{ marginTop: 36 }}>
       <h2 style={{ fontSize: 16, opacity: 0.8 }}>Integrations {conns.length > 0 && <span style={{ fontSize: 13, opacity: 0.6 }}>· {conns.length}</span>}</h2>
+
+      {googleNotice === "connected" && (
+        <p style={{ fontSize: 12, color: "#3ddc84" }}>✓ Google connected — Gmail &amp; Calendar will start syncing.</p>
+      )}
+      {googleNotice === "error" && (
+        <p style={{ fontSize: 12, color: "#ff8585" }}>Google connection failed — try again, and approve all requested access.</p>
+      )}
+
+      {/* One-click OAuth — distinct from the PAT form below */}
+      <button
+        onClick={() => { window.location.href = "/api/oauth/google/start"; }}
+        style={{ ...input, cursor: "pointer", padding: "9px 14px", marginBottom: 14, borderColor: "#3a4566", display: "flex", alignItems: "center", gap: 8 }}
+      >
+        <span style={{ fontWeight: 600 }}>Connect Google</span>
+        <span style={{ opacity: 0.6 }}>— Gmail + Calendar (one-click consent)</span>
+      </button>
 
       {conns.map((c) => (
         <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: "1px solid #1b2440" }}>
