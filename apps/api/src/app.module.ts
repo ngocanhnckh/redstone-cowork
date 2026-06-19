@@ -41,13 +41,15 @@ import { PostgresIngestedEventStore } from "./adapters/persistence/postgres-inge
 import { JiraConnector } from "./adapters/connectors/jira.connector";
 import { MattermostConnector } from "./adapters/connectors/mattermost.connector";
 import { GoogleConnector } from "./adapters/connectors/google.connector";
+import { MicrosoftConnector } from "./adapters/connectors/microsoft.connector";
 import { GoogleOAuthService } from "./application/google-oauth.service";
-import { OAuthController } from "./adapters/http/oauth.controller";
+import { MicrosoftOAuthService } from "./application/microsoft-oauth.service";
+import { OAuthController, MicrosoftOAuthController } from "./adapters/http/oauth.controller";
 import { PG_POOL, pgPoolProvider, PoolShutdown } from "./infrastructure/pg-pool.provider";
 import type { Pool } from "pg";
 
 @Module({
-  controllers: [HealthController, EventsController, SessionsController, DecisionsController, StreamController, PushController, ConnectionsController, OAuthController],
+  controllers: [HealthController, EventsController, SessionsController, DecisionsController, StreamController, PushController, ConnectionsController, OAuthController, MicrosoftOAuthController],
   providers: [
     RecordEventUseCase,
     SessionsService,
@@ -118,6 +120,10 @@ import type { Pool } from "pg";
           clientId: process.env.GOOGLE_CLIENT_ID ?? "",
           clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
         }),
+        new MicrosoftConnector({
+          clientId: process.env.MICROSOFT_CLIENT_ID ?? "",
+          clientSecret: process.env.MICROSOFT_CLIENT_SECRET ?? "",
+        }),
       ],
     },
     {
@@ -130,6 +136,21 @@ import type { Pool } from "pg";
             clientId: process.env.GOOGLE_CLIENT_ID ?? "",
             clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
             redirectUri: `${base}/api/oauth/google/callback`,
+          },
+          connections,
+        );
+      },
+    },
+    {
+      provide: MicrosoftOAuthService,
+      inject: [ConnectionsService],
+      useFactory: (connections: ConnectionsService) => {
+        const base = process.env.OAUTH_REDIRECT_BASE ?? "https://cowork.example.com";
+        return new MicrosoftOAuthService(
+          {
+            clientId: process.env.MICROSOFT_CLIENT_ID ?? "",
+            clientSecret: process.env.MICROSOFT_CLIENT_SECRET ?? "",
+            redirectUri: `${base}/api/oauth/microsoft/callback`,
           },
           connections,
         );

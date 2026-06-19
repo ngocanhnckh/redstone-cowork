@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const ConnectorKindSchema = z.enum(["jira", "mattermost", "google"]);
+export const ConnectorKindSchema = z.enum(["jira", "mattermost", "google", "microsoft"]);
 export type ConnectorKind = z.infer<typeof ConnectorKindSchema>;
 
 /** FR-2 — the unified event envelope every connector normalizes into. */

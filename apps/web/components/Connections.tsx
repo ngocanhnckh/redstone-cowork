@@ -24,12 +24,16 @@ export function Connections() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [googleNotice, setGoogleNotice] = useState<string | null>(null);
+  const [microsoftNotice, setMicrosoftNotice] = useState<string | null>(null);
 
-  // Surface the OAuth round-trip result (?google=connected|error) then clean the URL.
+  // Surface the OAuth round-trip result (?google=… / ?microsoft=…) then clean the URL.
   useEffect(() => {
-    const g = new URLSearchParams(window.location.search).get("google");
-    if (!g) return;
-    setGoogleNotice(g);
+    const params = new URLSearchParams(window.location.search);
+    const g = params.get("google");
+    const m = params.get("microsoft");
+    if (!g && !m) return;
+    if (g) setGoogleNotice(g);
+    if (m) setMicrosoftNotice(m);
     window.history.replaceState({}, "", window.location.pathname);
   }, []);
 
@@ -97,15 +101,30 @@ export function Connections() {
       {googleNotice === "error" && (
         <p style={{ fontSize: 12, color: "#ff8585" }}>Google connection failed — try again, and approve all requested access.</p>
       )}
+      {microsoftNotice === "connected" && (
+        <p style={{ fontSize: 12, color: "#3ddc84" }}>✓ Outlook connected — mail &amp; calendar will start syncing.</p>
+      )}
+      {microsoftNotice === "error" && (
+        <p style={{ fontSize: 12, color: "#ff8585" }}>Outlook connection failed — try again, and approve all requested access.</p>
+      )}
 
       {/* One-click OAuth — distinct from the PAT form below */}
-      <button
-        onClick={() => { window.location.href = "/api/oauth/google/start"; }}
-        style={{ ...input, cursor: "pointer", padding: "9px 14px", marginBottom: 14, borderColor: "#3a4566", display: "flex", alignItems: "center", gap: 8 }}
-      >
-        <span style={{ fontWeight: 600 }}>Connect Google</span>
-        <span style={{ opacity: 0.6 }}>— Gmail + Calendar (one-click consent)</span>
-      </button>
+      <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
+        <button
+          onClick={() => { window.location.href = "/api/oauth/google/start"; }}
+          style={{ ...input, cursor: "pointer", padding: "9px 14px", borderColor: "#3a4566", display: "flex", alignItems: "center", gap: 8 }}
+        >
+          <span style={{ fontWeight: 600 }}>Connect Google</span>
+          <span style={{ opacity: 0.6 }}>— Gmail + Calendar</span>
+        </button>
+        <button
+          onClick={() => { window.location.href = "/api/oauth/microsoft/start"; }}
+          style={{ ...input, cursor: "pointer", padding: "9px 14px", borderColor: "#3a4566", display: "flex", alignItems: "center", gap: 8 }}
+        >
+          <span style={{ fontWeight: 600 }}>Connect Outlook</span>
+          <span style={{ opacity: 0.6 }}>— mail + calendar</span>
+        </button>
+      </div>
 
       {conns.map((c) => (
         <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: "1px solid #1b2440" }}>
