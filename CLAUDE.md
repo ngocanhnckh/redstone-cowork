@@ -9,7 +9,7 @@ Self-hosted AI cowork assistant: the user is the CEO of a simulated company; a v
   - Mattermost channel **redstone-cowork** (id `xy6ffti36pd97mosgemaagmuoy`) at `https://mattermost.examplehost.group` — post a progress update at every milestone completion and any notable event (deploy, blocker, decision needed).
   - Credentials: `.creds` at repo root (gitignored): `JIRA_PAT`, `JIRA_ENDPOINT`, `MATTERMOST_PAT`, `MATTERMOST_ENDPOINT`. Jira is self-hosted Data Center: `Authorization: Bearer $JIRA_PAT`, API `/rest/api/2/...`.
 - **Push to GitHub regularly** (`ngocanhnckh/redstone-cowork`, private) — at least at every task completion.
-- **Never run Docker on this Mac.** Use `deploy/remote.sh {sync|init|build|up|down|logs|ps|smoke}` against the dev server (`ubuntu@18.143.147.28`, dir `/home/ubuntu/redstone-cowork`).
+- **Never run Docker on this Mac.** Use `deploy/remote.sh {sync|init|build|up|down|logs|ps|smoke}` against the dev server (`youruser@your-server.example.com`, dir `/home/youruser/redstone-cowork`). Public via a cloudflared token tunnel → `cowork.example.com`.
 - **Never commit secrets** — `.creds`, `.env*` (except `.env.example`) are gitignored; keep it that way.
 
 ## Architecture rules

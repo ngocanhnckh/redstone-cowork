@@ -3,8 +3,8 @@
 # Usage: deploy/remote.sh {sync|init|build|up|down|logs|ps|smoke} [args...]
 set -euo pipefail
 
-SERVER="${DEV_SERVER:-ubuntu@18.143.147.28}"
-DIR="${DEV_DIR:-/home/ubuntu/redstone-cowork}"
+SERVER="${DEV_SERVER:-youruser@your-server.example.com}"
+DIR="${DEV_DIR:-/home/youruser/redstone-cowork}"
 
 sync() {
   rsync -az --delete \
