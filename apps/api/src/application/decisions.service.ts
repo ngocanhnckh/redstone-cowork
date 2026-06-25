@@ -41,6 +41,7 @@ export class DecisionsService {
   listPending() { return this.store.listPending(); }
   get(id: string) { return this.store.get(id); }
   countPendingBySession() { return this.store.countPendingBySession(); }
+  oldestPendingAtBySession() { return this.store.oldestPendingAtBySession(); }
 
   async resolve(id: string, input: unknown): Promise<Decision> {
     const resolution = ResolutionSchema.parse(input);

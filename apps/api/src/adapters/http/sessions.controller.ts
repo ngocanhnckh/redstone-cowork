@@ -84,6 +84,10 @@ export class SessionsController {
 
   @Get()
   async list() {
-    return this.sessions.listViews(await this.decisions.countPendingBySession());
+    const [pending, oldest] = await Promise.all([
+      this.decisions.countPendingBySession(),
+      this.decisions.oldestPendingAtBySession(),
+    ]);
+    return this.sessions.listViews(pending, oldest);
   }
 }
