@@ -21,3 +21,6 @@ build/
 
 coverage/
 *.tsbuildinfo
+
+# Brainstorm visual companion scratch
+.superpowers/

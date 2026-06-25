@@ -1,94 +1,77 @@
 # Redstone Cowork — Project Plan
 
-> Companion docs: [ABOUT.md](./ABOUT.md) (vision) · [prd/000-master-prd.md](./prd/000-master-prd.md) (master PRD) · feature PRDs in [prd/](./prd/)
+> **Pivoted 2026-06-26.** Cowork is now **a cognitive-load-efficient control plane for coding agents**, not a simulated-company assistant. The connector / virtual-team / situation-room scope moved to the separate **redstone-agent** project; Cowork consumes it only through a bridge. Design source of truth: [`superpowers/specs/2026-06-26-remote-agent-control-plane-design.md`](./superpowers/specs/2026-06-26-remote-agent-control-plane-design.md). Visual reference: [`superpowers/specs/assets/cockpit-focus-theater.html`](./superpowers/specs/assets/cockpit-focus-theater.html).
 
 ## 1. Context
 
-Redstone Cowork turns every user into the "CEO" of their own simulated company. A virtual team of AI employees ingests the user's work streams (Jira, Mattermost, Gmail, Calendar, Claude Code sessions), keeps a clarified, prioritized backlog, surfaces decisions that need the boss's call, and relays answers back to running Claude Code sessions — from any device, anywhere.
+Developers run several coding agents (Claude Code) across machines and multitask to avoid dead time while agents work — but juggling desktops, IDE windows, and SSH sessions is its own cognitive tax. Cowork removes it: see any session's latest output from anywhere, get pulled to whichever session needs you next, answer it, and let the UI **auto-advance** to the next — on desktop, mobile, or browser. Plus remote debugging (port-forwarding), file preview/edit, and pulling project context into a session via an injected MCP to redstone-agent.
 
-**Deployment model:** self-hosted, single user per instance, simple Docker Compose. Companies may bulk-deploy many isolated instances on one shared server (one per employee). All Claude calls use the user's own Claude subscription via the Claude Agent SDK with their mounted credentials — traffic stays between the user and Anthropic.
+**Deployment model:** self-hosted, single user per instance, Docker Compose; public via a cloudflared tunnel. Currently live on `youruser@your-server.example.com` → `cowork.example.com` (see [`superpowers/.../m1-done-live-access`] memory / `deploy/remote.sh`).
 
-**MVP platforms:** Next.js web app + React Native mobile app. Electron desktop and Apple Watch are post-MVP (web covers desktop usage in the interim).
+**Platforms (priority order):** **Desktop (Electron)** → **Mobile (React Native)** → Browser (shared renderer). Apple Watch is post-MVP.
 
-## 2. MVP Scope
+## 2. The one job
 
-| # | Feature | PRD |
-|---|---------|-----|
-| 1 | Claude Code hook & notifications (decision relay, answer-from-anywhere) | [001](./prd/001-claude-code-hook.md) |
-| 2 | Integration framework + connectors — Phase 1: Jira, Mattermost, Gmail, Google Calendar · Phase 2: GitHub, Outlook | [002](./prd/002-integrations.md) |
-| 3 | Task sync & breakdown (unified backlog, 2-way Jira sync, LLM breakdown) | [003](./prd/003-task-sync-breakdown.md) |
-| 4 | Virtual team (full: personas, project group chats, opinions on decisions) | [004](./prd/004-virtual-team.md) |
-| 5 | Situation Room (monitoring + fast-track decisions, web + mobile) | [005](./prd/005-situation-room.md) |
-| 6 | Deployment (single-instance Docker + bulk multi-employee mode) | [006](./prd/006-deployment.md) |
+> See, triage, and answer every coding-agent session from one calm surface — never juggling windows, never leaving dead time — with remote debugging and on-demand project context.
 
-**Post-MVP:** proactive calendar planning (3h pre-meeting prep, 9 PM next-day planning, 5 AM brief), Google Drive context, mother-company gateway, Slack/Zalo connectors, Electron desktop, Apple Watch, re-runnable learning sessions beyond v1.
+What Cowork explicitly does **not** own (lives in redstone-agent): connectors (Jira/Mattermost/Gmail/Calendar/Outlook), the virtual team, task-sync, the situation room. Cowork reaches that context via (a) an **MCP injected into each session** and (b) a **server-to-server bridge** for the backlog.
 
-## 3. Architecture Summary
+## 3. Architecture summary
 
-- **Monorepo** (pnpm + Turborepo):
-  - `apps/api` — NestJS, hexagonal architecture (domain core; ports for connectors, notifications, agents; adapters per platform)
-  - `apps/web` — Next.js (Situation Room, backlog, project chats; liquid-glass design with motion.dev)
-  - `apps/mobile` — React Native (push notifications, quick replies, Situation Room)
-  - `apps/hook-cli` — installable command that attaches any Claude Code session (any machine) to the server
-  - `apps/worker` — LangGraph agents, pollers, schedulers
-  - `packages/shared` — Zod schemas + domain types shared by API/web/mobile
-  - `prompts/` — all system prompts as `.md` Jinja templates (never inline in code)
-  - `deploy/` — Docker Compose, bulk-deploy tooling
-- **Data:** Postgres (system of record), Qdrant (vectors), mem0 (agent memory)
-- **Agents:** LangChain/LangGraph/DeepAgents for conversational + orchestration; Claude Agent SDK for complex CLI-class tasks (research, files, coding) with progress hooks back to the conversational layer
-- **Event-based core:** connectors poll/webhook → unified event stream → mapping agents (entity/project/task) → notification & decision fan-out (WebSocket to web, push to mobile)
+Control plane vs data plane (full detail in the design doc):
 
-## 4. Milestones
+- **Cowork server (`apps/api`, NestJS hexagonal)** — the universal hub. Sessions · decisions · **waiting queue** · summaries · notifications · **credential vault** (encrypted SSH/host/port-maps) · file proxy · port proxy · **agent bridge** → redstone-agent. Capable of everything so mobile/browser are first-class.
+- **Agent host (`apps/hook-cli` v2)** — runs on each dev machine, wraps Claude Code. Holds one **persistent outbound WS** to the server; streams latest-answer/todos/summary; serves **local files** and **local `localhost:PORT`** up the WS; **injects the redstone-agent MCP** into sessions; registers an SSH target for the desktop fast lane.
+- **Desktop (`apps/desktop`, new — Electron + shared React renderer)** — the **Focus Theater** cockpit; opens direct SSH for the port-forward fast lane.
+- **Mobile (`apps/mobile`)** — notifications, answer-anywhere, file preview, session switching; all via the server.
+- **`packages/shared`** — Zod types · **`prompts/`** — Jinja `.md` templates (e.g. rolling-summary) · **`apps/worker`** — schedulers/pollers.
+- **Data:** Postgres (system of record), Qdrant (kept for future semantic search). Per-instance Docker Compose.
 
-### M0 — Foundation
-Monorepo scaffold; Docker Compose (Postgres, Qdrant, API, web, worker); NestJS hexagonal skeleton; shared Zod package; prompt loading (Jinja over `.md`); single-user auth (instance password/token); env-parameterized ports/volumes (groundwork for bulk deploy).
-**Exit:** `docker compose up` serves web + API on configurable ports; healthchecks green; one round-trip domain event persisted.
+## 4. Status of prior work
 
-### M1 — Claude Code Hook & Notifications *(killer feature — works standalone, no integrations needed)*
-Hook CLI + one-command session attach; session registry; decision capture (Claude finished / needs input / asks permission); multiple-choice + custom reply; WebSocket to web, push to mobile; answer routed back to the originating session on any machine.
-**Exit:** user attaches a session on a remote server, gets a phone notification, taps an option, Claude continues — without touching that server.
+- **M0 Foundation** — done. Monorepo, Docker Compose, hexagonal skeleton, shared Zod, Jinja prompts, instance auth. *Backbone — survives the pivot.*
+- **M1 Hook & notifications / decision relay** — done & live. Hook CLI attaches a session, captures decisions, push to phone, answer routed back to the session anywhere. **This is the seed of the control plane** and is reused directly.
+- **M2 connectors (Jira/Mattermost/Gmail/Calendar/Outlook)** — built, but **out of scope going forward**; treated as legacy and slated to migrate to redstone-agent. Not extended further in Cowork.
 
-### M2 — Integration Framework + Connectors v1
-Connector port/adapter framework; encrypted credential vault; Jira (PAT, self-hosted Data Center supported), Mattermost (PAT), Gmail, Google Calendar; learning session v1 (pull last 1 month → map projects/entities → user profile).
-**Exit:** all four connectors ingest into the unified event stream; learning session produces a reviewable project/entity map.
+## 5. Forward milestones (the pivot)
 
-### M3 — Task Sync & Breakdown
-Unified backlog; importance × urgency sorting; grouping by project/entity; 2-way Jira status sync; LLM breakdown into actionable steps (at minimum, clear first steps when uncertain).
-**Exit:** a Jira ticket appears in the backlog broken into steps; completing it in Redstone updates Jira.
+### CP1 — Control-plane server v2 + agent-host state *(first build)*
+Extend the session model with rich state (latestAnswer, rolling **summary**, **session todos**); derive the **waiting queue** (ordered, snooze/pin); define **auto-advance** + idempotent-answer + multi-device fan-out semantics; agent host streams latest-answer/todos/summary up its WS.
+**Exit:** two attached sessions on one machine appear in the queue; answering the focused one (from an API client) auto-advances the queue; logic covered by Vitest.
 
-### M4 — Virtual Team (full)
-Persona engine (personalities as prompt templates); auto-created project group chats; role casting per project (PM, Eng, UX, …); opinions on pending Claude Code decisions (PM: timeline/risk, Eng: technical, UX: experience); user's final call confirmed by PM → relayed to the Claude Code session; mem0-backed persona memory.
-**Exit:** a real pending decision from M1 triggers a group-chat discussion; the user replies in chat; the answer reaches the session.
+### CP2 — Desktop app: Focus Theater (first vertical slice)
+`apps/desktop` (Electron + shared React renderer, liquid-glass). Queue rail + focus stage with **live transcript**, **summary**, **session-todo checklist**, pinned answer dock; **answering auto-advances**. Flow/Browse modes; OS notifications + tray.
+**Exit:** the cockpit renders live sessions from CP1 and you answer + auto-advance entirely from the desktop app.
 
-### M5 — Situation Room
-Web + mobile dashboard: running projects, live activity, status updates, pending decisions with summaries + suggested responses; quick response and custom reply per decision.
-**Exit:** every pending decision and active project visible and actionable from one screen on the phone.
+### CP3 — Files & artifacts
+Agent-host **file service** (read **and edit**); the **artifact drawer** — code (line numbers, editable), image preview, and **URL live-iframe + open-in-new-tab**; editable file browser in the context column.
+**Exit:** open + edit a project file and preview a URL artifact from the cockpit; edits save back to the host.
 
-### M6 — MVP Phase 2
-GitHub + Outlook connectors; bulk deployment hardening (`deploy.sh`, employee manifest, reverse-proxy mode, shared-infra option); upgrade/backup story; polish pass on design (liquid glass, motion).
-**Exit:** a company admin deploys 10 isolated instances on one server with one command; upgrades all with one command.
+### CP4 — Remote debugging (port-forwarding)
+**Credential vault** (encrypted SSH/host/port-maps); desktop **SSH `-L` fast lane**, auto-configured per project; server **port proxy** (authenticated URLs) so mobile/browser can view forwarded apps.
+**Exit:** forward a remote `:3000` and open it from the desktop (native localhost) and from a browser (proxied URL).
+
+### CP5 — redstone-agent bridge + MCP injection
+Inject the redstone-agent **MCP** into each session (pull discussions, pick next task); **server bridge** renders the **backlog** half of the cockpit checklist.
+**Exit:** within a session, pull a Jira task via the injected MCP; the project backlog renders alongside session todos in the cockpit.
+
+### CP6 — Mobile app
+React Native: push notifications, answer-anywhere (multiple-choice + custom), file preview, session switching — all via the server.
+**Exit:** answer a waiting session and preview a file from the phone; desktop reflects it live.
 
 ### Dependency graph
 ```
-M0 ─→ M1 ─→ M4 ─→ M5
-  └─→ M2 ─→ M3 ─┘     M6 builds on M2 (connectors) + M0 (deploy)
+M0 ─→ M1 ─→ CP1 ─→ CP2 ─→ CP3 ─→ CP4
+                     └────→ CP6 (mobile reuses CP1–CP3 server work)
+            CP5 attaches once redstone-agent's interface lands
 ```
-M1 and M2 can proceed in parallel after M0.
 
-## 5. Risks & Mitigations
+## 6. Working agreements (unchanged)
 
-| Risk | Mitigation |
-|------|------------|
-| Claude Code hook fragility across versions/machines | Thin, versioned hook protocol; CLI self-checks; session heartbeats; graceful "session lost" UX |
-| Six connectors balloon scope | Hard phase split; one shared connector interface; Phase-2 connectors are adapters only, no framework changes |
-| Virtual team feels gimmicky or noisy | Personas only speak when a decision/opinion is warranted; autonomy thresholds; user can mute roles |
-| LLM cost/latency on user's subscription | Conversational tier on LangChain (cheap models OK); Claude Agent SDK reserved for complex tasks; batch/queue agent work |
-| Bulk deploy resource bloat (N × Postgres/Qdrant) | Shared-infra option: one Postgres/Qdrant server, per-instance DB/collection |
-| 2-way sync conflicts (Jira ↔ local) | Source-of-truth rules per field; idempotent sync ops; conflict surfaced as a decision, never silent overwrite |
-
-## 6. Working Agreements
-
-- Hexagonal architecture: domain core has zero framework/SDK imports; everything external behind a port.
+- Hexagonal: domain core has zero framework/SDK imports; everything external behind a port. Composition root in `app.module.ts` (Postgres when `DATABASE_URL` set, in-memory otherwise — tests need no DB).
+- **Agent-host invariant:** never break a user's Claude session — every path catches errors and exits cleanly.
 - All system prompts live in `prompts/**/*.md`, rendered with Jinja — never hardcoded.
-- Shared types defined once in `packages/shared` (Zod), consumed by API, web, mobile.
-- Every milestone ends with a runnable end-to-end demo (its Exit criterion).
+- Shared types defined once in `packages/shared` (Zod), consumed by API/desktop/mobile.
+- Desktop/mobile UI uses the **liquid-glass-frontend** skill (Warm Ink: clay = the action, amber = waiting on you).
+- TDD for behavior-bearing code; every milestone ends with a runnable end-to-end demo (its Exit criterion).
+- Report progress to Jira (RCW) + Mattermost; push to GitHub at each task; never run Docker on the Mac (use `deploy/remote.sh`).

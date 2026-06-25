@@ -1,3 +1,5 @@
+> ⚠️ **Superseded 2026-06-26.** This document describes the original "simulated company / virtual team" vision. Cowork has pivoted to **a cognitive-load-efficient control plane for coding agents**; the connector / virtual-team / situation-room scope moved to the separate **redstone-agent** project. See [`PLAN.md`](./PLAN.md) and [`superpowers/specs/2026-06-26-remote-agent-control-plane-design.md`](./superpowers/specs/2026-06-26-remote-agent-control-plane-design.md). Kept for historical context.
+
 # Abstract
 
 Redstone Cowork is an assistant that can help anyone to manage their productivity and agents. A normal worker face many different data stream (from jira, emails, messages from mattermost slack whatsapp...) and struggle to manage their own contexts and tasks.
