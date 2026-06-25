@@ -78,4 +78,12 @@ export class PostgresDecisionStore implements DecisionStore {
     );
     return rowCount ?? 0;
   }
+  async oldestPendingAtBySession(): Promise<Record<string, Date>> {
+    const res = await this.pool.query(
+      `SELECT session_id, MIN(created_at) AS oldest FROM decisions WHERE status = 'pending' GROUP BY session_id`
+    );
+    const out: Record<string, Date> = {};
+    for (const row of res.rows) out[row.session_id] = new Date(row.oldest);
+    return out;
+  }
 }

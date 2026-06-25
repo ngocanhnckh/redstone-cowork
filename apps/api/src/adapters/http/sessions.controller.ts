@@ -24,7 +24,16 @@ export class SessionsController {
     }
   }
 
-  // NOTE: by-wrapper route must be declared BEFORE :id routes to avoid being matched as an id
+  // NOTE: static segments (queue, by-wrapper) must be declared BEFORE :id routes
+  @Get("queue")
+  async queue() {
+    const [pending, oldest] = await Promise.all([
+      this.decisions.countPendingBySession(),
+      this.decisions.oldestPendingAtBySession(),
+    ]);
+    return this.sessions.queue(pending, oldest);
+  }
+
   @Get("by-wrapper/:wrapperId")
   async getByWrapper(@Param("wrapperId") wrapperId: string) {
     const session = await this.sessions.getByWrapper(wrapperId);
@@ -82,8 +91,43 @@ export class SessionsController {
     }
   }
 
+  @Post(":id/state")
+  @HttpCode(201)
+  async patchState(@Param("id") id: string, @Body() body: unknown) {
+    try {
+      const updated = await this.sessions.patchState(id, body);
+      if (!updated) throw new NotFoundException();
+      return updated;
+    } catch (e) {
+      if (e instanceof ZodError) throw new BadRequestException(e.issues);
+      throw e;
+    }
+  }
+
+  @Post(":id/snooze")
+  @HttpCode(200)
+  async snooze(@Param("id") id: string, @Body() body: unknown) {
+    const { minutes } = z.object({ minutes: z.number().nonnegative() }).parse(body);
+    if (!(await this.sessions.get(id))) throw new NotFoundException();
+    await this.sessions.snooze(id, minutes);
+    return { ok: true };
+  }
+
+  @Post(":id/pin")
+  @HttpCode(200)
+  async pin(@Param("id") id: string, @Body() body: unknown) {
+    const { pinned } = z.object({ pinned: z.boolean() }).parse(body);
+    if (!(await this.sessions.get(id))) throw new NotFoundException();
+    await this.sessions.pin(id, pinned);
+    return { ok: true };
+  }
+
   @Get()
   async list() {
-    return this.sessions.listViews(await this.decisions.countPendingBySession());
+    const [pending, oldest] = await Promise.all([
+      this.decisions.countPendingBySession(),
+      this.decisions.oldestPendingAtBySession(),
+    ]);
+    return this.sessions.listViews(pending, oldest);
   }
 }

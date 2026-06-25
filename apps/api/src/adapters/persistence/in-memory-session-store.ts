@@ -1,4 +1,4 @@
-import type { AgentSession } from "@rcw/shared";
+import type { AgentSession, SessionStatePatch } from "@rcw/shared";
 import type { SessionStore } from "../../domain/sessions/session-store.port";
 
 export class InMemorySessionStore implements SessionStore {
@@ -10,8 +10,12 @@ export class InMemorySessionStore implements SessionStore {
           ...existing,
           ...s,
           attachedAt: existing.attachedAt,
-          // PRESERVE permissionMode when the incoming value is null (events without a mode must not wipe it)
           permissionMode: s.permissionMode ?? existing.permissionMode,
+          latestAnswer: existing.latestAnswer,
+          summary: existing.summary,
+          todos: existing.todos,
+          pinned: existing.pinned,
+          snoozedUntil: existing.snoozedUntil,
         }
       : s;
     this.sessions.set(s.id, merged);
@@ -34,5 +38,25 @@ export class InMemorySessionStore implements SessionStore {
   async setPermissionMode(id: string, mode: string): Promise<void> {
     const s = this.sessions.get(id);
     if (s) this.sessions.set(id, { ...s, permissionMode: mode });
+  }
+  async patchState(id: string, patch: SessionStatePatch): Promise<AgentSession | null> {
+    const s = this.sessions.get(id);
+    if (!s) return null;
+    const next: AgentSession = {
+      ...s,
+      ...(patch.latestAnswer !== undefined ? { latestAnswer: patch.latestAnswer } : {}),
+      ...(patch.summary !== undefined ? { summary: patch.summary } : {}),
+      ...(patch.todos !== undefined ? { todos: patch.todos } : {}),
+    };
+    this.sessions.set(id, next);
+    return next;
+  }
+  async setPinned(id: string, pinned: boolean): Promise<void> {
+    const s = this.sessions.get(id);
+    if (s) this.sessions.set(id, { ...s, pinned });
+  }
+  async setSnoozedUntil(id: string, until: Date | null): Promise<void> {
+    const s = this.sessions.get(id);
+    if (s) this.sessions.set(id, { ...s, snoozedUntil: until });
   }
 }
