@@ -24,6 +24,15 @@ export class InMemoryDecisionStore implements DecisionStore {
       if (d.status === "pending") counts[d.sessionId] = (counts[d.sessionId] ?? 0) + 1;
     return counts;
   }
+  async oldestPendingAtBySession() {
+    const oldest: Record<string, Date> = {};
+    for (const d of this.decisions.values()) {
+      if (d.status !== "pending") continue;
+      const cur = oldest[d.sessionId];
+      if (!cur || d.createdAt.getTime() < cur.getTime()) oldest[d.sessionId] = d.createdAt;
+    }
+    return oldest;
+  }
   async listUndelivered(sessionId: string): Promise<Decision[]> {
     return [...this.decisions.values()].filter(
       (d) => d.sessionId === sessionId && d.status === "resolved" && d.deliveredAt === null && DELIVERABLE_KINDS.has(d.kind)

@@ -7,6 +7,8 @@ export interface DecisionStore {
   /** Atomic: only succeeds if still pending. Returns null when already resolved/unknown. */
   resolve(id: string, resolution: Resolution, at: Date): Promise<Decision | null>;
   countPendingBySession(): Promise<Record<string, number>>;
+  /** For each session with pending decisions, the earliest pending createdAt (when it began waiting). */
+  oldestPendingAtBySession(): Promise<Record<string, Date>>;
   /** Returns resolved decisions with no deliveredAt for this session (permission|question|instruction). */
   listUndelivered(sessionId: string): Promise<Decision[]>;
   markDelivered(id: string, at: Date): Promise<void>;
