@@ -1,5 +1,21 @@
 import { z } from "zod";
 
+export const TodoStatusSchema = z.enum(["pending", "in_progress", "completed"]);
+export const TodoItemSchema = z.object({
+  text: z.string().min(1),
+  status: TodoStatusSchema.default("pending"),
+});
+export type TodoItem = z.infer<typeof TodoItemSchema>;
+
+export const SessionStatePatchSchema = z
+  .object({
+    latestAnswer: z.string().nullable().optional(),
+    summary: z.string().nullable().optional(),
+    todos: z.array(TodoItemSchema).optional(),
+  })
+  .strict();
+export type SessionStatePatch = z.infer<typeof SessionStatePatchSchema>;
+
 export const AgentSessionSchema = z.object({
   id: z.string().min(1),               // Claude Code session_id
   machine: z.string().min(1),
@@ -10,6 +26,11 @@ export const AgentSessionSchema = z.object({
   wrapperId: z.string().nullable().default(null),
   permissionMode: z.string().nullable().default(null),
   autoModeEnabled: z.boolean().default(false),
+  latestAnswer: z.string().nullable().default(null),
+  summary: z.string().nullable().default(null),
+  todos: z.array(TodoItemSchema).default([]),
+  pinned: z.boolean().default(false),
+  snoozedUntil: z.coerce.date().nullable().default(null),
 });
 export type AgentSession = z.infer<typeof AgentSessionSchema>;
 

@@ -1,4 +1,4 @@
-import type { AgentSession } from "@rcw/shared";
+import type { AgentSession, SessionStatePatch } from "@rcw/shared";
 
 export interface SessionStore {
   upsert(session: AgentSession): Promise<AgentSession>;
@@ -7,5 +7,8 @@ export interface SessionStore {
   list(): Promise<AgentSession[]>;
   getByWrapper(wrapperId: string): Promise<AgentSession | null>;
   setPermissionMode(id: string, mode: string): Promise<void>;
+  patchState(id: string, patch: SessionStatePatch): Promise<AgentSession | null>;
+  setPinned(id: string, pinned: boolean): Promise<void>;
+  setSnoozedUntil(id: string, until: Date | null): Promise<void>;
 }
 export const SESSION_STORE = Symbol("SessionStore");
