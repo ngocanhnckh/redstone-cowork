@@ -4,14 +4,41 @@ import { startCockpit } from "../store";
 import QueueRail from "./QueueRail";
 import FocusStage from "./FocusStage";
 import ContextColumn from "./ContextColumn";
+import AgentGrid from "./AgentGrid";
+
+const noDrag = { WebkitAppRegion: "no-drag" } as CSSProperties;
 
 export default function Cockpit() {
   const queue = useStore((s) => s.queue);
+  const sessions = useStore((s) => s.sessions);
+  const mode = useStore((s) => s.mode);
+  const setMode = useStore((s) => s.setMode);
+  const detailId = useStore((s) => s.detailId);
+  const closeDetail = useStore((s) => s.closeDetail);
 
   useEffect(() => {
     const unsub = startCockpit();
     return unsub;
   }, []);
+
+  const seg = (m: "flow" | "grid", label: string) => (
+    <button
+      onClick={() => setMode(m)}
+      style={{
+        ...noDrag,
+        padding: "4px 12px",
+        borderRadius: 999,
+        fontSize: 11.5,
+        fontWeight: 500,
+        cursor: "pointer",
+        border: 0,
+        background: mode === m ? "rgb(var(--primary) / 0.32)" : "transparent",
+        color: mode === m ? "#fff" : "var(--text-soft)",
+      }}
+    >
+      {label}
+    </button>
+  );
 
   return (
     <div
@@ -61,41 +88,69 @@ export default function Cockpit() {
               textTransform: "uppercase",
             }}
           >
-            redstone cowork — flow
+            redstone cowork
           </span>
+          <div style={{ flex: 1 }} />
+          {/* Flow / Grid toggle */}
+          <div
+            style={{ ...noDrag, display: "flex", gap: 3, padding: 3, borderRadius: 999, border: "1px solid var(--border)" }}
+          >
+            {seg("flow", `Flow${queue.length ? ` · ${queue.length}` : ""}`)}
+            {seg("grid", `Grid${sessions.length ? ` · ${sessions.length}` : ""}`)}
+          </div>
         </div>
 
         {/* Main content */}
-        {queue.length === 0 ? (
-          <div
-            style={{
-              flex: 1,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <div style={{ textAlign: "center" }}>
-              <div
-                className="display"
-                style={{ fontSize: 32, color: "var(--text-soft)", marginBottom: 10 }}
+        {mode === "grid" ? (
+          detailId ? (
+            <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+              <button
+                onClick={closeDetail}
+                className="glass-inset-hover"
+                style={{
+                  ...noDrag,
+                  alignSelf: "flex-start",
+                  margin: "12px 0 0 16px",
+                  padding: "6px 13px",
+                  borderRadius: 999,
+                  border: "1px solid var(--border)",
+                  background: "transparent",
+                  color: "var(--text-soft)",
+                  fontSize: 12,
+                  cursor: "pointer",
+                }}
               >
+                ← All agents
+              </button>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 314px", flex: 1, minHeight: 0 }}>
+                <FocusStage sessionId={detailId} />
+                <ContextColumn sessionId={detailId} />
+              </div>
+            </div>
+          ) : (
+            <AgentGrid />
+          )
+        ) : queue.length === 0 ? (
+          <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <div style={{ textAlign: "center" }}>
+              <div className="display" style={{ fontSize: 32, color: "var(--text-soft)", marginBottom: 10 }}>
                 All clear
               </div>
-              <p className="soft" style={{ fontSize: 14, maxWidth: 360, lineHeight: 1.6 }}>
-                All sessions are running — nothing needs your attention.
+              <p className="soft" style={{ fontSize: 14, maxWidth: 360, lineHeight: 1.6, marginBottom: 18 }}>
+                Nothing needs your attention right now
+                {sessions.length ? ` — ${sessions.length} agent${sessions.length > 1 ? "s" : ""} connected.` : "."}
               </p>
+              <button
+                onClick={() => setMode("grid")}
+                className="glass-btn--clay"
+                style={{ padding: "9px 18px", fontSize: 13, fontWeight: 600 }}
+              >
+                View all agents →
+              </button>
             </div>
           </div>
         ) : (
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "214px 1fr 314px",
-              flex: 1,
-              minHeight: 0,
-            }}
-          >
+          <div style={{ display: "grid", gridTemplateColumns: "214px 1fr 314px", flex: 1, minHeight: 0 }}>
             <QueueRail />
             <FocusStage />
             <ContextColumn />

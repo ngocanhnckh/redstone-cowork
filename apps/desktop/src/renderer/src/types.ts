@@ -5,6 +5,7 @@ export type SessionView = {
   pendingDecisions: number; waitingSince: string | null;
   latestAnswer: string | null; summary: string | null; todos: Todo[];
   pinned: boolean; snoozedUntil: string | null;
+  lastSeenAt: string | null; attachedAt: string | null;
 };
 export type DecisionOption = { label: string; description?: string };
 export type Decision = {

@@ -7,10 +7,15 @@ type State = {
   queue: SessionView[];
   decisions: Decision[];
   focusId: string | null;
+  mode: "flow" | "grid";
+  detailId: string | null; // session shown in the grid's drill-in detail
   loading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
   setFocus: (id: string) => void;
+  setMode: (mode: "flow" | "grid") => void;
+  openDetail: (id: string) => void;
+  closeDetail: () => void;
   answer: (
     decisionId: string,
     resolution: { choice?: string | null; answers?: null; custom?: string | null }
@@ -24,6 +29,8 @@ export const useStore = create<State>((set, get) => ({
   queue: [],
   decisions: [],
   focusId: null,
+  mode: "flow",
+  detailId: null,
   loading: false,
   error: null,
 
@@ -51,6 +58,18 @@ export const useStore = create<State>((set, get) => ({
 
   setFocus: (id: string) => {
     set({ focusId: id });
+  },
+
+  setMode: (mode: "flow" | "grid") => {
+    set({ mode, detailId: null });
+  },
+
+  openDetail: (id: string) => {
+    set({ detailId: id });
+  },
+
+  closeDetail: () => {
+    set({ detailId: null });
   },
 
   answer: async (

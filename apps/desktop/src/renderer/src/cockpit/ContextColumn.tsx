@@ -50,13 +50,14 @@ function TodoRow({ todo }: { todo: Todo }) {
   );
 }
 
-export default function ContextColumn() {
+export default function ContextColumn({ sessionId }: { sessionId?: string } = {}) {
   const focusId = useStore((s) => s.focusId);
   const sessions = useStore((s) => s.sessions);
   const queue = useStore((s) => s.queue);
 
+  const id = sessionId ?? focusId;
   const session =
-    sessions.find((s) => s.id === focusId) ?? queue.find((s) => s.id === focusId);
+    sessions.find((s) => s.id === id) ?? queue.find((s) => s.id === id);
 
   return (
     <div

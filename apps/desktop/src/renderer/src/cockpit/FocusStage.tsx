@@ -5,15 +5,16 @@ function projectName(cwd: string): string {
   return cwd.split("/").filter(Boolean).pop() ?? cwd;
 }
 
-export default function FocusStage() {
+export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
   const focusId = useStore((s) => s.focusId);
   const sessions = useStore((s) => s.sessions);
   const queue = useStore((s) => s.queue);
   const decisions = useStore((s) => s.decisions);
 
+  const id = sessionId ?? focusId;
   const session =
-    sessions.find((s) => s.id === focusId) ?? queue.find((s) => s.id === focusId);
-  const decision = decisions.find((d) => d.sessionId === focusId);
+    sessions.find((s) => s.id === id) ?? queue.find((s) => s.id === id);
+  const decision = decisions.find((d) => d.sessionId === id);
 
   if (!session) return null;
 
