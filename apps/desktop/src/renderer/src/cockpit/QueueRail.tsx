@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { useStore } from "../store";
 
 function initials(cwd: string): string {
@@ -22,6 +23,12 @@ function projectName(cwd: string): string {
 }
 
 export default function QueueRail() {
+  const [, tick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => tick((n) => n + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
+
   const queue = useStore((s) => s.queue);
   const sessions = useStore((s) => s.sessions);
   const focusId = useStore((s) => s.focusId);

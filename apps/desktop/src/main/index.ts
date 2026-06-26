@@ -18,6 +18,7 @@ function createWindow(): void {
     backgroundColor: "#15110D",
     webPreferences: {
       preload: join(here, "../preload/index.mjs"),
+      // sandbox: false required — preload uses contextBridge + ipcRenderer which need Node/Electron access
       sandbox: false,
     },
   });

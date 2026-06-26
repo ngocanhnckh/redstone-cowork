@@ -97,6 +97,7 @@ export function startStream(
   let backoff = 1000;
   const backoffSteps = [1000, 2000, 5000];
   let backoffIdx = 0;
+  let activeReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
 
   // Poll fallback every 3000ms
   const pollInterval = setInterval(() => {
@@ -117,6 +118,7 @@ export function startStream(
       backoff = backoffSteps[0];
 
       const reader = res.body.getReader();
+      activeReader = reader;
       const dec = new TextDecoder();
       let buffer = "";
 
@@ -134,6 +136,8 @@ export function startStream(
       }
     } catch {
       // ignore errors, reconnect below
+    } finally {
+      activeReader = null;
     }
 
     if (!stopped) {
@@ -148,5 +152,7 @@ export function startStream(
   return () => {
     stopped = true;
     clearInterval(pollInterval);
+    activeReader?.cancel().catch(() => {/* ignore cancel errors */});
+    activeReader = null;
   };
 }

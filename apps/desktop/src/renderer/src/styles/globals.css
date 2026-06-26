@@ -47,6 +47,10 @@ body {
 @keyframes floatA { 0%,100% { transform: translate(0,0) scale(1); } 33% { transform: translate(-12vw,8vh) scale(1.14); } 66% { transform: translate(8vw,-7vh) scale(.92); } }
 @keyframes floatB { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(-15vw,11vh) scale(1.18); } }
 @keyframes floatC { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(13vw,-12vh) scale(.86); } }
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.45; transform: scale(0.78); }
+}
 .grain::after {
   content: ""; position: fixed; inset: 0; z-index: 1; pointer-events: none; opacity: .045; mix-blend-mode: overlay;
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
