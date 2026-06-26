@@ -104,4 +104,8 @@ export class ApiClient {
       3000
     );
   }
+
+  async pushState(sessionId: string, patch: { latestAnswer?: string | null; transcript?: Array<{ role: "user" | "assistant"; text: string }> }): Promise<void> {
+    await this.req(`/sessions/${encodeURIComponent(sessionId)}/state`, { method: "POST", headers: json(this.cfg.token), body: JSON.stringify(patch) }, 3000);
+  }
 }
