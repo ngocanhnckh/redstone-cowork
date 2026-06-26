@@ -23,6 +23,7 @@ type State = {
   snooze: (sessionId: string, minutes: number) => Promise<void>;
   pin: (sessionId: string, pinned: boolean) => Promise<void>;
   instruct: (sessionId: string, text: string) => Promise<void>;
+  switchMode: (sessionId: string, mode: string) => Promise<void>;
 };
 
 export const useStore = create<State>((set, get) => ({
@@ -105,6 +106,11 @@ export const useStore = create<State>((set, get) => ({
 
   instruct: async (sessionId, text) => {
     try { await window.cowork.instruct(sessionId, text); await get().refresh(); }
+    catch (e) { set({ error: e instanceof Error ? e.message : String(e) }); }
+  },
+
+  switchMode: async (sessionId, mode) => {
+    try { await window.cowork.switchMode(sessionId, mode); await get().refresh(); }
     catch (e) { set({ error: e instanceof Error ? e.message : String(e) }); }
   },
 }));

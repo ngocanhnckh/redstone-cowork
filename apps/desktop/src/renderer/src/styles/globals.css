@@ -98,6 +98,7 @@ body {
 .soft { color: var(--text-soft); }
 .faint { color: var(--text-faint); }
 .no-scrollbar::-webkit-scrollbar { display: none; }
+.reply-input::placeholder { color: var(--text-faint); }
 
 /* ===== markdown rendering (transcript / answers) ===== */
 .md { font-size: 14px; line-height: 1.62; color: var(--text); word-wrap: break-word; }

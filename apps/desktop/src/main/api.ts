@@ -78,6 +78,15 @@ export async function pin(id: string, pinned: boolean): Promise<void> {
   });
 }
 
+export async function switchMode(sessionId: string, mode: string): Promise<unknown> {
+  return (
+    await req(`/sessions/${encodeURIComponent(sessionId)}/mode`, {
+      method: "POST",
+      body: JSON.stringify({ mode }),
+    })
+  ).json();
+}
+
 export function parseSseBlock(
   block: string
 ): { type: string; payload: unknown } | null {

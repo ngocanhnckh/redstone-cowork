@@ -3,6 +3,8 @@ import { useStore } from "../store";
 import AnswerDock from "./AnswerDock";
 import Markdown from "./Markdown";
 
+const ACTIONABLE_KINDS = ["question", "permission", "mode"] as const;
+
 function projectName(cwd: string): string {
   return cwd.split("/").filter(Boolean).pop() ?? cwd;
 }
@@ -12,11 +14,16 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
   const sessions = useStore((s) => s.sessions);
   const queue = useStore((s) => s.queue);
   const decisions = useStore((s) => s.decisions);
+  const switchMode = useStore((s) => s.switchMode);
 
   const id = sessionId ?? focusId;
   const session =
     sessions.find((s) => s.id === id) ?? queue.find((s) => s.id === id);
-  const decision = decisions.find((d) => d.sessionId === id);
+
+  const sessionDecisions = decisions.filter((d) => d.sessionId === id);
+  const decision =
+    sessionDecisions.find((d) => (ACTIONABLE_KINDS as readonly string[]).includes(d.kind)) ??
+    sessionDecisions[0];
 
   const scrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -126,6 +133,52 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
             {session.id.slice(0, 4)}
           </span>
         </div>
+
+        {/* Mode selector */}
+        {(() => {
+          const modes = ["default", "acceptEdits", "plan", ...(session.autoModeEnabled ? ["auto"] : [])];
+          const current = session.permissionMode ?? "default";
+          const LABEL: Record<string, string> = { default: "Default", acceptEdits: "Accept Edits", plan: "Plan", auto: "Auto" };
+          return (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 14 }}>
+              <span
+                className="mono faint"
+                style={{ fontSize: 9, letterSpacing: "0.18em", textTransform: "uppercase", marginRight: 4 }}
+              >
+                mode
+              </span>
+              <div
+                style={{
+                  display: "flex",
+                  border: "1px solid var(--border)",
+                  borderRadius: 999,
+                  padding: 3,
+                  gap: 3,
+                }}
+              >
+                {modes.map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => switchMode(session.id, m)}
+                    style={{
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 11,
+                      padding: "4px 11px",
+                      borderRadius: 999,
+                      border: 0,
+                      cursor: "pointer",
+                      background: m === current ? "rgb(var(--primary) / 0.32)" : "transparent",
+                      color: m === current ? "#fff" : "var(--text-soft)",
+                      transition: "background 0.15s, color 0.15s",
+                    }}
+                  >
+                    {LABEL[m] ?? m}
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
       {/* Body — transcript scrollback */}

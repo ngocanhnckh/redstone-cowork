@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { Decision } from "../types";
 import { useStore } from "../store";
 import { nextAfterAnswer } from "../autoAdvance";
@@ -8,14 +8,40 @@ interface Props {
 }
 
 export default function AnswerDock({ decision }: Props) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const idleInputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const idleInputRef = useRef<HTMLTextAreaElement>(null);
+  const [sent, setSent] = useState(false);
+  const [idleSent, setIdleSent] = useState(false);
   const answer = useStore((s) => s.answer);
   const snooze = useStore((s) => s.snooze);
   const setFocus = useStore((s) => s.setFocus);
   const focusId = useStore((s) => s.focusId);
   const queue = useStore((s) => s.queue);
   const instruct = useStore((s) => s.instruct);
+
+  const textareaStyle: React.CSSProperties = {
+    flex: 1,
+    borderRadius: 16,
+    border: "1px solid var(--border)",
+    padding: "12px 16px",
+    color: "var(--text)",
+    caretColor: "rgb(var(--primary-soft))",
+    fontSize: 13.5,
+    background: "rgba(255,255,255,0.03)",
+    outline: "none",
+    resize: "none",
+    minHeight: 44,
+    maxHeight: 140,
+    overflowY: "auto",
+    lineHeight: 1.5,
+    fontFamily: "var(--font-body)",
+    width: "100%",
+  };
+
+  function autoGrow(el: HTMLTextAreaElement) {
+    el.style.height = "auto";
+    el.style.height = Math.min(140, el.scrollHeight) + "px";
+  }
 
   if (!decision) {
     // No pending decision — show Acknowledge to advance focus + free-text instruct
@@ -29,44 +55,48 @@ export default function AnswerDock({ decision }: Props) {
           backdropFilter: "blur(20px)",
         }}
       >
-        <div style={{ display: "flex", gap: 9, marginBottom: 10 }}>
-          <input
+        <div style={{ display: "flex", gap: 9, marginBottom: 10, alignItems: "flex-end" }}>
+          <textarea
             ref={idleInputRef}
+            className="reply-input no-scrollbar"
             placeholder="Send an instruction…"
+            rows={1}
+            onInput={(e) => autoGrow(e.currentTarget)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                const val = idleInputRef.current?.value.trim();
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                const el = idleInputRef.current;
+                const val = el?.value.trim();
                 if (val && focusId) {
                   instruct(focusId, val);
-                  if (idleInputRef.current) idleInputRef.current.value = "";
+                  if (el) { el.value = ""; el.style.height = "auto"; }
+                  setIdleSent(true);
+                  setTimeout(() => setIdleSent(false), 1800);
                 }
               }
             }}
-            style={{
-              flex: 1,
-              borderRadius: 999,
-              border: "1px solid var(--border)",
-              padding: "12px 18px",
-              color: "var(--text-faint)",
-              fontSize: 13.5,
-              background: "rgba(255,255,255,0.02)",
-              outline: "none",
-            }}
+            style={textareaStyle}
           />
           <button
             className="glass-btn--clay"
             onClick={() => {
-              const val = idleInputRef.current?.value.trim();
+              const el = idleInputRef.current;
+              const val = el?.value.trim();
               if (val && focusId) {
                 instruct(focusId, val);
-                if (idleInputRef.current) idleInputRef.current.value = "";
+                if (el) { el.value = ""; el.style.height = "auto"; }
+                setIdleSent(true);
+                setTimeout(() => setIdleSent(false), 1800);
               }
             }}
-            style={{ borderRadius: 999, padding: "0 22px", fontSize: 13.5, fontWeight: 600 }}
+            style={{ borderRadius: 999, padding: "0 22px", height: 44, fontSize: 13.5, fontWeight: 600, flexShrink: 0 }}
           >
             Send ↵
           </button>
         </div>
+        {idleSent && (
+          <span className="mono" style={{ display: "block", fontSize: 11, color: "rgb(var(--accent))", marginBottom: 6 }}>✓ sent</span>
+        )}
         <button
           className="glass-btn--clay"
           onClick={() => {
@@ -86,14 +116,17 @@ export default function AnswerDock({ decision }: Props) {
   const sessionId = decision.sessionId;
 
   const handleSend = () => {
-    const val = inputRef.current?.value.trim();
+    const el = inputRef.current;
+    const val = el?.value.trim();
     if (!val) return;
     if (decision && (decision.kind === "question" || decision.kind === "permission" || decision.kind === "mode")) {
       answer(decision.id, { custom: val });
     } else {
       instruct(decision!.sessionId, val);
     }
-    if (inputRef.current) inputRef.current.value = "";
+    if (el) { el.value = ""; el.style.height = "auto"; }
+    setSent(true);
+    setTimeout(() => setSent(false), 1800);
   };
 
   return (
@@ -139,32 +172,32 @@ export default function AnswerDock({ decision }: Props) {
         ))}
       </div>
 
-      <div style={{ display: "flex", gap: 9, marginTop: 11 }}>
-        <input
+      <div style={{ display: "flex", gap: 9, marginTop: 11, alignItems: "flex-end" }}>
+        <textarea
           ref={inputRef}
+          className="reply-input no-scrollbar"
           placeholder="Type a custom reply…"
+          rows={1}
+          onInput={(e) => autoGrow(e.currentTarget)}
           onKeyDown={(e) => {
-            if (e.key === "Enter") handleSend();
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              handleSend();
+            }
           }}
-          style={{
-            flex: 1,
-            borderRadius: 999,
-            border: "1px solid var(--border)",
-            padding: "12px 18px",
-            color: "var(--text-faint)",
-            fontSize: 13.5,
-            background: "rgba(255,255,255,0.02)",
-            outline: "none",
-          }}
+          style={textareaStyle}
         />
         <button
           className="glass-btn--clay"
           onClick={handleSend}
-          style={{ borderRadius: 999, padding: "0 22px", fontSize: 13.5, fontWeight: 600 }}
+          style={{ borderRadius: 999, padding: "0 22px", height: 44, fontSize: 13.5, fontWeight: 600, flexShrink: 0 }}
         >
           Send ↵
         </button>
       </div>
+      {sent && (
+        <span className="mono" style={{ display: "block", fontSize: 11, color: "rgb(var(--accent))", marginTop: 4 }}>✓ sent</span>
+      )}
 
       <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 12 }}>
         <span

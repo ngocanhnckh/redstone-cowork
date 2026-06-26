@@ -10,4 +10,5 @@ export const IPC = {
   pin: "api:pin",
   streamEvent: "stream:event",
   instruct: "api:instruct",
+  mode: "api:mode",
 } as const;
