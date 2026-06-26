@@ -45,11 +45,17 @@ import { MicrosoftConnector } from "./adapters/connectors/microsoft.connector";
 import { GoogleOAuthService } from "./application/google-oauth.service";
 import { MicrosoftOAuthService } from "./application/microsoft-oauth.service";
 import { OAuthController, MicrosoftOAuthController } from "./adapters/http/oauth.controller";
+import { DevicesController } from "./adapters/http/devices.controller";
+import { MasterTokenGuard } from "./adapters/http/master-token.guard";
+import { DevicesService } from "./application/devices.service";
+import { DEVICE_TOKEN_STORE } from "./domain/devices/device-token-store.port";
+import { InMemoryDeviceTokenStore } from "./adapters/persistence/in-memory-device-token-store";
+import { PostgresDeviceTokenStore } from "./adapters/persistence/postgres-device-token-store";
 import { PG_POOL, pgPoolProvider, PoolShutdown } from "./infrastructure/pg-pool.provider";
 import type { Pool } from "pg";
 
 @Module({
-  controllers: [HealthController, EventsController, SessionsController, DecisionsController, StreamController, PushController, ConnectionsController, OAuthController, MicrosoftOAuthController],
+  controllers: [HealthController, EventsController, SessionsController, DecisionsController, StreamController, PushController, ConnectionsController, OAuthController, MicrosoftOAuthController, DevicesController],
   providers: [
     RecordEventUseCase,
     SessionsService,
@@ -61,6 +67,8 @@ import type { Pool } from "pg";
     DecisionWaiters,
     DeliveryWaiters,
     EventsBus,
+    DevicesService,
+    MasterTokenGuard,
     // Single shared pool — null when DATABASE_URL is unset (tests run without DB)
     pgPoolProvider,
     // Graceful shutdown: ends the pool when the module is destroyed
@@ -110,6 +118,12 @@ import type { Pool } from "pg";
       inject: [PG_POOL],
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresIngestedEventStore(pool) : new InMemoryIngestedEventStore(),
+    },
+    {
+      provide: DEVICE_TOKEN_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresDeviceTokenStore(pool) : new InMemoryDeviceTokenStore(),
     },
     {
       provide: CONNECTORS,
