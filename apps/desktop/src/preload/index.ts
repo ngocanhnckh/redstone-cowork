@@ -1,7 +1,7 @@
-import { contextBridge } from "electron";
+import { contextBridge, ipcRenderer } from "electron";
 
-// Minimal bridge for the scaffold. Task 3 expands this into the full
-// `window.cowork` data API (config, sessions/queue/decisions, onUpdate).
 contextBridge.exposeInMainWorld("cowork", {
-  ping: () => "pong",
+  getConfig: (): Promise<{ serverUrl: string; hasToken: boolean } | null> => ipcRenderer.invoke("config:get"),
+  saveConfig: (serverUrl: string, token: string): Promise<{ ok: boolean }> => ipcRenderer.invoke("config:save", { serverUrl, token }),
+  clearConfig: (): Promise<void> => ipcRenderer.invoke("config:clear"),
 });
