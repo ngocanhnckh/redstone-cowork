@@ -10,7 +10,8 @@ const usage = `redstone <command>
   hook                                  install hooks here + arm attach for the next session event
   handle                                (internal) Claude Code hook entrypoint
   poll --wrapper <id> --tmux <target>   (internal) delivery poller for redstone-claude sessions
-  status                                show config + attach state`;
+  status                                show config + attach state
+  claude [args]    run Claude under the wrapper so cockpit/phone replies type back`;
 
 async function main() {
   const cmd = argv[2];
@@ -27,6 +28,11 @@ async function main() {
     armAttach(process.cwd());
     console.log(`hooks installed -> ${settingsPath}`);
     console.log("attach armed: the next Claude Code activity in this directory will connect this session.");
+  } else if (cmd === "claude") {
+    if (!loadCliConfig()) { console.error("run `redstone init` first"); exit(1); }
+    const { runWrapper } = await import("./claude-wrapper");
+    const bin = realpathSync(argv[1]);
+    runWrapper(argv.slice(3), bin);
   } else if (cmd === "handle") {
     const { handle } = await import("./handler");
     await handle();

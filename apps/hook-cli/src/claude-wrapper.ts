@@ -46,39 +46,27 @@ export function buildTmuxCommands(
   ];
 }
 
-function main() {
+export function runWrapper(args: string[], mainBin: string): void {
   if (!loadCliConfig()) {
     console.error("run `redstone init --server <url> --token <token>` first");
     exit(1);
   }
   if (spawnSync("tmux", ["-V"], { stdio: "ignore" }).error) {
-    console.error(
-      "redstone-claude requires tmux (on Windows: run inside WSL2). Install tmux and retry.",
-    );
+    console.error("redstone claude requires tmux (on Windows: run inside WSL2). Install tmux and retry.");
     exit(1);
   }
-
   const wrapperId = randomBytes(4).toString("hex");
-  const wrapperBin = realpathSync(argv[1]);
-  const mainBin = wrapperBin.replace(/claude-wrapper\.js$/, "main.js");
-
   installHooks(process.cwd(), `node ${mainBin}`);
-
-  const cmds = buildTmuxCommands(wrapperId, process.cwd(), argv.slice(2), mainBin);
-
-  // Execute all but the last two synchronously (new-session, set-option, new-window)
-  for (let i = 0; i < cmds.length - 2; i++) {
-    execFileSync("tmux", cmds[i]);
-  }
-
-  // attach — inherit stdio so the user sees the claude window
+  const cmds = buildTmuxCommands(wrapperId, process.cwd(), args, mainBin);
+  for (let i = 0; i < cmds.length - 2; i++) execFileSync("tmux", cmds[i]);
   spawnSync("tmux", cmds[cmds.length - 2], { stdio: "inherit" });
-
-  // kill-session — ignore errors (session may already be dead)
   spawnSync("tmux", cmds[cmds.length - 1], { stdio: "ignore" });
 }
 
-// Only run when executed directly (not when imported for testing)
+// Standalone `redstone-claude` bin (back-compat). The folded `redstone claude`
+// path in main.ts is what the installed bundle uses.
 if (require.main === module) {
-  main();
+  const wrapperBin = realpathSync(argv[1]);
+  const mainBin = wrapperBin.replace(/claude-wrapper\.js$/, "main.js");
+  runWrapper(argv.slice(2), mainBin);
 }
