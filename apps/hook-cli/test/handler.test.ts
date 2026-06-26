@@ -122,6 +122,15 @@ describe("processEvent", () => {
     expect(out).toBeNull();
   });
 
+  it("PostToolUse → pushState streams progress while Claude works", async () => {
+    const deps = baseDeps();
+    await processEvent(ev("PostToolUse"), deps);
+    expect(deps.api.pushState).toHaveBeenCalledWith(
+      "s1",
+      expect.objectContaining({ transcript: expect.anything() })
+    );
+  });
+
   it("PermissionRequest → createDecision called AND returns null immediately (non-blocking)", async () => {
     const deps = baseDeps({ wrapperId: "wrap1" });
     const out = await processEvent(

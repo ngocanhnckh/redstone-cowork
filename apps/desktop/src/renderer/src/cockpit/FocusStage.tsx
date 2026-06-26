@@ -15,6 +15,7 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
   const queue = useStore((s) => s.queue);
   const decisions = useStore((s) => s.decisions);
   const switchMode = useStore((s) => s.switchMode);
+  const pendingMap = useStore((s) => s.pending);
 
   const id = sessionId ?? focusId;
   const session =
@@ -25,12 +26,28 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
     sessionDecisions.find((d) => (ACTIONABLE_KINDS as readonly string[]).includes(d.kind)) ??
     sessionDecisions[0];
 
+  // Optimistic replies the user just sent, not yet echoed by the server transcript.
+  const transcript = session?.transcript ?? [];
+  const transcriptUserTexts = new Set(
+    transcript.filter((m) => m.role === "user").map((m) => m.text.trim())
+  );
+  const pending = (id ? pendingMap[id] ?? [] : []).filter(
+    (p) => !transcriptUserTexts.has(p.text.trim())
+  );
+  // Combined timeline = server transcript + still-unconfirmed optimistic sends.
+  const timeline = [
+    ...transcript.map((m) => ({ ...m, optimistic: false })),
+    ...pending.map((p) => ({ role: "user" as const, text: p.text, optimistic: true })),
+  ];
+  // Claude is mid-turn when the last thing said was the user's, with no question pending.
+  const isWorking = !decision && timeline.length > 0 && timeline[timeline.length - 1].role === "user";
+
   const scrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [session?.transcript]);
+  }, [session?.transcript, pending.length, isWorking]);
 
   if (!session) return null;
 
@@ -194,8 +211,8 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
           gap: 10,
         }}
       >
-        {session.transcript && session.transcript.length > 0 ? (
-          session.transcript.map((msg, i) =>
+        {timeline.length > 0 ? (
+          timeline.map((msg, i) =>
             msg.role === "assistant" ? (
               <div
                 key={i}
@@ -231,11 +248,14 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
                   lineHeight: 1.5,
                   whiteSpace: "pre-wrap",
                   color: "var(--text-soft)",
+                  opacity: msg.optimistic ? 0.72 : 1,
                 }}
               >
                 <span
                   style={{
-                    display: "block",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 7,
                     fontFamily: "var(--font-mono)",
                     fontSize: 9,
                     letterSpacing: "0.18em",
@@ -246,6 +266,11 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
                   }}
                 >
                   you
+                  {msg.optimistic && (
+                    <span style={{ color: "rgb(var(--accent))", letterSpacing: "0.04em" }}>
+                      · sending…
+                    </span>
+                  )}
                 </span>
                 {msg.text}
               </div>
@@ -262,6 +287,31 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
           <span className="faint" style={{ fontSize: 14, fontStyle: "italic" }}>
             Waiting for output…
           </span>
+        )}
+
+        {isWorking && (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 9,
+              padding: "10px 4px 4px",
+              fontFamily: "var(--font-mono)",
+              fontSize: 11,
+              color: "var(--text-soft)",
+            }}
+          >
+            <span
+              style={{
+                width: 7,
+                height: 7,
+                borderRadius: 999,
+                background: "rgb(var(--primary-soft))",
+                animation: "pulse 1.4s ease-in-out infinite",
+              }}
+            />
+            Claude is working…
+          </div>
         )}
       </div>
 

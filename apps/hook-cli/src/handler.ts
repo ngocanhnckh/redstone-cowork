@@ -75,7 +75,9 @@ export async function processEvent(
       }
     }
 
-    if (["SessionStart", "UserPromptSubmit", "Stop", "Notification", "PermissionRequest"].includes(event.hook_event_name)) {
+    // PostToolUse pushes the latest prose as Claude works through tools — the cockpit
+    // would otherwise show nothing between a reply and the final Stop (feels frozen).
+    if (["SessionStart", "UserPromptSubmit", "PostToolUse", "Stop", "Notification", "PermissionRequest"].includes(event.hook_event_name)) {
       await deps.api.pushState(event.session_id, {
         latestAnswer: deps.lastAssistantText(event),
         transcript: deps.recentMessages(event),
