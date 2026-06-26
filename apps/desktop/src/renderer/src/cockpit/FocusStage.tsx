@@ -1,6 +1,7 @@
 import { useRef, useEffect } from "react";
 import { useStore } from "../store";
 import AnswerDock from "./AnswerDock";
+import Markdown from "./Markdown";
 
 function projectName(cwd: string): string {
   return cwd.split("/").filter(Boolean).pop() ?? cwd;
@@ -149,9 +150,6 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
                 style={{
                   padding: "13px 16px",
                   borderRadius: 13,
-                  fontSize: 14,
-                  lineHeight: 1.6,
-                  whiteSpace: "pre-wrap",
                   color: "var(--text)",
                 }}
               >
@@ -163,13 +161,13 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
                     letterSpacing: "0.18em",
                     textTransform: "uppercase",
                     color: "var(--text-soft)",
-                    marginBottom: 6,
+                    marginBottom: 8,
                     opacity: 0.6,
                   }}
                 >
                   claude
                 </span>
-                {msg.text}
+                <Markdown>{msg.text}</Markdown>
               </div>
             ) : (
               <div
@@ -203,16 +201,9 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
         ) : session.latestAnswer ? (
           <div
             className="glass-inset"
-            style={{
-              padding: "13px 16px",
-              borderRadius: 13,
-              fontSize: 14,
-              lineHeight: 1.6,
-              whiteSpace: "pre-wrap",
-              color: "var(--text)",
-            }}
+            style={{ padding: "13px 16px", borderRadius: 13, color: "var(--text)" }}
           >
-            {session.latestAnswer}
+            <Markdown>{session.latestAnswer}</Markdown>
           </div>
         ) : (
           <span className="faint" style={{ fontSize: 14, fontStyle: "italic" }}>
