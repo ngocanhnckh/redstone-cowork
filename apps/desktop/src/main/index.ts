@@ -79,7 +79,13 @@ function createWindow(): void {
     minHeight: 640,
     show: false,
     titleBarStyle: "hiddenInset",
-    backgroundColor: "#15110D",
+    // Align the macOS traffic lights vertically into the app's 40px title bar.
+    trafficLightPosition: { x: 19, y: 14 },
+    // Native macOS translucency: blur the desktop/windows behind us. Transparent
+    // bg lets the vibrant material show through where the page is transparent.
+    vibrancy: "under-window",
+    visualEffectState: "active",
+    backgroundColor: "#00000000",
     webPreferences: {
       preload: join(here, "../preload/index.mjs"),
       // sandbox: false required — preload uses contextBridge + ipcRenderer which need Node/Electron access

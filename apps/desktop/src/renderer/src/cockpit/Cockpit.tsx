@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, type CSSProperties } from "react";
 import { useStore } from "../store";
 import { startCockpit } from "../store";
 import QueueRail from "./QueueRail";
@@ -17,7 +17,7 @@ export default function Cockpit() {
     <div
       data-app
       className="grain"
-      style={{ height: "100vh", position: "relative", display: "flex", flexDirection: "column" }}
+      style={{ height: "100vh", position: "relative", display: "flex", flexDirection: "column", overflow: "hidden" }}
     >
       <div className="atmosphere">
         <div className="blob blob--a" />
@@ -30,25 +30,27 @@ export default function Cockpit() {
         style={{
           position: "relative",
           zIndex: 2,
-          borderRadius: 18,
-          margin: "28px 12px 12px",
-          flex: 1,
+          height: "100vh",
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
-          border: "1px solid var(--border-strong)",
-          boxShadow: "0 50px 120px -50px rgba(0,0,0,0.85)",
         }}
       >
-        {/* Title row */}
+        {/* Title bar — draggable; left padding clears the macOS traffic lights */}
         <div
-          style={{
-            padding: "11px 16px",
-            borderBottom: "1px solid var(--border)",
-            display: "flex",
-            alignItems: "center",
-            gap: 14,
-          }}
+          style={
+            {
+              height: 40,
+              flexShrink: 0,
+              paddingLeft: 84,
+              paddingRight: 16,
+              borderBottom: "1px solid var(--border)",
+              display: "flex",
+              alignItems: "center",
+              gap: 14,
+              WebkitAppRegion: "drag",
+            } as CSSProperties
+          }
         >
           <span
             className="mono"

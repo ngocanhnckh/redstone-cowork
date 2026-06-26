@@ -29,7 +29,8 @@
 html { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
 body {
   margin: 0;
-  background: var(--app-bg);
+  /* transparent so the native macOS vibrancy (blurred desktop) shows through */
+  background: transparent;
   color: var(--text);
   font-family: var(--font-body);
   overflow-x: hidden;
