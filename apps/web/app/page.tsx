@@ -4,6 +4,7 @@ import { DecisionCard, type Decision } from "../components/DecisionCard";
 import { SessionRow } from "../components/SessionRow";
 import { NotificationsToggle } from "../components/NotificationsToggle";
 import { Connections } from "../components/Connections";
+import { Devices } from "../components/Devices";
 
 type Session = {
   id: string;
@@ -120,6 +121,7 @@ export default function Home() {
       </section>
 
       <Connections />
+      <Devices />
     </main>
   );
 }
