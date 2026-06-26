@@ -1,6 +1,7 @@
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, ipcMain } from "electron";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { saveConfig, loadConfig, clearConfig } from "./config";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -27,6 +28,13 @@ function createWindow(): void {
     win.loadFile(join(here, "../renderer/index.html"));
   }
 }
+
+ipcMain.handle("config:get", () => loadConfig());
+ipcMain.handle("config:save", (_e, args: { serverUrl: string; token: string }) => {
+  saveConfig(args.serverUrl, args.token);
+  return { ok: true };
+});
+ipcMain.handle("config:clear", () => { clearConfig(); });
 
 app.whenReady().then(() => {
   createWindow();
