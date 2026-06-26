@@ -14,6 +14,8 @@ const ALLOWED = [
   /^connections\/[\w-]+\/sync$/,
   /^connections\/sync-due$/,
   /^events\/recent$/,
+  /^devices$/,
+  /^devices\/[\w-]+$/,
 ];
 
 async function forward(req: Request, params: Promise<{ path: string[] }>, method: string) {
