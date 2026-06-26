@@ -46,6 +46,7 @@ import { GoogleOAuthService } from "./application/google-oauth.service";
 import { MicrosoftOAuthService } from "./application/microsoft-oauth.service";
 import { OAuthController, MicrosoftOAuthController } from "./adapters/http/oauth.controller";
 import { DevicesController } from "./adapters/http/devices.controller";
+import { InstallController } from "./adapters/http/install.controller";
 import { MasterTokenGuard } from "./adapters/http/master-token.guard";
 import { DevicesService } from "./application/devices.service";
 import { DEVICE_TOKEN_STORE } from "./domain/devices/device-token-store.port";
@@ -55,7 +56,7 @@ import { PG_POOL, pgPoolProvider, PoolShutdown } from "./infrastructure/pg-pool.
 import type { Pool } from "pg";
 
 @Module({
-  controllers: [HealthController, EventsController, SessionsController, DecisionsController, StreamController, PushController, ConnectionsController, OAuthController, MicrosoftOAuthController, DevicesController],
+  controllers: [HealthController, EventsController, SessionsController, DecisionsController, StreamController, PushController, ConnectionsController, OAuthController, MicrosoftOAuthController, DevicesController, InstallController],
   providers: [
     RecordEventUseCase,
     SessionsService,

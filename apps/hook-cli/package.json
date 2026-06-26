@@ -5,6 +5,6 @@
     "redstone": "./dist/main.js",
     "redstone-claude": "./dist/claude-wrapper.js"
   },
-  "scripts": { "build": "tsc -p tsconfig.json", "test": "vitest run" },
-  "devDependencies": { "@types/node": "^22.0.0", "vitest": "^3.1.0" }
+  "scripts": { "build": "tsc -p tsconfig.json", "build:bundle": "node build-bundle.mjs", "test": "vitest run" },
+  "devDependencies": { "@types/node": "^22.0.0", "esbuild": "^0.24.0", "vitest": "^3.1.0" }
 }
