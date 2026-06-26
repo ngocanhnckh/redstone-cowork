@@ -93,6 +93,10 @@ function createWindow(): void {
     },
   });
 
+  // Enforce vibrancy at runtime too — the constructor option is a no-op on some
+  // macOS/Electron combos, but setVibrancy after creation reliably applies it.
+  if (process.platform === "darwin") win.setVibrancy("under-window");
+
   win.on("ready-to-show", () => win.show());
 
   if (process.env.ELECTRON_RENDERER_URL) {
