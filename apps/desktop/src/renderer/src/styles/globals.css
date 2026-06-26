@@ -59,13 +59,13 @@ body {
 
 /* glass material */
 .glass-surface {
-  background: color-mix(in srgb, var(--app-panel) 42%, transparent);
-  -webkit-backdrop-filter: blur(34px) saturate(190%); backdrop-filter: blur(34px) saturate(190%);
+  background: color-mix(in srgb, var(--app-panel) 20%, transparent);
+  -webkit-backdrop-filter: blur(30px) saturate(190%); backdrop-filter: blur(30px) saturate(190%);
   box-shadow: inset 0 1px 0 rgb(255 255 255 / .15), inset 0 0 0 1px rgb(255 255 255 / .03);
 }
 .glass-soft {
-  background: color-mix(in srgb, var(--app-panel) 50%, transparent);
-  -webkit-backdrop-filter: blur(44px) saturate(200%); backdrop-filter: blur(44px) saturate(200%);
+  background: color-mix(in srgb, var(--app-panel) 28%, transparent);
+  -webkit-backdrop-filter: blur(40px) saturate(200%); backdrop-filter: blur(40px) saturate(200%);
   box-shadow: inset 0 1px 0 rgb(255 255 255 / .22), inset 0 -10px 28px rgb(0 0 0 / .10), 0 30px 70px -28px rgb(0 0 0 / .7);
 }
 .glass-menu {
@@ -74,12 +74,12 @@ body {
   box-shadow: inset 0 1px 0 rgb(255 255 255 / .14), 0 30px 80px -30px rgba(0,0,0,.8);
 }
 .glass-inset {
-  background: color-mix(in srgb, var(--app-elev) 55%, transparent);
+  background: color-mix(in srgb, var(--app-elev) 44%, transparent);
   box-shadow: inset 0 1px 0 rgb(255 255 255 / .08); border: 1px solid var(--border);
 }
 .glass-inset-hover { transition: background-color .2s, box-shadow .2s, transform .2s; }
 .glass-inset-hover:hover {
-  background: color-mix(in srgb, var(--app-elev) 72%, transparent);
+  background: color-mix(in srgb, var(--app-elev) 60%, transparent);
   box-shadow: inset 0 1px 0 rgb(255 255 255 / .16), inset 0 0 0 1px rgb(255 255 255 / .05); transform: translateY(-1px);
 }
 .glass-btn--clay {
