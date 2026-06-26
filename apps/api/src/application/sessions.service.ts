@@ -35,6 +35,7 @@ export class SessionsService {
       latestAnswer: null,
       summary: null,
       todos: [],
+      transcript: [],
       pinned: false,
       snoozedUntil: null,
     });

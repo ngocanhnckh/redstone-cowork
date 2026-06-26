@@ -4,7 +4,7 @@ import type { SessionStore } from "../../domain/sessions/session-store.port";
 
 const ROW = `id, machine, cwd, git_branch AS "gitBranch", attached_at AS "attachedAt", last_seen_at AS "lastSeenAt",
              wrapper_id AS "wrapperId", permission_mode AS "permissionMode", auto_mode_enabled AS "autoModeEnabled",
-             latest_answer AS "latestAnswer", summary, todos, pinned, snoozed_until AS "snoozedUntil"`;
+             latest_answer AS "latestAnswer", summary, todos, transcript, pinned, snoozed_until AS "snoozedUntil"`;
 
 export class PostgresSessionStore implements SessionStore {
   constructor(private readonly pool: Pool) {}
@@ -12,15 +12,15 @@ export class PostgresSessionStore implements SessionStore {
   async upsert(s: AgentSession): Promise<AgentSession> {
     const { rows } = await this.pool.query(
       `INSERT INTO sessions (id, machine, cwd, git_branch, attached_at, last_seen_at, wrapper_id, permission_mode, auto_mode_enabled,
-         latest_answer, summary, todos, pinned, snoozed_until)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13,$14)
+         latest_answer, summary, todos, transcript, pinned, snoozed_until)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13::jsonb,$14,$15)
        ON CONFLICT (id) DO UPDATE SET machine=$2, cwd=$3, git_branch=$4, last_seen_at=$6, wrapper_id=$7,
          permission_mode = COALESCE($8, sessions.permission_mode),
          auto_mode_enabled = $9
        RETURNING ${ROW}`,
       [s.id, s.machine, s.cwd, s.gitBranch, s.attachedAt, s.lastSeenAt, s.wrapperId ?? null,
        s.permissionMode ?? null, s.autoModeEnabled ?? false,
-       s.latestAnswer ?? null, s.summary ?? null, JSON.stringify(s.todos ?? []), s.pinned ?? false, s.snoozedUntil ?? null]
+       s.latestAnswer ?? null, s.summary ?? null, JSON.stringify(s.todos ?? []), JSON.stringify(s.transcript ?? []), s.pinned ?? false, s.snoozedUntil ?? null]
     );
     return AgentSessionSchema.parse(rows[0]);
   }
@@ -52,6 +52,7 @@ export class PostgresSessionStore implements SessionStore {
     if (patch.latestAnswer !== undefined) { vals.push(patch.latestAnswer); sets.push(`latest_answer = $${vals.length}`); }
     if (patch.summary !== undefined) { vals.push(patch.summary); sets.push(`summary = $${vals.length}`); }
     if (patch.todos !== undefined) { vals.push(JSON.stringify(patch.todos)); sets.push(`todos = $${vals.length}::jsonb`); }
+    if (patch.transcript !== undefined) { vals.push(JSON.stringify(patch.transcript)); sets.push(`transcript = $${vals.length}::jsonb`); }
     if (sets.length === 0) return this.get(id);
     const res = await this.pool.query(`UPDATE sessions SET ${sets.join(", ")} WHERE id = $1 RETURNING ${ROW}`, vals);
     return res.rows[0] ? AgentSessionSchema.parse(res.rows[0]) : null;

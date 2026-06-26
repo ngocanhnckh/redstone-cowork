@@ -6,7 +6,7 @@ const base = (id: string): AgentSession => ({
   id, machine: "m1", cwd: "/repo", gitBranch: "main",
   attachedAt: new Date(), lastSeenAt: new Date(),
   wrapperId: "w1", permissionMode: "default", autoModeEnabled: false,
-  latestAnswer: null, summary: null, todos: [], pinned: false, snoozedUntil: null,
+  latestAnswer: null, summary: null, todos: [], transcript: [], pinned: false, snoozedUntil: null,
 });
 
 describe("InMemorySessionStore rich state", () => {
@@ -20,6 +20,21 @@ describe("InMemorySessionStore rich state", () => {
     const r2 = await store.patchState("s1", { summary: "refactor in progress" });
     expect(r2?.summary).toBe("refactor in progress");
     expect(r2?.latestAnswer).toBe("done");
+  });
+
+  it("patchState sets transcript and preserves it across subsequent patches", async () => {
+    const store = new InMemorySessionStore();
+    await store.upsert(base("s3"));
+    const msgs = [{ role: "user" as const, text: "hello" }, { role: "assistant" as const, text: "hi there" }];
+    const r1 = await store.patchState("s3", { transcript: msgs });
+    expect(r1?.transcript).toEqual(msgs);
+    // patching other fields must not wipe transcript
+    const r2 = await store.patchState("s3", { latestAnswer: "done" });
+    expect(r2?.transcript).toEqual(msgs);
+    // re-attach (upsert) must not wipe transcript
+    await store.upsert(base("s3"));
+    const r3 = await store.get("s3");
+    expect(r3?.transcript).toEqual(msgs);
   });
 
   it("patchState returns null for an unknown id", async () => {
