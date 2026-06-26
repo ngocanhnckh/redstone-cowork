@@ -14,6 +14,7 @@ export class InMemorySessionStore implements SessionStore {
           latestAnswer: existing.latestAnswer,
           summary: existing.summary,
           todos: existing.todos,
+          transcript: existing.transcript,
           pinned: existing.pinned,
           snoozedUntil: existing.snoozedUntil,
         }
@@ -47,6 +48,7 @@ export class InMemorySessionStore implements SessionStore {
       ...(patch.latestAnswer !== undefined ? { latestAnswer: patch.latestAnswer } : {}),
       ...(patch.summary !== undefined ? { summary: patch.summary } : {}),
       ...(patch.todos !== undefined ? { todos: patch.todos } : {}),
+      ...(patch.transcript !== undefined ? { transcript: patch.transcript } : {}),
     };
     this.sessions.set(id, next);
     return next;

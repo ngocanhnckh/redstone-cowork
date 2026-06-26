@@ -6,6 +6,7 @@ const makeApi = (overrides: Partial<Deps["api"]> = {}): Deps["api"] => ({
   attach: vi.fn().mockResolvedValue(undefined),
   createDecision: vi.fn().mockResolvedValue({ id: "d1" }),
   resolveLocal: vi.fn().mockResolvedValue(undefined),
+  pushState: vi.fn().mockResolvedValue(undefined),
   ...overrides,
 });
 
@@ -17,6 +18,7 @@ const baseDeps = (overrides: Partial<Deps> = {}): Deps => ({
   wrapperId: null,
   autoModeEnabled: false,
   lastAssistantText: vi.fn().mockReturnValue(null),
+  recentMessages: vi.fn().mockReturnValue([]),
   ...overrides,
 });
 

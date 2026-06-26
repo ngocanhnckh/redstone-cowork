@@ -3,7 +3,7 @@ import { loadCliConfig } from "./config";
 import { ApiClient } from "./api-client";
 import { isArmed as isArmedFs, disarm as disarmFs } from "./state";
 import { buildDecisionSpec } from "./decision-spec";
-import { readLastAssistantText } from "./transcript";
+import { readLastAssistantText, readRecentMessages } from "./transcript";
 
 export type HookEvent = {
   hook_event_name: string;
@@ -19,7 +19,7 @@ export type HookEvent = {
 export type Deps = {
   api: Pick<
     ApiClient,
-    "heartbeat" | "attach" | "createDecision" | "resolveLocal"
+    "heartbeat" | "attach" | "createDecision" | "resolveLocal" | "pushState"
   >;
   isArmed: (cwd: string) => boolean;
   disarm: (cwd: string) => void;
@@ -28,6 +28,8 @@ export type Deps = {
   autoModeEnabled: boolean;
   /** Latest assistant prose from the session transcript — the context the user saw. */
   lastAssistantText: (event: HookEvent) => string | null;
+  /** Recent user prompts + assistant prose from the transcript tail. */
+  recentMessages: (event: HookEvent) => import("@rcw/shared").TranscriptMessage[];
 };
 
 export async function processEvent(
@@ -71,6 +73,13 @@ export async function processEvent(
           return null;
         }
       }
+    }
+
+    if (["SessionStart", "UserPromptSubmit", "Stop", "Notification", "PermissionRequest"].includes(event.hook_event_name)) {
+      await deps.api.pushState(event.session_id, {
+        latestAnswer: deps.lastAssistantText(event),
+        transcript: deps.recentMessages(event),
+      });
     }
 
     switch (event.hook_event_name) {
@@ -144,6 +153,7 @@ export async function handle(): Promise<void> {
     wrapperId,
     autoModeEnabled,
     lastAssistantText: (e) => readLastAssistantText(e.transcript_path),
+    recentMessages: (e) => readRecentMessages(e.transcript_path),
   });
   if (out) process.stdout.write(JSON.stringify(out));
 }

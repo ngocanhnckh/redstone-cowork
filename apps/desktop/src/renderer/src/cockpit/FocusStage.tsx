@@ -1,3 +1,4 @@
+import { useRef, useEffect } from "react";
 import { useStore } from "../store";
 import AnswerDock from "./AnswerDock";
 
@@ -15,6 +16,13 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
   const session =
     sessions.find((s) => s.id === id) ?? queue.find((s) => s.id === id);
   const decision = decisions.find((d) => d.sessionId === id);
+
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [session?.transcript]);
 
   if (!session) return null;
 
@@ -119,18 +127,80 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
         </div>
       </div>
 
-      {/* Body — latest answer */}
+      {/* Body — transcript scrollback */}
       <div
+        ref={scrollRef}
+        className="no-scrollbar"
         style={{
           flex: 1,
           overflowY: "auto",
           padding: "18px 32px 8px",
           display: "flex",
           flexDirection: "column",
-          gap: 14,
+          gap: 10,
         }}
       >
-        {session.latestAnswer ? (
+        {session.transcript && session.transcript.length > 0 ? (
+          session.transcript.map((msg, i) =>
+            msg.role === "assistant" ? (
+              <div
+                key={i}
+                className="glass-inset"
+                style={{
+                  padding: "13px 16px",
+                  borderRadius: 13,
+                  fontSize: 14,
+                  lineHeight: 1.6,
+                  whiteSpace: "pre-wrap",
+                  color: "var(--text)",
+                }}
+              >
+                <span
+                  style={{
+                    display: "block",
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 9,
+                    letterSpacing: "0.18em",
+                    textTransform: "uppercase",
+                    color: "var(--text-soft)",
+                    marginBottom: 6,
+                    opacity: 0.6,
+                  }}
+                >
+                  claude
+                </span>
+                {msg.text}
+              </div>
+            ) : (
+              <div
+                key={i}
+                style={{
+                  padding: "8px 4px",
+                  fontSize: 13,
+                  lineHeight: 1.5,
+                  whiteSpace: "pre-wrap",
+                  color: "var(--text-soft)",
+                }}
+              >
+                <span
+                  style={{
+                    display: "block",
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 9,
+                    letterSpacing: "0.18em",
+                    textTransform: "uppercase",
+                    color: "var(--text-soft)",
+                    marginBottom: 4,
+                    opacity: 0.5,
+                  }}
+                >
+                  you
+                </span>
+                {msg.text}
+              </div>
+            )
+          )
+        ) : session.latestAnswer ? (
           <div
             className="glass-inset"
             style={{

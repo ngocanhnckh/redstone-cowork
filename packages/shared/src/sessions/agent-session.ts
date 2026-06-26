@@ -7,11 +7,18 @@ export const TodoItemSchema = z.object({
 });
 export type TodoItem = z.infer<typeof TodoItemSchema>;
 
+export const TranscriptMessageSchema = z.object({
+  role: z.enum(["user", "assistant"]),
+  text: z.string(),
+});
+export type TranscriptMessage = z.infer<typeof TranscriptMessageSchema>;
+
 export const SessionStatePatchSchema = z
   .object({
     latestAnswer: z.string().nullable().optional(),
     summary: z.string().nullable().optional(),
     todos: z.array(TodoItemSchema).optional(),
+    transcript: z.array(TranscriptMessageSchema).optional(),
   })
   .strict();
 export type SessionStatePatch = z.infer<typeof SessionStatePatchSchema>;
@@ -29,6 +36,7 @@ export const AgentSessionSchema = z.object({
   latestAnswer: z.string().nullable().default(null),
   summary: z.string().nullable().default(null),
   todos: z.array(TodoItemSchema).default([]),
+  transcript: z.array(TranscriptMessageSchema).default([]),
   pinned: z.boolean().default(false),
   snoozedUntil: z.coerce.date().nullable().default(null),
 });
