@@ -55,6 +55,15 @@ export async function resolveDecision(
   ).json();
 }
 
+export async function instruct(sessionId: string, text: string): Promise<unknown> {
+  return (
+    await req(`/sessions/${encodeURIComponent(sessionId)}/instruct`, {
+      method: "POST",
+      body: JSON.stringify({ text }),
+    })
+  ).json();
+}
+
 export async function snooze(id: string, minutes: number): Promise<void> {
   await req(`/sessions/${id}/snooze`, {
     method: "POST",

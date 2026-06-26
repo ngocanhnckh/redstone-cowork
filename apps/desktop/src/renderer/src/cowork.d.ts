@@ -21,6 +21,7 @@ declare global {
       ): Promise<unknown>;
       snooze(id: string, minutes: number): Promise<void>;
       pin(id: string, pinned: boolean): Promise<void>;
+      instruct(sessionId: string, text: string): Promise<unknown>;
 
       // Stream
       onUpdate(cb: () => void): () => void;
