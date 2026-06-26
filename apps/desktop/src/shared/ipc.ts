@@ -9,4 +9,5 @@ export const IPC = {
   snooze: "api:snooze",
   pin: "api:pin",
   streamEvent: "stream:event",
+  instruct: "api:instruct",
 } as const;

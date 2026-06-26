@@ -9,14 +9,16 @@ interface Props {
 
 export default function AnswerDock({ decision }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const idleInputRef = useRef<HTMLInputElement>(null);
   const answer = useStore((s) => s.answer);
   const snooze = useStore((s) => s.snooze);
   const setFocus = useStore((s) => s.setFocus);
   const focusId = useStore((s) => s.focusId);
   const queue = useStore((s) => s.queue);
+  const instruct = useStore((s) => s.instruct);
 
   if (!decision) {
-    // No pending decision — show Acknowledge to advance focus
+    // No pending decision — show Acknowledge to advance focus + free-text instruct
     return (
       <div
         style={{
@@ -27,6 +29,44 @@ export default function AnswerDock({ decision }: Props) {
           backdropFilter: "blur(20px)",
         }}
       >
+        <div style={{ display: "flex", gap: 9, marginBottom: 10 }}>
+          <input
+            ref={idleInputRef}
+            placeholder="Send an instruction…"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                const val = idleInputRef.current?.value.trim();
+                if (val && focusId) {
+                  instruct(focusId, val);
+                  if (idleInputRef.current) idleInputRef.current.value = "";
+                }
+              }
+            }}
+            style={{
+              flex: 1,
+              borderRadius: 999,
+              border: "1px solid var(--border)",
+              padding: "12px 18px",
+              color: "var(--text-faint)",
+              fontSize: 13.5,
+              background: "rgba(255,255,255,0.02)",
+              outline: "none",
+            }}
+          />
+          <button
+            className="glass-btn--clay"
+            onClick={() => {
+              const val = idleInputRef.current?.value.trim();
+              if (val && focusId) {
+                instruct(focusId, val);
+                if (idleInputRef.current) idleInputRef.current.value = "";
+              }
+            }}
+            style={{ borderRadius: 999, padding: "0 22px", fontSize: 13.5, fontWeight: 600 }}
+          >
+            Send ↵
+          </button>
+        </div>
         <button
           className="glass-btn--clay"
           onClick={() => {
@@ -47,10 +87,13 @@ export default function AnswerDock({ decision }: Props) {
 
   const handleSend = () => {
     const val = inputRef.current?.value.trim();
-    if (val) {
+    if (!val) return;
+    if (decision && (decision.kind === "question" || decision.kind === "permission" || decision.kind === "mode")) {
       answer(decision.id, { custom: val });
-      if (inputRef.current) inputRef.current.value = "";
+    } else {
+      instruct(decision!.sessionId, val);
     }
+    if (inputRef.current) inputRef.current.value = "";
   };
 
   return (
