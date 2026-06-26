@@ -8,6 +8,7 @@ export type SessionView = {
   transcript: TranscriptMessage[];
   pinned: boolean; snoozedUntil: string | null;
   lastSeenAt: string | null; attachedAt: string | null;
+  permissionMode: string | null; autoModeEnabled: boolean;
 };
 export type DecisionOption = { label: string; description?: string };
 export type Decision = {
