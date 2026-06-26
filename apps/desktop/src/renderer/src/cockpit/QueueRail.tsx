@@ -87,6 +87,18 @@ export default function QueueRail() {
                 }}
               />
             )}
+            {focused && (
+              <span
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: "50%",
+                  background: `rgb(var(--accent))`,
+                  animation: "pulse 2s infinite",
+                  flexShrink: 0,
+                }}
+              />
+            )}
             <span
               style={{
                 width: 30,
@@ -114,19 +126,6 @@ export default function QueueRail() {
                 {waitingAgo(session.waitingSince)}
               </div>
             </div>
-            {focused && (
-              <span
-                style={{
-                  width: 8,
-                  height: 8,
-                  borderRadius: "50%",
-                  background: `rgb(var(--accent))`,
-                  marginLeft: "auto",
-                  animation: "pulse 2s infinite",
-                  flexShrink: 0,
-                }}
-              />
-            )}
           </div>
         );
       })}

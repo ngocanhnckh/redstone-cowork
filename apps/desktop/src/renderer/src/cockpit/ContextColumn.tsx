@@ -28,8 +28,14 @@ function TodoRow({ todo }: { todo: Todo }) {
           flexShrink: 0,
           background: completed
             ? `rgb(var(--accent))`
+            : inProgress
+            ? `rgb(var(--primary) / 0.25)`
             : "transparent",
-          border: completed ? "none" : `1.5px solid var(--border-strong)`,
+          border: completed
+            ? "none"
+            : inProgress
+            ? `1.5px solid rgb(var(--primary-soft))`
+            : `1.5px solid var(--border-strong)`,
           color: completed ? "#2a1d09" : undefined,
           fontWeight: completed ? 700 : undefined,
           fontSize: completed ? 11 : undefined,

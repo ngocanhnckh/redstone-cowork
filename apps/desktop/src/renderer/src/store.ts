@@ -57,21 +57,20 @@ export const useStore = create<State>((set, get) => ({
     decisionId: string,
     resolution: { choice?: string | null; answers?: null; custom?: string | null }
   ) => {
-    const { decisions, queue, refresh } = get();
-    const decision = decisions.find((d) => d.id === decisionId);
-    const sessionId = decision?.sessionId ?? null;
-    // Compute next focus before answering (the current session may leave the queue)
-    const nextFocusId = sessionId ? nextAfterAnswer(queue, sessionId) : null;
-    if (nextFocusId) {
-      set({ focusId: nextFocusId });
+    try {
+      const sessionId = get().decisions.find((d) => d.id === decisionId)?.sessionId ?? null;
+      await window.cowork.resolveDecision(decisionId, {
+        choice: null,
+        answers: null,
+        custom: null,
+        ...resolution,
+      });
+      const next = sessionId ? nextAfterAnswer(get().queue, sessionId) : null;
+      if (next) set({ focusId: next });
+      await get().refresh();
+    } catch (e) {
+      set({ error: e instanceof Error ? e.message : String(e) });
     }
-    await window.cowork.resolveDecision(decisionId, {
-      choice: null,
-      answers: null,
-      custom: null,
-      ...resolution,
-    });
-    await refresh();
   },
 
   snooze: async (sessionId: string, minutes: number) => {
