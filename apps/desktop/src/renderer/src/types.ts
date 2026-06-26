@@ -1,0 +1,14 @@
+export type Todo = { text: string; status: "pending" | "in_progress" | "completed" };
+export type SessionView = {
+  id: string; machine: string; cwd: string; gitBranch: string | null;
+  status: "active" | "waiting" | "stale" | "lost";
+  pendingDecisions: number; waitingSince: string | null;
+  latestAnswer: string | null; summary: string | null; todos: Todo[];
+  pinned: boolean; snoozedUntil: string | null;
+};
+export type DecisionOption = { label: string; description?: string };
+export type Decision = {
+  id: string; sessionId: string;
+  kind: "permission" | "question" | "completion" | "notification" | "instruction" | "mode";
+  title: string; body: Record<string, unknown>; options: DecisionOption[];
+};
