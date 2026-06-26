@@ -9,6 +9,8 @@ const bundlePath = () => process.env.REDSTONE_BUNDLE_PATH ?? join(process.cwd(),
 export class InstallController {
   @Get("install.sh")
   @Header("Content-Type", "text/plain; charset=utf-8")
+  // The script + bundle update on every deploy — must never be cached by a CDN.
+  @Header("Cache-Control", "no-store, max-age=0")
   installScript(): string {
     return INSTALL_SH;
   }
@@ -18,6 +20,7 @@ export class InstallController {
     const p = bundlePath();
     if (!existsSync(p)) return res.status(503).send("bundle unavailable");
     res.setHeader("Content-Type", "application/javascript; charset=utf-8");
+    res.setHeader("Cache-Control", "no-store, max-age=0");
     return res.send(readFileSync(p, "utf8"));
   }
 }
@@ -35,7 +38,7 @@ NODE_MAJOR="$(node -p 'process.versions.node.split(".")[0]')"
 [ "$NODE_MAJOR" -ge 20 ] || { echo "Node >= 20 required (found $(node -v))." >&2; exit 1; }
 mkdir -p "$HOME/.redstone" "$HOME/.local/bin"
 echo "Downloading redstone..."
-curl -fsSL "$SERVER/install/redstone.js" -o "$HOME/.redstone/redstone.js"
+curl -fsSL "$SERVER/install/redstone.js?t=$(date +%s)" -o "$HOME/.redstone/redstone.js"
 cat > "$HOME/.local/bin/redstone" <<'WRAPPER'
 #!/bin/sh
 exec node "$HOME/.redstone/redstone.js" "$@"
