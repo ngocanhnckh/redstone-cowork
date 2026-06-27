@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join, basename } from "node:path";
 import { saveConfig, loadConfig, clearConfig } from "./config";
 import * as api from "./api";
-import { getWorkspaceConfig, saveWorkspaceConfig } from "./workspace";
+import { getWorkspaceConfig, saveWorkspaceConfig, getSshHost, setSshHost, isLocalMachine } from "./workspace";
 import { IPC } from "../shared/ipc";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -162,6 +162,30 @@ ipcMain.handle(IPC.workspaceGet, (_e, a: Parameters<typeof getWorkspaceConfig>[0
 ipcMain.handle(IPC.workspaceSave, (_e, a: Parameters<typeof saveWorkspaceConfig>[0]) =>
   saveWorkspaceConfig(a)
 );
+
+// Per-machine SSH host (userData/ssh-hosts.json) — main never throws across IPC.
+ipcMain.handle(IPC.workspaceGetSshHost, (_e, a: { machine: string }) => {
+  try {
+    return getSshHost(a.machine);
+  } catch {
+    return a.machine;
+  }
+});
+ipcMain.handle(IPC.workspaceSetSshHost, (_e, a: { machine: string; host: string }) => {
+  try {
+    setSshHost(a.machine, a.host);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+});
+ipcMain.handle(IPC.workspaceIsLocal, (_e, a: { machine: string }) => {
+  try {
+    return isLocalMachine(a.machine);
+  } catch {
+    return false;
+  }
+});
 
 app.whenReady().then(() => {
   // Create system tray

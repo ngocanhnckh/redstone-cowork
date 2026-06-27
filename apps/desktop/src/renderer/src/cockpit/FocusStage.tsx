@@ -3,12 +3,15 @@ import { useStore } from "../store";
 import AnswerDock from "./AnswerDock";
 import Markdown from "./Markdown";
 import Kbd from "./Kbd";
-import WorkspaceConfig from "./WorkspaceConfig";
+import TerminalPanel from "./TerminalPanel";
+import BrowserPanel from "./BrowserPanel";
+import PortsPanel from "./PortsPanel";
 
 const TABS = [
   { key: "chat", label: "Chat", hint: "⌃1" },
   { key: "terminal", label: "Terminal", hint: "⌃2" },
   { key: "browser", label: "Browser", hint: "⌃3" },
+  { key: "ports", label: "Ports", hint: "⌃4" },
 ] as const;
 
 const ACTIONABLE_KINDS = ["question", "permission", "mode"] as const;
@@ -211,7 +214,7 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
         })()}
       </div>
 
-      {/* Tab bar — Chat / Terminal / Browser */}
+      {/* Tab bar — Chat / Terminal / Browser / Ports */}
       <div
         style={{
           display: "flex",
@@ -259,13 +262,21 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
         </div>
       </div>
 
-      {activeTab !== "chat" ? (
-        <WorkspaceConfig
-          key={`${id}-${activeTab}`}
+      {activeTab === "terminal" ? (
+        <TerminalPanel key={`${id}-terminal`} machine={session.machine} />
+      ) : activeTab === "browser" ? (
+        <BrowserPanel
+          key={`${id}-browser`}
           sessionId={id ?? ""}
           cwd={session.cwd}
           machine={session.machine}
-          kind={activeTab}
+        />
+      ) : activeTab === "ports" ? (
+        <PortsPanel
+          key={`${id}-ports`}
+          sessionId={id ?? ""}
+          cwd={session.cwd}
+          machine={session.machine}
         />
       ) : (
       <>

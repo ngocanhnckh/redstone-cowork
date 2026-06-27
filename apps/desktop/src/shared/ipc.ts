@@ -13,4 +13,7 @@ export const IPC = {
   mode: "api:mode",
   workspaceGet: "api:workspace:get",
   workspaceSave: "api:workspace:save",
+  workspaceGetSshHost: "api:workspace:sshhost:get",
+  workspaceSetSshHost: "api:workspace:sshhost:set",
+  workspaceIsLocal: "api:workspace:islocal",
 } as const;

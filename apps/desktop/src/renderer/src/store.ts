@@ -16,11 +16,11 @@ type State = {
   mode: "flow" | "grid";
   detailId: string | null; // session shown in the grid's drill-in detail
   pending: Record<string, PendingSend[]>; // sessionId → optimistic sent messages
-  activeTab: Record<string, "chat" | "terminal" | "browser">; // sessionId → active workspace tab
+  activeTab: Record<string, "chat" | "terminal" | "browser" | "ports">; // sessionId → active workspace tab
   loading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
-  setActiveTab: (sessionId: string, tab: "chat" | "terminal" | "browser") => void;
+  setActiveTab: (sessionId: string, tab: "chat" | "terminal" | "browser" | "ports") => void;
   setFocus: (id: string) => void;
   setMode: (mode: "flow" | "grid") => void;
   openDetail: (id: string) => void;

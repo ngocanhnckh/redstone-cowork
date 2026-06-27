@@ -29,13 +29,18 @@ declare global {
         sessionId: string;
         cwd: string;
         machine: string;
-      }): Promise<{ sshHost: string; forwardPorts: number[]; browserUrl: string } | null>;
+      }): Promise<{ forwardPorts: number[]; browserUrl: string } | null>;
       saveWorkspaceConfig(a: {
         sessionId: string;
         cwd: string;
         machine: string;
-        config: { sshHost: string; forwardPorts: number[]; browserUrl: string };
+        config: { forwardPorts: number[]; browserUrl: string };
       }): Promise<{ ok: boolean; error?: string }>;
+
+      // Per-machine SSH host
+      getSshHost(machine: string): Promise<string>;
+      setSshHost(machine: string, host: string): Promise<{ ok: boolean; error?: string }>;
+      isLocalMachine(machine: string): Promise<boolean>;
 
       // Stream
       onUpdate(cb: () => void): () => void;

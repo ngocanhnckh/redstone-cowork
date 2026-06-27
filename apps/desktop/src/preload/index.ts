@@ -36,15 +36,23 @@ contextBridge.exposeInMainWorld("cowork", {
     sessionId: string;
     cwd: string;
     machine: string;
-  }): Promise<{ sshHost: string; forwardPorts: number[]; browserUrl: string } | null> =>
+  }): Promise<{ forwardPorts: number[]; browserUrl: string } | null> =>
     ipcRenderer.invoke(IPC.workspaceGet, a),
   saveWorkspaceConfig: (a: {
     sessionId: string;
     cwd: string;
     machine: string;
-    config: { sshHost: string; forwardPorts: number[]; browserUrl: string };
+    config: { forwardPorts: number[]; browserUrl: string };
   }): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke(IPC.workspaceSave, a),
+
+  // Per-machine SSH host
+  getSshHost: (machine: string): Promise<string> =>
+    ipcRenderer.invoke(IPC.workspaceGetSshHost, { machine }),
+  setSshHost: (machine: string, host: string): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke(IPC.workspaceSetSshHost, { machine, host }),
+  isLocalMachine: (machine: string): Promise<boolean> =>
+    ipcRenderer.invoke(IPC.workspaceIsLocal, { machine }),
 
   // Stream
   onUpdate: (cb: () => void): (() => void) => {
