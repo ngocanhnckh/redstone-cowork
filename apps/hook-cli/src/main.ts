@@ -11,6 +11,7 @@ const usage = `redstone <command>
   handle                                (internal) Claude Code hook entrypoint
   poll --wrapper <id> --tmux <target>   (internal) delivery poller for redstone-claude sessions
   status                                show config + attach state
+  update                                re-download the latest agent bundle from the server
   claude [args]    run Claude under the wrapper so cockpit/phone replies type back`;
 
 async function main() {
@@ -44,6 +45,11 @@ async function main() {
     const { runPoller } = await import("./poller");
     const { ApiClient } = await import("./api-client");
     await runPoller({ wrapperId: wrapper, tmuxTarget: tmux, api: new ApiClient(cfg) });
+  } else if (cmd === "update") {
+    const { runUpdate } = await import("./updater");
+    const r = await runUpdate();
+    console.log(r.message);
+    if (!r.ok) exit(1);
   } else if (cmd === "status") {
     console.log(JSON.stringify({ config: loadCliConfig() }, null, 2));
   } else {

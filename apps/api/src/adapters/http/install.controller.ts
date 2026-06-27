@@ -49,4 +49,5 @@ redstone init --server "$SERVER" --token "$TOKEN"
 echo ""
 echo "redstone installed. If 'redstone' is not found, add to your shell: export PATH=\\"\\$HOME/.local/bin:\\$PATH\\""
 echo "Next: cd <your project> && redstone hook && claude --resume"
+echo "Later: run 'redstone update' anytime to pull the latest agent."
 `;
