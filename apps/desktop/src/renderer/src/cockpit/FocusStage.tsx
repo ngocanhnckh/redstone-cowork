@@ -153,10 +153,11 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
 
         {/* Mode selector */}
         {(() => {
-          // Claude Code's Shift+Tab cycle. "acceptEdits" IS Claude's auto-accept ("auto") mode.
-          const modes = ["default", "acceptEdits", "plan"];
+          // Shift+Tab cycle: default → acceptEdits → plan → auto. "auto" only exists
+          // when the session was launched with `claude --enable-auto-mode`.
+          const modes = ["default", "acceptEdits", "plan", ...(session.autoModeEnabled ? ["auto"] : [])];
           const current = session.permissionMode ?? "default";
-          const LABEL: Record<string, string> = { default: "Default", acceptEdits: "Auto", plan: "Plan" };
+          const LABEL: Record<string, string> = { default: "Default", acceptEdits: "Accept Edits", plan: "Plan", auto: "Auto" };
           return (
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 14 }}>
               <span

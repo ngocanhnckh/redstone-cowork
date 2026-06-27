@@ -63,7 +63,8 @@ describe("mode switch", () => {
       .expect(204);
   });
 
-  it("'auto' is not a real Claude mode (acceptEdits IS auto) → 400", async () => {
+  it("mode not in cycle (auto when autoModeEnabled=false) → 400", async () => {
+    // Attach a second session WITHOUT auto mode
     await request(app.getHttpServer()).post("/sessions").set(auth).send({
       id: "sess-noauto", machine: "m", cwd: "/p", gitBranch: null,
       wrapperId: "wrap-noauto", autoModeEnabled: false, permissionMode: "default",

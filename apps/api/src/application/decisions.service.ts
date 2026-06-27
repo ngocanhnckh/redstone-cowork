@@ -93,9 +93,12 @@ export class DecisionsService {
     const session = await this.sessions.get(sessionId);
     if (!session) throw new NotFoundException("unknown session");
 
-    // Claude Code's only Shift+Tab cycle: normal → auto-accept edits → plan → back.
-    // "acceptEdits" IS Claude's "auto" mode; there is no separate 4th mode.
-    const cycle = ["default", "acceptEdits", "plan"];
+    // Claude Code's Shift+Tab permission-mode cycle. "auto" is a real mode (a
+    // classifier-gated auto-approve mode) but only when the session was launched
+    // with `claude --enable-auto-mode` — hence gated on autoModeEnabled.
+    const cycle = session.autoModeEnabled
+      ? ["default", "acceptEdits", "plan", "auto"]
+      : ["default", "acceptEdits", "plan"];
 
     if (!cycle.includes(target)) throw new BadRequestException("mode not available");
 
