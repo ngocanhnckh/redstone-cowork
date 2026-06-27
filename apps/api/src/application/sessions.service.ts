@@ -26,12 +26,19 @@ export class SessionsService {
   async attach(input: unknown): Promise<AgentSession> {
     const parsed = NewAgentSessionSchema.parse(input);
     const now = new Date();
+    // Latch auto-capability: once a session is launched with --enable-auto-mode or is
+    // ever observed in auto mode, keep autoModeEnabled true across re-attaches (--resume).
+    const existing = await this.store.get(parsed.id);
+    const autoModeEnabled =
+      (existing?.autoModeEnabled ?? false) ||
+      (parsed.autoModeEnabled ?? false) ||
+      parsed.permissionMode === "auto";
     const session = await this.store.upsert({
       ...parsed,
       attachedAt: now,
       lastSeenAt: now,
       permissionMode: parsed.permissionMode ?? null,
-      autoModeEnabled: parsed.autoModeEnabled ?? false,
+      autoModeEnabled,
       latestAnswer: null,
       summary: null,
       todos: [],

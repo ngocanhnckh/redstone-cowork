@@ -94,9 +94,10 @@ export class DecisionsService {
     if (!session) throw new NotFoundException("unknown session");
 
     // Claude Code's Shift+Tab permission-mode cycle. "auto" is a real mode (a
-    // classifier-gated auto-approve mode) but only when the session was launched
-    // with `claude --enable-auto-mode` — hence gated on autoModeEnabled.
-    const cycle = session.autoModeEnabled
+    // classifier-gated auto-approve mode), available when the session was launched
+    // with `claude --enable-auto-mode` OR is currently in auto mode.
+    const autoAvailable = session.autoModeEnabled || session.permissionMode === "auto";
+    const cycle = autoAvailable
       ? ["default", "acceptEdits", "plan", "auto"]
       : ["default", "acceptEdits", "plan"];
 
