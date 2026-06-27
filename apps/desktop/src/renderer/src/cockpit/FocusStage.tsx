@@ -2,6 +2,14 @@ import { useRef, useEffect } from "react";
 import { useStore } from "../store";
 import AnswerDock from "./AnswerDock";
 import Markdown from "./Markdown";
+import Kbd from "./Kbd";
+import WorkspaceConfig from "./WorkspaceConfig";
+
+const TABS = [
+  { key: "chat", label: "Chat", hint: "⌃1" },
+  { key: "terminal", label: "Terminal", hint: "⌃2" },
+  { key: "browser", label: "Browser", hint: "⌃3" },
+] as const;
 
 const ACTIONABLE_KINDS = ["question", "permission", "mode"] as const;
 
@@ -16,8 +24,11 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
   const decisions = useStore((s) => s.decisions);
   const switchMode = useStore((s) => s.switchMode);
   const pendingMap = useStore((s) => s.pending);
+  const activeTabMap = useStore((s) => s.activeTab);
+  const setActiveTab = useStore((s) => s.setActiveTab);
 
   const id = sessionId ?? focusId;
+  const activeTab = (id && activeTabMap[id]) || "chat";
   const session =
     sessions.find((s) => s.id === id) ?? queue.find((s) => s.id === id);
 
@@ -200,6 +211,64 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
         })()}
       </div>
 
+      {/* Tab bar — Chat / Terminal / Browser */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 4,
+          padding: "10px 32px",
+          borderBottom: "1px solid var(--border)",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            border: "1px solid var(--border)",
+            borderRadius: 999,
+            padding: 3,
+            gap: 3,
+          }}
+        >
+          {TABS.map((t) => {
+            const active = activeTab === t.key;
+            return (
+              <button
+                key={t.key}
+                onClick={() => id && setActiveTab(id, t.key)}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 7,
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 11,
+                  padding: "4px 12px",
+                  borderRadius: 999,
+                  border: 0,
+                  cursor: "pointer",
+                  background: active ? "rgb(var(--primary) / 0.32)" : "transparent",
+                  color: active ? "#fff" : "var(--text-soft)",
+                  transition: "background 0.15s, color 0.15s",
+                }}
+              >
+                {t.label}
+                <Kbd>{t.hint}</Kbd>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {activeTab !== "chat" ? (
+        <WorkspaceConfig
+          key={`${id}-${activeTab}`}
+          sessionId={id ?? ""}
+          cwd={session.cwd}
+          machine={session.machine}
+          kind={activeTab}
+        />
+      ) : (
+      <>
       {/* Body — transcript scrollback */}
       <div
         ref={scrollRef}
@@ -319,6 +388,8 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
 
       {/* Answer dock pinned at bottom */}
       <AnswerDock decision={decision} />
+      </>
+      )}
     </div>
   );
 }

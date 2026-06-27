@@ -11,4 +11,6 @@ export const IPC = {
   streamEvent: "stream:event",
   instruct: "api:instruct",
   mode: "api:mode",
+  workspaceGet: "api:workspace:get",
+  workspaceSave: "api:workspace:save",
 } as const;

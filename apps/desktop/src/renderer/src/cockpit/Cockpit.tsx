@@ -15,11 +15,41 @@ export default function Cockpit() {
   const setMode = useStore((s) => s.setMode);
   const detailId = useStore((s) => s.detailId);
   const closeDetail = useStore((s) => s.closeDetail);
+  const focusId = useStore((s) => s.focusId);
+  const setActiveTab = useStore((s) => s.setActiveTab);
+  const activeTabMap = useStore((s) => s.activeTab);
 
   useEffect(() => {
     const unsub = startCockpit();
     return unsub;
   }, []);
+
+  // Workspace-tab shortcuts: Ctrl+1/2/3 jump, Ctrl+Tab / Ctrl+Shift+Tab cycle.
+  useEffect(() => {
+    const ORDER = ["chat", "terminal", "browser"] as const;
+    const onKey = (e: KeyboardEvent) => {
+      if (!e.ctrlKey || e.metaKey || e.altKey) return;
+      const id = detailId ?? focusId;
+      if (!id) return;
+
+      if (e.key === "1" || e.key === "2" || e.key === "3") {
+        e.preventDefault();
+        setActiveTab(id, ORDER[Number(e.key) - 1]);
+        return;
+      }
+      if (e.key === "Tab") {
+        e.preventDefault();
+        const cur = activeTabMap[id] ?? "chat";
+        const idx = ORDER.indexOf(cur);
+        const next = e.shiftKey
+          ? ORDER[(idx - 1 + ORDER.length) % ORDER.length]
+          : ORDER[(idx + 1) % ORDER.length];
+        setActiveTab(id, next);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [detailId, focusId, activeTabMap, setActiveTab]);
 
   const seg = (m: "flow" | "grid", label: string) => (
     <button

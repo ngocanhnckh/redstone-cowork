@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join, basename } from "node:path";
 import { saveConfig, loadConfig, clearConfig } from "./config";
 import * as api from "./api";
+import { getWorkspaceConfig, saveWorkspaceConfig } from "./workspace";
 import { IPC } from "../shared/ipc";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -152,6 +153,14 @@ ipcMain.handle(IPC.instruct, (_e, a: { sessionId: string; text: string }) =>
 );
 ipcMain.handle(IPC.mode, (_e, a: { sessionId: string; mode: string }) =>
   api.switchMode(a.sessionId, a.mode)
+);
+
+// Workspace config (per-session .redstone/session.json)
+ipcMain.handle(IPC.workspaceGet, (_e, a: Parameters<typeof getWorkspaceConfig>[0]) =>
+  getWorkspaceConfig(a)
+);
+ipcMain.handle(IPC.workspaceSave, (_e, a: Parameters<typeof saveWorkspaceConfig>[0]) =>
+  saveWorkspaceConfig(a)
 );
 
 app.whenReady().then(() => {

@@ -1,7 +1,8 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { Decision } from "../types";
 import { useStore } from "../store";
 import { nextAfterAnswer } from "../autoAdvance";
+import Kbd from "./Kbd";
 
 interface Props {
   decision: Decision | undefined;
@@ -18,6 +19,25 @@ export default function AnswerDock({ decision }: Props) {
   const focusId = useStore((s) => s.focusId);
   const queue = useStore((s) => s.queue);
   const instruct = useStore((s) => s.instruct);
+
+  // Skip (Ctrl+→) and Snooze (Ctrl+S) shortcuts — only active while a decision is shown.
+  useEffect(() => {
+    if (!decision) return;
+    const sid = decision.sessionId;
+    const onKey = (e: KeyboardEvent) => {
+      if (!e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.key === "ArrowRight") {
+        e.preventDefault();
+        const next = nextAfterAnswer(queue, sid);
+        if (next) setFocus(next);
+      } else if (e.key.toLowerCase() === "s" && !e.shiftKey) {
+        e.preventDefault();
+        snooze(sid, 15);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [decision, queue, setFocus, snooze]);
 
   const textareaStyle: React.CSSProperties = {
     flex: 1,
@@ -89,9 +109,9 @@ export default function AnswerDock({ decision }: Props) {
                 setTimeout(() => setIdleSent(false), 1800);
               }
             }}
-            style={{ borderRadius: 999, padding: "0 22px", height: 44, fontSize: 13.5, fontWeight: 600, flexShrink: 0 }}
+            style={{ borderRadius: 999, padding: "0 22px", height: 44, fontSize: 13.5, fontWeight: 600, flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 8 }}
           >
-            Send ↵
+            Send <Kbd>⌅</Kbd>
           </button>
         </div>
         {idleSent && (
@@ -190,9 +210,9 @@ export default function AnswerDock({ decision }: Props) {
         <button
           className="glass-btn--clay"
           onClick={handleSend}
-          style={{ borderRadius: 999, padding: "0 22px", height: 44, fontSize: 13.5, fontWeight: 600, flexShrink: 0 }}
+          style={{ borderRadius: 999, padding: "0 22px", height: 44, fontSize: 13.5, fontWeight: 600, flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 8 }}
         >
-          Send ↵
+          Send <Kbd>⌅</Kbd>
         </button>
       </div>
       {sent && (
@@ -214,9 +234,12 @@ export default function AnswerDock({ decision }: Props) {
             borderRadius: 999,
             padding: "6px 12px",
             cursor: "pointer",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 7,
           }}
         >
-          Skip ⤳
+          Skip ⤳ <Kbd>⌃→</Kbd>
         </span>
         <span
           className="glass-inset-hover"
@@ -229,9 +252,12 @@ export default function AnswerDock({ decision }: Props) {
             borderRadius: 999,
             padding: "6px 12px",
             cursor: "pointer",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 7,
           }}
         >
-          Snooze 15m
+          Snooze 15m <Kbd>⌃S</Kbd>
         </span>
         <span className="mono faint" style={{ marginLeft: "auto", fontSize: 10.5 }}>
           answer → auto-advance to next

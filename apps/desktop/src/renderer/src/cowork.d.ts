@@ -24,6 +24,19 @@ declare global {
       instruct(sessionId: string, text: string): Promise<unknown>;
       switchMode(sessionId: string, mode: string): Promise<unknown>;
 
+      // Workspace config
+      getWorkspaceConfig(a: {
+        sessionId: string;
+        cwd: string;
+        machine: string;
+      }): Promise<{ sshHost: string; forwardPorts: number[]; browserUrl: string } | null>;
+      saveWorkspaceConfig(a: {
+        sessionId: string;
+        cwd: string;
+        machine: string;
+        config: { sshHost: string; forwardPorts: number[]; browserUrl: string };
+      }): Promise<{ ok: boolean; error?: string }>;
+
       // Stream
       onUpdate(cb: () => void): () => void;
     };
