@@ -144,54 +144,76 @@ export function pasteSettleMs(text: string): number {
 export const KEY_SETTLE_MS = 180;
 
 /**
+ * Max length of a single `tmux send-keys -l` literal. tmux rejects an
+ * over-long command ("command too long"), so a large paste (e.g. a console
+ * stack trace) must be split into several send-keys calls that concatenate
+ * into the same input buffer.
+ */
+export const LITERAL_CHUNK = 480;
+
+/**
  * Fetch one batch of deliveries, send keystrokes for mapped items,
  * and acknowledge every item (mapped or not).
+ *
+ * Each item is processed defensively and acked even on failure: a single
+ * un-deliverable item (e.g. one that exceeds tmux limits) must NEVER wedge the
+ * queue — otherwise every later message piles up behind it forever.
  */
 export async function pollOnce(deps: PollOnceDeps): Promise<void> {
   const sleep = deps.sleep ?? (() => Promise.resolve());
   const items = await deps.deliveries();
   for (const d of items) {
-    // ssh-authorize: install the desktop's public key locally and report back —
-    // never typed into the TUI. Fully defensive: any failure becomes ok:false so
-    // the poller loop (and the user's Claude session) is never broken.
-    if (d.kind === "ssh-authorize") {
-      const sessionId = d.sessionId;
-      const publicKey = d.body?.publicKey;
-      try {
-        if (deps.postSshResult && sessionId) {
-          const result = publicKey
-            ? await authorizeSshKey(publicKey)
-            : { ok: false as const, error: "missing publicKey" };
-          await deps.postSshResult(sessionId, result);
-        }
-      } catch (e) {
+    try {
+      // ssh-authorize: install the desktop's public key locally and report back —
+      // never typed into the TUI.
+      if (d.kind === "ssh-authorize") {
+        const sessionId = d.sessionId;
+        const publicKey = d.body?.publicKey;
         try {
+          if (deps.postSshResult && sessionId) {
+            const result = publicKey
+              ? await authorizeSshKey(publicKey)
+              : { ok: false as const, error: "missing publicKey" };
+            await deps.postSshResult(sessionId, result);
+          }
+        } catch (e) {
           if (deps.postSshResult && sessionId) {
             await deps.postSshResult(sessionId, { ok: false, error: (e as Error)?.message ?? "ssh-authorize failed" });
           }
-        } catch {
-          // swallow — never break the session
         }
+        continue; // ack happens in finally
       }
-      await deps.markDelivered(d.id);
-      continue;
-    }
 
-    const keySequences = deliveryToKeys(d);
-    if (keySequences) {
-      for (let i = 0; i < keySequences.length; i++) {
-        const keys = keySequences[i];
-        await deps.sendKeys(keys);
-        // Let the keystroke register before the next one. After a literal paste
-        // (`-l <text>`) Claude's paste buffer needs to settle or the following
-        // Enter is absorbed as a newline; between ordinary keys (option digit →
-        // Enter) a short gap lets the selection register before we confirm.
-        if (i < keySequences.length - 1) {
-          await sleep(keys[0] === "-l" ? pasteSettleMs(keys[1] ?? "") : KEY_SETTLE_MS);
+      const keySequences = deliveryToKeys(d);
+      if (keySequences) {
+        for (let i = 0; i < keySequences.length; i++) {
+          const keys = keySequences[i];
+          // Chunk a long literal paste so it stays under tmux's command-length limit.
+          if (keys[0] === "-l" && (keys[1]?.length ?? 0) > LITERAL_CHUNK) {
+            const text = keys[1] ?? "";
+            for (let off = 0; off < text.length; off += LITERAL_CHUNK) {
+              await deps.sendKeys(["-l", text.slice(off, off + LITERAL_CHUNK)]);
+            }
+          } else {
+            await deps.sendKeys(keys);
+          }
+          // Let the keystroke register before the next one. After a literal paste
+          // Claude's paste buffer needs to settle or the following Enter is absorbed
+          // as a newline; between ordinary keys a short gap lets the selection register.
+          if (i < keySequences.length - 1) {
+            await sleep(keys[0] === "-l" ? pasteSettleMs(keys[1] ?? "") : KEY_SETTLE_MS);
+          }
         }
       }
+    } catch {
+      // Un-deliverable item — swallow so it can't wedge the queue; we ack below.
+    } finally {
+      try {
+        await deps.markDelivered(d.id);
+      } catch {
+        // best-effort ack; a failed ack just retries next poll
+      }
     }
-    await deps.markDelivered(d.id);
   }
 }
 

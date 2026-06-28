@@ -40,6 +40,41 @@ describe("pollOnce", () => {
     expect(pasteSettleMs("x".repeat(10_000))).toBe(1500);
   });
 
+  it("chunks a long literal paste into multiple send-keys (tmux command-length limit)", async () => {
+    const literals: string[] = [];
+    const big = "x".repeat(1700); // > LITERAL_CHUNK (480)
+    const deps = {
+      deliveries: vi.fn().mockResolvedValue([
+        { id: "big", kind: "instruction", options: [], resolution: { choice: null, answers: null, custom: big } },
+      ]),
+      markDelivered: vi.fn(),
+      sendKeys: async (keys: string[]) => { if (keys[0] === "-l") literals.push(keys[1]); },
+      sleep: vi.fn(),
+    };
+    await pollOnce(deps);
+    expect(literals.length).toBe(Math.ceil(1700 / 480)); // 4 chunks
+    expect(literals.join("")).toBe(big); // reassembles exactly
+    expect(deps.markDelivered).toHaveBeenCalledWith("big");
+  });
+
+  it("acks a poison delivery even when sendKeys throws (never wedges the queue)", async () => {
+    const acked: string[] = [];
+    const deps = {
+      deliveries: vi.fn().mockResolvedValue([
+        { id: "poison", kind: "instruction", options: [], resolution: { choice: null, answers: null, custom: "boom" } },
+        { id: "good", kind: "instruction", options: [], resolution: { choice: null, answers: null, custom: "ok" } },
+      ]),
+      markDelivered: vi.fn().mockImplementation(async (id: string) => { acked.push(id); }),
+      sendKeys: vi.fn().mockImplementation(async (keys: string[]) => {
+        if (keys[0] === "-l" && keys[1] === "boom") throw new Error("command too long");
+      }),
+      sleep: vi.fn(),
+    };
+    await pollOnce(deps);
+    // Both the failing item AND the following item are acked (queue not wedged).
+    expect(acked).toEqual(["poison", "good"]);
+  });
+
   describe("ssh-authorize", () => {
     let home: string;
     const realHome = process.env.HOME;
