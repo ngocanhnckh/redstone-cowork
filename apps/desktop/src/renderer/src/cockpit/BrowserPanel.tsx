@@ -22,7 +22,6 @@ declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace JSX {
     interface IntrinsicElements {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       webview: React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & {
         src?: string;
         partition?: string;
@@ -34,6 +33,7 @@ declare global {
 
 const inputStyle: React.CSSProperties = {
   flex: 1,
+  minWidth: 0,
   borderRadius: 12,
   border: "1px solid var(--border)",
   padding: "10px 13px",
@@ -62,12 +62,14 @@ function portUrl(port: number): string {
 }
 
 export default function BrowserPanel({ sessionId, cwd, machine }: Props) {
+  // Saved override URL (a typed address); when empty the preview is port-driven.
   const [browserUrl, setBrowserUrl] = useState("");
   const [forwardPorts, setForwardPorts] = useState<number[]>([]);
   const [previewPort, setPreviewPort] = useState<number | null>(null);
-  // The URL the webview is actually showing (override URL, or the preview port).
+  // The URL the webview is actually showing.
   const [loadUrl, setLoadUrl] = useState("");
-  const [currentUrl, setCurrentUrl] = useState("");
+  // The text shown in the address bar — tracks the live/loaded URL, editable.
+  const [address, setAddress] = useState("");
   const [status, setStatus] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [saving, setSaving] = useState(false);
   const webviewRef = useRef<WebviewEl | null>(null);
@@ -83,6 +85,15 @@ export default function BrowserPanel({ sessionId, cwd, machine }: Props) {
     }
   }
 
+  // Point the webview at a URL: update bar + src + imperative load.
+  function navigate(url: string) {
+    setLoadUrl(url);
+    setAddress(url);
+    if (url) {
+      webviewRef.current?.loadURL(url).catch(() => {/* not ready / bad url — src covers mount */});
+    }
+  }
+
   useEffect(() => {
     let cancelled = false;
     setStatus(null);
@@ -90,19 +101,19 @@ export default function BrowserPanel({ sessionId, cwd, machine }: Props) {
       .getWorkspaceConfig({ sessionId, cwd, machine })
       .then((cfg) => {
         if (cancelled || !cfg) return;
-        const url = cfg.browserUrl ?? "";
+        const url = (cfg.browserUrl ?? "").trim();
         const preview = cfg.previewPort ?? null;
         setBrowserUrl(url);
         setForwardPorts(cfg.forwardPorts ?? []);
         setPreviewPort(preview);
         // Resolve the URL to load: explicit override wins, else the preview port.
-        if (url.trim().length > 0) {
-          setLoadUrl(url.trim());
-          setCurrentUrl(url.trim());
+        if (url.length > 0) {
+          setLoadUrl(url);
+          setAddress(url);
         } else if (preview != null) {
           const u = portUrl(preview);
           setLoadUrl(u);
-          setCurrentUrl(u);
+          setAddress(u);
           ensureForward(preview);
         }
       })
@@ -114,13 +125,13 @@ export default function BrowserPanel({ sessionId, cwd, machine }: Props) {
     };
   }, [sessionId, cwd, machine]);
 
-  // Keep `currentUrl` synced from the live webview navigation.
+  // Keep the address bar synced from live webview navigation.
   useEffect(() => {
     const wv = webviewRef.current;
     if (!wv) return;
     const onNav = (e: Event) => {
       const url = (e as unknown as { url?: string }).url;
-      if (url) setCurrentUrl(url);
+      if (url) setAddress(url);
     };
     wv.addEventListener("did-navigate", onNav as EventListener);
     wv.addEventListener("did-navigate-in-page", onNav as EventListener);
@@ -141,23 +152,16 @@ export default function BrowserPanel({ sessionId, cwd, machine }: Props) {
     }
   }
 
-  async function handleSave() {
+  // Go: treat the address-bar text as a saved override URL and load it.
+  async function handleGo() {
+    const url = address.trim();
+    if (!url) return;
     setSaving(true);
     setStatus(null);
-    const url = browserUrl.trim();
     setBrowserUrl(url);
     await saveConfig({ browserUrl: url, previewPort });
     setSaving(false);
-    // Navigate the preview to the entered URL (override).
-    if (url) {
-      setLoadUrl(url);
-      setCurrentUrl(url);
-      try {
-        await webviewRef.current?.loadURL(url);
-      } catch {
-        /* webview not ready / bad url — ignore */
-      }
-    }
+    navigate(url);
   }
 
   // Pick a forwarded port as the default preview: clear the override and load it.
@@ -165,22 +169,15 @@ export default function BrowserPanel({ sessionId, cwd, machine }: Props) {
     setStatus(null);
     setPreviewPort(port);
     setBrowserUrl("");
-    const u = portUrl(port);
     await saveConfig({ browserUrl: "", previewPort: port });
     await ensureForward(port);
-    setLoadUrl(u);
-    setCurrentUrl(u);
-    try {
-      await webviewRef.current?.loadURL(u);
-    } catch {
-      /* webview not ready — src fallback covers initial mount */
-    }
+    navigate(portUrl(port));
   }
 
   const hasUrl = loadUrl.trim().length > 0;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+    <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, minWidth: 0 }}>
       <ConnectionBar
         sessionId={sessionId}
         machine={machine}
@@ -198,6 +195,7 @@ export default function BrowserPanel({ sessionId, cwd, machine }: Props) {
           gap: 8,
           padding: "10px 32px",
           borderBottom: "1px solid var(--border)",
+          minWidth: 0,
         }}
       >
         <button style={navBtn} title="Back" onClick={() => webviewRef.current?.goBack()}>
@@ -211,19 +209,19 @@ export default function BrowserPanel({ sessionId, cwd, machine }: Props) {
         </button>
         <input
           className="reply-input"
-          value={browserUrl}
-          onChange={(e) => setBrowserUrl(e.target.value)}
+          value={address}
+          onChange={(e) => setAddress(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter") handleSave();
+            if (e.key === "Enter") handleGo();
           }}
           placeholder="http://localhost:5173"
           style={inputStyle}
         />
         <button
           className="glass-btn--clay"
-          onClick={handleSave}
+          onClick={handleGo}
           disabled={saving}
-          style={{ padding: "9px 16px", fontSize: 13, fontWeight: 600, opacity: saving ? 0.6 : 1 }}
+          style={{ padding: "9px 16px", fontSize: 13, fontWeight: 600, opacity: saving ? 0.6 : 1, flexShrink: 0 }}
         >
           {saving ? "…" : "Go"}
         </button>
@@ -231,7 +229,7 @@ export default function BrowserPanel({ sessionId, cwd, machine }: Props) {
           style={navBtn}
           title="Open in real browser"
           onClick={() => {
-            const url = currentUrl || browserUrl.trim();
+            const url = address.trim();
             if (url) window.cowork.openExternal(url).catch(() => {/* ignore */});
           }}
         >
@@ -240,7 +238,7 @@ export default function BrowserPanel({ sessionId, cwd, machine }: Props) {
         {status && (
           <span
             className="mono"
-            style={{ fontSize: 11, color: status.kind === "ok" ? "rgb(var(--accent))" : "#e0736a" }}
+            style={{ fontSize: 11, color: status.kind === "ok" ? "rgb(var(--accent))" : "#e0736a", flexShrink: 0 }}
           >
             {status.text}
           </span>
@@ -267,7 +265,7 @@ export default function BrowserPanel({ sessionId, cwd, machine }: Props) {
           </span>
         ) : (
           forwardPorts.map((p) => {
-            const active = previewPort === p;
+            const active = previewPort === p && !browserUrl;
             return (
               <button
                 key={p}
@@ -310,7 +308,7 @@ export default function BrowserPanel({ sessionId, cwd, machine }: Props) {
             }}
           >
             <span className="faint" style={{ fontSize: 13, fontStyle: "italic" }}>
-              Set a URL above to preview it here.
+              Forward a port (Ports tab) or type a URL above to preview it here.
             </span>
           </div>
         )}

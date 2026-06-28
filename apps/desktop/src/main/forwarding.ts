@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { getSshHost, isLocalMachine } from "./workspace";
-import { sshMuxOpts } from "./ssh-common";
+// Note: forwards intentionally do NOT use ssh ControlMaster — see ControlPath=none below.
 
 export type ForwardStatus = "local" | "starting" | "active" | "failed" | "stopped";
 
@@ -57,7 +57,11 @@ export function startForward(args: StartArgs, onStatus: StatusCb): void {
       "ssh",
       [
         "-N",
-        ...sshMuxOpts(),
+        // A port forward must be its OWN long-lived connection. Multiplexing (ControlMaster)
+        // makes `ssh -N -L` a slave that exits immediately once the forward is registered,
+        // which we'd misread as "failed" — so disable muxing for forwards (ControlPath=none).
+        "-o",
+        "ControlPath=none",
         "-o",
         "BatchMode=yes",
         "-o",
