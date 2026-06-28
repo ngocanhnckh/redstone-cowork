@@ -39,6 +39,25 @@ export default function FilesPanel({ sessionId, cwd, machine }: Props) {
   const [reading, setReading] = useState(false);
   const [mdMode, setMdMode] = useState<"edit" | "preview">("preview");
   const [saveState, setSaveState] = useState<{ kind: "idle" | "saving" | "ok" | "err"; text?: string }>({ kind: "idle" });
+  // Auto-save preference persists across sessions (global, localStorage).
+  const [autoSave, setAutoSave] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("rcw.files.autosave") === "1";
+    } catch {
+      return false;
+    }
+  });
+  function toggleAutoSave() {
+    setAutoSave((on) => {
+      const next = !on;
+      try {
+        localStorage.setItem("rcw.files.autosave", next ? "1" : "0");
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }
 
   const loadDir = useCallback(
     async (dir: string) => {
@@ -147,6 +166,17 @@ export default function FilesPanel({ sessionId, cwd, machine }: Props) {
     return () => window.removeEventListener("keydown", onKey);
   }, [openPath, read, save]);
 
+  // Auto-save: debounce a write ~700ms after the last edit while enabled. Each
+  // keystroke re-runs this effect, clearing the prior timer (so we save once the
+  // user pauses, not on every keypress).
+  useEffect(() => {
+    if (!autoSave || openPath == null) return;
+    const isDirty = openPath in drafts && drafts[openPath] !== original;
+    if (!isDirty || !(read?.ok && read.encoding === "text")) return;
+    const t = setTimeout(() => save(), 700);
+    return () => clearTimeout(t);
+  }, [autoSave, drafts, openPath, original, read, save]);
+
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
       <ConnectionBar sessionId={sessionId} machine={machine} onHostChange={() => loadDir(cwd)} />
@@ -245,6 +275,25 @@ export default function FilesPanel({ sessionId, cwd, machine }: Props) {
                   </span>
                 )}
                 {read?.ok && read.encoding === "text" && (
+                  <button
+                    onClick={toggleAutoSave}
+                    title={autoSave ? "Auto-save on — saves ~0.7s after you stop typing" : "Enable auto-save"}
+                    style={{
+                      border: "1px solid var(--border)",
+                      background: autoSave ? "rgb(var(--accent) / 0.18)" : "transparent",
+                      color: autoSave ? "rgb(var(--accent))" : "var(--text-soft)",
+                      borderRadius: 8,
+                      padding: "4px 11px",
+                      fontSize: 10.5,
+                      fontFamily: "var(--font-mono)",
+                      cursor: "pointer",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {autoSave ? "● Auto-save" : "○ Auto-save"}
+                  </button>
+                )}
+                {read?.ok && read.encoding === "text" && !autoSave && (
                   <button
                     onClick={save}
                     disabled={!dirty}
