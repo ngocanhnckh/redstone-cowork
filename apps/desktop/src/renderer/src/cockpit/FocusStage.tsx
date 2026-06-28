@@ -131,10 +131,8 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
         {/* Mode selector — only relevant to Claude, so shown on the Chat tab */}
         {activeTab === "chat" &&
           (() => {
-            // Shift+Tab cycle: default → acceptEdits → plan → auto. "auto" exists when the
-            // session was launched with --enable-auto-mode OR is currently in auto mode.
-            const autoAvailable = session.autoModeEnabled || session.permissionMode === "auto";
-            const modes = ["default", "acceptEdits", "plan", ...(autoAvailable ? ["auto"] : [])];
+            // Full Shift+Tab cycle. Auto mode is a standard Claude feature, always offered.
+            const modes = ["default", "acceptEdits", "plan", "auto"];
             const current = session.permissionMode ?? "default";
             const LABEL: Record<string, string> = { default: "Default", acceptEdits: "Accept Edits", plan: "Plan", auto: "Auto" };
             return (

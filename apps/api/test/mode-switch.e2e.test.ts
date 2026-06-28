@@ -63,16 +63,25 @@ describe("mode switch", () => {
       .expect(204);
   });
 
-  it("mode not in cycle (auto when autoModeEnabled=false) → 400", async () => {
-    // Attach a second session WITHOUT auto mode
+  it("auto is always available even when autoModeEnabled=false", async () => {
     await request(app.getHttpServer()).post("/sessions").set(auth).send({
       id: "sess-noauto", machine: "m", cwd: "/p", gitBranch: null,
       wrapperId: "wrap-noauto", autoModeEnabled: false, permissionMode: "default",
     });
-    await request(app.getHttpServer())
+    const r = await request(app.getHttpServer())
       .post("/sessions/sess-noauto/mode")
       .set(auth)
       .send({ mode: "auto" })
+      .expect(200);
+    expect(r.body.mode).toBe("auto");
+    expect(r.body.btabs).toBe(3); // default → acceptEdits → plan → auto
+  });
+
+  it("an unknown mode is rejected → 400", async () => {
+    await request(app.getHttpServer())
+      .post("/sessions/sess-mode/mode")
+      .set(auth)
+      .send({ mode: "bogus" })
       .expect(400);
   });
 
