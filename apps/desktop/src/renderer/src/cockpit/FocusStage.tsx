@@ -28,7 +28,6 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
   const queue = useStore((s) => s.queue);
   const decisions = useStore((s) => s.decisions);
   const switchMode = useStore((s) => s.switchMode);
-  const pendingMap = useStore((s) => s.pending);
   const activeTabMap = useStore((s) => s.activeTab);
   const setActiveTab = useStore((s) => s.setActiveTab);
 
@@ -42,19 +41,7 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
     sessionDecisions.find((d) => (ACTIONABLE_KINDS as readonly string[]).includes(d.kind)) ??
     sessionDecisions[0];
 
-  // Optimistic replies the user just sent, not yet echoed by the server transcript.
-  const transcript = session?.transcript ?? [];
-  const transcriptUserTexts = new Set(
-    transcript.filter((m) => m.role === "user").map((m) => m.text.trim())
-  );
-  const pending = (id ? pendingMap[id] ?? [] : []).filter(
-    (p) => !transcriptUserTexts.has(p.text.trim())
-  );
-  // Combined timeline = server transcript + still-unconfirmed optimistic sends.
-  const timeline = [
-    ...transcript.map((m) => ({ ...m, optimistic: false })),
-    ...pending.map((p) => ({ role: "user" as const, text: p.text, optimistic: true })),
-  ];
+  const timeline = session?.transcript ?? [];
   // Claude is mid-turn when the last thing said was the user's, with no question pending.
   const isWorking = !decision && timeline.length > 0 && timeline[timeline.length - 1].role === "user";
 
@@ -71,7 +58,7 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
     if (scrollRef.current && stickToBottom.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [session?.transcript, pending.length, isWorking]);
+  }, [session?.transcript, isWorking]);
 
   if (!session) return null;
 
@@ -304,7 +291,6 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
                   lineHeight: 1.5,
                   whiteSpace: "pre-wrap",
                   color: "var(--text-soft)",
-                  opacity: msg.optimistic ? 0.72 : 1,
                 }}
               >
                 <span
@@ -322,11 +308,6 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
                   }}
                 >
                   you
-                  {msg.optimistic && (
-                    <span style={{ color: "rgb(var(--accent))", letterSpacing: "0.04em" }}>
-                      · sending…
-                    </span>
-                  )}
                 </span>
                 {msg.text}
               </div>
