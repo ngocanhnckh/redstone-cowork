@@ -20,6 +20,7 @@ const CHIP: Record<ForwardStatus, { label: string; color: string; bg: string }> 
 export default function PortsPanel({ sessionId, cwd, machine }: Props) {
   const [browserUrl, setBrowserUrl] = useState("");
   const [forwardPorts, setForwardPorts] = useState<number[]>([]);
+  const [previewPort, setPreviewPort] = useState<number | null>(null);
   const [portInput, setPortInput] = useState("");
   const [status, setStatus] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -28,6 +29,9 @@ export default function PortsPanel({ sessionId, cwd, machine }: Props) {
   // Latest browserUrl for persist() without re-running effects.
   const browserUrlRef = useRef("");
   browserUrlRef.current = browserUrl;
+  // Latest previewPort for persist() without re-running effects.
+  const previewPortRef = useRef<number | null>(null);
+  previewPortRef.current = previewPort;
 
   // Subscribe to live status pushes (filtered by sessionId).
   useEffect(() => {
@@ -53,6 +57,7 @@ export default function PortsPanel({ sessionId, cwd, machine }: Props) {
         const ports = cfg?.forwardPorts ?? [];
         setBrowserUrl(cfg?.browserUrl ?? "");
         setForwardPorts(ports);
+        setPreviewPort(cfg?.previewPort ?? null);
         const seeded: Record<number, { status: ForwardStatus; error?: string }> = {};
         for (const f of existing) seeded[f.port] = { status: f.status as ForwardStatus, error: f.error };
         setFwd(seeded);
@@ -72,14 +77,14 @@ export default function PortsPanel({ sessionId, cwd, machine }: Props) {
     };
   }, [sessionId, cwd, machine]);
 
-  async function persist(ports: number[]) {
+  async function persist(ports: number[], preview: number | null = previewPortRef.current) {
     setStatus(null);
     try {
       const res = await window.cowork.saveWorkspaceConfig({
         sessionId,
         cwd,
         machine,
-        config: { forwardPorts: ports, browserUrl: browserUrlRef.current },
+        config: { forwardPorts: ports, browserUrl: browserUrlRef.current, previewPort: preview },
       });
       if (res.ok) setStatus({ kind: "ok", text: "✓ saved" });
       else setStatus({ kind: "err", text: res.error ?? "save failed" });
@@ -101,7 +106,10 @@ export default function PortsPanel({ sessionId, cwd, machine }: Props) {
     const next = [...forwardPorts, n];
     setForwardPorts(next);
     setPortInput("");
-    persist(next);
+    // Default the preview port to the first port the user forwards.
+    const nextPreview = previewPort == null ? n : previewPort;
+    if (nextPreview !== previewPort) setPreviewPort(nextPreview);
+    persist(next, nextPreview);
     window.cowork.startForward({ sessionId, machine, port: n }).catch(() => {/* ignore */});
   }
 
@@ -112,8 +120,11 @@ export default function PortsPanel({ sessionId, cwd, machine }: Props) {
       const { [n]: _drop, ...rest } = prev;
       return rest;
     });
+    // If the removed port was the preview, fall back to the first remaining (or null).
+    const nextPreview = previewPort === n ? (next[0] ?? null) : previewPort;
+    if (nextPreview !== previewPort) setPreviewPort(nextPreview);
     window.cowork.stopForward({ sessionId, port: n }).catch(() => {/* ignore */});
-    persist(next);
+    persist(next, nextPreview);
   }
 
   function startOne(n: number) {

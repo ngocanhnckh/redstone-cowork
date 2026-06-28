@@ -57,13 +57,31 @@ const navBtn: React.CSSProperties = {
   lineHeight: 1,
 };
 
+function portUrl(port: number): string {
+  return `http://localhost:${port}`;
+}
+
 export default function BrowserPanel({ sessionId, cwd, machine }: Props) {
   const [browserUrl, setBrowserUrl] = useState("");
   const [forwardPorts, setForwardPorts] = useState<number[]>([]);
+  const [previewPort, setPreviewPort] = useState<number | null>(null);
+  // The URL the webview is actually showing (override URL, or the preview port).
+  const [loadUrl, setLoadUrl] = useState("");
   const [currentUrl, setCurrentUrl] = useState("");
   const [status, setStatus] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [saving, setSaving] = useState(false);
   const webviewRef = useRef<WebviewEl | null>(null);
+
+  // Ensure the preview port's tunnel is up before loading (idempotent; no-op when local).
+  async function ensureForward(port: number) {
+    try {
+      const local = await window.cowork.isLocalMachine(machine);
+      if (local) return;
+      await window.cowork.startForward({ sessionId, machine, port });
+    } catch {
+      /* best-effort — webview load may still succeed if already forwarded */
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -72,9 +90,21 @@ export default function BrowserPanel({ sessionId, cwd, machine }: Props) {
       .getWorkspaceConfig({ sessionId, cwd, machine })
       .then((cfg) => {
         if (cancelled || !cfg) return;
-        setBrowserUrl(cfg.browserUrl ?? "");
-        setCurrentUrl(cfg.browserUrl ?? "");
+        const url = cfg.browserUrl ?? "";
+        const preview = cfg.previewPort ?? null;
+        setBrowserUrl(url);
         setForwardPorts(cfg.forwardPorts ?? []);
+        setPreviewPort(preview);
+        // Resolve the URL to load: explicit override wins, else the preview port.
+        if (url.trim().length > 0) {
+          setLoadUrl(url.trim());
+          setCurrentUrl(url.trim());
+        } else if (preview != null) {
+          const u = portUrl(preview);
+          setLoadUrl(u);
+          setCurrentUrl(u);
+          ensureForward(preview);
+        }
       })
       .catch(() => {
         /* ignore — treat as unconfigured */
@@ -98,24 +128,29 @@ export default function BrowserPanel({ sessionId, cwd, machine }: Props) {
       wv.removeEventListener("did-navigate", onNav as EventListener);
       wv.removeEventListener("did-navigate-in-page", onNav as EventListener);
     };
-  }, [browserUrl]);
+  }, [loadUrl]);
 
-  async function handleSave() {
-    setSaving(true);
-    setStatus(null);
-    const url = browserUrl.trim();
+  async function saveConfig(next: { browserUrl: string; previewPort: number | null }) {
     try {
-      const config = { forwardPorts, browserUrl: url };
+      const config = { forwardPorts, browserUrl: next.browserUrl, previewPort: next.previewPort };
       const res = await window.cowork.saveWorkspaceConfig({ sessionId, cwd, machine, config });
       if (res.ok) setStatus({ kind: "ok", text: "✓ saved" });
       else setStatus({ kind: "err", text: res.error ?? "save failed" });
     } catch (e) {
       setStatus({ kind: "err", text: e instanceof Error ? e.message : String(e) });
-    } finally {
-      setSaving(false);
     }
-    // Navigate the preview to the entered URL.
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    setStatus(null);
+    const url = browserUrl.trim();
+    setBrowserUrl(url);
+    await saveConfig({ browserUrl: url, previewPort });
+    setSaving(false);
+    // Navigate the preview to the entered URL (override).
     if (url) {
+      setLoadUrl(url);
       setCurrentUrl(url);
       try {
         await webviewRef.current?.loadURL(url);
@@ -125,11 +160,35 @@ export default function BrowserPanel({ sessionId, cwd, machine }: Props) {
     }
   }
 
-  const hasUrl = browserUrl.trim().length > 0;
+  // Pick a forwarded port as the default preview: clear the override and load it.
+  async function selectPreview(port: number) {
+    setStatus(null);
+    setPreviewPort(port);
+    setBrowserUrl("");
+    const u = portUrl(port);
+    await saveConfig({ browserUrl: "", previewPort: port });
+    await ensureForward(port);
+    setLoadUrl(u);
+    setCurrentUrl(u);
+    try {
+      await webviewRef.current?.loadURL(u);
+    } catch {
+      /* webview not ready — src fallback covers initial mount */
+    }
+  }
+
+  const hasUrl = loadUrl.trim().length > 0;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
-      <ConnectionBar sessionId={sessionId} machine={machine} />
+      <ConnectionBar
+        sessionId={sessionId}
+        machine={machine}
+        onHostChange={() => {
+          if (previewPort != null) ensureForward(previewPort);
+          webviewRef.current?.reload();
+        }}
+      />
 
       {/* Address + nav controls */}
       <div
@@ -188,12 +247,56 @@ export default function BrowserPanel({ sessionId, cwd, machine }: Props) {
         )}
       </div>
 
+      {/* Preview port selector */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          flexWrap: "wrap",
+          padding: "8px 32px",
+          borderBottom: "1px solid var(--border)",
+        }}
+      >
+        <span className="faint" style={{ fontSize: 11, letterSpacing: 0.3 }}>
+          Preview port
+        </span>
+        {forwardPorts.length === 0 ? (
+          <span className="faint" style={{ fontSize: 11, fontStyle: "italic" }}>
+            Forward a port in the Ports tab to preview it here.
+          </span>
+        ) : (
+          forwardPorts.map((p) => {
+            const active = previewPort === p;
+            return (
+              <button
+                key={p}
+                onClick={() => selectPreview(p)}
+                className="mono"
+                style={{
+                  border: "1px solid var(--border)",
+                  background: active ? "rgb(var(--primary)/0.32)" : "transparent",
+                  color: active ? "var(--text)" : "var(--text-soft)",
+                  borderRadius: 999,
+                  padding: "3px 11px",
+                  fontSize: 11.5,
+                  cursor: "pointer",
+                  fontVariantNumeric: "tabular-nums",
+                }}
+              >
+                {p}
+              </button>
+            );
+          })
+        )}
+      </div>
+
       {/* Preview */}
       <div style={{ flex: 1, minHeight: 0, position: "relative", background: "rgba(0,0,0,0.18)" }}>
         {hasUrl ? (
           <webview
             ref={webviewRef as unknown as React.Ref<HTMLElement>}
-            src={browserUrl.trim()}
+            src={loadUrl}
             style={{ width: "100%", height: "100%", border: 0 }}
           />
         ) : (

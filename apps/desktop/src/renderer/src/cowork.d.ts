@@ -29,12 +29,12 @@ declare global {
         sessionId: string;
         cwd: string;
         machine: string;
-      }): Promise<{ forwardPorts: number[]; browserUrl: string } | null>;
+      }): Promise<{ forwardPorts: number[]; browserUrl: string; previewPort?: number | null } | null>;
       saveWorkspaceConfig(a: {
         sessionId: string;
         cwd: string;
         machine: string;
-        config: { forwardPorts: number[]; browserUrl: string };
+        config: { forwardPorts: number[]; browserUrl: string; previewPort?: number | null };
       }): Promise<{ ok: boolean; error?: string }>;
 
       // Per-machine SSH host

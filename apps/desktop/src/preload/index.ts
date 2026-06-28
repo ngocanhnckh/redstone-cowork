@@ -37,13 +37,13 @@ contextBridge.exposeInMainWorld("cowork", {
     sessionId: string;
     cwd: string;
     machine: string;
-  }): Promise<{ forwardPorts: number[]; browserUrl: string } | null> =>
+  }): Promise<{ forwardPorts: number[]; browserUrl: string; previewPort?: number | null } | null> =>
     ipcRenderer.invoke(IPC.workspaceGet, a),
   saveWorkspaceConfig: (a: {
     sessionId: string;
     cwd: string;
     machine: string;
-    config: { forwardPorts: number[]; browserUrl: string };
+    config: { forwardPorts: number[]; browserUrl: string; previewPort?: number | null };
   }): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke(IPC.workspaceSave, a),
 

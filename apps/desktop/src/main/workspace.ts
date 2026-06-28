@@ -7,6 +7,7 @@ import { execFile } from "node:child_process";
 export type WorkspaceConfig = {
   forwardPorts: number[];
   browserUrl: string;
+  previewPort?: number | null;
 };
 
 type Args = { sessionId: string; cwd: string; machine: string };
@@ -121,6 +122,10 @@ function normalizeConfig(parsed: Partial<WorkspaceConfig>): WorkspaceConfig {
       ? parsed.forwardPorts.filter((n): n is number => Number.isFinite(n))
       : [],
     browserUrl: typeof parsed.browserUrl === "string" ? parsed.browserUrl : "",
+    previewPort:
+      typeof parsed.previewPort === "number" && Number.isFinite(parsed.previewPort)
+        ? parsed.previewPort
+        : null,
   };
 }
 
