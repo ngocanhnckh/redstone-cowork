@@ -1,11 +1,74 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { mkdir, readFile, writeFile, chmod } from "node:fs/promises";
+import { homedir, userInfo } from "node:os";
+import { join } from "node:path";
 import { deliveryToKeys } from "./keymap";
 import type { ApiClient } from "./api-client";
 
 const execFileP = promisify(execFile);
 
-type Delivery = Parameters<typeof deliveryToKeys>[0] & { id: string };
+type Delivery = Parameters<typeof deliveryToKeys>[0] & {
+  id: string;
+  sessionId?: string;
+  body?: { btabs?: number; publicKey?: string; tool_input?: { questions?: unknown } };
+};
+
+export type SshResult = {
+  ok: boolean;
+  user?: string;
+  address?: string | null;
+  port?: number;
+  error?: string;
+};
+
+/**
+ * Install a desktop SSH public key into this box's ~/.ssh/authorized_keys, then
+ * report how to reach the box. Runs ON the remote (the agent is already trusted
+ * via the relay), so it bootstraps key auth with no password. Best-effort public
+ * address via ipify; null when it can't be reached (e.g. NAT). Pure file/network
+ * work, no tmux — the caller acks the delivery and posts the returned result.
+ */
+export async function authorizeSshKey(publicKey: string): Promise<SshResult> {
+  const sshDir = join(homedir(), ".ssh");
+  const keyFile = join(sshDir, "authorized_keys");
+  await mkdir(sshDir, { recursive: true, mode: 0o700 });
+
+  const line = publicKey.trim();
+  let existing = "";
+  try {
+    existing = await readFile(keyFile, "utf8");
+  } catch {
+    existing = ""; // first key — file doesn't exist yet
+  }
+  const present = existing
+    .split("\n")
+    .map((l) => l.trim())
+    .includes(line);
+  if (!present) {
+    const next = existing.length > 0 && !existing.endsWith("\n") ? existing + "\n" : existing;
+    await writeFile(keyFile, next + line + "\n", "utf8");
+  }
+  await chmod(keyFile, 0o600);
+
+  const user = userInfo().username;
+  const port = 22;
+  let address: string | null = null;
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 4000);
+    try {
+      const res = await fetch("https://api.ipify.org", { signal: ctrl.signal });
+      if (res.ok) address = (await res.text()).trim() || null;
+    } finally {
+      clearTimeout(t);
+    }
+  } catch {
+    address = null; // best-effort; the user can fill in HostName manually
+  }
+
+  return { ok: true, user, address, port };
+}
 
 /**
  * Flat dependency shape for pollOnce — easy to mock in tests.
@@ -17,6 +80,8 @@ export type PollOnceDeps = {
   markDelivered(id: string): Promise<void>;
   /** Execute a single send-keys argument list against the tmux target. */
   sendKeys(keys: string[]): Promise<void>;
+  /** Report an ssh-authorize outcome back to the server. Optional; only needed when ssh deliveries arrive. */
+  postSshResult?(sessionId: string, result: SshResult): Promise<void>;
   /** Pause (ms). Optional so tests run instantly; runPoller injects a real sleep. */
   sleep?(ms: number): Promise<void>;
 };
@@ -51,6 +116,32 @@ export async function pollOnce(deps: PollOnceDeps): Promise<void> {
   const sleep = deps.sleep ?? (() => Promise.resolve());
   const items = await deps.deliveries();
   for (const d of items) {
+    // ssh-authorize: install the desktop's public key locally and report back —
+    // never typed into the TUI. Fully defensive: any failure becomes ok:false so
+    // the poller loop (and the user's Claude session) is never broken.
+    if (d.kind === "ssh-authorize") {
+      const sessionId = d.sessionId;
+      const publicKey = d.body?.publicKey;
+      try {
+        if (deps.postSshResult && sessionId) {
+          const result = publicKey
+            ? await authorizeSshKey(publicKey)
+            : { ok: false as const, error: "missing publicKey" };
+          await deps.postSshResult(sessionId, result);
+        }
+      } catch (e) {
+        try {
+          if (deps.postSshResult && sessionId) {
+            await deps.postSshResult(sessionId, { ok: false, error: (e as Error)?.message ?? "ssh-authorize failed" });
+          }
+        } catch {
+          // swallow — never break the session
+        }
+      }
+      await deps.markDelivered(d.id);
+      continue;
+    }
+
     const keySequences = deliveryToKeys(d);
     if (keySequences) {
       for (let i = 0; i < keySequences.length; i++) {
@@ -105,6 +196,7 @@ export async function runPoller(opts: {
           api.deliveries(wrapperId, 25_000) as Promise<Delivery[]>,
         markDelivered: (id) => api.markDelivered(id),
         sendKeys,
+        postSshResult: (sid, result) => api.postSshResult(sid, result),
         sleep: (ms) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
       });
     } catch {

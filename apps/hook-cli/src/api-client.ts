@@ -108,4 +108,16 @@ export class ApiClient {
   async pushState(sessionId: string, patch: { latestAnswer?: string | null; transcript?: Array<{ role: "user" | "assistant"; text: string }> }): Promise<void> {
     await this.req(`/sessions/${encodeURIComponent(sessionId)}/state`, { method: "POST", headers: json(this.cfg.token), body: JSON.stringify(patch) }, 3000);
   }
+
+  /** Report the outcome of an ssh-authorize delivery back to the server. */
+  async postSshResult(
+    sessionId: string,
+    result: { ok: boolean; user?: string; address?: string | null; port?: number; error?: string }
+  ): Promise<void> {
+    await this.req(
+      `/sessions/${encodeURIComponent(sessionId)}/ssh-result`,
+      { method: "POST", headers: json(this.cfg.token), body: JSON.stringify(result) },
+      4000
+    );
+  }
 }

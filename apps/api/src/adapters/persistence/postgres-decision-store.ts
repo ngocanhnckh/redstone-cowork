@@ -1,9 +1,11 @@
 import type { Pool } from "pg";
-import { DecisionSchema, type Decision, type Resolution } from "@rcw/shared";
+import { DecisionSchema, DELIVERABLE_KINDS, type Decision, type Resolution } from "@rcw/shared";
 import type { DecisionStore } from "../../domain/decisions/decision-store.port";
 
 const ROW = `id, session_id AS "sessionId", kind, title, body, options, status, resolution,
              created_at AS "createdAt", resolved_at AS "resolvedAt", delivered_at AS "deliveredAt"`;
+
+const DELIVERABLE_KINDS_SQL = DELIVERABLE_KINDS.map((k) => `'${k}'`).join(",");
 
 export class PostgresDecisionStore implements DecisionStore {
   constructor(private readonly pool: Pool) {}
@@ -48,7 +50,7 @@ export class PostgresDecisionStore implements DecisionStore {
   async listUndelivered(sessionId: string): Promise<Decision[]> {
     const { rows } = await this.pool.query(
       `SELECT ${ROW} FROM decisions
-       WHERE session_id=$1 AND status='resolved' AND delivered_at IS NULL AND kind IN ('permission','question','instruction','mode')
+       WHERE session_id=$1 AND status='resolved' AND delivered_at IS NULL AND kind IN (${DELIVERABLE_KINDS_SQL})
        ORDER BY created_at ASC`,
       [sessionId]
     );

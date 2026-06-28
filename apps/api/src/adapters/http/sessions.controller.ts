@@ -4,6 +4,8 @@ import type { Response } from "express";
 import { z, ZodError } from "zod";
 import { SessionsService } from "../../application/sessions.service";
 import { DecisionsService } from "../../application/decisions.service";
+import { SshResultStore } from "../../application/ssh-result-store";
+import { EventsBus } from "../../application/events-bus";
 import { InstanceTokenGuard } from "./instance-token.guard";
 
 @Controller("sessions")
@@ -12,6 +14,8 @@ export class SessionsController {
   constructor(
     private readonly sessions: SessionsService,
     private readonly decisions: DecisionsService,
+    private readonly sshResults: SshResultStore,
+    private readonly bus: EventsBus,
   ) {}
 
   @Post()
@@ -89,6 +93,48 @@ export class SessionsController {
       if (e instanceof ZodError) throw new BadRequestException(e.issues);
       throw e;
     }
+  }
+
+  // Ask this session's host agent to install a desktop SSH public key into its
+  // remote ~/.ssh/authorized_keys (passwordless onboarding). The agent's poller
+  // performs the install and reports back via POST :id/ssh-result.
+  @Post(":id/ssh-authorize")
+  @HttpCode(200)
+  async sshAuthorize(@Param("id") id: string, @Body() body: unknown) {
+    try {
+      const { publicKey } = z.object({ publicKey: z.string().min(1) }).parse(body);
+      return await this.decisions.authorizeSsh(id, publicKey);
+    } catch (e) {
+      if (e instanceof ZodError) throw new BadRequestException(e.issues);
+      throw e;
+    }
+  }
+
+  @Post(":id/ssh-result")
+  @HttpCode(200)
+  async sshResult(@Param("id") id: string, @Body() body: unknown) {
+    try {
+      const result = z
+        .object({
+          ok: z.boolean(),
+          user: z.string().optional(),
+          address: z.string().nullable().optional(),
+          port: z.number().optional(),
+          error: z.string().optional(),
+        })
+        .parse(body);
+      this.sshResults.set(id, { ...result, at: new Date().toISOString() });
+      this.bus.emit({ type: "session.updated", payload: { id } });
+      return { ok: true };
+    } catch (e) {
+      if (e instanceof ZodError) throw new BadRequestException(e.issues);
+      throw e;
+    }
+  }
+
+  @Get(":id/ssh-result")
+  async getSshResult(@Param("id") id: string) {
+    return this.sshResults.get(id);
   }
 
   @Post(":id/state")

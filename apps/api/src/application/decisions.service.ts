@@ -79,6 +79,28 @@ export class DecisionsService {
     return created;
   }
 
+  /**
+   * Ask the session's host (its running agent poller) to install `publicKey`
+   * into the remote `~/.ssh/authorized_keys`. Created as a RESOLVED deliverable
+   * (mirrors `switchMode`) so it is delivered to the poller but never surfaces
+   * as a pending decision card. The poller acts on it and posts back an
+   * ssh-result; it never types into the TUI.
+   */
+  async authorizeSsh(sessionId: string, publicKey: string): Promise<{ ok: true }> {
+    if (!(await this.sessions.get(sessionId))) throw new NotFoundException("unknown session");
+    const now = new Date();
+    const decision: Decision = {
+      sessionId, kind: "ssh-authorize", title: "Authorize SSH key",
+      body: { publicKey }, options: [],
+      id: randomUUID(), status: "resolved", createdAt: now, resolvedAt: now,
+      resolution: { choice: null, answers: null, custom: null }, deliveredAt: null,
+    };
+    await this.store.create(decision);
+    this.deliveryWaiters.notify(sessionId);
+    this.bus.emit({ type: "session.updated", payload: { id: sessionId } });
+    return { ok: true };
+  }
+
   async deliveries(sessionId: string, timeoutMs: number): Promise<Decision[]> {
     const existing = await this.store.listUndelivered(sessionId);
     if (existing.length > 0) return existing;

@@ -1,7 +1,7 @@
-import type { Decision, Resolution } from "@rcw/shared";
+import { DELIVERABLE_KINDS, type Decision, type Resolution } from "@rcw/shared";
 import type { DecisionStore } from "../../domain/decisions/decision-store.port";
 
-const DELIVERABLE_KINDS = new Set(["permission", "question", "instruction", "mode"]);
+const DELIVERABLE_KIND_SET = new Set<string>(DELIVERABLE_KINDS);
 
 export class InMemoryDecisionStore implements DecisionStore {
   private decisions = new Map<string, Decision>();
@@ -35,7 +35,7 @@ export class InMemoryDecisionStore implements DecisionStore {
   }
   async listUndelivered(sessionId: string): Promise<Decision[]> {
     return [...this.decisions.values()].filter(
-      (d) => d.sessionId === sessionId && d.status === "resolved" && d.deliveredAt === null && DELIVERABLE_KINDS.has(d.kind)
+      (d) => d.sessionId === sessionId && d.status === "resolved" && d.deliveredAt === null && DELIVERABLE_KIND_SET.has(d.kind)
     ).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
   }
   async markDelivered(id: string, at: Date): Promise<void> {

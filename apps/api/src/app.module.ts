@@ -8,6 +8,7 @@ import { RecordEventUseCase } from "./application/record-event.use-case";
 import { SessionsService } from "./application/sessions.service";
 import { DecisionsService } from "./application/decisions.service";
 import { DecisionWaiters } from "./application/decision-waiters";
+import { SshResultStore } from "./application/ssh-result-store";
 import { DeliveryWaiters } from "./application/delivery-waiters";
 import { EventsBus } from "./application/events-bus";
 import { EVENT_STORE } from "./domain/events/event-store.port";
@@ -66,6 +67,7 @@ import type { Pool } from "pg";
     SyncService,
     CredentialCipher,
     DecisionWaiters,
+    SshResultStore,
     DeliveryWaiters,
     EventsBus,
     DevicesService,
