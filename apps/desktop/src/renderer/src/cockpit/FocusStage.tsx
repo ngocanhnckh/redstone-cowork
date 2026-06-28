@@ -77,113 +77,71 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
         flex: 1,
       }}
     >
-      {/* Stage head */}
+      {/* Stage head — compact two-row header */}
+      {/* Row 1: identity + info line (left) · mode control (right, chat only) */}
       <div
         style={{
-          padding: "24px 32px 20px",
-          borderBottom: "1px solid var(--border)",
-          position: "relative",
+          display: "flex",
+          alignItems: "center",
+          gap: 16,
+          padding: "12px 32px 10px",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18 }}>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 12, minWidth: 0, flex: 1 }}>
           <span
+            title={isWaiting ? "needs review" : session.status}
             style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 7,
-              fontFamily: "var(--font-mono)",
-              fontSize: 10.5,
-              letterSpacing: "0.18em",
-              textTransform: "uppercase",
-              padding: "5px 11px",
+              flexShrink: 0,
+              alignSelf: "center",
+              width: 8,
+              height: 8,
               borderRadius: 999,
-              background: isWaiting
-                ? `rgb(var(--accent) / 0.16)`
-                : `rgba(255,255,255,0.06)`,
-              color: isWaiting ? `rgb(var(--accent))` : "var(--text-soft)",
-              border: isWaiting
-                ? `1px solid rgb(var(--accent) / 0.32)`
-                : `1px solid var(--border)`,
+              background: isWaiting ? "rgb(var(--accent))" : "rgb(var(--primary-soft))",
+              boxShadow: isWaiting ? "0 0 0 3px rgb(var(--accent) / 0.18)" : "none",
+            }}
+          />
+          <h2
+            className="display"
+            style={{
+              fontSize: 19,
+              fontWeight: 400,
+              margin: 0,
+              lineHeight: 1.1,
+              flexShrink: 0,
+              whiteSpace: "nowrap",
             }}
           >
-            {isWaiting ? "● needs review" : `● ${session.status}`}
+            {projectName(session.cwd)}
+          </h2>
+          <span
+            className="mono faint"
+            style={{
+              fontSize: 11,
+              letterSpacing: "0.02em",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              minWidth: 0,
+            }}
+          >
+            {session.machine} · {session.gitBranch ?? "no branch"} · #{session.id.slice(0, 4)}
           </span>
         </div>
 
-        <h2
-          className="display"
-          style={{ fontSize: 38, fontWeight: 400, margin: "0 0 14px", lineHeight: 1 }}
-        >
-          {projectName(session.cwd)}
-        </h2>
-
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <span
-            className="glass-inset mono"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 8,
-              fontSize: 11,
-              color: "var(--text-soft)",
-              padding: "6px 12px",
-              borderRadius: 999,
-            }}
-          >
-            <span className="faint" style={{ fontSize: 8.5, letterSpacing: "0.18em", textTransform: "uppercase" }}>host</span>
-            {session.machine}
-          </span>
-          <span
-            className="glass-inset mono"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 8,
-              fontSize: 11,
-              color: "var(--text-soft)",
-              padding: "6px 12px",
-              borderRadius: 999,
-            }}
-          >
-            <span className="faint" style={{ fontSize: 8.5, letterSpacing: "0.18em", textTransform: "uppercase" }}>branch</span>
-            {session.gitBranch ?? "no branch"}
-          </span>
-          <span
-            className="glass-inset mono"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 8,
-              fontSize: 11,
-              color: "var(--text-soft)",
-              padding: "6px 12px",
-              borderRadius: 999,
-            }}
-          >
-            <span className="faint" style={{ fontSize: 8.5, letterSpacing: "0.18em", textTransform: "uppercase" }}>session</span>
-            {session.id.slice(0, 4)}
-          </span>
-        </div>
-
-        {/* Mode selector */}
-        {(() => {
-          // Shift+Tab cycle: default → acceptEdits → plan → auto. "auto" exists when the
-          // session was launched with --enable-auto-mode OR is currently in auto mode.
-          const autoAvailable = session.autoModeEnabled || session.permissionMode === "auto";
-          const modes = ["default", "acceptEdits", "plan", ...(autoAvailable ? ["auto"] : [])];
-          const current = session.permissionMode ?? "default";
-          const LABEL: Record<string, string> = { default: "Default", acceptEdits: "Accept Edits", plan: "Plan", auto: "Auto" };
-          return (
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 14 }}>
-              <span
-                className="mono faint"
-                style={{ fontSize: 9, letterSpacing: "0.18em", textTransform: "uppercase", marginRight: 4 }}
-              >
-                mode
-              </span>
+        {/* Mode selector — only relevant to Claude, so shown on the Chat tab */}
+        {activeTab === "chat" &&
+          (() => {
+            // Shift+Tab cycle: default → acceptEdits → plan → auto. "auto" exists when the
+            // session was launched with --enable-auto-mode OR is currently in auto mode.
+            const autoAvailable = session.autoModeEnabled || session.permissionMode === "auto";
+            const modes = ["default", "acceptEdits", "plan", ...(autoAvailable ? ["auto"] : [])];
+            const current = session.permissionMode ?? "default";
+            const LABEL: Record<string, string> = { default: "Default", acceptEdits: "Accept Edits", plan: "Plan", auto: "Auto" };
+            return (
               <div
                 style={{
                   display: "flex",
+                  flexShrink: 0,
                   border: "1px solid var(--border)",
                   borderRadius: 999,
                   padding: 3,
@@ -210,57 +168,49 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
                   </button>
                 ))}
               </div>
-            </div>
-          );
-        })()}
+            );
+          })()}
       </div>
 
-      {/* Tab bar — Chat / Terminal / Browser / Ports */}
+      {/* Row 2: tab bar — primary nav, with bottom border separating header from body */}
       <div
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 4,
-          padding: "10px 32px",
+          gap: 2,
+          padding: "0 32px",
           borderBottom: "1px solid var(--border)",
         }}
       >
-        <div
-          style={{
-            display: "flex",
-            border: "1px solid var(--border)",
-            borderRadius: 999,
-            padding: 3,
-            gap: 3,
-          }}
-        >
-          {TABS.map((t) => {
-            const active = activeTab === t.key;
-            return (
-              <button
-                key={t.key}
-                onClick={() => id && setActiveTab(id, t.key)}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 7,
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 11,
-                  padding: "4px 12px",
-                  borderRadius: 999,
-                  border: 0,
-                  cursor: "pointer",
-                  background: active ? "rgb(var(--primary) / 0.32)" : "transparent",
-                  color: active ? "#fff" : "var(--text-soft)",
-                  transition: "background 0.15s, color 0.15s",
-                }}
-              >
-                {t.label}
-                <Kbd>{t.hint}</Kbd>
-              </button>
-            );
-          })}
-        </div>
+        {TABS.map((t) => {
+          const active = activeTab === t.key;
+          return (
+            <button
+              key={t.key}
+              onClick={() => id && setActiveTab(id, t.key)}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 7,
+                fontFamily: "var(--font-mono)",
+                fontSize: 11,
+                padding: "9px 12px",
+                border: 0,
+                borderBottom: active
+                  ? "2px solid rgb(var(--primary-soft))"
+                  : "2px solid transparent",
+                marginBottom: -1,
+                background: "transparent",
+                cursor: "pointer",
+                color: active ? "var(--text)" : "var(--text-soft)",
+                transition: "color 0.15s, border-color 0.15s",
+              }}
+            >
+              {t.label}
+              <Kbd>{t.hint}</Kbd>
+            </button>
+          );
+        })}
       </div>
 
       {activeTab === "terminal" ? (
