@@ -87,6 +87,42 @@ export async function switchMode(sessionId: string, mode: string): Promise<unkno
   ).json();
 }
 
+export async function authorizeSsh(
+  sessionId: string,
+  publicKey: string
+): Promise<{ ok: true }> {
+  return (
+    await req(`/sessions/${encodeURIComponent(sessionId)}/ssh-authorize`, {
+      method: "POST",
+      body: JSON.stringify({ publicKey }),
+    })
+  ).json();
+}
+
+export type SshResult = {
+  ok: boolean;
+  user?: string;
+  address?: string | null;
+  port?: number;
+  error?: string;
+  at: string;
+};
+
+export async function getSshResult(sessionId: string): Promise<SshResult | null> {
+  const res = await req(`/sessions/${encodeURIComponent(sessionId)}/ssh-result`);
+  const text = await res.text();
+  if (!text || !text.trim()) return null;
+  try {
+    const parsed = JSON.parse(text);
+    if (parsed && typeof parsed === "object" && typeof parsed.at === "string") {
+      return parsed as SshResult;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export function parseSseBlock(
   block: string
 ): { type: string; payload: unknown } | null {

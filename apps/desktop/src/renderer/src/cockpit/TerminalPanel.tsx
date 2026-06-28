@@ -137,7 +137,7 @@ export default function TerminalPanel({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
-      <ConnectionBar machine={machine} onHostChange={() => restart()} />
+      <ConnectionBar sessionId={sessionId} machine={machine} onHostChange={() => restart()} />
       <div
         style={{
           display: "flex",

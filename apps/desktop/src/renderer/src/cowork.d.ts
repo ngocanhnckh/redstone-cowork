@@ -42,6 +42,13 @@ declare global {
       setSshHost(machine: string, host: string): Promise<{ ok: boolean; error?: string }>;
       isLocalMachine(machine: string): Promise<boolean>;
 
+      // Passwordless SSH onboarding
+      sshSetup(a: {
+        sessionId: string;
+        machine: string;
+        hostNameOverride?: string;
+      }): Promise<SshSetupResult>;
+
       // Terminal (PTY)
       startTerminal(a: {
         id: string;
@@ -84,4 +91,10 @@ declare global {
   }
 
   type ForwardStatus = "local" | "starting" | "active" | "failed" | "stopped";
+
+  type SshSetupResult =
+    | { stage: "keygen"; ok: false; error: string }
+    | { stage: "authorize"; ok: false; error: string }
+    | { stage: "need-host"; ok: false; needHostName: true; user?: string; port?: number }
+    | { stage: "done"; ok: boolean; error?: string; alias: string; hostName: string };
 }

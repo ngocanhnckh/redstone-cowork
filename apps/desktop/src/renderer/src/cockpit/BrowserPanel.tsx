@@ -129,7 +129,7 @@ export default function BrowserPanel({ sessionId, cwd, machine }: Props) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
-      <ConnectionBar machine={machine} />
+      <ConnectionBar sessionId={sessionId} machine={machine} />
 
       {/* Address + nav controls */}
       <div

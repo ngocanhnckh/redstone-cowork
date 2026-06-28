@@ -19,6 +19,7 @@ import {
   stopAllForwards,
   type StartArgs as ForwardStartArgs,
 } from "./forwarding";
+import { sshSetup, type SshSetupArgs } from "./ssh-setup";
 import { IPC } from "../shared/ipc";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -203,6 +204,9 @@ ipcMain.handle(IPC.workspaceIsLocal, (_e, a: { machine: string }) => {
     return false;
   }
 });
+
+// Passwordless SSH onboarding — main never throws; sshSetup returns a result object.
+ipcMain.handle(IPC.sshSetup, (_e, a: SshSetupArgs) => sshSetup(a));
 
 // Terminal (PTY) IPC — main never throws across these channels.
 ipcMain.handle(IPC.terminalStart, (e, a: EnsureArgs) => {

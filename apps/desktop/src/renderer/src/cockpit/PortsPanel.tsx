@@ -136,7 +136,7 @@ export default function PortsPanel({ sessionId, cwd, machine }: Props) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
-      <ConnectionBar machine={machine} onHostChange={restartForwards} />
+      <ConnectionBar sessionId={sessionId} machine={machine} onHostChange={restartForwards} />
       <div style={{ flex: 1, overflowY: "auto", padding: "18px 32px 24px" }} className="no-scrollbar">
         <div
           className="glass-inset"

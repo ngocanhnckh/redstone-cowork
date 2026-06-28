@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
 import { IPC } from "../shared/ipc";
+import type { SshSetupResult } from "../main/ssh-setup";
 
 contextBridge.exposeInMainWorld("cowork", {
   // Config
@@ -53,6 +54,14 @@ contextBridge.exposeInMainWorld("cowork", {
     ipcRenderer.invoke(IPC.workspaceSetSshHost, { machine, host }),
   isLocalMachine: (machine: string): Promise<boolean> =>
     ipcRenderer.invoke(IPC.workspaceIsLocal, { machine }),
+
+  // Passwordless SSH onboarding
+  sshSetup: (a: {
+    sessionId: string;
+    machine: string;
+    hostNameOverride?: string;
+  }): Promise<SshSetupResult> =>
+    ipcRenderer.invoke(IPC.sshSetup, a),
 
   // Terminal (PTY)
   startTerminal: (a: {
