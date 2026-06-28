@@ -85,6 +85,11 @@ export class ApiClient {
     return r.ok ? r.json() : null;
   }
 
+  /** GET /sessions/by-wrapper/:wrapperId — the full session object (has `.id`). */
+  async getByWrapper(wrapperId: string): Promise<{ id: string } | null> {
+    return this.sessionByWrapper(wrapperId);
+  }
+
   async deliveries(
     wrapperId: string,
     timeoutMs: number

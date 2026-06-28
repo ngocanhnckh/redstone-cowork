@@ -208,6 +208,15 @@ ipcMain.handle(IPC.workspaceIsLocal, (_e, a: { machine: string }) => {
 // Passwordless SSH onboarding — main never throws; sshSetup returns a result object.
 ipcMain.handle(IPC.sshSetup, (_e, a: SshSetupArgs) => sshSetup(a));
 
+// Latest agent-reported SSH result for a session (null when none) — main never throws.
+ipcMain.handle(IPC.sshResultGet, async (_e, sessionId: string) => {
+  try {
+    return await api.getSshResult(sessionId);
+  } catch {
+    return null;
+  }
+});
+
 // Terminal (PTY) IPC — main never throws across these channels.
 ipcMain.handle(IPC.terminalStart, (e, a: EnsureArgs) => {
   const wc = e.sender;

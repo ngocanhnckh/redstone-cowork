@@ -48,6 +48,14 @@ declare global {
         machine: string;
         hostNameOverride?: string;
       }): Promise<SshSetupResult>;
+      getSshResult(sessionId: string): Promise<{
+        ok: boolean;
+        user?: string;
+        address?: string | null;
+        port?: number;
+        error?: string;
+        at?: string;
+      } | null>;
 
       // Terminal (PTY)
       startTerminal(a: {

@@ -62,6 +62,16 @@ contextBridge.exposeInMainWorld("cowork", {
     hostNameOverride?: string;
   }): Promise<SshSetupResult> =>
     ipcRenderer.invoke(IPC.sshSetup, a),
+  getSshResult: (
+    sessionId: string
+  ): Promise<{
+    ok: boolean;
+    user?: string;
+    address?: string | null;
+    port?: number;
+    error?: string;
+    at?: string;
+  } | null> => ipcRenderer.invoke(IPC.sshResultGet, sessionId),
 
   // Terminal (PTY)
   startTerminal: (a: {

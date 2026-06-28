@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, rmSync, readFileSync, existsSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { pollOnce, pasteSettleMs } from "../src/poller";
+import { pollOnce, pasteSettleMs, reportHostInfo } from "../src/poller";
 
 describe("pollOnce", () => {
   it("sends keys for each delivery and acks", async () => {
@@ -106,6 +106,48 @@ describe("pollOnce", () => {
       const contents = readFileSync(keyFile, "utf8");
       const occurrences = contents.split("ssh-ed25519 AAAATESTKEY desktop@redstone").length - 1;
       expect(occurrences).toBe(1);
+    });
+  });
+
+  describe("reportHostInfo", () => {
+    beforeEach(() => {
+      // Keep address detection from hitting the network (fast + deterministic).
+      vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
+    });
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it("posts host-info { ok:true, user, port:22 } once on startup", async () => {
+      const getByWrapper = vi.fn().mockResolvedValue({ id: "sess-y" });
+      const postSshResult = vi.fn().mockResolvedValue(undefined);
+      await reportHostInfo("wrap-1", { getByWrapper, postSshResult });
+      expect(getByWrapper).toHaveBeenCalledOnce();
+      expect(getByWrapper).toHaveBeenCalledWith("wrap-1");
+      expect(postSshResult).toHaveBeenCalledOnce();
+      const [sid, result] = postSshResult.mock.calls[0];
+      expect(sid).toBe("sess-y");
+      expect(result.ok).toBe(true);
+      expect(typeof result.user).toBe("string");
+      expect(result.port).toBe(22);
+      // offline → address falls back to null
+      expect(result.address).toBeNull();
+    });
+
+    it("does not post when the wrapper has no session yet", async () => {
+      const getByWrapper = vi.fn().mockResolvedValue(null);
+      const postSshResult = vi.fn().mockResolvedValue(undefined);
+      await reportHostInfo("wrap-2", { getByWrapper, postSshResult });
+      expect(postSshResult).not.toHaveBeenCalled();
+    });
+
+    it("never throws when getByWrapper rejects", async () => {
+      const getByWrapper = vi.fn().mockRejectedValue(new Error("boom"));
+      const postSshResult = vi.fn();
+      await expect(
+        reportHostInfo("wrap-3", { getByWrapper, postSshResult })
+      ).resolves.toBeUndefined();
+      expect(postSshResult).not.toHaveBeenCalled();
     });
   });
 

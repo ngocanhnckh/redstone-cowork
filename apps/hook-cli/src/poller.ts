@@ -23,6 +23,27 @@ export type SshResult = {
 };
 
 /**
+ * Best-effort public address of this box via ipify, with a ~4s timeout. Returns
+ * null on any failure (e.g. NAT / offline) — the user can fill in HostName by hand.
+ * Shared by the ssh-authorize branch and the startup host-info report.
+ */
+export async function detectPublicAddress(): Promise<string | null> {
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 4000);
+    try {
+      const res = await fetch("https://api.ipify.org", { signal: ctrl.signal });
+      if (res.ok) return (await res.text()).trim() || null;
+    } finally {
+      clearTimeout(t);
+    }
+  } catch {
+    // best-effort; fall through to null
+  }
+  return null;
+}
+
+/**
  * Install a desktop SSH public key into this box's ~/.ssh/authorized_keys, then
  * report how to reach the box. Runs ON the remote (the agent is already trusted
  * via the relay), so it bootstraps key auth with no password. Best-effort public
@@ -53,21 +74,35 @@ export async function authorizeSshKey(publicKey: string): Promise<SshResult> {
 
   const user = userInfo().username;
   const port = 22;
-  let address: string | null = null;
-  try {
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 4000);
-    try {
-      const res = await fetch("https://api.ipify.org", { signal: ctrl.signal });
-      if (res.ok) address = (await res.text()).trim() || null;
-    } finally {
-      clearTimeout(t);
-    }
-  } catch {
-    address = null; // best-effort; the user can fill in HostName manually
-  }
+  const address = await detectPublicAddress();
 
   return { ok: true, user, address, port };
+}
+
+/**
+ * One-time, best-effort host-info report at poller startup so the desktop can
+ * learn the box's reachable address WITHOUT the user clicking "Set up SSH".
+ * Resolves the session from the wrapper, gathers user / public IP / port 22, and
+ * posts it as an ssh-result. Fully defensive — never throws (it must never break
+ * the poller or the user's Claude session).
+ */
+export async function reportHostInfo(
+  wrapperId: string,
+  deps: {
+    getByWrapper(wrapperId: string): Promise<{ id: string } | null>;
+    postSshResult(sessionId: string, result: SshResult): Promise<void>;
+  }
+): Promise<void> {
+  try {
+    const session = await deps.getByWrapper(wrapperId);
+    if (!session?.id) return;
+    const user = userInfo().username;
+    const port = 22;
+    const address = await detectPublicAddress();
+    await deps.postSshResult(session.id, { ok: true, user, address, port });
+  } catch {
+    // swallow — host-info is best-effort and must never break the poller
+  }
 }
 
 /**
@@ -187,6 +222,13 @@ export async function runPoller(opts: {
       await new Promise<void>((resolve) => setTimeout(resolve, 3000));
     }
   }
+
+  // One-time, best-effort host-info report so the desktop can learn this box's
+  // reachable address without the user clicking anything. Never throws.
+  await reportHostInfo(wrapperId, {
+    getByWrapper: (id) => api.getByWrapper(id),
+    postSshResult: (sid, result) => api.postSshResult(sid, result),
+  });
 
   // Infinite poll loop with 5s error back-off
   for (;;) {

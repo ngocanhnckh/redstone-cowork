@@ -21,6 +21,10 @@ export default function ConnectionBar({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<string>(machine);
 
+  // Agent-detected reachable host (user@address), sourced from the cowork server
+  // via the poller's startup host-info report — independent of the user's shell.
+  const [detected, setDetected] = useState<string | null>(null);
+
   // SSH setup flow state.
   const [setupBusy, setSetupBusy] = useState(false);
   const [setupStatus, setSetupStatus] = useState<string | null>(null);
@@ -45,6 +49,50 @@ export default function ConnectionBar({
       cancelled = true;
     };
   }, [machine]);
+
+  // Ask the cowork server what address the agent on the box reported. If we get a
+  // usable user@address, offer it as a one-click suggestion (remote sessions only).
+  useEffect(() => {
+    let cancelled = false;
+    window.cowork
+      .getSshResult(sessionId)
+      .then((result) => {
+        if (cancelled || !result || !result.address) return;
+        const value = result.user ? `${result.user}@${result.address}` : result.address;
+        setDetected(value);
+      })
+      .catch(() => {
+        /* ignore — suggestion is purely additive */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId]);
+
+  async function useDetected() {
+    if (!detected) return;
+    try {
+      await window.cowork.setSshHost(machine, detected);
+    } catch {
+      /* ignore */
+    }
+    setHost(detected);
+    setDraft(detected);
+    setDetected(null);
+    onHostChange?.(detected);
+  }
+
+  // Only suggest when it actually differs from what we'd otherwise connect with.
+  const showSuggestion = !isLocal && !editing && detected !== null && detected !== host;
+  const suggestionChip = showSuggestion ? (
+    <button
+      onClick={useDetected}
+      title="Use the address the agent on the box reported (sourced from the cowork server)"
+      style={suggestBtn}
+    >
+      use detected: {detected}
+    </button>
+  ) : null;
 
   async function save() {
     const next = draft.trim() || machine;
@@ -260,6 +308,7 @@ export default function ConnectionBar({
         >
           ✎
         </button>
+        {suggestionChip}
         {setupControls}
       </div>
       {needHostRow}
@@ -277,4 +326,17 @@ const editBtn: React.CSSProperties = {
   fontSize: 10.5,
   fontFamily: "var(--font-mono)",
   cursor: "pointer",
+};
+
+// Faint, on-brand suggestion chip for the agent-detected host.
+const suggestBtn: React.CSSProperties = {
+  border: "1px dashed var(--border)",
+  background: "transparent",
+  color: "rgb(var(--accent))",
+  borderRadius: 7,
+  padding: "2px 8px",
+  fontSize: 10.5,
+  fontFamily: "var(--font-mono)",
+  cursor: "pointer",
+  opacity: 0.85,
 };
