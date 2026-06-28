@@ -4,6 +4,7 @@ import path from "node:path";
 import { execFile, execFileSync } from "node:child_process";
 import * as api from "./api";
 import { setSshHost } from "./workspace";
+import { sshMuxOpts } from "./ssh-common";
 
 // ---------------------------------------------------------------------------
 // Passwordless SSH onboarding — desktop half.
@@ -131,6 +132,7 @@ export function testConnection(alias: string): Promise<{ ok: boolean; error?: st
     execFile(
       "ssh",
       [
+        ...sshMuxOpts(),
         "-o",
         "BatchMode=yes",
         "-o",

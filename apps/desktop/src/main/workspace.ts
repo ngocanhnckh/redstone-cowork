@@ -3,6 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { execFile } from "node:child_process";
+import { sshMuxOpts } from "./ssh-common";
 
 export type WorkspaceConfig = {
   forwardPorts: number[];
@@ -94,7 +95,7 @@ function sshExec(sshHost: string, remoteCommand: string, stdin?: string): Promis
   return new Promise((resolve, reject) => {
     const child = execFile(
       "ssh",
-      ["-o", "BatchMode=yes", "-o", `ConnectTimeout=8`, sshHost, remoteCommand],
+      [...sshMuxOpts(), "-o", "BatchMode=yes", "-o", `ConnectTimeout=8`, sshHost, remoteCommand],
       { timeout: SSH_TIMEOUT_MS },
       (err) => (err ? reject(err) : resolve())
     );
@@ -109,7 +110,7 @@ function sshCapture(sshHost: string, remoteCommand: string): Promise<string> {
   return new Promise((resolve, reject) => {
     execFile(
       "ssh",
-      ["-o", "BatchMode=yes", "-o", `ConnectTimeout=8`, sshHost, remoteCommand],
+      [...sshMuxOpts(), "-o", "BatchMode=yes", "-o", `ConnectTimeout=8`, sshHost, remoteCommand],
       { timeout: SSH_TIMEOUT_MS },
       (err, stdout) => (err ? reject(err) : resolve(stdout))
     );

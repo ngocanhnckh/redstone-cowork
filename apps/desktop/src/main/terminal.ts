@@ -1,5 +1,6 @@
 import type { IPty } from "node-pty";
 import { getSshHost, isLocalMachine } from "./workspace";
+import { sshMuxOpts } from "./ssh-common";
 
 // node-pty is a native module externalized from the main bundle — require it lazily
 // and defensively so a load failure can be surfaced as an error string, never a crash.
@@ -84,7 +85,7 @@ export function ensureTerminal(
     } else {
       const host = getSshHost(machine);
       const remoteCmd = `cd ${shellQuote(cwd)} && exec $SHELL -l`;
-      child = pty.spawn("ssh", ["-tt", host, remoteCmd], {
+      child = pty.spawn("ssh", ["-tt", ...sshMuxOpts(), host, remoteCmd], {
         name: "xterm-256color",
         cols: safeCols,
         rows: safeRows,

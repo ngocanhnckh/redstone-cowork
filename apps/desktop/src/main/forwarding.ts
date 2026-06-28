@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { getSshHost, isLocalMachine } from "./workspace";
+import { sshMuxOpts } from "./ssh-common";
 
 export type ForwardStatus = "local" | "starting" | "active" | "failed" | "stopped";
 
@@ -56,6 +57,7 @@ export function startForward(args: StartArgs, onStatus: StatusCb): void {
       "ssh",
       [
         "-N",
+        ...sshMuxOpts(),
         "-o",
         "BatchMode=yes",
         "-o",
