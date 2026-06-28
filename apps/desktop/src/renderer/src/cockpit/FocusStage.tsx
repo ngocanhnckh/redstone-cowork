@@ -6,12 +6,14 @@ import Kbd from "./Kbd";
 import TerminalPanel from "./TerminalPanel";
 import BrowserPanel from "./BrowserPanel";
 import PortsPanel from "./PortsPanel";
+import FilesPanel from "./FilesPanel";
 
 const TABS = [
   { key: "chat", label: "Chat", hint: "⌃1" },
   { key: "terminal", label: "Terminal", hint: "⌃2" },
   { key: "browser", label: "Browser", hint: "⌃3" },
   { key: "ports", label: "Ports", hint: "⌃4" },
+  { key: "files", label: "Files", hint: "⌃5" },
 ] as const;
 
 const ACTIONABLE_KINDS = ["question", "permission", "mode"] as const;
@@ -238,6 +240,13 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
       ) : activeTab === "ports" ? (
         <PortsPanel
           key={`${id}-ports`}
+          sessionId={id ?? ""}
+          cwd={session.cwd}
+          machine={session.machine}
+        />
+      ) : activeTab === "files" ? (
+        <FilesPanel
+          key={`${id}-files`}
           sessionId={id ?? ""}
           cwd={session.cwd}
           machine={session.machine}

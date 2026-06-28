@@ -93,12 +93,41 @@ declare global {
       // Open a URL in the real browser
       openExternal(url: string): Promise<{ ok: boolean; error?: string }>;
 
+      // File browser
+      listFiles(a: {
+        cwd: string;
+        machine: string;
+        dir: string;
+      }): Promise<
+        | { ok: true; entries: DirEntry[] }
+        | { ok: false; error: string }
+      >;
+      readFile(a: {
+        cwd: string;
+        machine: string;
+        file: string;
+      }): Promise<FileRead>;
+      writeFile(a: {
+        cwd: string;
+        machine: string;
+        file: string;
+        content: string;
+      }): Promise<{ ok: boolean; error?: string }>;
+
       // Stream
       onUpdate(cb: () => void): () => void;
     };
   }
 
   type ForwardStatus = "local" | "starting" | "active" | "failed" | "stopped";
+
+  type DirEntry = { name: string; path: string; kind: "dir" | "file"; size: number };
+
+  type FileRead =
+    | { ok: true; encoding: "text"; content: string; size: number; truncated: boolean }
+    | { ok: true; encoding: "base64"; content: string; size: number; mime: string }
+    | { ok: true; encoding: "binary"; size: number; mime: string }
+    | { ok: false; error: string };
 
   type SshSetupResult =
     | { stage: "keygen"; ok: false; error: string }

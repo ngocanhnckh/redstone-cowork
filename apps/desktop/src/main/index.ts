@@ -20,6 +20,7 @@ import {
   type StartArgs as ForwardStartArgs,
 } from "./forwarding";
 import { sshSetup, type SshSetupArgs } from "./ssh-setup";
+import { listDir, readFileAt, writeFileAt } from "./files";
 import { IPC } from "../shared/ipc";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -270,6 +271,17 @@ ipcMain.handle(IPC.openExternal, (_e, a: { url: string }) => {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
 });
+
+// File browser — list / read / write, local or over ssh. Main never throws across IPC.
+ipcMain.handle(IPC.filesList, (_e, a: { cwd: string; machine: string; dir: string }) =>
+  listDir(a)
+);
+ipcMain.handle(IPC.filesRead, (_e, a: { cwd: string; machine: string; file: string }) =>
+  readFileAt(a)
+);
+ipcMain.handle(IPC.filesWrite, (_e, a: { cwd: string; machine: string; file: string; content: string }) =>
+  writeFileAt(a)
+);
 
 app.whenReady().then(() => {
   // Create system tray

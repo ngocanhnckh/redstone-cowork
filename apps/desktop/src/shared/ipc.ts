@@ -29,4 +29,7 @@ export const IPC = {
   forwardList: "api:forward:list",
   forwardStatus: "api:forward:status",
   openExternal: "api:open-external",
+  filesList: "api:files:list",
+  filesRead: "api:files:read",
+  filesWrite: "api:files:write",
 } as const;

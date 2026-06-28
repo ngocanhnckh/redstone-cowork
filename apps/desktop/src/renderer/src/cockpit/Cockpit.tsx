@@ -28,13 +28,13 @@ export default function Cockpit() {
 
   // Workspace-tab shortcuts: Ctrl+1/2/3/4 jump, Ctrl+Tab / Ctrl+Shift+Tab cycle.
   useEffect(() => {
-    const ORDER = ["chat", "terminal", "browser", "ports"] as const;
+    const ORDER = ["chat", "terminal", "browser", "ports", "files"] as const;
     const onKey = (e: KeyboardEvent) => {
       if (!e.ctrlKey || e.metaKey || e.altKey) return;
       const id = detailId ?? focusId;
       if (!id) return;
 
-      if (e.key === "1" || e.key === "2" || e.key === "3" || e.key === "4") {
+      if (e.key === "1" || e.key === "2" || e.key === "3" || e.key === "4" || e.key === "5") {
         e.preventDefault();
         setActiveTab(id, ORDER[Number(e.key) - 1]);
         return;

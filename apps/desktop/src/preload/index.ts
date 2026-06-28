@@ -127,6 +127,32 @@ contextBridge.exposeInMainWorld("cowork", {
   openExternal: (url: string): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke(IPC.openExternal, { url }),
 
+  // File browser
+  listFiles: (a: {
+    cwd: string;
+    machine: string;
+    dir: string;
+  }): Promise<
+    | { ok: true; entries: Array<{ name: string; path: string; kind: "dir" | "file"; size: number }> }
+    | { ok: false; error: string }
+  > => ipcRenderer.invoke(IPC.filesList, a),
+  readFile: (a: {
+    cwd: string;
+    machine: string;
+    file: string;
+  }): Promise<
+    | { ok: true; encoding: "text"; content: string; size: number; truncated: boolean }
+    | { ok: true; encoding: "base64"; content: string; size: number; mime: string }
+    | { ok: true; encoding: "binary"; size: number; mime: string }
+    | { ok: false; error: string }
+  > => ipcRenderer.invoke(IPC.filesRead, a),
+  writeFile: (a: {
+    cwd: string;
+    machine: string;
+    file: string;
+    content: string;
+  }): Promise<{ ok: boolean; error?: string }> => ipcRenderer.invoke(IPC.filesWrite, a),
+
   // Stream
   onUpdate: (cb: () => void): (() => void) => {
     const handler = () => cb();
