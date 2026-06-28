@@ -42,6 +42,20 @@ declare global {
       setSshHost(machine: string, host: string): Promise<{ ok: boolean; error?: string }>;
       isLocalMachine(machine: string): Promise<boolean>;
 
+      // Terminal (PTY)
+      startTerminal(a: {
+        id: string;
+        cwd: string;
+        machine: string;
+        cols: number;
+        rows: number;
+      }): Promise<{ ok: true; replay: string } | { ok: false; error: string }>;
+      sendTerminalInput(a: { id: string; data: string }): void;
+      resizeTerminal(a: { id: string; cols: number; rows: number }): void;
+      killTerminal(id: string): Promise<{ ok: boolean }>;
+      onTerminalData(cb: (a: { id: string; data: string }) => void): () => void;
+      onTerminalExit(cb: (a: { id: string }) => void): () => void;
+
       // Stream
       onUpdate(cb: () => void): () => void;
     };

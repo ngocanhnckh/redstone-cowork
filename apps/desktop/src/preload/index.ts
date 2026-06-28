@@ -54,6 +54,32 @@ contextBridge.exposeInMainWorld("cowork", {
   isLocalMachine: (machine: string): Promise<boolean> =>
     ipcRenderer.invoke(IPC.workspaceIsLocal, { machine }),
 
+  // Terminal (PTY)
+  startTerminal: (a: {
+    id: string;
+    cwd: string;
+    machine: string;
+    cols: number;
+    rows: number;
+  }): Promise<{ ok: true; replay: string } | { ok: false; error: string }> =>
+    ipcRenderer.invoke(IPC.terminalStart, a),
+  sendTerminalInput: (a: { id: string; data: string }): void =>
+    ipcRenderer.send(IPC.terminalInput, a),
+  resizeTerminal: (a: { id: string; cols: number; rows: number }): void =>
+    ipcRenderer.send(IPC.terminalResize, a),
+  killTerminal: (id: string): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke(IPC.terminalKill, { id }),
+  onTerminalData: (cb: (a: { id: string; data: string }) => void): (() => void) => {
+    const handler = (_e: unknown, a: { id: string; data: string }) => cb(a);
+    ipcRenderer.on(IPC.terminalData, handler);
+    return () => ipcRenderer.removeListener(IPC.terminalData, handler);
+  },
+  onTerminalExit: (cb: (a: { id: string }) => void): (() => void) => {
+    const handler = (_e: unknown, a: { id: string }) => cb(a);
+    ipcRenderer.on(IPC.terminalExit, handler);
+    return () => ipcRenderer.removeListener(IPC.terminalExit, handler);
+  },
+
   // Stream
   onUpdate: (cb: () => void): (() => void) => {
     const handler = () => cb();

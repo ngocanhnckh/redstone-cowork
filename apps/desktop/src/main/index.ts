@@ -4,6 +4,14 @@ import { dirname, join, basename } from "node:path";
 import { saveConfig, loadConfig, clearConfig } from "./config";
 import * as api from "./api";
 import { getWorkspaceConfig, saveWorkspaceConfig, getSshHost, setSshHost, isLocalMachine } from "./workspace";
+import {
+  ensureTerminal,
+  writeTerminal,
+  resizeTerminal,
+  killTerminal,
+  killAllTerminals,
+  type EnsureArgs,
+} from "./terminal";
 import { IPC } from "../shared/ipc";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -187,6 +195,31 @@ ipcMain.handle(IPC.workspaceIsLocal, (_e, a: { machine: string }) => {
   }
 });
 
+// Terminal (PTY) IPC — main never throws across these channels.
+ipcMain.handle(IPC.terminalStart, (e, a: EnsureArgs) => {
+  const wc = e.sender;
+  const result = ensureTerminal(
+    a,
+    (data) => {
+      if (!wc.isDestroyed()) wc.send(IPC.terminalData, { id: a.id, data });
+    },
+    () => {
+      if (!wc.isDestroyed()) wc.send(IPC.terminalExit, { id: a.id });
+    }
+  );
+  return result;
+});
+ipcMain.on(IPC.terminalInput, (_e, a: { id: string; data: string }) =>
+  writeTerminal(a.id, a.data)
+);
+ipcMain.on(IPC.terminalResize, (_e, a: { id: string; cols: number; rows: number }) =>
+  resizeTerminal(a.id, a.cols, a.rows)
+);
+ipcMain.handle(IPC.terminalKill, (_e, a: { id: string }) => {
+  killTerminal(a.id);
+  return { ok: true };
+});
+
 app.whenReady().then(() => {
   // Create system tray
   try {
@@ -230,4 +263,5 @@ app.on("window-all-closed", () => {
 app.on("before-quit", () => {
   stopStream?.();
   stopStream = null;
+  killAllTerminals();
 });

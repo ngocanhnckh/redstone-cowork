@@ -264,7 +264,12 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
       </div>
 
       {activeTab === "terminal" ? (
-        <TerminalPanel key={`${id}-terminal`} machine={session.machine} />
+        <TerminalPanel
+          key={`${id}-terminal`}
+          sessionId={id ?? ""}
+          cwd={session.cwd}
+          machine={session.machine}
+        />
       ) : activeTab === "browser" ? (
         <BrowserPanel
           key={`${id}-browser`}
