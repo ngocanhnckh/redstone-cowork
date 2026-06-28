@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach } from "vitest";
 import { writeFileSync, rmSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { readLastAssistantText, MAX_SUMMARY_CHARS } from "../src/transcript";
+import { readLastAssistantText, readRecentMessages, MAX_SUMMARY_CHARS } from "../src/transcript";
 
 const made: string[] = [];
 const writeJsonl = (lines: object[]): string => {
@@ -65,5 +65,100 @@ describe("readLastAssistantText", () => {
     const path = join(dir, "session.jsonl");
     writeFileSync(path, 'not json\n{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"ok"}]}}\n');
     expect(readLastAssistantText(path)).toBe("ok");
+  });
+});
+
+describe("readRecentMessages", () => {
+  it("renders an Edit tool_use as a diff snippet appended to the turn", () => {
+    const path = writeJsonl([
+      { type: "assistant", message: { role: "assistant", content: [
+        { type: "text", text: "Updating the config." },
+        { type: "tool_use", id: "t1", name: "Edit", input: {
+          file_path: "src/config.ts", old_string: "const a = 1;", new_string: "const a = 2;",
+        } },
+      ] } },
+    ]);
+    const msgs = readRecentMessages(path);
+    expect(msgs).toHaveLength(1);
+    const text = msgs[0].text;
+    expect(text).toContain("Updating the config.");
+    expect(text).toContain("✎");
+    expect(text).toContain("src/config.ts");
+    expect(text).toContain("```diff");
+    expect(text).toContain("- const a = 1;");
+    expect(text).toContain("+ const a = 2;");
+  });
+
+  it("includes an edit-only assistant turn (no text block)", () => {
+    const path = writeJsonl([
+      { type: "assistant", message: { role: "assistant", content: [
+        { type: "tool_use", id: "t1", name: "Edit", input: {
+          file_path: "src/x.ts", old_string: "foo", new_string: "bar",
+        } },
+      ] } },
+    ]);
+    const msgs = readRecentMessages(path);
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0].role).toBe("assistant");
+    expect(msgs[0].text).toContain("- foo");
+    expect(msgs[0].text).toContain("+ bar");
+  });
+
+  it("renders a Write tool_use as a new-file diff", () => {
+    const path = writeJsonl([
+      { type: "assistant", message: { role: "assistant", content: [
+        { type: "tool_use", id: "t1", name: "Write", input: {
+          file_path: "src/new.ts", content: "line1\nline2",
+        } },
+      ] } },
+    ]);
+    const text = readRecentMessages(path)[0].text;
+    expect(text).toContain("(new file)");
+    expect(text).toContain("+ line1");
+    expect(text).toContain("+ line2");
+  });
+
+  it("renders MultiEdit as one header with multiple hunks", () => {
+    const path = writeJsonl([
+      { type: "assistant", message: { role: "assistant", content: [
+        { type: "tool_use", id: "t1", name: "MultiEdit", input: {
+          file_path: "src/m.ts", edits: [
+            { old_string: "a1", new_string: "b1" },
+            { old_string: "a2", new_string: "b2" },
+          ],
+        } },
+      ] } },
+    ]);
+    const text = readRecentMessages(path)[0].text;
+    expect(text).toContain("src/m.ts");
+    expect((text.match(/✎/g) || []).length).toBe(1);
+    expect(text).toContain("- a1");
+    expect(text).toContain("+ b1");
+    expect(text).toContain("- a2");
+    expect(text).toContain("+ b2");
+  });
+
+  it("ignores non-edit tool calls and keeps prose / user turns", () => {
+    const path = writeJsonl([
+      { type: "user", message: { role: "user", content: "do the thing" } },
+      { type: "assistant", message: { role: "assistant", content: [
+        { type: "text", text: "Running a command." },
+        { type: "tool_use", id: "t1", name: "Bash", input: { command: "ls" } },
+      ] } },
+    ]);
+    const msgs = readRecentMessages(path);
+    expect(msgs.map((m) => m.role)).toEqual(["user", "assistant"]);
+    expect(msgs[1].text).toBe("Running a command.");
+    expect(msgs[1].text).not.toContain("```diff");
+  });
+
+  it("truncates an oversized diff block", () => {
+    const big = Array.from({ length: 200 }, (_, i) => `line ${i}`).join("\n");
+    const path = writeJsonl([
+      { type: "assistant", message: { role: "assistant", content: [
+        { type: "tool_use", id: "t1", name: "Write", input: { file_path: "big.ts", content: big } },
+      ] } },
+    ]);
+    expect(readRecentMessages(path)[0].text).toContain("… (truncated)");
   });
 });

@@ -4,11 +4,96 @@ import type { TranscriptMessage } from "@rcw/shared";
 /** Cap stored message length — enough to read on expand, small enough not to bloat the payload/DB. */
 export const MAX_SUMMARY_CHARS = 2000;
 
+/** Assistant turns may carry diff snippets, so they get a higher cap than plain user prose. */
+export const MAX_ASSISTANT_CHARS = 6000;
+
+/** Per-diff-block caps so a single huge edit can't bloat the payload. */
+const MAX_DIFF_LINES = 60;
+const MAX_DIFF_CHARS = 1500;
+
 /** Only scan the tail of the transcript; the last assistant prose is always near the end. */
 const TAIL_BYTES = 256 * 1024;
 
-type ContentBlock = { type?: string; text?: string };
+const EDIT_TOOLS = new Set(["Edit", "Write", "MultiEdit", "NotebookEdit"]);
+
+type ContentBlock = { type?: string; text?: string; name?: string; input?: unknown };
 type TranscriptLine = { type?: string; message?: { role?: string; content?: ContentBlock[] | string } };
+
+/** Split a string into lines, defending against non-string input. */
+function toLines(s: unknown): string[] {
+  return typeof s === "string" ? s.split("\n") : [];
+}
+
+/** Build a fenced ```diff block from `-`/`+` prefixed lines, capped by lines & chars. */
+function diffBlock(lines: string[]): string {
+  let truncated = false;
+  let kept = lines;
+  if (kept.length > MAX_DIFF_LINES) {
+    kept = kept.slice(0, MAX_DIFF_LINES);
+    truncated = true;
+  }
+  let body = kept.join("\n");
+  if (body.length > MAX_DIFF_CHARS) {
+    body = body.slice(0, MAX_DIFF_CHARS);
+    truncated = true;
+  }
+  if (truncated) body += "\n… (truncated)";
+  return "```diff\n" + body + "\n```";
+}
+
+/** Format a single edit-family tool_use block into a compact markdown snippet, or null to skip. */
+function formatEditTool(block: ContentBlock): string | null {
+  try {
+    const name = block.name;
+    const input = block.input as Record<string, unknown> | undefined;
+    if (!input || typeof input !== "object") return null;
+
+    if (name === "Edit") {
+      const fp = input.file_path;
+      if (typeof fp !== "string") return null;
+      const lines = [
+        ...toLines(input.old_string).map((l) => "- " + l),
+        ...toLines(input.new_string).map((l) => "+ " + l),
+      ];
+      return `**✎ ${fp}**\n` + diffBlock(lines);
+    }
+
+    if (name === "Write") {
+      const fp = input.file_path;
+      if (typeof fp !== "string") return null;
+      const lines = toLines(input.content).map((l) => "+ " + l);
+      return `**✎ ${fp} (new file)**\n` + diffBlock(lines);
+    }
+
+    if (name === "MultiEdit") {
+      const fp = input.file_path;
+      if (typeof fp !== "string" || !Array.isArray(input.edits)) return null;
+      const hunks: string[][] = [];
+      for (const e of input.edits as Array<Record<string, unknown>>) {
+        if (!e || typeof e !== "object") continue;
+        hunks.push([
+          ...toLines(e.old_string).map((l) => "- " + l),
+          ...toLines(e.new_string).map((l) => "+ " + l),
+        ]);
+      }
+      if (!hunks.length) return null;
+      // Separate each edit's hunk with a blank line.
+      const lines = hunks.flatMap((h, i) => (i === 0 ? h : ["", ...h]));
+      return `**✎ ${fp}**\n` + diffBlock(lines);
+    }
+
+    if (name === "NotebookEdit") {
+      const fp = input.notebook_path ?? input.file_path;
+      if (typeof fp !== "string") return null;
+      const lines = toLines(input.new_source).map((l) => "+ " + l);
+      return `**✎ ${fp} (cell)**\n` + diffBlock(lines);
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Read the most recent assistant *text* the user saw, from a Claude Code session
@@ -44,12 +129,24 @@ export function readRecentMessages(path: string | null | undefined, limit = 40):
       if (role !== "assistant" && role !== "user") continue;
       const content = obj.message?.content;
       let prose = "";
+      const edits: string[] = [];
       if (typeof content === "string") prose = content;
       else if (Array.isArray(content)) {
         prose = content.filter((b) => b?.type === "text" && typeof b.text === "string").map((b) => b.text!).join("\n").trim();
+        if (role === "assistant") {
+          for (const b of content) {
+            if (b?.type === "tool_use" && typeof b.name === "string" && EDIT_TOOLS.has(b.name)) {
+              const snip = formatEditTool(b);
+              if (snip) edits.push(snip);
+            }
+          }
+        }
       }
-      if (!prose) continue; // skip tool-only turns (tool_use / tool_result)
-      out.push({ role: role as "user" | "assistant", text: prose.slice(0, MAX_SUMMARY_CHARS) });
+      let text = prose;
+      if (edits.length) text = text ? text + "\n\n" + edits.join("\n\n") : edits.join("\n\n");
+      if (!text) continue; // skip turns with no prose and no edits (other tool calls / tool_result)
+      const cap = role === "assistant" ? MAX_ASSISTANT_CHARS : MAX_SUMMARY_CHARS;
+      out.push({ role: role as "user" | "assistant", text: text.slice(0, cap) });
     }
     return out.slice(-limit);
   } catch {
