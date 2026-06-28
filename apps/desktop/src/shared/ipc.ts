@@ -22,4 +22,9 @@ export const IPC = {
   terminalResize: "api:terminal:resize",
   terminalKill: "api:terminal:kill",
   terminalExit: "api:terminal:exit",
+  forwardStart: "api:forward:start",
+  forwardStop: "api:forward:stop",
+  forwardList: "api:forward:list",
+  forwardStatus: "api:forward:status",
+  openExternal: "api:open-external",
 } as const;

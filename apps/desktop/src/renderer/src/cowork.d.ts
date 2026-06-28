@@ -56,8 +56,32 @@ declare global {
       onTerminalData(cb: (a: { id: string; data: string }) => void): () => void;
       onTerminalExit(cb: (a: { id: string }) => void): () => void;
 
+      // Port forwarding (ssh -N -L)
+      startForward(a: {
+        sessionId: string;
+        machine: string;
+        port: number;
+      }): Promise<{ ok: boolean; error?: string }>;
+      stopForward(a: { sessionId: string; port: number }): Promise<{ ok: boolean }>;
+      listForwards(
+        sessionId: string
+      ): Promise<Array<{ port: number; status: ForwardStatus; error?: string }>>;
+      onForwardStatus(
+        cb: (a: {
+          sessionId: string;
+          port: number;
+          status: ForwardStatus;
+          error?: string;
+        }) => void
+      ): () => void;
+
+      // Open a URL in the real browser
+      openExternal(url: string): Promise<{ ok: boolean; error?: string }>;
+
       // Stream
       onUpdate(cb: () => void): () => void;
     };
   }
+
+  type ForwardStatus = "local" | "starting" | "active" | "failed" | "stopped";
 }

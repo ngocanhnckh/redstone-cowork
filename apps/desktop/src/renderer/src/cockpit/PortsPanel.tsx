@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ConnectionBar from "./ConnectionBar";
 
 interface Props {
@@ -7,25 +7,62 @@ interface Props {
   machine: string;
 }
 
+type ForwardStatus = "local" | "starting" | "active" | "failed" | "stopped";
+
+const CHIP: Record<ForwardStatus, { label: string; color: string; bg: string }> = {
+  local: { label: "local", color: "var(--text-soft)", bg: "rgba(255,255,255,0.06)" },
+  starting: { label: "starting", color: "#e6b450", bg: "rgba(230,180,80,0.12)" },
+  active: { label: "active", color: "rgb(var(--accent))", bg: "rgba(var(--accent),0.14)" },
+  failed: { label: "failed", color: "#e0736a", bg: "rgba(224,115,106,0.12)" },
+  stopped: { label: "off", color: "var(--text-soft)", bg: "rgba(255,255,255,0.04)" },
+};
+
 export default function PortsPanel({ sessionId, cwd, machine }: Props) {
   const [browserUrl, setBrowserUrl] = useState("");
   const [forwardPorts, setForwardPorts] = useState<number[]>([]);
   const [portInput, setPortInput] = useState("");
   const [status, setStatus] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [loaded, setLoaded] = useState(false);
+  // Live per-port forward status, keyed by port.
+  const [fwd, setFwd] = useState<Record<number, { status: ForwardStatus; error?: string }>>({});
+  // Latest browserUrl for persist() without re-running effects.
+  const browserUrlRef = useRef("");
+  browserUrlRef.current = browserUrl;
 
+  // Subscribe to live status pushes (filtered by sessionId).
+  useEffect(() => {
+    const unsub = window.cowork.onForwardStatus((a) => {
+      if (a.sessionId !== sessionId) return;
+      setFwd((prev) => ({ ...prev, [a.port]: { status: a.status as ForwardStatus, error: a.error } }));
+    });
+    return unsub;
+  }, [sessionId]);
+
+  // Load config, seed forward statuses, auto-start any not-yet-forwarding ports.
   useEffect(() => {
     let cancelled = false;
     setStatus(null);
-    window.cowork
-      .getWorkspaceConfig({ sessionId, cwd, machine })
-      .then((cfg) => {
+    setLoaded(false);
+    setFwd({});
+    Promise.all([
+      window.cowork.getWorkspaceConfig({ sessionId, cwd, machine }),
+      window.cowork.listForwards(sessionId),
+    ])
+      .then(([cfg, existing]) => {
         if (cancelled) return;
-        if (cfg) {
-          setBrowserUrl(cfg.browserUrl ?? "");
-          setForwardPorts(cfg.forwardPorts ?? []);
-        }
+        const ports = cfg?.forwardPorts ?? [];
+        setBrowserUrl(cfg?.browserUrl ?? "");
+        setForwardPorts(ports);
+        const seeded: Record<number, { status: ForwardStatus; error?: string }> = {};
+        for (const f of existing) seeded[f.port] = { status: f.status as ForwardStatus, error: f.error };
+        setFwd(seeded);
         setLoaded(true);
+        // Auto-start forwards for ports that aren't already managed.
+        for (const p of ports) {
+          if (!seeded[p]) {
+            window.cowork.startForward({ sessionId, machine, port: p }).catch(() => {/* ignore */});
+          }
+        }
       })
       .catch(() => {
         if (!cancelled) setLoaded(true);
@@ -42,7 +79,7 @@ export default function PortsPanel({ sessionId, cwd, machine }: Props) {
         sessionId,
         cwd,
         machine,
-        config: { forwardPorts: ports, browserUrl },
+        config: { forwardPorts: ports, browserUrl: browserUrlRef.current },
       });
       if (res.ok) setStatus({ kind: "ok", text: "✓ saved" });
       else setStatus({ kind: "err", text: res.error ?? "save failed" });
@@ -65,12 +102,28 @@ export default function PortsPanel({ sessionId, cwd, machine }: Props) {
     setForwardPorts(next);
     setPortInput("");
     persist(next);
+    window.cowork.startForward({ sessionId, machine, port: n }).catch(() => {/* ignore */});
   }
 
   function removePort(n: number) {
     const next = forwardPorts.filter((p) => p !== n);
     setForwardPorts(next);
+    setFwd((prev) => {
+      const { [n]: _drop, ...rest } = prev;
+      return rest;
+    });
+    window.cowork.stopForward({ sessionId, port: n }).catch(() => {/* ignore */});
     persist(next);
+  }
+
+  function startOne(n: number) {
+    setFwd((prev) => ({ ...prev, [n]: { status: "starting" } }));
+    window.cowork.startForward({ sessionId, machine, port: n }).catch(() => {/* ignore */});
+  }
+
+  function stopOne(n: number) {
+    window.cowork.stopForward({ sessionId, port: n }).catch(() => {/* ignore */});
+    setFwd((prev) => ({ ...prev, [n]: { status: "stopped" } }));
   }
 
   return (
@@ -79,7 +132,7 @@ export default function PortsPanel({ sessionId, cwd, machine }: Props) {
       <div style={{ flex: 1, overflowY: "auto", padding: "18px 32px 24px" }} className="no-scrollbar">
         <div
           className="glass-inset"
-          style={{ padding: "20px 22px", borderRadius: 16, maxWidth: 520 }}
+          style={{ padding: "20px 22px", borderRadius: 16, maxWidth: 560 }}
         >
           <h3
             className="display"
@@ -130,53 +183,94 @@ export default function PortsPanel({ sessionId, cwd, machine }: Props) {
             )}
           </div>
 
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 16 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 16 }}>
             {loaded && forwardPorts.length === 0 && (
               <span className="faint" style={{ fontSize: 12, fontStyle: "italic" }}>
                 No ports forwarded yet.
               </span>
             )}
-            {forwardPorts.map((p) => (
-              <span
-                key={p}
-                className="glass-inset mono"
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 8,
-                  fontSize: 12,
-                  color: "var(--text)",
-                  padding: "6px 8px 6px 12px",
-                  borderRadius: 999,
-                }}
-              >
-                {p}
-                <button
-                  onClick={() => removePort(p)}
-                  title={`Remove ${p}`}
+            {forwardPorts.map((p) => {
+              const st = fwd[p]?.status ?? "stopped";
+              const chip = CHIP[st];
+              const running = st === "starting" || st === "active" || st === "local";
+              return (
+                <div
+                  key={p}
+                  className="glass-inset mono"
                   style={{
-                    border: 0,
-                    background: "rgba(255,255,255,0.06)",
-                    color: "var(--text-soft)",
-                    borderRadius: 999,
-                    width: 18,
-                    height: 18,
-                    lineHeight: "16px",
-                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
                     fontSize: 12,
+                    color: "var(--text)",
+                    padding: "8px 10px 8px 14px",
+                    borderRadius: 12,
                   }}
                 >
-                  ×
-                </button>
-              </span>
-            ))}
+                  <span style={{ minWidth: 52, fontVariantNumeric: "tabular-nums" }}>{p}</span>
+                  <span
+                    title={fwd[p]?.error}
+                    style={{
+                      fontSize: 10.5,
+                      letterSpacing: 0.3,
+                      color: chip.color,
+                      background: chip.bg,
+                      borderRadius: 999,
+                      padding: "2px 9px",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    {chip.label}
+                  </span>
+                  <span style={{ flex: 1 }} />
+                  {st !== "local" && (
+                    <button
+                      onClick={() => (running ? stopOne(p) : startOne(p))}
+                      title={running ? `Stop forwarding ${p}` : `Start forwarding ${p}`}
+                      style={toggleBtn}
+                    >
+                      {running ? "Stop" : "Start"}
+                    </button>
+                  )}
+                  <button
+                    onClick={() => removePort(p)}
+                    title={`Remove ${p}`}
+                    style={{
+                      border: 0,
+                      background: "rgba(255,255,255,0.06)",
+                      color: "var(--text-soft)",
+                      borderRadius: 999,
+                      width: 20,
+                      height: 20,
+                      lineHeight: "18px",
+                      cursor: "pointer",
+                      fontSize: 13,
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
+              );
+            })}
           </div>
 
           <p className="faint" style={{ fontSize: 11, lineHeight: 1.5, margin: "18px 0 0" }}>
-            Forwarding actually starts in the next increment.
+            Each port runs <span className="mono">ssh -N -L</span> to the host. Local sessions need no
+            forwarding.
           </p>
         </div>
       </div>
     </div>
   );
 }
+
+const toggleBtn: React.CSSProperties = {
+  border: "1px solid var(--border)",
+  background: "transparent",
+  color: "var(--text-soft)",
+  borderRadius: 8,
+  padding: "3px 12px",
+  fontSize: 11,
+  fontFamily: "var(--font-mono)",
+  cursor: "pointer",
+};

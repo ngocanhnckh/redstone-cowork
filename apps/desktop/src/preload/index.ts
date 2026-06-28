@@ -80,6 +80,34 @@ contextBridge.exposeInMainWorld("cowork", {
     return () => ipcRenderer.removeListener(IPC.terminalExit, handler);
   },
 
+  // Port forwarding (ssh -N -L)
+  startForward: (a: {
+    sessionId: string;
+    machine: string;
+    port: number;
+  }): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke(IPC.forwardStart, a),
+  stopForward: (a: { sessionId: string; port: number }): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke(IPC.forwardStop, a),
+  listForwards: (
+    sessionId: string
+  ): Promise<Array<{ port: number; status: string; error?: string }>> =>
+    ipcRenderer.invoke(IPC.forwardList, { sessionId }),
+  onForwardStatus: (
+    cb: (a: { sessionId: string; port: number; status: string; error?: string }) => void
+  ): (() => void) => {
+    const handler = (
+      _e: unknown,
+      a: { sessionId: string; port: number; status: string; error?: string }
+    ) => cb(a);
+    ipcRenderer.on(IPC.forwardStatus, handler);
+    return () => ipcRenderer.removeListener(IPC.forwardStatus, handler);
+  },
+
+  // Open a URL in the real browser
+  openExternal: (url: string): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke(IPC.openExternal, { url }),
+
   // Stream
   onUpdate: (cb: () => void): (() => void) => {
     const handler = () => cb();

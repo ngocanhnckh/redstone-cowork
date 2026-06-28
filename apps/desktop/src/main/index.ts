@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, Notification } from "electron";
+import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, Notification, shell } from "electron";
 import { fileURLToPath } from "node:url";
 import { dirname, join, basename } from "node:path";
 import { saveConfig, loadConfig, clearConfig } from "./config";
@@ -12,6 +12,13 @@ import {
   killAllTerminals,
   type EnsureArgs,
 } from "./terminal";
+import {
+  startForward,
+  stopForward,
+  listForwards,
+  stopAllForwards,
+  type StartArgs as ForwardStartArgs,
+} from "./forwarding";
 import { IPC } from "../shared/ipc";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -99,6 +106,8 @@ function createWindow(): void {
       preload: join(here, "../preload/index.mjs"),
       // sandbox: false required — preload uses contextBridge + ipcRenderer which need Node/Electron access
       sandbox: false,
+      // Enable the <webview> tag for the Browser tab's Chromium preview.
+      webviewTag: true,
     },
   });
 
@@ -220,6 +229,35 @@ ipcMain.handle(IPC.terminalKill, (_e, a: { id: string }) => {
   return { ok: true };
 });
 
+// Port forwarding (ssh -N -L) IPC — main never throws across these channels.
+ipcMain.handle(IPC.forwardStart, (e, a: ForwardStartArgs) => {
+  const wc = e.sender;
+  try {
+    startForward(a, (port, status, error) => {
+      if (!wc.isDestroyed())
+        wc.send(IPC.forwardStatus, { sessionId: a.sessionId, port, status, error });
+    });
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+});
+ipcMain.handle(IPC.forwardStop, (_e, a: { sessionId: string; port: number }) => {
+  stopForward(a.sessionId, a.port);
+  return { ok: true };
+});
+ipcMain.handle(IPC.forwardList, (_e, a: { sessionId: string }) => listForwards(a.sessionId));
+
+// Open a URL in the user's real browser.
+ipcMain.handle(IPC.openExternal, (_e, a: { url: string }) => {
+  try {
+    if (a.url && /^https?:\/\//i.test(a.url)) shell.openExternal(a.url);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+});
+
 app.whenReady().then(() => {
   // Create system tray
   try {
@@ -264,4 +302,5 @@ app.on("before-quit", () => {
   stopStream?.();
   stopStream = null;
   killAllTerminals();
+  stopAllForwards();
 });
