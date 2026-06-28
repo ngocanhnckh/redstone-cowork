@@ -56,6 +56,10 @@ export default function AnswerDock({ decision }: Props) {
     lineHeight: 1.5,
     fontFamily: "var(--font-body)",
     width: "100%",
+    minWidth: 0, // let the flex item shrink instead of pushing the column wider
+    maxWidth: "100%",
+    boxSizing: "border-box",
+    overflowWrap: "anywhere",
   };
 
   function autoGrow(el: HTMLTextAreaElement) {
@@ -75,7 +79,7 @@ export default function AnswerDock({ decision }: Props) {
           backdropFilter: "blur(20px)",
         }}
       >
-        <div style={{ display: "flex", gap: 9, marginBottom: 10, alignItems: "flex-end" }}>
+        <div style={{ display: "flex", gap: 9, marginBottom: 10, alignItems: "flex-end", minWidth: 0 }}>
           <textarea
             ref={idleInputRef}
             className="reply-input no-scrollbar"
@@ -192,7 +196,7 @@ export default function AnswerDock({ decision }: Props) {
         ))}
       </div>
 
-      <div style={{ display: "flex", gap: 9, marginTop: 11, alignItems: "flex-end" }}>
+      <div style={{ display: "flex", gap: 9, marginTop: 11, alignItems: "flex-end", minWidth: 0 }}>
         <textarea
           ref={inputRef}
           className="reply-input no-scrollbar"

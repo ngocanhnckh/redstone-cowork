@@ -74,6 +74,7 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
         display: "flex",
         flexDirection: "column",
         minHeight: 0,
+        minWidth: 0,
         flex: 1,
       }}
     >
