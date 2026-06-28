@@ -111,7 +111,7 @@ function Tile({ s, onClick }: { s: SessionView; onClick: () => void }) {
             {projectName(s.cwd)}
           </div>
           <div className="mono faint" style={{ fontSize: 10.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-            {s.machine}
+            {s.machine}{s.wrapperId ? ` · rcw-${s.wrapperId}` : ""}
           </div>
         </div>
         <span

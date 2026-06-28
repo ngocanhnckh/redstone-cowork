@@ -124,7 +124,8 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
               minWidth: 0,
             }}
           >
-            {session.machine} · {session.gitBranch ?? "no branch"} · #{session.id.slice(0, 4)}
+            {session.machine} · {session.gitBranch ?? "no branch"}
+            {session.wrapperId ? ` · tmux rcw-${session.wrapperId}` : ` · #${session.id.slice(0, 4)}`}
           </span>
         </div>
 

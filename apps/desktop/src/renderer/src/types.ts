@@ -2,6 +2,7 @@ export type Todo = { text: string; status: "pending" | "in_progress" | "complete
 export type TranscriptMessage = { role: "user" | "assistant"; text: string };
 export type SessionView = {
   id: string; machine: string; cwd: string; gitBranch: string | null;
+  wrapperId: string | null;
   status: "active" | "waiting" | "stale" | "lost";
   pendingDecisions: number; waitingSince: string | null;
   latestAnswer: string | null; summary: string | null; todos: Todo[];
