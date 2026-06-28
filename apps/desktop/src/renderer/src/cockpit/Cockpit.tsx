@@ -18,6 +18,8 @@ export default function Cockpit() {
   const focusId = useStore((s) => s.focusId);
   const setActiveTab = useStore((s) => s.setActiveTab);
   const activeTabMap = useStore((s) => s.activeTab);
+  const contextCollapsed = useStore((s) => s.contextCollapsed);
+  const toggleContext = useStore((s) => s.toggleContext);
 
   useEffect(() => {
     const unsub = startCockpit();
@@ -121,6 +123,24 @@ export default function Cockpit() {
             redstone cowork
           </span>
           <div style={{ flex: 1 }} />
+          {/* Collapse / expand the right details sidebar */}
+          <button
+            onClick={toggleContext}
+            title={contextCollapsed ? "Show details panel" : "Hide details panel"}
+            style={{
+              ...noDrag,
+              border: "1px solid var(--border)",
+              background: contextCollapsed ? "transparent" : "rgb(var(--primary) / 0.18)",
+              color: "var(--text-soft)",
+              borderRadius: 8,
+              padding: "4px 10px",
+              fontSize: 11.5,
+              fontFamily: "var(--font-mono)",
+              cursor: "pointer",
+            }}
+          >
+            {contextCollapsed ? "◧ details" : "▦ details"}
+          </button>
           {/* Flow / Grid toggle */}
           <div
             style={{ ...noDrag, display: "flex", gap: 3, padding: 3, borderRadius: 999, border: "1px solid var(--border)" }}
@@ -152,9 +172,9 @@ export default function Cockpit() {
               >
                 ← All agents
               </button>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 314px", flex: 1, minHeight: 0 }}>
+              <div style={{ display: "grid", gridTemplateColumns: contextCollapsed ? "1fr" : "1fr 314px", flex: 1, minHeight: 0 }}>
                 <FocusStage sessionId={detailId} />
-                <ContextColumn sessionId={detailId} />
+                {!contextCollapsed && <ContextColumn sessionId={detailId} />}
               </div>
             </div>
           ) : (
@@ -180,10 +200,10 @@ export default function Cockpit() {
             </div>
           </div>
         ) : (
-          <div style={{ display: "grid", gridTemplateColumns: "214px 1fr 314px", flex: 1, minHeight: 0 }}>
+          <div style={{ display: "grid", gridTemplateColumns: contextCollapsed ? "214px 1fr" : "214px 1fr 314px", flex: 1, minHeight: 0 }}>
             <QueueRail />
             <FocusStage />
-            <ContextColumn />
+            {!contextCollapsed && <ContextColumn />}
           </div>
         )}
       </div>

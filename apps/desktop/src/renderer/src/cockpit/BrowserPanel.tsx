@@ -187,26 +187,20 @@ export default function BrowserPanel({ sessionId, cwd, machine }: Props) {
         }}
       />
 
-      {/* Address + nav controls */}
+      {/* Single compact toolbar: nav · address · go · open · preview-port */}
       <div
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 8,
-          padding: "10px 32px",
+          gap: 6,
+          padding: "6px 14px",
           borderBottom: "1px solid var(--border)",
           minWidth: 0,
         }}
       >
-        <button style={navBtn} title="Back" onClick={() => webviewRef.current?.goBack()}>
-          ◀
-        </button>
-        <button style={navBtn} title="Forward" onClick={() => webviewRef.current?.goForward()}>
-          ▶
-        </button>
-        <button style={navBtn} title="Reload" onClick={() => webviewRef.current?.reload()}>
-          ⟳
-        </button>
+        <button style={navBtn} title="Back" onClick={() => webviewRef.current?.goBack()}>◀</button>
+        <button style={navBtn} title="Forward" onClick={() => webviewRef.current?.goForward()}>▶</button>
+        <button style={navBtn} title="Reload" onClick={() => webviewRef.current?.reload()}>⟳</button>
         <input
           className="reply-input"
           value={address}
@@ -215,13 +209,14 @@ export default function BrowserPanel({ sessionId, cwd, machine }: Props) {
             if (e.key === "Enter") handleGo();
           }}
           placeholder="http://localhost:5173"
-          style={inputStyle}
+          style={{ ...inputStyle, padding: "7px 11px" }}
         />
         <button
           className="glass-btn--clay"
           onClick={handleGo}
           disabled={saving}
-          style={{ padding: "9px 16px", fontSize: 13, fontWeight: 600, opacity: saving ? 0.6 : 1, flexShrink: 0 }}
+          title="Load this URL"
+          style={{ padding: "7px 13px", fontSize: 12.5, fontWeight: 600, opacity: saving ? 0.6 : 1, flexShrink: 0 }}
         >
           {saving ? "…" : "Go"}
         </button>
@@ -235,57 +230,40 @@ export default function BrowserPanel({ sessionId, cwd, machine }: Props) {
         >
           ⧉
         </button>
+        {/* Preview port — a compact dropdown instead of a separate chip row */}
+        <select
+          title="Preview port (forwarded ports)"
+          value={browserUrl ? "" : previewPort ?? ""}
+          onChange={(e) => {
+            const v = e.target.value;
+            if (v) selectPreview(Number(v));
+          }}
+          className="mono"
+          style={{
+            flexShrink: 0,
+            border: "1px solid var(--border)",
+            background: "rgba(255,255,255,0.03)",
+            color: "var(--text-soft)",
+            borderRadius: 8,
+            padding: "6px 8px",
+            fontSize: 11.5,
+            outline: "none",
+            cursor: "pointer",
+          }}
+        >
+          <option value="">{forwardPorts.length ? "port…" : "no ports"}</option>
+          {forwardPorts.map((p) => (
+            <option key={p} value={p}>:{p}</option>
+          ))}
+        </select>
         {status && (
           <span
             className="mono"
+            title={status.text}
             style={{ fontSize: 11, color: status.kind === "ok" ? "rgb(var(--accent))" : "#e0736a", flexShrink: 0 }}
           >
-            {status.text}
+            {status.kind === "ok" ? "✓" : "⚠"}
           </span>
-        )}
-      </div>
-
-      {/* Preview port selector */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          flexWrap: "wrap",
-          padding: "8px 32px",
-          borderBottom: "1px solid var(--border)",
-        }}
-      >
-        <span className="faint" style={{ fontSize: 11, letterSpacing: 0.3 }}>
-          Preview port
-        </span>
-        {forwardPorts.length === 0 ? (
-          <span className="faint" style={{ fontSize: 11, fontStyle: "italic" }}>
-            Forward a port in the Ports tab to preview it here.
-          </span>
-        ) : (
-          forwardPorts.map((p) => {
-            const active = previewPort === p && !browserUrl;
-            return (
-              <button
-                key={p}
-                onClick={() => selectPreview(p)}
-                className="mono"
-                style={{
-                  border: "1px solid var(--border)",
-                  background: active ? "rgb(var(--primary)/0.32)" : "transparent",
-                  color: active ? "var(--text)" : "var(--text-soft)",
-                  borderRadius: 999,
-                  padding: "3px 11px",
-                  fontSize: 11.5,
-                  cursor: "pointer",
-                  fontVariantNumeric: "tabular-nums",
-                }}
-              >
-                {p}
-              </button>
-            );
-          })
         )}
       </div>
 
@@ -313,14 +291,6 @@ export default function BrowserPanel({ sessionId, cwd, machine }: Props) {
           </div>
         )}
       </div>
-
-      <p
-        className="faint"
-        style={{ fontSize: 11, lineHeight: 1.5, margin: 0, padding: "8px 32px", borderTop: "1px solid var(--border)" }}
-      >
-        The preview hits <span className="mono">localhost:&lt;port&gt;</span> — for remote sessions that
-        port must be forwarded in the Ports tab.
-      </p>
     </div>
   );
 }

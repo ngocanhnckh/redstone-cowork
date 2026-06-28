@@ -17,10 +17,12 @@ type State = {
   detailId: string | null; // session shown in the grid's drill-in detail
   pending: Record<string, PendingSend[]>; // sessionId → optimistic sent messages
   activeTab: Record<string, "chat" | "terminal" | "browser" | "ports">; // sessionId → active workspace tab
+  contextCollapsed: boolean; // right context sidebar collapsed (more room for the body)
   loading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
   setActiveTab: (sessionId: string, tab: "chat" | "terminal" | "browser" | "ports") => void;
+  toggleContext: () => void;
   setFocus: (id: string) => void;
   setMode: (mode: "flow" | "grid") => void;
   openDetail: (id: string) => void;
@@ -67,12 +69,15 @@ export const useStore = create<State>((set, get) => ({
   detailId: null,
   pending: {},
   activeTab: {},
+  contextCollapsed: false,
   loading: false,
   error: null,
 
   setActiveTab: (sessionId, tab) => {
     set((state) => ({ activeTab: { ...state.activeTab, [sessionId]: tab } }));
   },
+
+  toggleContext: () => set((state) => ({ contextCollapsed: !state.contextCollapsed })),
 
   refresh: async () => {
     try {

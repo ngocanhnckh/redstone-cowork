@@ -57,8 +57,16 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
   const isWorking = !decision && timeline.length > 0 && timeline[timeline.length - 1].role === "user";
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Only auto-scroll to the bottom when the user is already near it, so a poll
+  // refresh doesn't yank them back down while they're reading scrollback.
+  const stickToBottom = useRef(true);
+  const onBodyScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    stickToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  };
   useEffect(() => {
-    if (scrollRef.current) {
+    if (scrollRef.current && stickToBottom.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [session?.transcript, pending.length, isWorking]);
@@ -239,6 +247,7 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
       {/* Body — transcript scrollback */}
       <div
         ref={scrollRef}
+        onScroll={onBodyScroll}
         className="no-scrollbar"
         style={{
           flex: 1,
