@@ -26,6 +26,18 @@ export default function TerminalPanel({
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
+  // Bumping this re-runs the effect to (re)spawn the shell.
+  const [restartKey, setRestartKey] = useState(0);
+
+  async function restart() {
+    setError(null);
+    try {
+      await window.cowork.killTerminal(sessionId);
+    } catch {
+      /* ignore */
+    }
+    setRestartKey((k) => k + 1);
+  }
 
   useEffect(() => {
     const container = containerRef.current;
@@ -121,11 +133,38 @@ export default function TerminalPanel({
       // Dispose xterm but DO NOT kill the pty — it persists across tab switches.
       term.dispose();
     };
-  }, [sessionId, cwd, machine]);
+  }, [sessionId, cwd, machine, restartKey]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
-      <ConnectionBar machine={machine} />
+      <ConnectionBar machine={machine} onHostChange={() => restart()} />
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "flex-end",
+          gap: 8,
+          padding: "6px 32px",
+          borderBottom: "1px solid var(--border)",
+        }}
+      >
+        <button
+          onClick={() => restart()}
+          title="Restart the shell"
+          style={{
+            border: "1px solid var(--border)",
+            background: "transparent",
+            color: "var(--text-soft)",
+            borderRadius: 7,
+            padding: "3px 11px",
+            fontSize: 10.5,
+            fontFamily: "var(--font-mono)",
+            cursor: "pointer",
+          }}
+        >
+          ⟳ restart
+        </button>
+      </div>
       {error ? (
         <div style={{ flex: 1, padding: "18px 32px", overflowY: "auto" }} className="no-scrollbar">
           <div

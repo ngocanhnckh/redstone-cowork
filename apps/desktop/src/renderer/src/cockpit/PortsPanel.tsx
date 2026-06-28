@@ -126,9 +126,17 @@ export default function PortsPanel({ sessionId, cwd, machine }: Props) {
     setFwd((prev) => ({ ...prev, [n]: { status: "stopped" } }));
   }
 
+  // The ssh host changed — re-spawn every tunnel against the new host.
+  function restartForwards() {
+    for (const p of forwardPorts) {
+      window.cowork.stopForward({ sessionId, port: p }).catch(() => {/* ignore */});
+      window.cowork.startForward({ sessionId, machine, port: p }).catch(() => {/* ignore */});
+    }
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
-      <ConnectionBar machine={machine} />
+      <ConnectionBar machine={machine} onHostChange={restartForwards} />
       <div style={{ flex: 1, overflowY: "auto", padding: "18px 32px 24px" }} className="no-scrollbar">
         <div
           className="glass-inset"

@@ -5,7 +5,14 @@ import { useEffect, useState } from "react";
  * Local sessions show "● local (this machine)". Remote sessions show
  * "via ssh <host>" with an inline edit that persists per-machine.
  */
-export default function ConnectionBar({ machine }: { machine: string }) {
+export default function ConnectionBar({
+  machine,
+  onHostChange,
+}: {
+  machine: string;
+  /** Called after the ssh host is changed + saved, so callers can reconnect. */
+  onHostChange?: (host: string) => void;
+}) {
   const [host, setHost] = useState<string>(machine);
   const [isLocal, setIsLocal] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -30,6 +37,7 @@ export default function ConnectionBar({ machine }: { machine: string }) {
 
   async function save() {
     const next = draft.trim() || machine;
+    const changed = next !== host;
     try {
       await window.cowork.setSshHost(machine, next);
     } catch {
@@ -37,6 +45,7 @@ export default function ConnectionBar({ machine }: { machine: string }) {
     }
     setHost(next);
     setEditing(false);
+    if (changed) onHostChange?.(next);
   }
 
   const wrap: React.CSSProperties = {

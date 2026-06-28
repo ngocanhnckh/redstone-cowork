@@ -58,14 +58,13 @@ export function ensureTerminal(
   const { id, cwd, machine, cols, rows } = args;
 
   const existing = terminals.get(id);
-  if (existing) {
+  if (existing && !existing.exited) {
     existing.onData = onData;
-    // If the pty already exited, replay the scrollback and re-signal exit.
-    if (existing.exited) {
-      queueMicrotask(() => onExit());
-    }
     return { ok: true, replay: existing.buffer };
   }
+  // A dead terminal (e.g. ssh failed / shell exited) is replaced by a fresh spawn,
+  // so reopening the tab or fixing the ssh host restarts it rather than replaying.
+  if (existing) terminals.delete(id);
 
   try {
     const pty = loadPty();
