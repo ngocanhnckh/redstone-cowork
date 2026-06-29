@@ -28,6 +28,7 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
   const queue = useStore((s) => s.queue);
   const decisions = useStore((s) => s.decisions);
   const switchMode = useStore((s) => s.switchMode);
+  const pendingMap = useStore((s) => s.pending);
   const activeTabMap = useStore((s) => s.activeTab);
   const setActiveTab = useStore((s) => s.setActiveTab);
 
@@ -41,7 +42,15 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
     sessionDecisions.find((d) => (ACTIONABLE_KINDS as readonly string[]).includes(d.kind)) ??
     sessionDecisions[0];
 
-  const timeline = session?.transcript ?? [];
+  // Server transcript + optimistic sends not yet incorporated by the host. The
+  // optimistic copies render instantly so the user sees their message right away;
+  // store pruning removes them once the transcript grows past the send.
+  const transcript = session?.transcript ?? [];
+  const pending = id ? pendingMap[id] ?? [] : [];
+  const timeline = [
+    ...transcript,
+    ...pending.map((p) => ({ role: "user" as const, text: p.text })),
+  ];
   // Claude is mid-turn when the last thing said was the user's, with no question pending.
   const isWorking = !decision && timeline.length > 0 && timeline[timeline.length - 1].role === "user";
 
@@ -58,7 +67,7 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
     if (scrollRef.current && stickToBottom.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [session?.transcript, isWorking]);
+  }, [session?.transcript, pending.length, isWorking]);
 
   if (!session) return null;
 
@@ -290,7 +299,7 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
                   fontSize: 13,
                   lineHeight: 1.5,
                   whiteSpace: "pre-wrap",
-                  color: "var(--text-soft)",
+                  color: "var(--text)",
                 }}
               >
                 <span

@@ -15,9 +15,9 @@
   --app-elev: #2A2219;
   --border: rgba(243, 238, 227, 0.10);
   --border-strong: rgba(243, 238, 227, 0.20);
-  --text: #F0ECE1;
-  --text-soft: #A79C8C;
-  --text-faint: #6B6052;
+  --text: #F4F1E9;
+  --text-soft: #CFC6B6;   /* lightened — was #A79C8C, too dark over the translucent glass */
+  --text-faint: #9B9182;  /* lightened — was #6B6052 */
   --hover: rgba(243, 238, 227, 0.055);
   --font-display: 'Instrument Serif', Georgia, serif;
   --font-body: 'Space Grotesk', ui-sans-serif, system-ui;
