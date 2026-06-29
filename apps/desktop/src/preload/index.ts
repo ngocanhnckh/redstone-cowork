@@ -152,6 +152,24 @@ contextBridge.exposeInMainWorld("cowork", {
     file: string;
     content: string;
   }): Promise<{ ok: boolean; error?: string }> => ipcRenderer.invoke(IPC.filesWrite, a),
+  deletePath: (a: {
+    cwd: string;
+    machine: string;
+    path: string;
+  }): Promise<{ ok: boolean; error?: string }> => ipcRenderer.invoke(IPC.filesDelete, a),
+  makeDir: (a: {
+    cwd: string;
+    machine: string;
+    parent: string;
+    name: string;
+  }): Promise<{ ok: boolean; error?: string; path?: string }> => ipcRenderer.invoke(IPC.filesMkdir, a),
+  uploadFiles: (a: {
+    cwd: string;
+    machine: string;
+    destDir: string;
+  }): Promise<{ ok: boolean; uploaded: number; error?: string }> => ipcRenderer.invoke(IPC.filesUpload, a),
+  copyText: (text: string): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke(IPC.clipboardWrite, { text }),
 
   // Stream
   onUpdate: (cb: () => void): (() => void) => {

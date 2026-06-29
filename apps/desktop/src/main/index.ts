@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, Notification, shell } from "electron";
+import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, Notification, shell, dialog, clipboard } from "electron";
 import { fileURLToPath } from "node:url";
 import { dirname, join, basename } from "node:path";
 import { saveConfig, loadConfig, clearConfig } from "./config";
@@ -20,7 +20,7 @@ import {
   type StartArgs as ForwardStartArgs,
 } from "./forwarding";
 import { sshSetup, type SshSetupArgs } from "./ssh-setup";
-import { listDir, readFileAt, writeFileAt } from "./files";
+import { listDir, readFileAt, writeFileAt, deletePath, makeDir, uploadLocalFile } from "./files";
 import { IPC } from "../shared/ipc";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -282,6 +282,41 @@ ipcMain.handle(IPC.filesRead, (_e, a: { cwd: string; machine: string; file: stri
 ipcMain.handle(IPC.filesWrite, (_e, a: { cwd: string; machine: string; file: string; content: string }) =>
   writeFileAt(a)
 );
+ipcMain.handle(IPC.filesDelete, (_e, a: { cwd: string; machine: string; path: string }) =>
+  deletePath(a)
+);
+ipcMain.handle(IPC.filesMkdir, (_e, a: { cwd: string; machine: string; parent: string; name: string }) =>
+  makeDir(a)
+);
+// Upload: open the OS file picker, then copy each chosen file into destDir.
+ipcMain.handle(IPC.filesUpload, async (e, a: { cwd: string; machine: string; destDir: string }) => {
+  try {
+    const win = BrowserWindow.fromWebContents(e.sender) ?? undefined;
+    const picked = await dialog.showOpenDialog(win!, {
+      title: "Upload file(s)",
+      properties: ["openFile", "multiSelections"],
+    });
+    if (picked.canceled || picked.filePaths.length === 0) return { ok: true, uploaded: 0 };
+    let uploaded = 0;
+    const errors: string[] = [];
+    for (const srcPath of picked.filePaths) {
+      const r = await uploadLocalFile({ cwd: a.cwd, machine: a.machine, srcPath, destDir: a.destDir });
+      if (r.ok) uploaded++;
+      else errors.push(r.error ?? "failed");
+    }
+    return { ok: errors.length === 0, uploaded, error: errors[0] };
+  } catch (err) {
+    return { ok: false, uploaded: 0, error: err instanceof Error ? err.message : String(err) };
+  }
+});
+ipcMain.handle(IPC.clipboardWrite, (_e, a: { text: string }) => {
+  try {
+    clipboard.writeText(a.text ?? "");
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+});
 
 app.whenReady().then(() => {
   // Create system tray

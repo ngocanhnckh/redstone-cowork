@@ -113,6 +113,23 @@ declare global {
         file: string;
         content: string;
       }): Promise<{ ok: boolean; error?: string }>;
+      deletePath(a: {
+        cwd: string;
+        machine: string;
+        path: string;
+      }): Promise<{ ok: boolean; error?: string }>;
+      makeDir(a: {
+        cwd: string;
+        machine: string;
+        parent: string;
+        name: string;
+      }): Promise<{ ok: boolean; error?: string; path?: string }>;
+      uploadFiles(a: {
+        cwd: string;
+        machine: string;
+        destDir: string;
+      }): Promise<{ ok: boolean; uploaded: number; error?: string }>;
+      copyText(text: string): Promise<{ ok: boolean; error?: string }>;
 
       // Stream
       onUpdate(cb: () => void): () => void;

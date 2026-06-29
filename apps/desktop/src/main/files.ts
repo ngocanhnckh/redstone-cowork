@@ -49,7 +49,7 @@ function sshCapture(sshHost: string, remoteCommand: string, encoding: "utf8" | "
   });
 }
 
-function sshWrite(sshHost: string, remoteCommand: string, stdin: string): Promise<void> {
+function sshWrite(sshHost: string, remoteCommand: string, stdin: string | Buffer): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = execFile(
       "ssh",
@@ -207,6 +207,78 @@ export async function writeFileAt(args: Loc & { file: string; content: string })
     const sshHost = getSshHost(machine);
     await sshWrite(sshHost, `cat > ${shellQuote(file)}`, content);
     return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+// ------------------------------ mutations ----------------------------------
+
+/**
+ * Guard every mutation to within the session's project dir: the target must be
+ * the cwd itself or a descendant, and may not contain a `..` segment. Paths in
+ * the tree are always built from cwd, so this only ever blocks tampering.
+ */
+export function isWithin(root: string, target: string): boolean {
+  const r = root.replace(/\/+$/, "");
+  if (target.split("/").includes("..")) return false;
+  return target === r || target.startsWith(r + "/");
+}
+
+function joinRemote(dir: string, name: string): string {
+  return dir.replace(/\/+$/, "") + "/" + name;
+}
+
+export async function deletePath(args: Loc & { path: string }): Promise<{ ok: boolean; error?: string }> {
+  const { cwd, machine, path: target } = args;
+  if (target.replace(/\/+$/, "") === cwd.replace(/\/+$/, ""))
+    return { ok: false, error: "refusing to delete the project root" };
+  if (!isWithin(cwd, target)) return { ok: false, error: "refusing to delete outside the project" };
+  try {
+    if (isLocalMachine(machine)) {
+      await fsp.rm(target, { recursive: true, force: true });
+      return { ok: true };
+    }
+    await sshCapture(getSshHost(machine), `rm -rf ${shellQuote(target)}`);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+export async function makeDir(args: Loc & { parent: string; name: string }): Promise<{ ok: boolean; error?: string; path?: string }> {
+  const { cwd, machine, parent, name } = args;
+  const clean = name.trim();
+  if (!clean || clean.includes("/") || clean === "." || clean === "..")
+    return { ok: false, error: "invalid folder name" };
+  const target = joinRemote(parent, clean);
+  if (!isWithin(cwd, target)) return { ok: false, error: "refusing to create outside the project" };
+  try {
+    if (isLocalMachine(machine)) {
+      await fsp.mkdir(target, { recursive: true });
+      return { ok: true, path: target };
+    }
+    await sshCapture(getSshHost(machine), `mkdir -p ${shellQuote(target)}`);
+    return { ok: true, path: target };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/** Copy one already-chosen local file into destDir on the session's machine. */
+export async function uploadLocalFile(args: Loc & { srcPath: string; destDir: string }): Promise<{ ok: boolean; error?: string; name?: string }> {
+  const { cwd, machine, srcPath, destDir } = args;
+  const name = srcPath.split("/").pop() ?? "file";
+  const target = joinRemote(destDir, name);
+  if (!isWithin(cwd, target)) return { ok: false, error: "refusing to write outside the project" };
+  try {
+    if (isLocalMachine(machine)) {
+      await fsp.copyFile(srcPath, target);
+      return { ok: true, name };
+    }
+    const buf = await fsp.readFile(srcPath);
+    await sshWrite(getSshHost(machine), `cat > ${shellQuote(target)}`, buf);
+    return { ok: true, name };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }

@@ -24,6 +24,11 @@ function humanSize(n: number): string {
   return `${(n / 1024 / 1024).toFixed(1)} MB`;
 }
 
+/** What was right-clicked. `parent` is the dir new folders / uploads act on. */
+type MenuTarget =
+  | { kind: "file" | "dir"; path: string; parent: string }
+  | { kind: "root"; path: string; parent: string };
+
 export default function FilesPanel({ sessionId, cwd, machine }: Props) {
   // Tree: loaded entries per directory + expanded set. Lazy-loaded on expand.
   const [tree, setTree] = useState<Record<string, DirEntry[]>>({});
@@ -58,6 +63,13 @@ export default function FilesPanel({ sessionId, cwd, machine }: Props) {
       return next;
     });
   }
+
+  // Right-click context menu + the folder-name / delete-confirm dialogs.
+  const [menu, setMenu] = useState<{ x: number; y: number; target: MenuTarget } | null>(null);
+  const [mkdirIn, setMkdirIn] = useState<string | null>(null); // parent dir to create a folder in
+  const [folderName, setFolderName] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<{ path: string; name: string; isDir: boolean } | null>(null);
+  const [opError, setOpError] = useState<string | null>(null);
 
   const loadDir = useCallback(
     async (dir: string) => {
@@ -177,6 +189,88 @@ export default function FilesPanel({ sessionId, cwd, machine }: Props) {
     return () => clearTimeout(t);
   }, [autoSave, drafts, openPath, original, read, save]);
 
+  // Dismiss the context menu on any outside click / scroll / Escape.
+  useEffect(() => {
+    if (!menu) return;
+    const close = () => setMenu(null);
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setMenu(null);
+    window.addEventListener("click", close);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("click", close);
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [menu]);
+
+  /** Path relative to the project root, for "copy relative path". */
+  function relPath(p: string): string {
+    const root = cwd.replace(/\/+$/, "");
+    if (p === root) return ".";
+    return p.startsWith(root + "/") ? p.slice(root.length + 1) : p;
+  }
+
+  function openMenu(e: React.MouseEvent, target: MenuTarget) {
+    e.preventDefault();
+    e.stopPropagation();
+    setMenu({ x: e.clientX, y: e.clientY, target });
+  }
+
+  async function copyRel(p: string) {
+    setMenu(null);
+    await window.cowork.copyText(relPath(p));
+  }
+
+  function beginMkdir(parent: string) {
+    setMenu(null);
+    setOpError(null);
+    setFolderName("");
+    setMkdirIn(parent);
+  }
+
+  async function submitMkdir() {
+    const parent = mkdirIn;
+    if (parent == null) return;
+    const res = await window.cowork.makeDir({ cwd, machine, parent, name: folderName });
+    if (res.ok) {
+      setMkdirIn(null);
+      setExpanded((s) => new Set(s).add(parent));
+      await loadDir(parent);
+    } else {
+      setOpError(res.error ?? "could not create folder");
+    }
+  }
+
+  async function uploadInto(destDir: string) {
+    setMenu(null);
+    setOpError(null);
+    const res = await window.cowork.uploadFiles({ cwd, machine, destDir });
+    if (res.ok && res.uploaded > 0) {
+      setExpanded((s) => new Set(s).add(destDir));
+      await loadDir(destDir);
+    } else if (!res.ok) {
+      setOpError(res.error ?? "upload failed");
+    }
+  }
+
+  async function confirmDelete() {
+    const t = deleteTarget;
+    if (!t) return;
+    const res = await window.cowork.deletePath({ cwd, machine, path: t.path });
+    if (res.ok) {
+      setDeleteTarget(null);
+      if (openPath === t.path || (t.isDir && openPath?.startsWith(t.path + "/"))) {
+        setOpenPath(null);
+        setRead(null);
+      }
+      const parent = t.path.slice(0, t.path.lastIndexOf("/")) || cwd;
+      await loadDir(parent);
+    } else {
+      setOpError(res.error ?? "delete failed");
+    }
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
       <ConnectionBar sessionId={sessionId} machine={machine} onHostChange={() => loadDir(cwd)} />
@@ -184,6 +278,7 @@ export default function FilesPanel({ sessionId, cwd, machine }: Props) {
         {/* File tree */}
         <div
           className="no-scrollbar"
+          onContextMenu={(e) => openMenu(e, { kind: "root", path: cwd, parent: cwd })}
           style={{
             width: 256,
             flexShrink: 0,
@@ -192,6 +287,15 @@ export default function FilesPanel({ sessionId, cwd, machine }: Props) {
             padding: "10px 6px 16px",
           }}
         >
+          {/* Root actions */}
+          <div style={{ display: "flex", gap: 4, padding: "0 6px 8px" }}>
+            <button onClick={() => beginMkdir(cwd)} title="New folder in project root" style={treeActionBtn}>
+              ＋ Folder
+            </button>
+            <button onClick={() => uploadInto(cwd)} title="Upload file(s) to project root" style={treeActionBtn}>
+              ⤓ Upload
+            </button>
+          </div>
           {treeError && (
             <div className="mono" style={{ fontSize: 11, color: "#e0736a", padding: "6px 10px" }}>
               {treeError}
@@ -207,6 +311,7 @@ export default function FilesPanel({ sessionId, cwd, machine }: Props) {
             drafts={drafts}
             onToggleDir={toggleDir}
             onOpenFile={openFile}
+            onContextMenu={openMenu}
           />
         </div>
 
@@ -367,9 +472,174 @@ export default function FilesPanel({ sessionId, cwd, machine }: Props) {
           )}
         </div>
       </div>
+
+      {/* Right-click context menu */}
+      {menu && (
+        <div
+          className="glass-menu"
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            position: "fixed",
+            left: Math.min(menu.x, window.innerWidth - 190),
+            top: Math.min(menu.y, window.innerHeight - 180),
+            zIndex: 50,
+            minWidth: 176,
+            borderRadius: 10,
+            border: "1px solid var(--border-strong)",
+            padding: 5,
+            boxShadow: "0 18px 50px -16px rgba(0,0,0,.7)",
+          }}
+        >
+          {menu.target.kind !== "root" && (
+            <MenuItem onClick={() => copyRel(menu.target.path)}>Copy relative path</MenuItem>
+          )}
+          <MenuItem onClick={() => beginMkdir(menu.target.parent)}>New folder…</MenuItem>
+          <MenuItem onClick={() => uploadInto(menu.target.parent)}>Upload file…</MenuItem>
+          {menu.target.kind !== "root" && (
+            <>
+              <div style={{ height: 1, background: "var(--border)", margin: "5px 6px" }} />
+              <MenuItem
+                danger
+                onClick={() => {
+                  const t = menu.target as Extract<MenuTarget, { kind: "file" | "dir" }>;
+                  setMenu(null);
+                  setOpError(null);
+                  setDeleteTarget({ path: t.path, name: baseName(t.path), isDir: t.kind === "dir" });
+                }}
+              >
+                Delete {menu.target.kind === "dir" ? "folder" : "file"}
+              </MenuItem>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* New-folder name dialog */}
+      {mkdirIn != null && (
+        <Modal onClose={() => setMkdirIn(null)}>
+          <div className="mono" style={{ fontSize: 11, color: "var(--text-soft)", marginBottom: 10 }}>
+            New folder in <span style={{ color: "var(--text)" }}>{relPath(mkdirIn)}</span>
+          </div>
+          <input
+            autoFocus
+            className="reply-input"
+            value={folderName}
+            onChange={(e) => setFolderName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") submitMkdir();
+              if (e.key === "Escape") setMkdirIn(null);
+            }}
+            placeholder="folder-name"
+            style={modalInput}
+          />
+          {opError && <div style={{ color: "#e0736a", fontSize: 11, marginTop: 8 }}>{opError}</div>}
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 14 }}>
+            <button onClick={() => setMkdirIn(null)} style={modalBtn}>Cancel</button>
+            <button onClick={submitMkdir} className="glass-btn--clay" style={{ ...modalBtn, color: "#fff" }} disabled={!folderName.trim()}>
+              Create
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Delete confirmation */}
+      {deleteTarget && (
+        <Modal onClose={() => setDeleteTarget(null)}>
+          <div style={{ fontSize: 13, color: "var(--text)", marginBottom: 6 }}>
+            Delete {deleteTarget.isDir ? "folder" : "file"}{" "}
+            <span className="mono" style={{ color: "rgb(var(--accent))" }}>{deleteTarget.name}</span>?
+          </div>
+          <div className="faint" style={{ fontSize: 11.5, lineHeight: 1.5 }}>
+            {deleteTarget.isDir ? "This removes the folder and everything inside it. " : ""}This can't be undone.
+          </div>
+          {opError && <div style={{ color: "#e0736a", fontSize: 11, marginTop: 8 }}>{opError}</div>}
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
+            <button onClick={() => setDeleteTarget(null)} style={modalBtn}>Cancel</button>
+            <button
+              onClick={confirmDelete}
+              style={{ ...modalBtn, background: "rgba(224,115,106,0.18)", color: "#e0736a", border: "1px solid rgba(224,115,106,0.4)" }}
+            >
+              Delete
+            </button>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
+
+/** A single context-menu row. */
+function MenuItem({ children, onClick, danger }: { children: React.ReactNode; onClick: () => void; danger?: boolean }) {
+  return (
+    <div
+      onClick={onClick}
+      className="mono glass-inset-hover"
+      style={{
+        fontSize: 11.5,
+        padding: "7px 10px",
+        borderRadius: 7,
+        cursor: "pointer",
+        color: danger ? "#e0736a" : "var(--text)",
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** Centered modal overlay used for folder-name input and delete confirmation. */
+function Modal({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
+  return (
+    <div
+      onClick={onClose}
+      style={{ position: "fixed", inset: 0, zIndex: 60, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center" }}
+    >
+      <div
+        className="glass-menu"
+        onClick={(e) => e.stopPropagation()}
+        style={{ width: 320, borderRadius: 14, border: "1px solid var(--border-strong)", padding: "18px 18px 16px" }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+const treeActionBtn: React.CSSProperties = {
+  flex: 1,
+  border: "1px solid var(--border)",
+  background: "transparent",
+  color: "var(--text-soft)",
+  borderRadius: 7,
+  padding: "4px 6px",
+  fontSize: 10.5,
+  fontFamily: "var(--font-mono)",
+  cursor: "pointer",
+};
+
+const modalInput: React.CSSProperties = {
+  width: "100%",
+  borderRadius: 10,
+  border: "1px solid var(--border)",
+  padding: "9px 12px",
+  color: "var(--text)",
+  caretColor: "rgb(var(--primary-soft))",
+  fontSize: 13,
+  background: "rgba(255,255,255,0.03)",
+  outline: "none",
+  fontFamily: "var(--font-mono)",
+  boxSizing: "border-box",
+};
+
+const modalBtn: React.CSSProperties = {
+  border: "1px solid var(--border)",
+  background: "transparent",
+  color: "var(--text-soft)",
+  borderRadius: 8,
+  padding: "6px 16px",
+  fontSize: 12,
+  cursor: "pointer",
+};
 
 function Centered({ children, error }: { children: React.ReactNode; error?: boolean }) {
   return (
@@ -403,10 +673,11 @@ interface TreeProps {
   drafts: Record<string, string>;
   onToggleDir: (dir: string) => void;
   onOpenFile: (path: string) => void;
+  onContextMenu: (e: React.MouseEvent, target: MenuTarget) => void;
 }
 
 function Tree(props: TreeProps) {
-  const { dir, depth, tree, expanded, loadingDirs, openPath, drafts, onToggleDir, onOpenFile } = props;
+  const { dir, depth, tree, expanded, loadingDirs, openPath, drafts, onToggleDir, onOpenFile, onContextMenu } = props;
   const entries = tree[dir];
   if (!entries) {
     return loadingDirs.has(dir) ? (
@@ -418,7 +689,11 @@ function Tree(props: TreeProps) {
       {entries.map((e) =>
         e.kind === "dir" ? (
           <div key={e.path}>
-            <Row depth={depth} onClick={() => onToggleDir(e.path)}>
+            <Row
+              depth={depth}
+              onClick={() => onToggleDir(e.path)}
+              onContextMenu={(ev) => onContextMenu(ev, { kind: "dir", path: e.path, parent: e.path })}
+            >
               <span style={{ width: 12, display: "inline-block", opacity: 0.6 }}>
                 {expanded.has(e.path) ? "▾" : "▸"}
               </span>
@@ -432,6 +707,9 @@ function Tree(props: TreeProps) {
             depth={depth}
             active={openPath === e.path}
             onClick={() => onOpenFile(e.path)}
+            onContextMenu={(ev) =>
+              onContextMenu(ev, { kind: "file", path: e.path, parent: e.path.slice(0, e.path.lastIndexOf("/")) })
+            }
           >
             <span style={{ width: 12, display: "inline-block" }} />
             <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.name}</span>
@@ -447,18 +725,21 @@ function Row({
   depth,
   children,
   onClick,
+  onContextMenu,
   active,
   muted,
 }: {
   depth: number;
   children: React.ReactNode;
   onClick?: () => void;
+  onContextMenu?: (e: React.MouseEvent) => void;
   active?: boolean;
   muted?: boolean;
 }) {
   return (
     <div
       onClick={onClick}
+      onContextMenu={onContextMenu}
       className="mono"
       style={{
         display: "flex",

@@ -7,11 +7,16 @@ import {
   mimeFor,
   isPreviewableBinary,
   looksBinary,
+  isWithin,
   listDir,
   readFileAt,
   writeFileAt,
+  deletePath,
+  makeDir,
+  uploadLocalFile,
   MAX_TEXT_BYTES,
 } from "./files";
+import { existsSync } from "node:fs";
 
 // These run against the LOCAL fs branch — machine = this host's name.
 const LOCAL = os.hostname();
@@ -109,5 +114,54 @@ describe("local fs operations", () => {
     const r = await readFileAt({ cwd: dir, machine: LOCAL, file });
     expect(r).toMatchObject({ ok: true, encoding: "text", content: "# hi\n" });
     rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("makeDir creates a folder, deletePath removes it", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "rcw-files-"));
+    const mk = await makeDir({ cwd: dir, machine: LOCAL, parent: dir, name: "newdir" });
+    expect(mk.ok).toBe(true);
+    expect(existsSync(join(dir, "newdir"))).toBe(true);
+    const del = await deletePath({ cwd: dir, machine: LOCAL, path: join(dir, "newdir") });
+    expect(del.ok).toBe(true);
+    expect(existsSync(join(dir, "newdir"))).toBe(false);
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("deletePath recursively removes a folder with contents", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "rcw-files-"));
+    mkdirSync(join(dir, "sub"));
+    writeFileSync(join(dir, "sub", "f.txt"), "x");
+    const del = await deletePath({ cwd: dir, machine: LOCAL, path: join(dir, "sub") });
+    expect(del.ok).toBe(true);
+    expect(existsSync(join(dir, "sub"))).toBe(false);
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("uploadLocalFile copies a chosen file into the dest dir", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "rcw-files-"));
+    const src = join(dir, "src.bin");
+    writeFileSync(src, Buffer.from([1, 2, 3, 0, 255]));
+    mkdirSync(join(dir, "dest"));
+    const up = await uploadLocalFile({ cwd: dir, machine: LOCAL, srcPath: src, destDir: join(dir, "dest") });
+    expect(up).toMatchObject({ ok: true, name: "src.bin" });
+    expect(existsSync(join(dir, "dest", "src.bin"))).toBe(true);
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("refuses to delete the project root or escape it", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "rcw-files-"));
+    expect((await deletePath({ cwd: dir, machine: LOCAL, path: dir })).ok).toBe(false);
+    expect((await deletePath({ cwd: dir, machine: LOCAL, path: join(dir, "..", "evil") })).ok).toBe(false);
+    rmSync(dir, { recursive: true, force: true });
+  });
+});
+
+describe("isWithin", () => {
+  it("accepts the root and descendants, rejects siblings and ..", () => {
+    expect(isWithin("/p", "/p")).toBe(true);
+    expect(isWithin("/p", "/p/a/b")).toBe(true);
+    expect(isWithin("/p", "/other")).toBe(false);
+    expect(isWithin("/p", "/p/../x")).toBe(false);
+    expect(isWithin("/p", "/people")).toBe(false); // prefix but not a child
   });
 });
