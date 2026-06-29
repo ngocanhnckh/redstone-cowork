@@ -131,6 +131,22 @@ describe("processEvent", () => {
     );
   });
 
+  it("UserPromptSubmit and PostToolUse push working=true (Claude is mid-turn)", async () => {
+    for (const name of ["UserPromptSubmit", "PostToolUse"]) {
+      const deps = baseDeps();
+      await processEvent(ev(name), deps);
+      expect(deps.api.pushState).toHaveBeenCalledWith("s1", expect.objectContaining({ working: true }));
+    }
+  });
+
+  it("Stop / Notification / PermissionRequest push working=false (waiting on the user)", async () => {
+    for (const name of ["Stop", "Notification", "PermissionRequest"]) {
+      const deps = baseDeps({ wrapperId: "wrap1" });
+      await processEvent(ev(name, { message: "m", tool_name: "Bash", tool_input: { command: "ls" } }), deps);
+      expect(deps.api.pushState).toHaveBeenCalledWith("s1", expect.objectContaining({ working: false }));
+    }
+  });
+
   it("PermissionRequest → createDecision called AND returns null immediately (non-blocking)", async () => {
     const deps = baseDeps({ wrapperId: "wrap1" });
     const out = await processEvent(

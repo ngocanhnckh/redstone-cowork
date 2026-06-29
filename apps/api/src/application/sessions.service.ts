@@ -43,6 +43,7 @@ export class SessionsService {
       summary: null,
       todos: [],
       transcript: [],
+      working: existing?.working ?? false,
       pinned: false,
       snoozedUntil: null,
     });

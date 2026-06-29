@@ -19,6 +19,8 @@ export const SessionStatePatchSchema = z
     summary: z.string().nullable().optional(),
     todos: z.array(TodoItemSchema).optional(),
     transcript: z.array(TranscriptMessageSchema).optional(),
+    /** True while Claude is mid-turn (prompt submitted / running tools), false once it stops. */
+    working: z.boolean().optional(),
   })
   .strict();
 export type SessionStatePatch = z.infer<typeof SessionStatePatchSchema>;
@@ -37,6 +39,7 @@ export const AgentSessionSchema = z.object({
   summary: z.string().nullable().default(null),
   todos: z.array(TodoItemSchema).default([]),
   transcript: z.array(TranscriptMessageSchema).default([]),
+  working: z.boolean().default(false),
   pinned: z.boolean().default(false),
   snoozedUntil: z.coerce.date().nullable().default(null),
 });

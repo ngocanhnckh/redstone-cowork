@@ -51,8 +51,13 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
     ...transcript,
     ...pending.map((p) => ({ role: "user" as const, text: p.text })),
   ];
-  // Claude is mid-turn when the last thing said was the user's, with no question pending.
-  const isWorking = !decision && timeline.length > 0 && timeline[timeline.length - 1].role === "user";
+  // Show the "thinking" indicator from the moment the user sends until Claude's
+  // final answer. Driven primarily by the server `working` flag (true from
+  // prompt-submit through tool runs, false at Stop); the optimistic pending and
+  // last-is-user checks cover the brief gap before the host's first push lands.
+  // Suppressed once a decision needs the user — then it's their turn, not Claude's.
+  const lastIsUser = timeline.length > 0 && timeline[timeline.length - 1].role === "user";
+  const isWorking = !decision && (!!session?.working || pending.length > 0 || lastIsUser);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   // Only auto-scroll to the bottom when the user is already near it, so a poll
@@ -340,23 +345,29 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 9,
-              padding: "10px 4px 4px",
+              gap: 10,
+              padding: "10px 4px 6px",
               fontFamily: "var(--font-mono)",
               fontSize: 11,
               color: "var(--text-soft)",
             }}
           >
-            <span
-              style={{
-                width: 7,
-                height: 7,
-                borderRadius: 999,
-                background: "rgb(var(--primary-soft))",
-                animation: "pulse 1.4s ease-in-out infinite",
-              }}
-            />
-            Claude is working…
+            <span style={{ display: "inline-flex", gap: 4 }}>
+              {[0, 1, 2].map((i) => (
+                <span
+                  key={i}
+                  style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: 999,
+                    background: "rgb(var(--primary-soft))",
+                    animation: "thinking 1.2s ease-in-out infinite",
+                    animationDelay: `${i * 0.18}s`,
+                  }}
+                />
+              ))}
+            </span>
+            <span className="shimmer">Claude is thinking…</span>
           </div>
         )}
       </div>

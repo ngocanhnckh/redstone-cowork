@@ -6,7 +6,7 @@ const base = (id: string): AgentSession => ({
   id, machine: "m1", cwd: "/repo", gitBranch: "main",
   attachedAt: new Date(), lastSeenAt: new Date(),
   wrapperId: "w1", permissionMode: "default", autoModeEnabled: false,
-  latestAnswer: null, summary: null, todos: [], transcript: [], pinned: false, snoozedUntil: null,
+  latestAnswer: null, summary: null, todos: [], transcript: [], working: false, pinned: false, snoozedUntil: null,
 });
 
 describe("InMemorySessionStore rich state", () => {
@@ -35,6 +35,19 @@ describe("InMemorySessionStore rich state", () => {
     await store.upsert(base("s3"));
     const r3 = await store.get("s3");
     expect(r3?.transcript).toEqual(msgs);
+  });
+
+  it("patchState toggles working and preserves it across a re-upsert (attach)", async () => {
+    const store = new InMemorySessionStore();
+    await store.upsert(base("s4"));
+    expect((await store.get("s4"))?.working).toBe(false);
+    const r1 = await store.patchState("s4", { working: true });
+    expect(r1?.working).toBe(true);
+    // a heartbeat/attach (upsert) must not reset working mid-turn
+    await store.upsert(base("s4"));
+    expect((await store.get("s4"))?.working).toBe(true);
+    const r2 = await store.patchState("s4", { working: false });
+    expect(r2?.working).toBe(false);
   });
 
   it("patchState returns null for an unknown id", async () => {

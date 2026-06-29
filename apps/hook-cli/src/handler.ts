@@ -78,9 +78,15 @@ export async function processEvent(
     // PostToolUse pushes the latest prose as Claude works through tools — the cockpit
     // would otherwise show nothing between a reply and the final Stop (feels frozen).
     if (["SessionStart", "UserPromptSubmit", "PostToolUse", "Stop", "Notification", "PermissionRequest"].includes(event.hook_event_name)) {
+      // Claude is mid-turn from prompt-submit through tool runs, and stops at Stop.
+      // Notification / PermissionRequest mean it's blocked waiting on the user, not working.
+      const working =
+        event.hook_event_name === "UserPromptSubmit" ||
+        event.hook_event_name === "PostToolUse";
       await deps.api.pushState(event.session_id, {
         latestAnswer: deps.lastAssistantText(event),
         transcript: deps.recentMessages(event),
+        working,
       });
     }
 
