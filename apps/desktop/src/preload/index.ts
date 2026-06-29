@@ -163,6 +163,12 @@ contextBridge.exposeInMainWorld("cowork", {
     parent: string;
     name: string;
   }): Promise<{ ok: boolean; error?: string; path?: string }> => ipcRenderer.invoke(IPC.filesMkdir, a),
+  createFile: (a: {
+    cwd: string;
+    machine: string;
+    parent: string;
+    name: string;
+  }): Promise<{ ok: boolean; error?: string; path?: string }> => ipcRenderer.invoke(IPC.filesCreate, a),
   uploadFiles: (a: {
     cwd: string;
     machine: string;

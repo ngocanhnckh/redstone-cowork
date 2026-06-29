@@ -13,6 +13,7 @@ import {
   writeFileAt,
   deletePath,
   makeDir,
+  createFile,
   uploadLocalFile,
   MAX_TEXT_BYTES,
 } from "./files";
@@ -134,6 +135,26 @@ describe("local fs operations", () => {
     const del = await deletePath({ cwd: dir, machine: LOCAL, path: join(dir, "sub") });
     expect(del.ok).toBe(true);
     expect(existsSync(join(dir, "sub"))).toBe(false);
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("createFile makes an empty file and refuses to clobber an existing one", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "rcw-files-"));
+    const r1 = await createFile({ cwd: dir, machine: LOCAL, parent: dir, name: "note.md" });
+    expect(r1).toMatchObject({ ok: true });
+    expect(existsSync(join(dir, "note.md"))).toBe(true);
+    const read = await readFileAt({ cwd: dir, machine: LOCAL, file: join(dir, "note.md") });
+    expect(read).toMatchObject({ ok: true, encoding: "text", content: "" });
+    // second create with the same name must NOT overwrite
+    const r2 = await createFile({ cwd: dir, machine: LOCAL, parent: dir, name: "note.md" });
+    expect(r2.ok).toBe(false);
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("createFile rejects invalid names and escapes", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "rcw-files-"));
+    expect((await createFile({ cwd: dir, machine: LOCAL, parent: dir, name: "a/b" })).ok).toBe(false);
+    expect((await createFile({ cwd: dir, machine: LOCAL, parent: dir, name: ".." })).ok).toBe(false);
     rmSync(dir, { recursive: true, force: true });
   });
 

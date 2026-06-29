@@ -265,6 +265,29 @@ export async function makeDir(args: Loc & { parent: string; name: string }): Pro
   }
 }
 
+export async function createFile(args: Loc & { parent: string; name: string }): Promise<{ ok: boolean; error?: string; path?: string }> {
+  const { cwd, machine, parent, name } = args;
+  const clean = name.trim();
+  if (!clean || clean.includes("/") || clean === "." || clean === "..")
+    return { ok: false, error: "invalid file name" };
+  const target = joinRemote(parent, clean);
+  if (!isWithin(cwd, target)) return { ok: false, error: "refusing to create outside the project" };
+  try {
+    if (isLocalMachine(machine)) {
+      if (fs.existsSync(target)) return { ok: false, error: "a file with that name already exists" };
+      await fsp.mkdir(path.dirname(target), { recursive: true });
+      await fsp.writeFile(target, "", { encoding: "utf8", flag: "wx" }); // wx = fail if exists
+      return { ok: true, path: target };
+    }
+    // Remote: noclobber so we never truncate an existing file; `: >` makes it empty.
+    await sshCapture(getSshHost(machine), `set -o noclobber; : > ${shellQuote(target)}`);
+    return { ok: true, path: target };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { ok: false, error: /exist|noclobber|cannot overwrite/i.test(msg) ? "a file with that name already exists" : msg };
+  }
+}
+
 /** Copy one already-chosen local file into destDir on the session's machine. */
 export async function uploadLocalFile(args: Loc & { srcPath: string; destDir: string }): Promise<{ ok: boolean; error?: string; name?: string }> {
   const { cwd, machine, srcPath, destDir } = args;

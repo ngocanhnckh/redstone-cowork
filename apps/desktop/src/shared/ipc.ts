@@ -34,6 +34,7 @@ export const IPC = {
   filesWrite: "api:files:write",
   filesDelete: "api:files:delete",
   filesMkdir: "api:files:mkdir",
+  filesCreate: "api:files:create",
   filesUpload: "api:files:upload",
   clipboardWrite: "api:clipboard:write",
 } as const;

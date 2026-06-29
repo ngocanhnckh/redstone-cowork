@@ -20,7 +20,7 @@ import {
   type StartArgs as ForwardStartArgs,
 } from "./forwarding";
 import { sshSetup, type SshSetupArgs } from "./ssh-setup";
-import { listDir, readFileAt, writeFileAt, deletePath, makeDir, uploadLocalFile } from "./files";
+import { listDir, readFileAt, writeFileAt, deletePath, makeDir, createFile, uploadLocalFile } from "./files";
 import { IPC } from "../shared/ipc";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -287,6 +287,9 @@ ipcMain.handle(IPC.filesDelete, (_e, a: { cwd: string; machine: string; path: st
 );
 ipcMain.handle(IPC.filesMkdir, (_e, a: { cwd: string; machine: string; parent: string; name: string }) =>
   makeDir(a)
+);
+ipcMain.handle(IPC.filesCreate, (_e, a: { cwd: string; machine: string; parent: string; name: string }) =>
+  createFile(a)
 );
 // Upload: open the OS file picker, then copy each chosen file into destDir.
 ipcMain.handle(IPC.filesUpload, async (e, a: { cwd: string; machine: string; destDir: string }) => {

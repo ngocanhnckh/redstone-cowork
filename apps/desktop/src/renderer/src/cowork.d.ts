@@ -124,6 +124,12 @@ declare global {
         parent: string;
         name: string;
       }): Promise<{ ok: boolean; error?: string; path?: string }>;
+      createFile(a: {
+        cwd: string;
+        machine: string;
+        parent: string;
+        name: string;
+      }): Promise<{ ok: boolean; error?: string; path?: string }>;
       uploadFiles(a: {
         cwd: string;
         machine: string;

@@ -90,8 +90,9 @@ export default function FilesPanel({ sessionId, cwd, machine }: Props) {
 
   // Right-click context menu + the folder-name / delete-confirm dialogs.
   const [menu, setMenu] = useState<{ x: number; y: number; target: MenuTarget } | null>(null);
-  const [mkdirIn, setMkdirIn] = useState<string | null>(null); // parent dir to create a folder in
-  const [folderName, setFolderName] = useState("");
+  // The new-entry dialog — creates a file or folder inside `parent`.
+  const [creating, setCreating] = useState<{ parent: string; kind: "file" | "folder" } | null>(null);
+  const [entryName, setEntryName] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<{ path: string; name: string; isDir: boolean } | null>(null);
   const [opError, setOpError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -264,23 +265,28 @@ export default function FilesPanel({ sessionId, cwd, machine }: Props) {
     }
   }
 
-  function beginMkdir(parent: string) {
+  function beginCreate(parent: string, kind: "file" | "folder") {
     setMenu(null);
     setOpError(null);
-    setFolderName("");
-    setMkdirIn(parent);
+    setEntryName("");
+    setCreating({ parent, kind });
   }
 
-  async function submitMkdir() {
-    const parent = mkdirIn;
-    if (parent == null) return;
-    const res = await window.cowork.makeDir({ cwd, machine, parent, name: folderName });
+  async function submitCreate() {
+    if (!creating) return;
+    const { parent, kind } = creating;
+    const res =
+      kind === "folder"
+        ? await window.cowork.makeDir({ cwd, machine, parent, name: entryName })
+        : await window.cowork.createFile({ cwd, machine, parent, name: entryName });
     if (res.ok) {
-      setMkdirIn(null);
+      setCreating(null);
       setExpanded((s) => new Set(s).add(parent));
       await loadDir(parent);
+      // Jump straight into a freshly created file.
+      if (kind === "file" && res.path) openFile(res.path);
     } else {
-      setOpError(res.error ?? "could not create folder");
+      setOpError(res.error ?? `could not create ${kind}`);
     }
   }
 
@@ -334,7 +340,10 @@ export default function FilesPanel({ sessionId, cwd, machine }: Props) {
         >
           {/* Root actions */}
           <div style={{ display: "flex", gap: 4, padding: "0 6px 8px" }}>
-            <button onClick={() => beginMkdir(cwd)} title="New folder in project root" style={treeActionBtn}>
+            <button onClick={() => beginCreate(cwd, "file")} title="New file in project root" style={treeActionBtn}>
+              ＋ File
+            </button>
+            <button onClick={() => beginCreate(cwd, "folder")} title="New folder in project root" style={treeActionBtn}>
               ＋ Folder
             </button>
             <button onClick={() => uploadInto(cwd)} title="Upload file(s) to project root" style={treeActionBtn}>
@@ -519,7 +528,7 @@ export default function FilesPanel({ sessionId, cwd, machine }: Props) {
       </div>
 
       {/* Transient feedback toast (copy / upload / errors outside a modal) */}
-      {(toast || (opError && mkdirIn == null && !deleteTarget)) && (
+      {(toast || (opError && creating == null && !deleteTarget)) && (
         <div
           className="glass-menu mono"
           style={{
@@ -560,7 +569,8 @@ export default function FilesPanel({ sessionId, cwd, machine }: Props) {
           {menu.target.kind !== "root" && (
             <MenuItem onClick={() => copyRel(menu.target.path)}>Copy relative path</MenuItem>
           )}
-          <MenuItem onClick={() => beginMkdir(menu.target.parent)}>New folder…</MenuItem>
+          <MenuItem onClick={() => beginCreate(menu.target.parent, "file")}>New file…</MenuItem>
+          <MenuItem onClick={() => beginCreate(menu.target.parent, "folder")}>New folder…</MenuItem>
           <MenuItem onClick={() => uploadInto(menu.target.parent)}>Upload file…</MenuItem>
           {menu.target.kind !== "root" && (
             <>
@@ -581,28 +591,28 @@ export default function FilesPanel({ sessionId, cwd, machine }: Props) {
         </div>
       )}
 
-      {/* New-folder name dialog */}
-      {mkdirIn != null && (
-        <Modal onClose={() => setMkdirIn(null)}>
+      {/* New file / folder name dialog */}
+      {creating != null && (
+        <Modal onClose={() => setCreating(null)}>
           <div className="mono" style={{ fontSize: 11, color: "var(--text-soft)", marginBottom: 10 }}>
-            New folder in <span style={{ color: "var(--text)" }}>{relPath(mkdirIn)}</span>
+            New {creating.kind} in <span style={{ color: "var(--text)" }}>{relPath(creating.parent)}</span>
           </div>
           <input
             autoFocus
             className="reply-input"
-            value={folderName}
-            onChange={(e) => setFolderName(e.target.value)}
+            value={entryName}
+            onChange={(e) => setEntryName(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") submitMkdir();
-              if (e.key === "Escape") setMkdirIn(null);
+              if (e.key === "Enter") submitCreate();
+              if (e.key === "Escape") setCreating(null);
             }}
-            placeholder="folder-name"
+            placeholder={creating.kind === "file" ? "file-name.ext" : "folder-name"}
             style={modalInput}
           />
           {opError && <div style={{ color: "#e0736a", fontSize: 11, marginTop: 8 }}>{opError}</div>}
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 14 }}>
-            <button onClick={() => setMkdirIn(null)} style={modalBtn}>Cancel</button>
-            <button onClick={submitMkdir} className="glass-btn--clay" style={{ ...modalBtn, color: "#fff" }} disabled={!folderName.trim()}>
+            <button onClick={() => setCreating(null)} style={modalBtn}>Cancel</button>
+            <button onClick={submitCreate} className="glass-btn--clay" style={{ ...modalBtn, color: "#fff" }} disabled={!entryName.trim()}>
               Create
             </button>
           </div>
