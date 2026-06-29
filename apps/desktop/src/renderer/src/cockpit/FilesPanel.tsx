@@ -29,6 +29,30 @@ type MenuTarget =
   | { kind: "file" | "dir"; path: string; parent: string }
   | { kind: "root"; path: string; parent: string };
 
+/**
+ * Copy text to the clipboard from the renderer. Uses the legacy execCommand path
+ * (a hidden, selected textarea) which works in Electron under file:// where
+ * navigator.clipboard is often unavailable, and needs no IPC / main restart.
+ */
+function copyToClipboard(text: string): boolean {
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.top = "-1000px";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    ta.setSelectionRange(0, text.length);
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta);
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
 export default function FilesPanel({ sessionId, cwd, machine }: Props) {
   // Tree: loaded entries per directory + expanded set. Lazy-loaded on expand.
   const [tree, setTree] = useState<Record<string, DirEntry[]>>({});
@@ -70,6 +94,7 @@ export default function FilesPanel({ sessionId, cwd, machine }: Props) {
   const [folderName, setFolderName] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<{ path: string; name: string; isDir: boolean } | null>(null);
   const [opError, setOpError] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
 
   const loadDir = useCallback(
     async (dir: string) => {
@@ -219,7 +244,24 @@ export default function FilesPanel({ sessionId, cwd, machine }: Props) {
 
   async function copyRel(p: string) {
     setMenu(null);
-    await window.cowork.copyText(relPath(p));
+    const rel = relPath(p);
+    // Renderer-side copy first (no IPC / main restart needed); fall back to the
+    // native clipboard over IPC if execCommand is unavailable.
+    let ok = copyToClipboard(rel);
+    if (!ok) {
+      try {
+        const r = await window.cowork.copyText(rel);
+        ok = !!r?.ok;
+      } catch {
+        ok = false;
+      }
+    }
+    if (ok) {
+      setToast(`Copied ${rel}`);
+      setTimeout(() => setToast(null), 1800);
+    } else {
+      setOpError("couldn't copy to clipboard");
+    }
   }
 
   function beginMkdir(parent: string) {
@@ -249,8 +291,11 @@ export default function FilesPanel({ sessionId, cwd, machine }: Props) {
     if (res.ok && res.uploaded > 0) {
       setExpanded((s) => new Set(s).add(destDir));
       await loadDir(destDir);
+      setToast(`Uploaded ${res.uploaded} file${res.uploaded > 1 ? "s" : ""}`);
+      setTimeout(() => setToast(null), 1800);
     } else if (!res.ok) {
       setOpError(res.error ?? "upload failed");
+      setTimeout(() => setOpError(null), 2600);
     }
   }
 
@@ -472,6 +517,28 @@ export default function FilesPanel({ sessionId, cwd, machine }: Props) {
           )}
         </div>
       </div>
+
+      {/* Transient feedback toast (copy / upload / errors outside a modal) */}
+      {(toast || (opError && mkdirIn == null && !deleteTarget)) && (
+        <div
+          className="glass-menu mono"
+          style={{
+            position: "fixed",
+            bottom: 22,
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 70,
+            fontSize: 11.5,
+            padding: "8px 16px",
+            borderRadius: 999,
+            border: "1px solid var(--border-strong)",
+            color: toast ? "rgb(var(--accent))" : "#e0736a",
+            boxShadow: "0 14px 40px -16px rgba(0,0,0,.7)",
+          }}
+        >
+          {toast ?? opError}
+        </div>
+      )}
 
       {/* Right-click context menu */}
       {menu && (
