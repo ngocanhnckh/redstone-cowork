@@ -26,7 +26,7 @@ export default function AssistPanel() {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [manage, setManage] = useState(false);
-  const [form, setForm] = useState({ label: "", baseUrl: "", model: "", apiKey: "" });
+  const [form, setForm] = useState({ label: "", baseUrl: "", model: "", apiKey: "", maxTokens: "" });
   const [formErr, setFormErr] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -51,14 +51,20 @@ export default function AssistPanel() {
       setFormErr("all fields are required");
       return;
     }
+    const maxTokens = form.maxTokens.trim() ? Number.parseInt(form.maxTokens.trim(), 10) : undefined;
+    if (maxTokens !== undefined && (!Number.isInteger(maxTokens) || maxTokens <= 0)) {
+      setFormErr("max tokens must be a positive number");
+      return;
+    }
     try {
       const info = await window.cowork.addLlmEndpoint({
         label: form.label.trim(),
         baseUrl: form.baseUrl.trim(),
         model: form.model.trim(),
         apiKey: form.apiKey.trim(),
+        maxTokens,
       });
-      setForm({ label: "", baseUrl: "", model: "", apiKey: "" });
+      setForm({ label: "", baseUrl: "", model: "", apiKey: "", maxTokens: "" });
       await loadModels();
       setModelId(info.id);
     } catch (e) {
@@ -195,11 +201,12 @@ export default function AssistPanel() {
                 ["baseUrl", "Base URL (https://…/v1)"],
                 ["model", "Model name"],
                 ["apiKey", "API key"],
+                ["maxTokens", "Max output tokens (optional)"],
               ] as const).map(([k, ph]) => (
                 <input
                   key={k}
                   value={form[k]}
-                  type={k === "apiKey" ? "password" : "text"}
+                  type={k === "apiKey" ? "password" : k === "maxTokens" ? "number" : "text"}
                   onChange={(e) => setForm((f) => ({ ...f, [k]: e.target.value }))}
                   placeholder={ph}
                   style={miniInput}

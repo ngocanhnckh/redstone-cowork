@@ -16,8 +16,9 @@ const ENDPOINTS: LlmEndpoint[] = [
   { id: "flash", label: "Flash", baseUrl: "https://x/v1", apiKey: "k2", model: "syn:small:text", kind: "preset" },
 ];
 
-const make = (port: LlmPort, presets: LlmEndpoint[], sessions: unknown, store = new InMemoryLlmEndpointStore()) =>
-  new LlmService(port, presets, store, cipher, prompts, sessions as never);
+const LIMITS = { maxContextTokens: 12_000, maxOutputTokens: 1_024 };
+const make = (port: LlmPort, presets: LlmEndpoint[], sessions: unknown, store = new InMemoryLlmEndpointStore(), limits = LIMITS) =>
+  new LlmService(port, presets, store, limits, cipher, prompts, sessions as never);
 
 function fakeSessions(session: unknown) {
   return {
@@ -45,8 +46,8 @@ describe("LlmService", () => {
   it("lists configured models without leaking keys", async () => {
     const svc = make(port, ENDPOINTS, session);
     expect(await svc.models()).toEqual([
-      { id: "text", label: "Large", model: "syn:large:text", kind: "preset" },
-      { id: "flash", label: "Flash", model: "syn:small:text", kind: "preset" },
+      { id: "text", label: "Large", model: "syn:large:text", kind: "preset", maxTokens: null },
+      { id: "flash", label: "Flash", model: "syn:small:text", kind: "preset", maxTokens: null },
     ]);
   });
 
@@ -103,6 +104,24 @@ describe("LlmService", () => {
   it("refuses to delete a preset id", async () => {
     const svc = make(port, ENDPOINTS, session);
     await expect(svc.deleteEndpoint("flash")).rejects.toThrow();
+  });
+
+  it("applies the server default output cap, and a custom endpoint's own cap", async () => {
+    const store = new InMemoryLlmEndpointStore();
+    const svc = make(port, ENDPOINTS, session, store, { maxContextTokens: 12_000, maxOutputTokens: 777 });
+    await svc.chat({ modelId: "flash", messages: [{ role: "user", content: "hi" }] });
+    expect(calls.at(-1)!.maxTokens).toBe(777); // preset → server default
+    const info = await svc.addEndpoint({ label: "C", baseUrl: "https://c/v1", apiKey: "k", model: "m", maxTokens: 4096 });
+    await svc.chat({ modelId: info.id, messages: [{ role: "user", content: "hi" }] });
+    expect(calls.at(-1)!.maxTokens).toBe(4096); // custom → its own cap
+  });
+
+  it("hard-caps injected context to the configured token budget", async () => {
+    const big = { id: "s1", transcript: [{ role: "user", text: "X".repeat(50_000) }] };
+    const svc = make(port, ENDPOINTS, fakeSessions(big), new InMemoryLlmEndpointStore(), { maxContextTokens: 1_000, maxOutputTokens: 1_024 });
+    await svc.assist({ sessionId: "s1", kind: "summarize" });
+    // budget 1000 tokens * 4 chars = 4000 chars (+ a short trim marker)
+    expect(calls.at(-1)!.messages[1].content.length).toBeLessThan(4_200);
   });
 
   it("endpointsFromEnv only includes fully-configured tiers", () => {

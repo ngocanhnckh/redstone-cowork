@@ -191,7 +191,8 @@ contextBridge.exposeInMainWorld("cowork", {
     baseUrl: string;
     apiKey: string;
     model: string;
-  }): Promise<{ id: string; label: string; model: string; kind: "preset" | "custom" }> =>
+    maxTokens?: number;
+  }): Promise<{ id: string; label: string; model: string; kind: "preset" | "custom"; maxTokens?: number | null }> =>
     ipcRenderer.invoke(IPC.llmAddEndpoint, a),
   deleteLlmEndpoint: (id: string): Promise<void> => ipcRenderer.invoke(IPC.llmDeleteEndpoint, { id }),
 

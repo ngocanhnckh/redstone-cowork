@@ -8,15 +8,14 @@ import {
   type LlmModelInfo,
   type AgentSession,
 } from "@rcw/shared";
-import { LLM_PORT, LLM_ENDPOINTS, type LlmPort, type LlmEndpoint } from "../domain/llm/llm.port";
+import { LLM_PORT, LLM_ENDPOINTS, LLM_LIMITS, APPROX_CHARS_PER_TOKEN, type LlmPort, type LlmEndpoint, type LlmLimits } from "../domain/llm/llm.port";
 import { LLM_ENDPOINT_STORE, type LlmEndpointStore } from "../domain/llm/llm-endpoint-store.port";
 import { CredentialCipher } from "../infrastructure/credential-cipher";
 import { PromptLoader } from "../infrastructure/prompts/prompt-loader";
 import { SessionsService } from "./sessions.service";
 
-/** Cap how much of the transcript we feed the model — recent context matters most. */
-const MAX_TRANSCRIPT_MESSAGES = 30;
-const MAX_TRANSCRIPT_CHARS = 12_000;
+/** Never feed more than the most recent N messages, then trim further to the token budget. */
+const MAX_TRANSCRIPT_MESSAGES = 40;
 
 @Injectable()
 export class LlmService {
@@ -24,6 +23,7 @@ export class LlmService {
     @Inject(LLM_PORT) private readonly llm: LlmPort,
     @Inject(LLM_ENDPOINTS) private readonly presets: LlmEndpoint[],
     @Inject(LLM_ENDPOINT_STORE) private readonly store: LlmEndpointStore,
+    @Inject(LLM_LIMITS) private readonly limits: LlmLimits,
     private readonly cipher: CredentialCipher,
     private readonly prompts: PromptLoader,
     private readonly sessions: SessionsService,
@@ -35,7 +35,7 @@ export class LlmService {
     const out: LlmEndpoint[] = [];
     for (const r of rows) {
       try {
-        out.push({ id: r.id, label: r.label, baseUrl: r.baseUrl, model: r.model, apiKey: this.cipher.decrypt(r.keyCipher), kind: "custom" });
+        out.push({ id: r.id, label: r.label, baseUrl: r.baseUrl, model: r.model, apiKey: this.cipher.decrypt(r.keyCipher), kind: "custom", maxTokens: r.maxTokens });
       } catch {
         // key rotated / corrupt cipher — skip rather than crash the model list
       }
@@ -49,7 +49,7 @@ export class LlmService {
 
   /** Models the cockpit can target (presets + custom), without leaking keys. */
   async models(): Promise<LlmModelInfo[]> {
-    return (await this.allEndpoints()).map((e) => ({ id: e.id, label: e.label, model: e.model, kind: e.kind }));
+    return (await this.allEndpoints()).map((e) => ({ id: e.id, label: e.label, model: e.model, kind: e.kind, maxTokens: e.maxTokens ?? null }));
   }
 
   private async resolve(modelId?: string): Promise<LlmEndpoint> {
@@ -75,9 +75,10 @@ export class LlmService {
       baseUrl: input.baseUrl,
       model: input.model,
       keyCipher: this.cipher.encrypt(input.apiKey),
+      maxTokens: input.maxTokens ?? null,
       createdAt: new Date(),
     });
-    return { id, label: input.label, model: input.model, kind: "custom" };
+    return { id, label: input.label, model: input.model, kind: "custom", maxTokens: input.maxTokens ?? null };
   }
 
   async deleteEndpoint(id: string): Promise<void> {
@@ -85,14 +86,15 @@ export class LlmService {
     await this.store.delete(id);
   }
 
-  private async call(endpoint: LlmEndpoint, messages: LlmMessage[], opts?: { temperature?: number; maxTokens?: number }): Promise<string> {
+  private async call(endpoint: LlmEndpoint, messages: LlmMessage[], opts?: { temperature?: number }): Promise<string> {
     return this.llm.complete({
       baseUrl: endpoint.baseUrl,
       apiKey: endpoint.apiKey,
       model: endpoint.model,
       messages,
       temperature: opts?.temperature,
-      maxTokens: opts?.maxTokens,
+      // Per-endpoint cap when set, else the server default.
+      maxTokens: endpoint.maxTokens ?? this.limits.maxOutputTokens,
     });
   }
 
@@ -101,13 +103,18 @@ export class LlmService {
     return this.call(await this.resolve(req.modelId), req.messages);
   }
 
-  /** Render a session's transcript into a compact, role-tagged block for prompts. */
+  /**
+   * Render a session's transcript into a compact, role-tagged block, hard-capped
+   * to the configured context-token budget (recent turns kept). Approximates
+   * tokens by chars so we never ship more than ~maxContextTokens of context.
+   */
   private formatConversation(session: AgentSession): string {
+    const charBudget = this.limits.maxContextTokens * APPROX_CHARS_PER_TOKEN;
     const msgs = session.transcript.slice(-MAX_TRANSCRIPT_MESSAGES);
     let out = msgs
       .map((m) => `${m.role === "assistant" ? "Claude" : "Operator"}: ${m.text}`)
       .join("\n\n");
-    if (out.length > MAX_TRANSCRIPT_CHARS) out = "…\n" + out.slice(out.length - MAX_TRANSCRIPT_CHARS);
+    if (out.length > charBudget) out = "…(earlier context trimmed)\n" + out.slice(out.length - charBudget);
     return out || "(no conversation yet)";
   }
 

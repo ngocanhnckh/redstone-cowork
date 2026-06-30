@@ -13,6 +13,7 @@ export const LlmModelInfoSchema = z.object({
   label: z.string().min(1),    // human label for the picker
   model: z.string().min(1),    // upstream model name
   kind: z.enum(["preset", "custom"]).default("preset"),
+  maxTokens: z.number().int().positive().nullable().optional(), // output cap (custom endpoints)
 });
 export type LlmModelInfo = z.infer<typeof LlmModelInfoSchema>;
 
@@ -47,5 +48,7 @@ export const LlmEndpointInputSchema = z.object({
   baseUrl: z.string().url(),
   apiKey: z.string().min(1),
   model: z.string().min(1),
+  /** Max output tokens for this endpoint; omit to use the server default. */
+  maxTokens: z.number().int().positive().max(128_000).optional(),
 });
 export type LlmEndpointInput = z.infer<typeof LlmEndpointInputSchema>;

@@ -56,12 +56,13 @@ import { PostgresDeviceTokenStore } from "./adapters/persistence/postgres-device
 import { PG_POOL, pgPoolProvider, PoolShutdown } from "./infrastructure/pg-pool.provider";
 import { LlmController } from "./adapters/http/llm.controller";
 import { LlmService } from "./application/llm.service";
-import { LLM_PORT, LLM_ENDPOINTS } from "./domain/llm/llm.port";
+import { LLM_PORT, LLM_ENDPOINTS, LLM_LIMITS } from "./domain/llm/llm.port";
 import { LLM_ENDPOINT_STORE } from "./domain/llm/llm-endpoint-store.port";
 import { InMemoryLlmEndpointStore } from "./adapters/persistence/in-memory-llm-endpoint-store";
 import { PostgresLlmEndpointStore } from "./adapters/persistence/postgres-llm-endpoint-store";
 import { OpenAiCompatibleLlm } from "./adapters/llm/openai-llm.adapter";
 import { endpointsFromEnv } from "./adapters/llm/endpoints-from-env";
+import { llmLimitsFromEnv } from "./adapters/llm/llm-limits";
 import { PromptLoader } from "./infrastructure/prompts/prompt-loader";
 import type { Pool } from "pg";
 
@@ -88,6 +89,7 @@ import type { Pool } from "pg";
     },
     { provide: LLM_PORT, useFactory: () => new OpenAiCompatibleLlm() },
     { provide: LLM_ENDPOINTS, useFactory: () => endpointsFromEnv() },
+    { provide: LLM_LIMITS, useFactory: () => llmLimitsFromEnv() },
     {
       provide: LLM_ENDPOINT_STORE,
       inject: [PG_POOL],

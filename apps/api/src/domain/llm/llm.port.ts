@@ -8,6 +8,8 @@ export type LlmEndpoint = {
   apiKey: string;
   model: string;
   kind: "preset" | "custom";
+  /** Per-endpoint output token cap; null/undefined → use the server default. */
+  maxTokens?: number | null;
 };
 
 export type LlmCallOptions = {
@@ -27,3 +29,14 @@ export interface LlmPort {
 export const LLM_PORT = Symbol("LLM_PORT");
 /** Injection token for the configured endpoint list (presets from env). */
 export const LLM_ENDPOINTS = Symbol("LLM_ENDPOINTS");
+
+/** Token budgets, configurable via env, applied to every call. */
+export type LlmLimits = {
+  /** Max approx tokens of session context injected into a prompt (hard-capped under 100k). */
+  maxContextTokens: number;
+  /** Default max output tokens when an endpoint doesn't specify its own. */
+  maxOutputTokens: number;
+};
+export const LLM_LIMITS = Symbol("LLM_LIMITS");
+/** Rough chars→tokens ratio for budgeting without a tokenizer. */
+export const APPROX_CHARS_PER_TOKEN = 4;

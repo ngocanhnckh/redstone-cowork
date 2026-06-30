@@ -150,6 +150,7 @@ declare global {
         baseUrl: string;
         apiKey: string;
         model: string;
+        maxTokens?: number;
       }): Promise<LlmModelInfo>;
       deleteLlmEndpoint(id: string): Promise<void>;
 
@@ -160,7 +161,7 @@ declare global {
 
   type ForwardStatus = "local" | "starting" | "active" | "failed" | "stopped";
 
-  type LlmModelInfo = { id: string; label: string; model: string; kind: "preset" | "custom" };
+  type LlmModelInfo = { id: string; label: string; model: string; kind: "preset" | "custom"; maxTokens?: number | null };
 
   type DirEntry = { name: string; path: string; kind: "dir" | "file"; size: number };
 
