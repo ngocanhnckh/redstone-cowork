@@ -175,8 +175,16 @@ export const useStore = create<State>((set, get) => ({
   },
 
   instruct: async (sessionId, text) => {
-    try { get().recordSent(sessionId, text); await window.cowork.instruct(sessionId, text); await get().refresh(); }
-    catch (e) { set({ error: e instanceof Error ? e.message : String(e) }); }
+    try {
+      get().recordSent(sessionId, text);
+      // In Flow mode, sending a message means "I'm done here" — advance to the
+      // next waiting session (computed before refresh shuffles the queue).
+      const { mode, queue } = get();
+      const next = mode === "flow" ? nextAfterAnswer(queue, sessionId) : null;
+      await window.cowork.instruct(sessionId, text);
+      if (next) set({ focusId: next });
+      await get().refresh();
+    } catch (e) { set({ error: e instanceof Error ? e.message : String(e) }); }
   },
 
   switchMode: async (sessionId, mode) => {

@@ -341,33 +341,19 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
         )}
 
         {isWorking && (
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              padding: "10px 4px 6px",
-              fontFamily: "var(--font-mono)",
-              fontSize: 11,
-              color: "var(--text-soft)",
-            }}
-          >
-            <span style={{ display: "inline-flex", gap: 4 }}>
-              {[0, 1, 2].map((i) => (
-                <span
-                  key={i}
-                  style={{
-                    width: 6,
-                    height: 6,
-                    borderRadius: 999,
-                    background: "rgb(var(--primary-soft))",
-                    animation: "thinking 1.2s ease-in-out infinite",
-                    animationDelay: `${i * 0.18}s`,
-                  }}
-                />
+          <div className="thinking-card">
+            <span className="ai-core" />
+            <span className="eq">
+              {[0, 1, 2, 3, 4].map((i) => (
+                <span key={i} className="eq-bar" style={{ animationDelay: `${i * 0.13}s` }} />
               ))}
             </span>
-            <span className="shimmer">Claude is thinking…</span>
+            <span
+              className="shimmer"
+              style={{ fontFamily: "var(--font-mono)", fontSize: 11.5, letterSpacing: "0.04em", position: "relative" }}
+            >
+              Claude is working — more on the way…
+            </span>
           </div>
         )}
       </div>
