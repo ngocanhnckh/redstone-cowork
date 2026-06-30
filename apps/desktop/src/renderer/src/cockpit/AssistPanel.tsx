@@ -26,7 +26,7 @@ export default function AssistPanel() {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [manage, setManage] = useState(false);
-  const [form, setForm] = useState({ label: "", baseUrl: "", model: "", apiKey: "", maxTokens: "" });
+  const [form, setForm] = useState({ label: "", baseUrl: "", model: "", apiKey: "", maxTokens: "", role: "" });
   const [formErr, setFormErr] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -63,8 +63,9 @@ export default function AssistPanel() {
         model: form.model.trim(),
         apiKey: form.apiKey.trim(),
         maxTokens,
+        role: (form.role || undefined) as "text" | "flash" | "vision" | undefined,
       });
-      setForm({ label: "", baseUrl: "", model: "", apiKey: "", maxTokens: "" });
+      setForm({ label: "", baseUrl: "", model: "", apiKey: "", maxTokens: "", role: "" });
       await loadModels();
       setModelId(info.id);
     } catch (e) {
@@ -194,8 +195,18 @@ export default function AssistPanel() {
                 </div>
               ))}
             </div>
-            <div className="kicker" style={{ marginBottom: 8 }}>Add custom endpoint</div>
+            <div className="kicker" style={{ marginBottom: 8 }}>Add / override endpoint</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <select
+                value={form.role}
+                onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}
+                style={{ ...miniInput, color: form.role ? "var(--text)" : "var(--text-soft)" }}
+              >
+                <option value="" style={{ background: "var(--app-panel)" }}>Standalone custom model</option>
+                <option value="text" style={{ background: "var(--app-panel)" }}>Override role: Text (deep / high quality)</option>
+                <option value="flash" style={{ background: "var(--app-panel)" }}>Override role: Flash (quick / low context)</option>
+                <option value="vision" style={{ background: "var(--app-panel)" }}>Override role: Vision</option>
+              </select>
               {([
                 ["label", "Label (e.g. My GPT-4o)"],
                 ["baseUrl", "Base URL (https://…/v1)"],

@@ -43,6 +43,10 @@ export const AssistResponseSchema = z.object({ text: z.string() });
 export type AssistResponse = z.infer<typeof AssistResponseSchema>;
 
 /** Payload to add a user-defined OpenAI-compatible endpoint. */
+/** The three assistant roles, each backed by an env preset that the UI can override. */
+export const LlmRoleIdSchema = z.enum(["text", "flash", "vision"]);
+export type LlmRoleId = z.infer<typeof LlmRoleIdSchema>;
+
 export const LlmEndpointInputSchema = z.object({
   label: z.string().min(1).max(60),
   baseUrl: z.string().url(),
@@ -50,5 +54,7 @@ export const LlmEndpointInputSchema = z.object({
   model: z.string().min(1),
   /** Max output tokens for this endpoint; omit to use the server default. */
   maxTokens: z.number().int().positive().max(128_000).optional(),
+  /** Bind this endpoint to a role (text/flash/vision), overriding that env preset; omit for a standalone custom model. */
+  role: LlmRoleIdSchema.optional(),
 });
 export type LlmEndpointInput = z.infer<typeof LlmEndpointInputSchema>;

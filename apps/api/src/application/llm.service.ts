@@ -44,7 +44,12 @@ export class LlmService {
   }
 
   private async allEndpoints(): Promise<LlmEndpoint[]> {
-    return [...this.presets, ...(await this.customEndpoints())];
+    // Presets first; a custom endpoint sharing a preset id (text/flash/vision)
+    // overrides it in place, while custom:<uuid> endpoints append.
+    const map = new Map<string, LlmEndpoint>();
+    for (const p of this.presets) map.set(p.id, p);
+    for (const c of await this.customEndpoints()) map.set(c.id, c);
+    return [...map.values()];
   }
 
   /** Models the cockpit can target (presets + custom), without leaking keys. */
@@ -68,7 +73,8 @@ export class LlmService {
   async addEndpoint(input: LlmEndpointInput): Promise<LlmModelInfo> {
     if (!this.cipher.isConfigured())
       throw new ServiceUnavailableException("CRED_ENCRYPTION_KEY not set — cannot store endpoint keys.");
-    const id = `custom:${randomUUID()}`;
+    // A role-bound endpoint takes the role id (overriding that preset); otherwise a fresh custom id.
+    const id = input.role ?? `custom:${randomUUID()}`;
     await this.store.create({
       id,
       label: input.label,
@@ -82,7 +88,8 @@ export class LlmService {
   }
 
   async deleteEndpoint(id: string): Promise<void> {
-    if (!id.startsWith("custom:")) throw new BadRequestException("only custom endpoints can be removed");
+    // Removes a custom endpoint, or clears a role override (reverting to the env preset).
+    // Deleting a bare preset id with no override stored is a harmless no-op.
     await this.store.delete(id);
   }
 

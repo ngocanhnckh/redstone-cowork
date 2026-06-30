@@ -101,9 +101,20 @@ describe("LlmService", () => {
     expect((await svc.models()).map((m) => m.id)).not.toContain(info.id);
   });
 
-  it("refuses to delete a preset id", async () => {
-    const svc = make(port, ENDPOINTS, session);
-    await expect(svc.deleteEndpoint("flash")).rejects.toThrow();
+  it("a role override replaces that preset in place, and delete reverts to the preset", async () => {
+    const store = new InMemoryLlmEndpointStore();
+    const svc = make(port, ENDPOINTS, session, store);
+    const info = await svc.addEndpoint({ label: "My flash", baseUrl: "https://o/v1", apiKey: "k", model: "fast-x", role: "flash" });
+    expect(info.id).toBe("flash"); // bound to the role id, not custom:<uuid>
+    const flash = (await svc.models()).find((m) => m.id === "flash")!;
+    expect(flash).toMatchObject({ model: "fast-x", kind: "custom" }); // overrides the preset in place
+    expect((await svc.models()).filter((m) => m.id === "flash").length).toBe(1); // no duplicate
+    // routing to flash now uses the override's endpoint
+    await svc.chat({ modelId: "flash", messages: [{ role: "user", content: "hi" }] });
+    expect(calls.at(-1)).toMatchObject({ model: "fast-x", apiKey: "k" });
+    // clearing the override reverts to the env preset
+    await svc.deleteEndpoint("flash");
+    expect((await svc.models()).find((m) => m.id === "flash")).toMatchObject({ model: "syn:small:text", kind: "preset" });
   });
 
   it("applies the server default output cap, and a custom endpoint's own cap", async () => {

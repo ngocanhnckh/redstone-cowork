@@ -151,6 +151,7 @@ declare global {
         apiKey: string;
         model: string;
         maxTokens?: number;
+        role?: "text" | "flash" | "vision";
       }): Promise<LlmModelInfo>;
       deleteLlmEndpoint(id: string): Promise<void>;
 
