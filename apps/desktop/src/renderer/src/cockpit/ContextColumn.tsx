@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useStore } from "../store";
 import { Todo } from "../types";
 
@@ -54,10 +55,25 @@ export default function ContextColumn({ sessionId }: { sessionId?: string } = {}
   const focusId = useStore((s) => s.focusId);
   const sessions = useStore((s) => s.sessions);
   const queue = useStore((s) => s.queue);
+  const refresh = useStore((s) => s.refresh);
+  const [summarizing, setSummarizing] = useState(false);
 
   const id = sessionId ?? focusId;
   const session =
     sessions.find((s) => s.id === id) ?? queue.find((s) => s.id === id);
+
+  async function summarize() {
+    if (!id || summarizing) return;
+    setSummarizing(true);
+    try {
+      await window.cowork.llmAssist({ sessionId: id, kind: "summarize" });
+      await refresh();
+    } catch {
+      /* surfaced as no-change; the assistant panel shows detailed errors */
+    } finally {
+      setSummarizing(false);
+    }
+  }
 
   return (
     <div
@@ -70,7 +86,27 @@ export default function ContextColumn({ sessionId }: { sessionId?: string } = {}
         overflowY: "auto",
       }}
     >
-      <div className="kicker">Summary</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div className="kicker">Summary</div>
+        <span style={{ flex: 1 }} />
+        <button
+          onClick={summarize}
+          disabled={summarizing || !session}
+          title="Summarize this session with the LLM"
+          style={{
+            border: "1px solid var(--border)",
+            background: summarizing ? "rgb(var(--primary) / 0.2)" : "transparent",
+            color: "var(--text-soft)",
+            borderRadius: 7,
+            padding: "3px 9px",
+            fontSize: 10,
+            fontFamily: "var(--font-mono)",
+            cursor: summarizing ? "default" : "pointer",
+          }}
+        >
+          {summarizing ? "…" : session?.summary ? "↻ refresh" : "✦ summarize"}
+        </button>
+      </div>
       <div
         className="glass-inset no-scrollbar"
         style={{

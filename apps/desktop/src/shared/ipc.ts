@@ -37,4 +37,6 @@ export const IPC = {
   filesCreate: "api:files:create",
   filesUpload: "api:files:upload",
   clipboardWrite: "api:clipboard:write",
+  llmModels: "api:llm:models",
+  llmAssist: "api:llm:assist",
 } as const;

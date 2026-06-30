@@ -108,6 +108,26 @@ export type SshResult = {
   at: string;
 };
 
+// ---- LLM assistant ----
+export type LlmModelInfo = { id: string; label: string; model: string; kind: "preset" | "custom" };
+
+export async function llmModels(): Promise<LlmModelInfo[]> {
+  const json = (await (await req("/llm/models")).json()) as { models: LlmModelInfo[] };
+  return json.models ?? [];
+}
+
+export async function llmAssist(a: {
+  sessionId: string;
+  kind: "chat" | "optimize" | "summarize";
+  modelId?: string;
+  input?: string;
+}): Promise<string> {
+  const json = (await (
+    await req("/llm/assist", { method: "POST", body: JSON.stringify(a) })
+  ).json()) as { text: string };
+  return json.text;
+}
+
 export async function getSshResult(sessionId: string): Promise<SshResult | null> {
   const res = await req(`/sessions/${encodeURIComponent(sessionId)}/ssh-result`);
   const text = await res.text();

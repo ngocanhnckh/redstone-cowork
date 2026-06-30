@@ -5,6 +5,7 @@ import QueueRail from "./QueueRail";
 import FocusStage from "./FocusStage";
 import ContextColumn from "./ContextColumn";
 import AgentGrid from "./AgentGrid";
+import AssistPanel from "./AssistPanel";
 
 const noDrag = { WebkitAppRegion: "no-drag" } as CSSProperties;
 
@@ -20,6 +21,7 @@ export default function Cockpit() {
   const activeTabMap = useStore((s) => s.activeTab);
   const contextCollapsed = useStore((s) => s.contextCollapsed);
   const toggleContext = useStore((s) => s.toggleContext);
+  const toggleAssist = useStore((s) => s.toggleAssist);
 
   useEffect(() => {
     const unsub = startCockpit();
@@ -52,6 +54,18 @@ export default function Cockpit() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [detailId, focusId, activeTabMap, setActiveTab]);
+
+  // ⌃J toggles the LLM assistant slide-over.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey && !e.metaKey && !e.altKey && (e.key === "j" || e.key === "J")) {
+        e.preventDefault();
+        toggleAssist();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [toggleAssist]);
 
   const seg = (m: "flow" | "grid", label: string) => (
     <button
@@ -123,6 +137,27 @@ export default function Cockpit() {
             redstone cowork
           </span>
           <div style={{ flex: 1 }} />
+          {/* LLM assistant */}
+          <button
+            onClick={toggleAssist}
+            title="Assistant — chat, optimize, summarize (⌃J)"
+            style={{
+              ...noDrag,
+              border: "1px solid var(--border)",
+              background: "transparent",
+              color: "var(--text-soft)",
+              borderRadius: 8,
+              padding: "4px 10px",
+              fontSize: 11.5,
+              fontFamily: "var(--font-mono)",
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            <span className="ai-core" style={{ width: 11, height: 11 }} /> assist
+          </button>
           {/* Collapse / expand the right details sidebar */}
           <button
             onClick={toggleContext}
@@ -207,6 +242,8 @@ export default function Cockpit() {
           </div>
         )}
       </div>
+
+      <AssistPanel />
     </div>
   );
 }

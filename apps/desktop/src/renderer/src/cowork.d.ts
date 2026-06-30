@@ -137,12 +137,23 @@ declare global {
       }): Promise<{ ok: boolean; uploaded: number; error?: string }>;
       copyText(text: string): Promise<{ ok: boolean; error?: string }>;
 
+      // LLM assistant
+      getLlmModels(): Promise<LlmModelInfo[]>;
+      llmAssist(a: {
+        sessionId: string;
+        kind: "chat" | "optimize" | "summarize";
+        modelId?: string;
+        input?: string;
+      }): Promise<string>;
+
       // Stream
       onUpdate(cb: () => void): () => void;
     };
   }
 
   type ForwardStatus = "local" | "starting" | "active" | "failed" | "stopped";
+
+  type LlmModelInfo = { id: string; label: string; model: string; kind: "preset" | "custom" };
 
   type DirEntry = { name: string; path: string; kind: "dir" | "file"; size: number };
 

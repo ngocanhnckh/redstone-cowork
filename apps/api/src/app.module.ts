@@ -54,10 +54,16 @@ import { DEVICE_TOKEN_STORE } from "./domain/devices/device-token-store.port";
 import { InMemoryDeviceTokenStore } from "./adapters/persistence/in-memory-device-token-store";
 import { PostgresDeviceTokenStore } from "./adapters/persistence/postgres-device-token-store";
 import { PG_POOL, pgPoolProvider, PoolShutdown } from "./infrastructure/pg-pool.provider";
+import { LlmController } from "./adapters/http/llm.controller";
+import { LlmService } from "./application/llm.service";
+import { LLM_PORT, LLM_ENDPOINTS } from "./domain/llm/llm.port";
+import { OpenAiCompatibleLlm } from "./adapters/llm/openai-llm.adapter";
+import { endpointsFromEnv } from "./adapters/llm/endpoints-from-env";
+import { PromptLoader } from "./infrastructure/prompts/prompt-loader";
 import type { Pool } from "pg";
 
 @Module({
-  controllers: [HealthController, EventsController, SessionsController, DecisionsController, StreamController, PushController, ConnectionsController, OAuthController, MicrosoftOAuthController, DevicesController, InstallController],
+  controllers: [HealthController, EventsController, SessionsController, DecisionsController, StreamController, PushController, ConnectionsController, OAuthController, MicrosoftOAuthController, DevicesController, InstallController, LlmController],
   providers: [
     RecordEventUseCase,
     SessionsService,
@@ -72,6 +78,13 @@ import type { Pool } from "pg";
     EventsBus,
     DevicesService,
     MasterTokenGuard,
+    LlmService,
+    {
+      provide: PromptLoader,
+      useFactory: () => new PromptLoader(process.env.PROMPTS_DIR ?? "prompts"),
+    },
+    { provide: LLM_PORT, useFactory: () => new OpenAiCompatibleLlm() },
+    { provide: LLM_ENDPOINTS, useFactory: () => endpointsFromEnv() },
     // Single shared pool — null when DATABASE_URL is unset (tests run without DB)
     pgPoolProvider,
     // Graceful shutdown: ends the pool when the module is destroyed

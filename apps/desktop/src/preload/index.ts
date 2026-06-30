@@ -177,6 +177,16 @@ contextBridge.exposeInMainWorld("cowork", {
   copyText: (text: string): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke(IPC.clipboardWrite, { text }),
 
+  // LLM assistant
+  getLlmModels: (): Promise<Array<{ id: string; label: string; model: string; kind: "preset" | "custom" }>> =>
+    ipcRenderer.invoke(IPC.llmModels),
+  llmAssist: (a: {
+    sessionId: string;
+    kind: "chat" | "optimize" | "summarize";
+    modelId?: string;
+    input?: string;
+  }): Promise<string> => ipcRenderer.invoke(IPC.llmAssist, a),
+
   // Stream
   onUpdate: (cb: () => void): (() => void) => {
     const handler = () => cb();
