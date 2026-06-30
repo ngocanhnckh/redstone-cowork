@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach } from "vitest";
 import { writeFileSync, rmSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { readLastAssistantText, readRecentMessages, MAX_SUMMARY_CHARS } from "../src/transcript";
+import { readLastAssistantText, readRecentMessages, readLatestTodos, MAX_SUMMARY_CHARS } from "../src/transcript";
 
 const made: string[] = [];
 const writeJsonl = (lines: object[]): string => {
@@ -65,6 +65,41 @@ describe("readLastAssistantText", () => {
     const path = join(dir, "session.jsonl");
     writeFileSync(path, 'not json\n{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"ok"}]}}\n');
     expect(readLastAssistantText(path)).toBe("ok");
+  });
+});
+
+describe("readLatestTodos", () => {
+  const todoLine = (todos: object[]) => ({
+    type: "assistant",
+    message: { role: "assistant", content: [{ type: "tool_use", name: "TodoWrite", input: { todos } }] },
+  });
+
+  it("returns the latest TodoWrite, mapping content→text and clamping status", () => {
+    const path = writeJsonl([
+      todoLine([{ content: "old plan", status: "pending" }]),
+      { type: "assistant", message: { role: "assistant", content: [{ type: "text", text: "working" }] } },
+      todoLine([
+        { content: "ship feature", status: "in_progress" },
+        { content: "write tests", status: "completed" },
+        { content: "deploy", status: "weird" },
+      ]),
+    ]);
+    expect(readLatestTodos(path)).toEqual([
+      { text: "ship feature", status: "in_progress" },
+      { text: "write tests", status: "completed" },
+      { text: "deploy", status: "pending" },
+    ]);
+  });
+
+  it("returns [] when there is no TodoWrite", () => {
+    const path = writeJsonl([
+      { type: "assistant", message: { role: "assistant", content: [{ type: "text", text: "hi" }] } },
+    ]);
+    expect(readLatestTodos(path)).toEqual([]);
+  });
+
+  it("returns [] for a missing path", () => {
+    expect(readLatestTodos(null)).toEqual([]);
   });
 });
 

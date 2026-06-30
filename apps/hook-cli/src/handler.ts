@@ -3,7 +3,7 @@ import { loadCliConfig } from "./config";
 import { ApiClient } from "./api-client";
 import { isArmed as isArmedFs, disarm as disarmFs } from "./state";
 import { buildDecisionSpec } from "./decision-spec";
-import { readLastAssistantText, readRecentMessages } from "./transcript";
+import { readLastAssistantText, readRecentMessages, readLatestTodos } from "./transcript";
 
 export type HookEvent = {
   hook_event_name: string;
@@ -30,6 +30,8 @@ export type Deps = {
   lastAssistantText: (event: HookEvent) => string | null;
   /** Recent user prompts + assistant prose from the transcript tail. */
   recentMessages: (event: HookEvent) => import("@rcw/shared").TranscriptMessage[];
+  /** Claude's current to-do list (latest TodoWrite) from the transcript. */
+  latestTodos: (event: HookEvent) => import("@rcw/shared").TodoItem[];
 };
 
 export async function processEvent(
@@ -86,6 +88,7 @@ export async function processEvent(
       await deps.api.pushState(event.session_id, {
         latestAnswer: deps.lastAssistantText(event),
         transcript: deps.recentMessages(event),
+        todos: deps.latestTodos(event),
         working,
       });
     }
@@ -162,6 +165,7 @@ export async function handle(): Promise<void> {
     autoModeEnabled,
     lastAssistantText: (e) => readLastAssistantText(e.transcript_path),
     recentMessages: (e) => readRecentMessages(e.transcript_path),
+    latestTodos: (e) => readLatestTodos(e.transcript_path),
   });
   if (out) process.stdout.write(JSON.stringify(out));
 }

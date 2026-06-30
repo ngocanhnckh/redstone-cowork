@@ -1,5 +1,5 @@
 import { openSync, fstatSync, readSync, closeSync } from "node:fs";
-import type { TranscriptMessage } from "@rcw/shared";
+import type { TranscriptMessage, TodoItem } from "@rcw/shared";
 
 /** Cap stored message length — enough to read on expand, small enough not to bloat the payload/DB. */
 export const MAX_SUMMARY_CHARS = 2000;
@@ -149,6 +149,57 @@ export function readRecentMessages(path: string | null | undefined, limit = 40):
       out.push({ role: role as "user" | "assistant", text: text.slice(0, cap) });
     }
     return out.slice(-limit);
+  } catch {
+    return [];
+  } finally {
+    if (fd !== null) { try { closeSync(fd); } catch { /* ignore */ } }
+  }
+}
+
+/**
+ * The current Claude Code to-do list for the session — the input of the most
+ * recent `TodoWrite` tool call in the transcript. Claude maintains this itself,
+ * so it's the real plan, free to read. Maps Claude's `{content,status}` shape to
+ * our `{text,status}`. Returns [] when the session has no todos. Never throws.
+ */
+export function readLatestTodos(path: string | null | undefined): TodoItem[] {
+  if (!path) return [];
+  let fd: number | null = null;
+  try {
+    fd = openSync(path, "r");
+    const size = fstatSync(fd).size;
+    const start = Math.max(0, size - TAIL_BYTES);
+    const length = size - start;
+    if (length <= 0) return [];
+    const buf = Buffer.allocUnsafe(length);
+    readSync(fd, buf, 0, length, start);
+    let text = buf.toString("utf8");
+    if (start > 0) { const nl = text.indexOf("\n"); text = nl >= 0 ? text.slice(nl + 1) : ""; }
+    const lines = text.split("\n");
+    // Walk newest→oldest: the latest TodoWrite reflects the live plan.
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const line = lines[i].trim();
+      if (!line || !line.includes("TodoWrite")) continue;
+      let obj: TranscriptLine;
+      try { obj = JSON.parse(line); } catch { continue; }
+      const content = obj.message?.content;
+      if (!Array.isArray(content)) continue;
+      for (const b of content) {
+        if (b?.type === "tool_use" && b.name === "TodoWrite") {
+          const raw = (b.input as { todos?: unknown })?.todos;
+          if (!Array.isArray(raw)) continue;
+          const todos: TodoItem[] = [];
+          for (const t of raw as Array<Record<string, unknown>>) {
+            const txt = typeof t?.content === "string" ? t.content : typeof t?.text === "string" ? t.text : "";
+            if (!txt) continue;
+            const status = t?.status === "completed" || t?.status === "in_progress" ? t.status : "pending";
+            todos.push({ text: txt.slice(0, 300), status });
+          }
+          return todos;
+        }
+      }
+    }
+    return [];
   } catch {
     return [];
   } finally {

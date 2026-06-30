@@ -19,6 +19,7 @@ const baseDeps = (overrides: Partial<Deps> = {}): Deps => ({
   autoModeEnabled: false,
   lastAssistantText: vi.fn().mockReturnValue(null),
   recentMessages: vi.fn().mockReturnValue([]),
+  latestTodos: vi.fn().mockReturnValue([]),
   ...overrides,
 });
 
