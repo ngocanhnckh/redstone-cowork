@@ -186,6 +186,14 @@ contextBridge.exposeInMainWorld("cowork", {
     modelId?: string;
     input?: string;
   }): Promise<string> => ipcRenderer.invoke(IPC.llmAssist, a),
+  addLlmEndpoint: (a: {
+    label: string;
+    baseUrl: string;
+    apiKey: string;
+    model: string;
+  }): Promise<{ id: string; label: string; model: string; kind: "preset" | "custom" }> =>
+    ipcRenderer.invoke(IPC.llmAddEndpoint, a),
+  deleteLlmEndpoint: (id: string): Promise<void> => ipcRenderer.invoke(IPC.llmDeleteEndpoint, { id }),
 
   // Stream
   onUpdate: (cb: () => void): (() => void) => {

@@ -145,6 +145,13 @@ declare global {
         modelId?: string;
         input?: string;
       }): Promise<string>;
+      addLlmEndpoint(a: {
+        label: string;
+        baseUrl: string;
+        apiKey: string;
+        model: string;
+      }): Promise<LlmModelInfo>;
+      deleteLlmEndpoint(id: string): Promise<void>;
 
       // Stream
       onUpdate(cb: () => void): () => void;

@@ -40,3 +40,12 @@ export type AssistRequest = z.infer<typeof AssistRequestSchema>;
 
 export const AssistResponseSchema = z.object({ text: z.string() });
 export type AssistResponse = z.infer<typeof AssistResponseSchema>;
+
+/** Payload to add a user-defined OpenAI-compatible endpoint. */
+export const LlmEndpointInputSchema = z.object({
+  label: z.string().min(1).max(60),
+  baseUrl: z.string().url(),
+  apiKey: z.string().min(1),
+  model: z.string().min(1),
+});
+export type LlmEndpointInput = z.infer<typeof LlmEndpointInputSchema>;

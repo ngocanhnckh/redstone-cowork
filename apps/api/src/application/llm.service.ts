@@ -1,12 +1,16 @@
 import { BadRequestException, Inject, Injectable, ServiceUnavailableException } from "@nestjs/common";
+import { randomUUID } from "node:crypto";
 import {
   type AssistRequest,
   type LlmChatRequest,
+  type LlmEndpointInput,
   type LlmMessage,
   type LlmModelInfo,
   type AgentSession,
 } from "@rcw/shared";
 import { LLM_PORT, LLM_ENDPOINTS, type LlmPort, type LlmEndpoint } from "../domain/llm/llm.port";
+import { LLM_ENDPOINT_STORE, type LlmEndpointStore } from "../domain/llm/llm-endpoint-store.port";
+import { CredentialCipher } from "../infrastructure/credential-cipher";
 import { PromptLoader } from "../infrastructure/prompts/prompt-loader";
 import { SessionsService } from "./sessions.service";
 
@@ -18,25 +22,67 @@ const MAX_TRANSCRIPT_CHARS = 12_000;
 export class LlmService {
   constructor(
     @Inject(LLM_PORT) private readonly llm: LlmPort,
-    @Inject(LLM_ENDPOINTS) private readonly endpoints: LlmEndpoint[],
+    @Inject(LLM_ENDPOINTS) private readonly presets: LlmEndpoint[],
+    @Inject(LLM_ENDPOINT_STORE) private readonly store: LlmEndpointStore,
+    private readonly cipher: CredentialCipher,
     private readonly prompts: PromptLoader,
     private readonly sessions: SessionsService,
   ) {}
 
-  /** Models the cockpit can target, without leaking keys. */
-  models(): LlmModelInfo[] {
-    return this.endpoints.map((e) => ({ id: e.id, label: e.label, model: e.model, kind: e.kind }));
+  /** Custom endpoints from the store, decrypted; skips any that fail to decrypt. */
+  private async customEndpoints(): Promise<LlmEndpoint[]> {
+    const rows = await this.store.list();
+    const out: LlmEndpoint[] = [];
+    for (const r of rows) {
+      try {
+        out.push({ id: r.id, label: r.label, baseUrl: r.baseUrl, model: r.model, apiKey: this.cipher.decrypt(r.keyCipher), kind: "custom" });
+      } catch {
+        // key rotated / corrupt cipher — skip rather than crash the model list
+      }
+    }
+    return out;
   }
 
-  private resolve(modelId?: string): LlmEndpoint {
-    if (this.endpoints.length === 0)
+  private async allEndpoints(): Promise<LlmEndpoint[]> {
+    return [...this.presets, ...(await this.customEndpoints())];
+  }
+
+  /** Models the cockpit can target (presets + custom), without leaking keys. */
+  async models(): Promise<LlmModelInfo[]> {
+    return (await this.allEndpoints()).map((e) => ({ id: e.id, label: e.label, model: e.model, kind: e.kind }));
+  }
+
+  private async resolve(modelId?: string): Promise<LlmEndpoint> {
+    const endpoints = await this.allEndpoints();
+    if (endpoints.length === 0)
       throw new ServiceUnavailableException("No LLM models configured on the server.");
     if (modelId) {
-      const found = this.endpoints.find((e) => e.id === modelId);
+      const found = endpoints.find((e) => e.id === modelId);
       if (found) return found;
     }
     // Default: prefer flash, then the first configured.
-    return this.endpoints.find((e) => e.id === "flash") ?? this.endpoints[0];
+    return endpoints.find((e) => e.id === "flash") ?? endpoints[0];
+  }
+
+  /** Add a custom OpenAI-compatible endpoint; the key is encrypted at rest. */
+  async addEndpoint(input: LlmEndpointInput): Promise<LlmModelInfo> {
+    if (!this.cipher.isConfigured())
+      throw new ServiceUnavailableException("CRED_ENCRYPTION_KEY not set — cannot store endpoint keys.");
+    const id = `custom:${randomUUID()}`;
+    await this.store.create({
+      id,
+      label: input.label,
+      baseUrl: input.baseUrl,
+      model: input.model,
+      keyCipher: this.cipher.encrypt(input.apiKey),
+      createdAt: new Date(),
+    });
+    return { id, label: input.label, model: input.model, kind: "custom" };
+  }
+
+  async deleteEndpoint(id: string): Promise<void> {
+    if (!id.startsWith("custom:")) throw new BadRequestException("only custom endpoints can be removed");
+    await this.store.delete(id);
   }
 
   private async call(endpoint: LlmEndpoint, messages: LlmMessage[], opts?: { temperature?: number; maxTokens?: number }): Promise<string> {
@@ -52,7 +98,7 @@ export class LlmService {
 
   /** Raw chat passthrough (used by the assistant's free-form panel). */
   async chat(req: LlmChatRequest): Promise<string> {
-    return this.call(this.resolve(req.modelId), req.messages);
+    return this.call(await this.resolve(req.modelId), req.messages);
   }
 
   /** Render a session's transcript into a compact, role-tagged block for prompts. */
@@ -70,7 +116,7 @@ export class LlmService {
     const session = await this.sessions.get(req.sessionId);
     if (!session) throw new BadRequestException("unknown session");
     const conversation = this.formatConversation(session);
-    const endpoint = this.resolve(req.modelId);
+    const endpoint = await this.resolve(req.modelId);
 
     if (req.kind === "summarize") {
       const text = await this.call(

@@ -128,6 +128,19 @@ export async function llmAssist(a: {
   return json.text;
 }
 
+export async function addLlmEndpoint(a: {
+  label: string;
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+}): Promise<LlmModelInfo> {
+  return (await (await req("/llm/endpoints", { method: "POST", body: JSON.stringify(a) })).json()) as LlmModelInfo;
+}
+
+export async function deleteLlmEndpoint(id: string): Promise<void> {
+  await req(`/llm/endpoints/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
 export async function getSshResult(sessionId: string): Promise<SshResult | null> {
   const res = await req(`/sessions/${encodeURIComponent(sessionId)}/ssh-result`);
   const text = await res.text();

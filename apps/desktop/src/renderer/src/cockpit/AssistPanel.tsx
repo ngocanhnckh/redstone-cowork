@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useStore } from "../store";
 import Markdown from "./Markdown";
 import Kbd from "./Kbd";
@@ -25,19 +25,56 @@ export default function AssistPanel() {
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const [manage, setManage] = useState(false);
+  const [form, setForm] = useState({ label: "", baseUrl: "", model: "", apiKey: "" });
+  const [formErr, setFormErr] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const loadModels = useCallback(async () => {
+    try {
+      const m = await window.cowork.getLlmModels();
+      setModels(m);
+      if (m[0]) setModelId((cur) => (cur && m.some((x) => x.id === cur) ? cur : m.find((x) => x.id === "flash")?.id ?? m[0].id));
+    } catch {
+      setModels([]);
+    }
+  }, []);
 
   // Load the configured models once the panel first opens.
   useEffect(() => {
-    if (!open || models) return;
-    window.cowork
-      .getLlmModels()
-      .then((m) => {
-        setModels(m);
-        if (m[0]) setModelId((cur) => cur || (m.find((x) => x.id === "flash")?.id ?? m[0].id));
-      })
-      .catch(() => setModels([]));
-  }, [open, models]);
+    if (open && !models) loadModels();
+  }, [open, models, loadModels]);
+
+  async function addEndpoint() {
+    setFormErr(null);
+    if (!form.label.trim() || !form.baseUrl.trim() || !form.model.trim() || !form.apiKey.trim()) {
+      setFormErr("all fields are required");
+      return;
+    }
+    try {
+      const info = await window.cowork.addLlmEndpoint({
+        label: form.label.trim(),
+        baseUrl: form.baseUrl.trim(),
+        model: form.model.trim(),
+        apiKey: form.apiKey.trim(),
+      });
+      setForm({ label: "", baseUrl: "", model: "", apiKey: "" });
+      await loadModels();
+      setModelId(info.id);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setFormErr(/503/.test(msg) ? "Server can't store keys (CRED_ENCRYPTION_KEY not set)." : msg);
+    }
+  }
+
+  async function removeEndpoint(id: string) {
+    try {
+      await window.cowork.deleteLlmEndpoint(id);
+      await loadModels();
+    } catch {
+      /* ignore */
+    }
+  }
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -130,8 +167,51 @@ export default function AssistPanel() {
             {!models && <option>loading…</option>}
             {noModels && <option>no models</option>}
           </select>
+          <button onClick={() => setManage((v) => !v)} title="Manage models" style={{ ...iconBtn, color: manage ? "var(--text)" : "var(--text-soft)" }}>⚙</button>
           <button onClick={toggle} title="Close (⌃J)" style={iconBtn}>✕</button>
         </div>
+
+        {/* Manage models */}
+        {manage && (
+          <div style={{ padding: "12px 18px", borderBottom: "1px solid var(--border)", background: "rgba(255,255,255,0.02)" }}>
+            <div className="kicker" style={{ marginBottom: 8 }}>Models</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: 12 }}>
+              {(models ?? []).map((m) => (
+                <div key={m.id} className="mono" style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: "var(--text-soft)" }}>
+                  <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {m.label} <span className="faint">· {m.model}</span>
+                  </span>
+                  <span className="faint" style={{ fontSize: 9, textTransform: "uppercase" }}>{m.kind}</span>
+                  {m.kind === "custom" && (
+                    <button onClick={() => removeEndpoint(m.id)} title="Remove" style={{ ...iconBtn, width: 20, height: 20, fontSize: 11 }}>×</button>
+                  )}
+                </div>
+              ))}
+            </div>
+            <div className="kicker" style={{ marginBottom: 8 }}>Add custom endpoint</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {([
+                ["label", "Label (e.g. My GPT-4o)"],
+                ["baseUrl", "Base URL (https://…/v1)"],
+                ["model", "Model name"],
+                ["apiKey", "API key"],
+              ] as const).map(([k, ph]) => (
+                <input
+                  key={k}
+                  value={form[k]}
+                  type={k === "apiKey" ? "password" : "text"}
+                  onChange={(e) => setForm((f) => ({ ...f, [k]: e.target.value }))}
+                  placeholder={ph}
+                  style={miniInput}
+                />
+              ))}
+              {formErr && <div style={{ color: "#e0736a", fontSize: 10.5 }}>{formErr}</div>}
+              <button onClick={addEndpoint} className="glass-btn--clay" style={{ alignSelf: "flex-start", padding: "5px 14px", fontSize: 11.5, fontWeight: 600 }}>
+                Add endpoint
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Quick actions */}
         <div style={{ display: "flex", gap: 7, padding: "10px 18px", borderBottom: "1px solid var(--border)" }}>
@@ -214,4 +294,9 @@ const iconBtn: React.CSSProperties = {
 const chip: React.CSSProperties = {
   border: "1px solid var(--border)", background: "transparent", color: "var(--text-soft)",
   borderRadius: 999, padding: "5px 13px", fontSize: 11.5, fontFamily: "var(--font-mono)", cursor: "pointer",
+};
+const miniInput: React.CSSProperties = {
+  borderRadius: 8, border: "1px solid var(--border)", padding: "6px 10px", color: "var(--text)",
+  caretColor: "rgb(var(--primary-soft))", fontSize: 11.5, background: "rgba(255,255,255,0.03)",
+  outline: "none", fontFamily: "var(--font-mono)", boxSizing: "border-box", width: "100%",
 };
