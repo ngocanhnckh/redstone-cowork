@@ -91,7 +91,10 @@ export async function processEvent(
       const todoToolRan =
         event.hook_event_name === "PostToolUse" &&
         /^(TaskCreate|TaskUpdate|TaskDelete|TodoWrite)$/.test(event.tool_name ?? "");
-      const refreshTodos = todoToolRan || event.hook_event_name === "SessionStart";
+      // Refresh on task-tool runs (live), on SessionStart (load existing), and on
+      // Stop (once per turn — cheap enough, keeps the list current for the user).
+      const refreshTodos =
+        todoToolRan || event.hook_event_name === "SessionStart" || event.hook_event_name === "Stop";
       await deps.api.pushState(event.session_id, {
         latestAnswer: deps.lastAssistantText(event),
         transcript: deps.recentMessages(event),

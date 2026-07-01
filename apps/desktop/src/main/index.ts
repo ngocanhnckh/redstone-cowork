@@ -119,6 +119,23 @@ function createWindow(): void {
 
   win.on("ready-to-show", () => win.show());
 
+  // Links in the chat/markdown must NOT navigate the app away. Open http(s) links
+  // to a different origin in the user's real browser; deny popups likewise.
+  const appOrigin = (): string => {
+    try { return new URL(win.webContents.getURL()).origin; } catch { return ""; }
+  };
+  win.webContents.on("will-navigate", (e, url) => {
+    if (/^https?:/i.test(url)) {
+      try { if (new URL(url).origin === appOrigin()) return; } catch { /* treat as external */ }
+      e.preventDefault();
+      shell.openExternal(url);
+    }
+  });
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:/i.test(url)) shell.openExternal(url);
+    return { action: "deny" };
+  });
+
   if (process.env.ELECTRON_RENDERER_URL) {
     win.loadURL(process.env.ELECTRON_RENDERER_URL);
   } else {
