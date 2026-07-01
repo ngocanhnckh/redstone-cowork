@@ -24,3 +24,6 @@ coverage/
 
 # Brainstorm visual companion scratch
 .superpowers/
+
+# Local agent worktrees / session state
+.claude/
