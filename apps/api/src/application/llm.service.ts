@@ -35,7 +35,7 @@ export class LlmService {
     const out: LlmEndpoint[] = [];
     for (const r of rows) {
       try {
-        out.push({ id: r.id, label: r.label, baseUrl: r.baseUrl, model: r.model, apiKey: this.cipher.decrypt(r.keyCipher), kind: "custom", maxTokens: r.maxTokens });
+        out.push({ id: r.id, label: r.label, baseUrl: r.baseUrl, model: r.model, apiKey: this.cipher.decrypt(r.keyCipher), kind: "custom", maxTokens: r.maxTokens, maxInputTokens: r.maxInputTokens });
       } catch {
         // key rotated / corrupt cipher — skip rather than crash the model list
       }
@@ -54,7 +54,7 @@ export class LlmService {
 
   /** Models the cockpit can target (presets + custom), without leaking keys. */
   async models(): Promise<LlmModelInfo[]> {
-    return (await this.allEndpoints()).map((e) => ({ id: e.id, label: e.label, model: e.model, kind: e.kind, maxTokens: e.maxTokens ?? null }));
+    return (await this.allEndpoints()).map((e) => ({ id: e.id, label: e.label, model: e.model, kind: e.kind, maxTokens: e.maxTokens ?? null, maxInputTokens: e.maxInputTokens ?? null }));
   }
 
   /** Public endpoint resolution for the agent loop (with keys). */
@@ -62,11 +62,11 @@ export class LlmService {
     return this.resolve(modelId);
   }
 
-  /** Formatted, token-capped conversation for a session; throws if unknown. */
-  async conversationForSession(sessionId: string): Promise<string> {
+  /** Formatted, token-capped conversation for a session; throws if unknown. `maxInputTokens` overrides the global budget. */
+  async conversationForSession(sessionId: string, maxInputTokens?: number | null): Promise<string> {
     const session = await this.sessions.get(sessionId);
     if (!session) throw new BadRequestException("unknown session");
-    return this.formatConversation(session);
+    return this.formatConversation(session, maxInputTokens);
   }
 
   private async resolve(modelId?: string): Promise<LlmEndpoint> {
@@ -94,9 +94,10 @@ export class LlmService {
       model: input.model,
       keyCipher: this.cipher.encrypt(input.apiKey),
       maxTokens: input.maxTokens ?? null,
+      maxInputTokens: input.maxInputTokens ?? null,
       createdAt: new Date(),
     });
-    return { id, label: input.label, model: input.model, kind: "custom", maxTokens: input.maxTokens ?? null };
+    return { id, label: input.label, model: input.model, kind: "custom", maxTokens: input.maxTokens ?? null, maxInputTokens: input.maxInputTokens ?? null };
   }
 
   async deleteEndpoint(id: string): Promise<void> {
@@ -127,8 +128,10 @@ export class LlmService {
    * to the configured context-token budget (recent turns kept). Approximates
    * tokens by chars so we never ship more than ~maxContextTokens of context.
    */
-  private formatConversation(session: AgentSession): string {
-    const charBudget = this.limits.maxContextTokens * APPROX_CHARS_PER_TOKEN;
+  private formatConversation(session: AgentSession, maxInputTokens?: number | null): string {
+    // Per-endpoint cap when given, else the server default — always hard-capped under 100k.
+    const tokenBudget = Math.min(100_000, Math.max(100, maxInputTokens ?? this.limits.maxContextTokens));
+    const charBudget = tokenBudget * APPROX_CHARS_PER_TOKEN;
     const msgs = session.transcript.slice(-MAX_TRANSCRIPT_MESSAGES);
     let out = msgs
       .map((m) => `${m.role === "assistant" ? "Claude" : "Operator"}: ${m.text}`)
@@ -141,8 +144,8 @@ export class LlmService {
   async assist(req: AssistRequest): Promise<string> {
     const session = await this.sessions.get(req.sessionId);
     if (!session) throw new BadRequestException("unknown session");
-    const conversation = this.formatConversation(session);
     const endpoint = await this.resolve(req.modelId);
+    const conversation = this.formatConversation(session, endpoint.maxInputTokens);
 
     if (req.kind === "summarize") {
       const text = await this.call(

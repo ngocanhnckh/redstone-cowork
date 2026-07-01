@@ -39,7 +39,7 @@ export class AgentService {
   async run(input: { sessionId: string; input: string; modelId?: string }): Promise<AgentResult> {
     // Default to the Text (deep) model — agent reasoning wants the strong one.
     const endpoint = await this.llmService.resolveEndpoint(input.modelId ?? "text");
-    const conversation = await this.llmService.conversationForSession(input.sessionId);
+    const conversation = await this.llmService.conversationForSession(input.sessionId, endpoint.maxInputTokens);
     const system = this.prompts.render("llm/agent.md", { conversation });
 
     const messages: AgentMessage[] = [

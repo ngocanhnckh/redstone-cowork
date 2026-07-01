@@ -10,6 +10,8 @@ export type LlmEndpoint = {
   kind: "preset" | "custom";
   /** Per-endpoint output token cap; null/undefined → use the server default. */
   maxTokens?: number | null;
+  /** Per-endpoint input/context token cap; null/undefined → use the server default. */
+  maxInputTokens?: number | null;
 };
 
 export type LlmCallOptions = {

@@ -134,6 +134,7 @@ export async function addLlmEndpoint(a: {
   apiKey: string;
   model: string;
   maxTokens?: number;
+  maxInputTokens?: number;
   role?: "text" | "flash" | "vision";
 }): Promise<LlmModelInfo> {
   return (await (await req("/llm/endpoints", { method: "POST", body: JSON.stringify(a) })).json()) as LlmModelInfo;

@@ -20,6 +20,8 @@ const nextConfig: NextConfig = {
       { source: "/decisions", destination: `${API_URL}/decisions` },
       { source: "/decisions/:path*", destination: `${API_URL}/decisions/:path*` },
       { source: "/stream", destination: `${API_URL}/stream` },
+      // LLM assistant + agent (models, chat, assist, agent, custom endpoints).
+      { source: "/llm/:path*", destination: `${API_URL}/llm/:path*` },
     ];
   },
 };

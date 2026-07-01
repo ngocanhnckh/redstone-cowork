@@ -28,7 +28,7 @@ export default function AssistPanel() {
   const [busy, setBusy] = useState(false);
   const [agentOk, setAgentOk] = useState(false);
   const [manage, setManage] = useState(false);
-  const [form, setForm] = useState({ label: "", baseUrl: "", model: "", apiKey: "", maxTokens: "", role: "" });
+  const [form, setForm] = useState({ label: "", baseUrl: "", model: "", apiKey: "", maxInputTokens: "", role: "" });
   const [formErr, setFormErr] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -56,9 +56,9 @@ export default function AssistPanel() {
       setFormErr("all fields are required");
       return;
     }
-    const maxTokens = form.maxTokens.trim() ? Number.parseInt(form.maxTokens.trim(), 10) : undefined;
-    if (maxTokens !== undefined && (!Number.isInteger(maxTokens) || maxTokens <= 0)) {
-      setFormErr("max tokens must be a positive number");
+    const maxInputTokens = form.maxInputTokens.trim() ? Number.parseInt(form.maxInputTokens.trim(), 10) : undefined;
+    if (maxInputTokens !== undefined && (!Number.isInteger(maxInputTokens) || maxInputTokens <= 0)) {
+      setFormErr("max input tokens must be a positive number");
       return;
     }
     try {
@@ -67,10 +67,10 @@ export default function AssistPanel() {
         baseUrl: form.baseUrl.trim(),
         model: form.model.trim(),
         apiKey: form.apiKey.trim(),
-        maxTokens,
+        maxInputTokens,
         role: (form.role || undefined) as "text" | "flash" | "vision" | undefined,
       });
-      setForm({ label: "", baseUrl: "", model: "", apiKey: "", maxTokens: "", role: "" });
+      setForm({ label: "", baseUrl: "", model: "", apiKey: "", maxInputTokens: "", role: "" });
       await loadModels();
       setModelId(info.id);
     } catch (e) {
@@ -233,12 +233,12 @@ export default function AssistPanel() {
                 ["baseUrl", "Base URL (https://…/v1)"],
                 ["model", "Model name"],
                 ["apiKey", "API key"],
-                ["maxTokens", "Max output tokens (optional)"],
+                ["maxInputTokens", "Max input / context tokens (optional)"],
               ] as const).map(([k, ph]) => (
                 <input
                   key={k}
                   value={form[k]}
-                  type={k === "apiKey" ? "password" : k === "maxTokens" ? "number" : "text"}
+                  type={k === "apiKey" ? "password" : k === "maxInputTokens" ? "number" : "text"}
                   onChange={(e) => setForm((f) => ({ ...f, [k]: e.target.value }))}
                   placeholder={ph}
                   style={miniInput}

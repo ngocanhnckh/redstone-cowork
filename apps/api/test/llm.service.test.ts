@@ -46,8 +46,8 @@ describe("LlmService", () => {
   it("lists configured models without leaking keys", async () => {
     const svc = make(port, ENDPOINTS, session);
     expect(await svc.models()).toEqual([
-      { id: "text", label: "Large", model: "syn:large:text", kind: "preset", maxTokens: null },
-      { id: "flash", label: "Flash", model: "syn:small:text", kind: "preset", maxTokens: null },
+      { id: "text", label: "Large", model: "syn:large:text", kind: "preset", maxTokens: null, maxInputTokens: null },
+      { id: "flash", label: "Flash", model: "syn:small:text", kind: "preset", maxTokens: null, maxInputTokens: null },
     ]);
   });
 
@@ -133,6 +133,16 @@ describe("LlmService", () => {
     await svc.assist({ sessionId: "s1", kind: "summarize" });
     // budget 1000 tokens * 4 chars = 4000 chars (+ a short trim marker)
     expect(calls.at(-1)!.messages[1].content.length).toBeLessThan(4_200);
+  });
+
+  it("a custom endpoint's own input cap overrides the global context budget", async () => {
+    const big = { id: "s1", transcript: [{ role: "user", text: "Y".repeat(50_000) }] };
+    const store = new InMemoryLlmEndpointStore();
+    const svc = make(port, ENDPOINTS, fakeSessions(big), store, { maxContextTokens: 12_000, maxOutputTokens: 1_024 });
+    const info = await svc.addEndpoint({ label: "tiny-ctx", baseUrl: "https://c/v1", apiKey: "k", model: "m", maxInputTokens: 200 });
+    await svc.assist({ sessionId: "s1", kind: "summarize", modelId: info.id });
+    // 200 tokens * 4 = 800 chars (+ trim marker), far below the 12k global budget
+    expect(calls.at(-1)!.messages[1].content.length).toBeLessThan(1_000);
   });
 
   it("endpointsFromEnv only includes fully-configured tiers", () => {

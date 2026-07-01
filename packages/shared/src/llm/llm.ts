@@ -13,7 +13,8 @@ export const LlmModelInfoSchema = z.object({
   label: z.string().min(1),    // human label for the picker
   model: z.string().min(1),    // upstream model name
   kind: z.enum(["preset", "custom"]).default("preset"),
-  maxTokens: z.number().int().positive().nullable().optional(), // output cap (custom endpoints)
+  maxTokens: z.number().int().positive().nullable().optional(),      // output cap
+  maxInputTokens: z.number().int().positive().nullable().optional(), // context/input cap
 });
 export type LlmModelInfo = z.infer<typeof LlmModelInfoSchema>;
 
@@ -54,6 +55,8 @@ export const LlmEndpointInputSchema = z.object({
   model: z.string().min(1),
   /** Max output tokens for this endpoint; omit to use the server default. */
   maxTokens: z.number().int().positive().max(128_000).optional(),
+  /** Max input/context tokens to inject for this endpoint; omit to use the server default (hard-capped under 100k). */
+  maxInputTokens: z.number().int().positive().max(100_000).optional(),
   /** Bind this endpoint to a role (text/flash/vision), overriding that env preset; omit for a standalone custom model. */
   role: LlmRoleIdSchema.optional(),
 });

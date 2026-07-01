@@ -192,8 +192,9 @@ contextBridge.exposeInMainWorld("cowork", {
     apiKey: string;
     model: string;
     maxTokens?: number;
+    maxInputTokens?: number;
     role?: "text" | "flash" | "vision";
-  }): Promise<{ id: string; label: string; model: string; kind: "preset" | "custom"; maxTokens?: number | null }> =>
+  }): Promise<{ id: string; label: string; model: string; kind: "preset" | "custom"; maxTokens?: number | null; maxInputTokens?: number | null }> =>
     ipcRenderer.invoke(IPC.llmAddEndpoint, a),
   deleteLlmEndpoint: (id: string): Promise<void> => ipcRenderer.invoke(IPC.llmDeleteEndpoint, { id }),
   agentEnabled: (): Promise<boolean> => ipcRenderer.invoke(IPC.llmAgentEnabled),

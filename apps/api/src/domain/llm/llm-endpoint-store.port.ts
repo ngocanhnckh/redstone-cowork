@@ -6,6 +6,7 @@ export type StoredLlmEndpoint = {
   model: string;
   keyCipher: string;
   maxTokens: number | null;
+  maxInputTokens: number | null;
   createdAt: Date;
 };
 
