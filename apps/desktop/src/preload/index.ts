@@ -31,6 +31,12 @@ contextBridge.exposeInMainWorld("cowork", {
     ipcRenderer.invoke(IPC.instruct, { sessionId, text }),
   switchMode: (sessionId: string, mode: string): Promise<unknown> =>
     ipcRenderer.invoke(IPC.mode, { sessionId, mode }),
+  addUserTodo: (sessionId: string, text: string): Promise<unknown> =>
+    ipcRenderer.invoke(IPC.userTodoAdd, { sessionId, text }),
+  toggleUserTodo: (sessionId: string, todoId: string): Promise<unknown> =>
+    ipcRenderer.invoke(IPC.userTodoToggle, { sessionId, todoId }),
+  deleteUserTodo: (sessionId: string, todoId: string): Promise<unknown> =>
+    ipcRenderer.invoke(IPC.userTodoDelete, { sessionId, todoId }),
 
   // Workspace config
   getWorkspaceConfig: (a: {

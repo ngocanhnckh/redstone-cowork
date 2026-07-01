@@ -1,5 +1,6 @@
+import { randomUUID } from "node:crypto";
 import { Inject, Injectable } from "@nestjs/common";
-import { NewAgentSessionSchema, SessionStatePatchSchema, type AgentSession, type SessionStatePatch, type SessionStatus } from "@rcw/shared";
+import { NewAgentSessionSchema, SessionStatePatchSchema, type AgentSession, type SessionStatePatch, type SessionStatus, type UserTodo } from "@rcw/shared";
 import { SESSION_STORE, type SessionStore } from "../domain/sessions/session-store.port";
 import { EventsBus } from "./events-bus";
 
@@ -46,6 +47,7 @@ export class SessionsService {
       latestAnswer: null,
       summary: null,
       todos: [],
+      userTodos: existing?.userTodos ?? [],
       transcript: [],
       working: existing?.working ?? false,
       pinned: false,
@@ -109,6 +111,37 @@ export class SessionsService {
       const bw = b.waitingSince?.getTime() ?? 0;
       return aw - bw;
     });
+  }
+
+  /** Undone items float to the top; each group keeps insertion order (stable). */
+  private static sortUserTodos(todos: UserTodo[]): UserTodo[] {
+    return [...todos].sort((a, b) => Number(a.done) - Number(b.done));
+  }
+
+  async addUserTodo(id: string, text: string): Promise<AgentSession | null> {
+    const s = await this.store.get(id);
+    if (!s) return null;
+    const todo: UserTodo = { id: randomUUID(), text: text.trim(), done: false };
+    const updated = await this.store.setUserTodos(id, SessionsService.sortUserTodos([...s.userTodos, todo]));
+    if (updated) this.bus.emit({ type: "session.updated", payload: { id } });
+    return updated;
+  }
+
+  async toggleUserTodo(id: string, todoId: string): Promise<AgentSession | null> {
+    const s = await this.store.get(id);
+    if (!s) return null;
+    const flipped = s.userTodos.map((t) => (t.id === todoId ? { ...t, done: !t.done } : t));
+    const updated = await this.store.setUserTodos(id, SessionsService.sortUserTodos(flipped));
+    if (updated) this.bus.emit({ type: "session.updated", payload: { id } });
+    return updated;
+  }
+
+  async deleteUserTodo(id: string, todoId: string): Promise<AgentSession | null> {
+    const s = await this.store.get(id);
+    if (!s) return null;
+    const updated = await this.store.setUserTodos(id, s.userTodos.filter((t) => t.id !== todoId));
+    if (updated) this.bus.emit({ type: "session.updated", payload: { id } });
+    return updated;
   }
 
   get(id: string) { return this.store.get(id); }

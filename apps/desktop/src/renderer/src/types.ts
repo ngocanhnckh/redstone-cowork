@@ -1,4 +1,5 @@
 export type Todo = { text: string; status: "pending" | "in_progress" | "completed" };
+export type UserTodo = { id: string; text: string; done: boolean };
 export type TranscriptMessage = { role: "user" | "assistant"; text: string };
 export type SessionView = {
   id: string; machine: string; cwd: string; gitBranch: string | null;
@@ -6,6 +7,7 @@ export type SessionView = {
   status: "active" | "waiting" | "stale" | "lost";
   pendingDecisions: number; waitingSince: string | null;
   latestAnswer: string | null; summary: string | null; todos: Todo[];
+  userTodos: UserTodo[];
   transcript: TranscriptMessage[];
   working: boolean;
   pinned: boolean; snoozedUntil: string | null;

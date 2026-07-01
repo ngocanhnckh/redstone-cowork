@@ -59,6 +59,33 @@ describe("SessionsService queue + state", () => {
     expect(q[1].waitingSince?.getTime()).toBe(oldest.s2.getTime());
   });
 
+  it("user todos: add appends, toggle flips done and floats undone to the top", async () => {
+    const store = new InMemorySessionStore();
+    const svc = new SessionsService(store, bus());
+    await seed(store, svc);
+    await svc.addUserTodo("s1", "first");
+    await svc.addUserTodo("s1", "second");
+    let s = await svc.get("s1");
+    expect(s?.userTodos.map((t) => t.text)).toEqual(["first", "second"]);
+    expect(s?.userTodos.every((t) => !t.done)).toBe(true);
+    // Check off "first" → it should drop below the still-open "second".
+    const firstId = s!.userTodos.find((t) => t.text === "first")!.id;
+    s = await svc.toggleUserTodo("s1", firstId);
+    expect(s?.userTodos.map((t) => t.text)).toEqual(["second", "first"]);
+    expect(s?.userTodos.find((t) => t.text === "first")?.done).toBe(true);
+    // Delete "second".
+    const secondId = s!.userTodos.find((t) => t.text === "second")!.id;
+    s = await svc.deleteUserTodo("s1", secondId);
+    expect(s?.userTodos.map((t) => t.text)).toEqual(["first"]);
+  });
+
+  it("user-todo ops on an unknown session return null", async () => {
+    const store = new InMemorySessionStore();
+    const svc = new SessionsService(store, bus());
+    expect(await svc.addUserTodo("nope", "x")).toBeNull();
+    expect(await svc.toggleUserTodo("nope", "y")).toBeNull();
+  });
+
   it("queue excludes a session snoozed past now but keeps it in listViews", async () => {
     const store = new InMemorySessionStore();
     const svc = new SessionsService(store, bus());

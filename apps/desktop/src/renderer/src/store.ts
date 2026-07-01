@@ -69,6 +69,9 @@ type State = {
   pin: (sessionId: string, pinned: boolean) => Promise<void>;
   instruct: (sessionId: string, text: string) => Promise<void>;
   switchMode: (sessionId: string, mode: string) => Promise<void>;
+  addUserTodo: (sessionId: string, text: string) => Promise<void>;
+  toggleUserTodo: (sessionId: string, todoId: string) => Promise<void>;
+  deleteUserTodo: (sessionId: string, todoId: string) => Promise<void>;
 };
 
 export const useStore = create<State>((set, get) => ({
@@ -210,6 +213,22 @@ export const useStore = create<State>((set, get) => ({
 
   switchMode: async (sessionId, mode) => {
     try { await window.cowork.switchMode(sessionId, mode); await get().refresh(); }
+    catch (e) { set({ error: e instanceof Error ? e.message : String(e) }); }
+  },
+
+  addUserTodo: async (sessionId, text) => {
+    if (!text.trim()) return;
+    try { await window.cowork.addUserTodo(sessionId, text.trim()); await get().refresh(); }
+    catch (e) { set({ error: e instanceof Error ? e.message : String(e) }); }
+  },
+
+  toggleUserTodo: async (sessionId, todoId) => {
+    try { await window.cowork.toggleUserTodo(sessionId, todoId); await get().refresh(); }
+    catch (e) { set({ error: e instanceof Error ? e.message : String(e) }); }
+  },
+
+  deleteUserTodo: async (sessionId, todoId) => {
+    try { await window.cowork.deleteUserTodo(sessionId, todoId); await get().refresh(); }
     catch (e) { set({ error: e instanceof Error ? e.message : String(e) }); }
   },
 }));

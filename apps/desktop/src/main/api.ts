@@ -78,6 +78,31 @@ export async function pin(id: string, pinned: boolean): Promise<void> {
   });
 }
 
+export async function addUserTodo(sessionId: string, text: string): Promise<unknown> {
+  return (
+    await req(`/sessions/${encodeURIComponent(sessionId)}/user-todos`, {
+      method: "POST",
+      body: JSON.stringify({ text }),
+    })
+  ).json();
+}
+
+export async function toggleUserTodo(sessionId: string, todoId: string): Promise<unknown> {
+  return (
+    await req(`/sessions/${encodeURIComponent(sessionId)}/user-todos/${encodeURIComponent(todoId)}/toggle`, {
+      method: "POST",
+    })
+  ).json();
+}
+
+export async function deleteUserTodo(sessionId: string, todoId: string): Promise<unknown> {
+  return (
+    await req(`/sessions/${encodeURIComponent(sessionId)}/user-todos/${encodeURIComponent(todoId)}/delete`, {
+      method: "POST",
+    })
+  ).json();
+}
+
 export async function switchMode(sessionId: string, mode: string): Promise<unknown> {
   return (
     await req(`/sessions/${encodeURIComponent(sessionId)}/mode`, {

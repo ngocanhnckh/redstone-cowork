@@ -173,6 +173,36 @@ export class SessionsController {
     return { ok: true };
   }
 
+  @Post(":id/user-todos")
+  @HttpCode(201)
+  async addUserTodo(@Param("id") id: string, @Body() body: unknown) {
+    try {
+      const { text } = z.object({ text: z.string().min(1) }).parse(body);
+      const updated = await this.sessions.addUserTodo(id, text);
+      if (!updated) throw new NotFoundException();
+      return updated;
+    } catch (e) {
+      if (e instanceof ZodError) throw new BadRequestException(e.issues);
+      throw e;
+    }
+  }
+
+  @Post(":id/user-todos/:todoId/toggle")
+  @HttpCode(200)
+  async toggleUserTodo(@Param("id") id: string, @Param("todoId") todoId: string) {
+    const updated = await this.sessions.toggleUserTodo(id, todoId);
+    if (!updated) throw new NotFoundException();
+    return updated;
+  }
+
+  @Post(":id/user-todos/:todoId/delete")
+  @HttpCode(200)
+  async deleteUserTodo(@Param("id") id: string, @Param("todoId") todoId: string) {
+    const updated = await this.sessions.deleteUserTodo(id, todoId);
+    if (!updated) throw new NotFoundException();
+    return updated;
+  }
+
   @Get()
   async list() {
     const [pending, oldest] = await Promise.all([

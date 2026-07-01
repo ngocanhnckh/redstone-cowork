@@ -1,4 +1,4 @@
-import type { AgentSession, SessionStatePatch } from "@rcw/shared";
+import type { AgentSession, SessionStatePatch, UserTodo } from "@rcw/shared";
 import type { SessionStore } from "../../domain/sessions/session-store.port";
 
 export class InMemorySessionStore implements SessionStore {
@@ -14,6 +14,7 @@ export class InMemorySessionStore implements SessionStore {
           latestAnswer: existing.latestAnswer,
           summary: existing.summary,
           todos: existing.todos,
+          userTodos: existing.userTodos,
           transcript: existing.transcript,
           working: existing.working,
           pinned: existing.pinned,
@@ -62,5 +63,12 @@ export class InMemorySessionStore implements SessionStore {
   async setSnoozedUntil(id: string, until: Date | null): Promise<void> {
     const s = this.sessions.get(id);
     if (s) this.sessions.set(id, { ...s, snoozedUntil: until });
+  }
+  async setUserTodos(id: string, todos: UserTodo[]): Promise<AgentSession | null> {
+    const s = this.sessions.get(id);
+    if (!s) return null;
+    const next = { ...s, userTodos: todos };
+    this.sessions.set(id, next);
+    return next;
   }
 }

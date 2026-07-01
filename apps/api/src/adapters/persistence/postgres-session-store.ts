@@ -1,10 +1,10 @@
 import type { Pool } from "pg";
-import { AgentSessionSchema, type AgentSession, type SessionStatePatch } from "@rcw/shared";
+import { AgentSessionSchema, type AgentSession, type SessionStatePatch, type UserTodo } from "@rcw/shared";
 import type { SessionStore } from "../../domain/sessions/session-store.port";
 
 const ROW = `id, machine, cwd, git_branch AS "gitBranch", attached_at AS "attachedAt", last_seen_at AS "lastSeenAt",
              wrapper_id AS "wrapperId", permission_mode AS "permissionMode", auto_mode_enabled AS "autoModeEnabled",
-             latest_answer AS "latestAnswer", summary, todos, transcript, working, pinned, snoozed_until AS "snoozedUntil"`;
+             latest_answer AS "latestAnswer", summary, todos, user_todos AS "userTodos", transcript, working, pinned, snoozed_until AS "snoozedUntil"`;
 
 export class PostgresSessionStore implements SessionStore {
   constructor(private readonly pool: Pool) {}
@@ -63,5 +63,12 @@ export class PostgresSessionStore implements SessionStore {
   }
   async setSnoozedUntil(id: string, until: Date | null): Promise<void> {
     await this.pool.query(`UPDATE sessions SET snoozed_until = $2 WHERE id = $1`, [id, until]);
+  }
+  async setUserTodos(id: string, todos: UserTodo[]): Promise<AgentSession | null> {
+    const res = await this.pool.query(
+      `UPDATE sessions SET user_todos = $2::jsonb WHERE id = $1 RETURNING ${ROW}`,
+      [id, JSON.stringify(todos)]
+    );
+    return res.rows[0] ? AgentSessionSchema.parse(res.rows[0]) : null;
   }
 }

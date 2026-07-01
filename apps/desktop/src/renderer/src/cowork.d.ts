@@ -23,6 +23,9 @@ declare global {
       pin(id: string, pinned: boolean): Promise<void>;
       instruct(sessionId: string, text: string): Promise<unknown>;
       switchMode(sessionId: string, mode: string): Promise<unknown>;
+      addUserTodo(sessionId: string, text: string): Promise<unknown>;
+      toggleUserTodo(sessionId: string, todoId: string): Promise<unknown>;
+      deleteUserTodo(sessionId: string, todoId: string): Promise<unknown>;
 
       // Workspace config
       getWorkspaceConfig(a: {

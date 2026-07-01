@@ -190,6 +190,15 @@ ipcMain.handle(IPC.instruct, (_e, a: { sessionId: string; text: string }) =>
 ipcMain.handle(IPC.mode, (_e, a: { sessionId: string; mode: string }) =>
   api.switchMode(a.sessionId, a.mode)
 );
+ipcMain.handle(IPC.userTodoAdd, (_e, a: { sessionId: string; text: string }) =>
+  api.addUserTodo(a.sessionId, a.text)
+);
+ipcMain.handle(IPC.userTodoToggle, (_e, a: { sessionId: string; todoId: string }) =>
+  api.toggleUserTodo(a.sessionId, a.todoId)
+);
+ipcMain.handle(IPC.userTodoDelete, (_e, a: { sessionId: string; todoId: string }) =>
+  api.deleteUserTodo(a.sessionId, a.todoId)
+);
 
 // Workspace config (per-session .redstone/session.json)
 ipcMain.handle(IPC.workspaceGet, (_e, a: Parameters<typeof getWorkspaceConfig>[0]) =>

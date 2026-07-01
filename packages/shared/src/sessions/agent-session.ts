@@ -7,6 +7,14 @@ export const TodoItemSchema = z.object({
 });
 export type TodoItem = z.infer<typeof TodoItemSchema>;
 
+/** A user-managed checklist item (distinct from Claude's auto-derived plan todos). */
+export const UserTodoSchema = z.object({
+  id: z.string().min(1),
+  text: z.string().min(1),
+  done: z.boolean().default(false),
+});
+export type UserTodo = z.infer<typeof UserTodoSchema>;
+
 export const TranscriptMessageSchema = z.object({
   role: z.enum(["user", "assistant"]),
   text: z.string(),
@@ -38,6 +46,7 @@ export const AgentSessionSchema = z.object({
   latestAnswer: z.string().nullable().default(null),
   summary: z.string().nullable().default(null),
   todos: z.array(TodoItemSchema).default([]),
+  userTodos: z.array(UserTodoSchema).default([]),
   transcript: z.array(TranscriptMessageSchema).default([]),
   working: z.boolean().default(false),
   pinned: z.boolean().default(false),

@@ -1,11 +1,45 @@
 import { useEffect, useRef, useState } from "react";
 import { useStore } from "../store";
-import { Todo } from "../types";
+import { Todo, UserTodo } from "../types";
+import Markdown from "./Markdown";
 
-function TodoRow({ todo }: { todo: Todo }) {
+/** A small square checkbox glyph shared by Claude's plan rows and user checklist rows. */
+function CheckBox({
+  state,
+  onClick,
+}: {
+  state: "done" | "active" | "open";
+  onClick?: () => void;
+}) {
+  const done = state === "done";
+  const active = state === "active";
+  return (
+    <span
+      onClick={onClick}
+      style={{
+        width: 16,
+        height: 16,
+        borderRadius: 5,
+        display: "grid",
+        placeItems: "center",
+        flexShrink: 0,
+        cursor: onClick ? "pointer" : undefined,
+        background: done ? `rgb(var(--accent))` : active ? `rgb(var(--primary) / 0.25)` : "transparent",
+        border: done ? "none" : active ? `1.5px solid rgb(var(--primary-soft))` : `1.5px solid var(--border-strong)`,
+        color: done ? "#2a1d09" : undefined,
+        fontWeight: done ? 700 : undefined,
+        fontSize: done ? 11 : undefined,
+      }}
+    >
+      {done ? "✓" : null}
+    </span>
+  );
+}
+
+/** Claude's own plan item — read-only (reflects Claude's live task state). */
+function PlanRow({ todo }: { todo: Todo }) {
   const completed = todo.status === "completed";
   const inProgress = todo.status === "in_progress";
-
   return (
     <div
       style={{
@@ -19,34 +53,56 @@ function TodoRow({ todo }: { todo: Todo }) {
         color: completed ? "var(--text-faint)" : "var(--text)",
       }}
     >
-      <span
-        style={{
-          width: 16,
-          height: 16,
-          borderRadius: 5,
-          display: "grid",
-          placeItems: "center",
-          flexShrink: 0,
-          background: completed
-            ? `rgb(var(--accent))`
-            : inProgress
-            ? `rgb(var(--primary) / 0.25)`
-            : "transparent",
-          border: completed
-            ? "none"
-            : inProgress
-            ? `1.5px solid rgb(var(--primary-soft))`
-            : `1.5px solid var(--border-strong)`,
-          color: completed ? "#2a1d09" : undefined,
-          fontWeight: completed ? 700 : undefined,
-          fontSize: completed ? 11 : undefined,
-        }}
-      >
-        {completed ? "✓" : null}
-      </span>
-      <span style={{ textDecoration: completed ? "line-through" : undefined }}>
-        {todo.text}
-      </span>
+      <CheckBox state={completed ? "done" : inProgress ? "active" : "open"} />
+      <span style={{ textDecoration: completed ? "line-through" : undefined }}>{todo.text}</span>
+    </div>
+  );
+}
+
+/** User checklist item — click the box to toggle, hover to reveal delete. */
+function UserRow({
+  todo,
+  onToggle,
+  onDelete,
+}: {
+  todo: UserTodo;
+  onToggle: () => void;
+  onDelete: () => void;
+}) {
+  const [hover, setHover] = useState(false);
+  return (
+    <div
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        display: "flex",
+        gap: 10,
+        alignItems: "center",
+        padding: "8px 9px",
+        borderRadius: 9,
+        fontSize: 13,
+        color: todo.done ? "var(--text-faint)" : "var(--text)",
+      }}
+    >
+      <CheckBox state={todo.done ? "done" : "open"} onClick={onToggle} />
+      <span style={{ flex: 1, textDecoration: todo.done ? "line-through" : undefined }}>{todo.text}</span>
+      {hover && (
+        <button
+          onClick={onDelete}
+          title="Remove"
+          style={{
+            border: 0,
+            background: "transparent",
+            color: "var(--text-faint)",
+            cursor: "pointer",
+            fontSize: 13,
+            lineHeight: 1,
+            padding: "0 2px",
+          }}
+        >
+          ✕
+        </button>
+      )}
     </div>
   );
 }
@@ -56,11 +112,26 @@ export default function ContextColumn({ sessionId }: { sessionId?: string } = {}
   const sessions = useStore((s) => s.sessions);
   const queue = useStore((s) => s.queue);
   const refresh = useStore((s) => s.refresh);
+  const addUserTodo = useStore((s) => s.addUserTodo);
+  const toggleUserTodo = useStore((s) => s.toggleUserTodo);
+  const deleteUserTodo = useStore((s) => s.deleteUserTodo);
   const [summarizing, setSummarizing] = useState(false);
+  const [draft, setDraft] = useState("");
 
   const id = sessionId ?? focusId;
   const session =
     sessions.find((s) => s.id === id) ?? queue.find((s) => s.id === id);
+
+  // Claude's plan sorted undone-first (in_progress, then pending, then completed).
+  const planRank = (t: Todo) => (t.status === "completed" ? 2 : t.status === "in_progress" ? 0 : 1);
+  const plan = [...(session?.todos ?? [])].sort((a, b) => planRank(a) - planRank(b));
+  const userTodos = session?.userTodos ?? [];
+
+  function submitTodo() {
+    if (!id || !draft.trim()) return;
+    addUserTodo(id, draft);
+    setDraft("");
+  }
 
   async function summarize() {
     if (!id || summarizing) return;
@@ -97,10 +168,13 @@ export default function ContextColumn({ sessionId }: { sessionId?: string } = {}
         display: "flex",
         flexDirection: "column",
         gap: 14,
-        overflowY: "auto",
+        height: "100%",
+        minHeight: 0,
+        overflow: "hidden",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      {/* Summary — fixed height so a long todo list can't squeeze it; scrolls internally. */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
         <div className="kicker">Summary</div>
         <span style={{ flex: 1 }} />
         <button
@@ -129,26 +203,94 @@ export default function ContextColumn({ sessionId }: { sessionId?: string } = {}
           fontSize: 12.5,
           lineHeight: 1.6,
           color: "var(--text-soft)",
-          maxHeight: 158,
+          height: 168,
+          flexShrink: 0,
           overflowY: "auto",
         }}
       >
-        {session?.summary ?? (
+        {session?.summary ? (
+          <Markdown>{session.summary}</Markdown>
+        ) : (
           <span className="faint" style={{ fontStyle: "italic" }}>
             No summary yet.
           </span>
         )}
       </div>
 
-      <div className="kicker">Session todos</div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-        {session && session.todos.length > 0 ? (
-          session.todos.map((todo, i) => <TodoRow key={i} todo={todo} />)
-        ) : (
-          <span className="faint" style={{ fontSize: 12, fontStyle: "italic", padding: "4px 9px" }}>
-            No todos yet.
-          </span>
+      {/* Todos — scrollable middle region: Claude's read-only plan + your checklist. */}
+      <div className="kicker" style={{ flexShrink: 0 }}>Session todos</div>
+      <div
+        className="no-scrollbar"
+        style={{ flex: 1, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 }}
+      >
+        {plan.length > 0 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+            <div className="faint" style={{ fontSize: 10, fontFamily: "var(--font-mono)", padding: "0 9px 2px", opacity: 0.6 }}>
+              Claude's plan
+            </div>
+            {plan.map((todo, i) => <PlanRow key={i} todo={todo} />)}
+          </div>
         )}
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+          <div className="faint" style={{ fontSize: 10, fontFamily: "var(--font-mono)", padding: "0 9px 2px", opacity: 0.6 }}>
+            Your checklist
+          </div>
+          {userTodos.length > 0 ? (
+            userTodos.map((t) => (
+              <UserRow
+                key={t.id}
+                todo={t}
+                onToggle={() => id && toggleUserTodo(id, t.id)}
+                onDelete={() => id && deleteUserTodo(id, t.id)}
+              />
+            ))
+          ) : (
+            plan.length === 0 && (
+              <span className="faint" style={{ fontSize: 12, fontStyle: "italic", padding: "4px 9px" }}>
+                No todos yet.
+              </span>
+            )
+          )}
+        </div>
+      </div>
+
+      {/* Add a checklist item — pinned below the scroll region. */}
+      <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+        <input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") submitTodo(); }}
+          placeholder="Add a to-do…"
+          disabled={!session}
+          style={{
+            flex: 1,
+            minWidth: 0,
+            border: "1px solid var(--border)",
+            background: "transparent",
+            borderRadius: 8,
+            padding: "6px 10px",
+            fontSize: 12.5,
+            color: "var(--text)",
+            outline: "none",
+          }}
+        />
+        <button
+          onClick={submitTodo}
+          disabled={!session || !draft.trim()}
+          title="Add to your checklist"
+          style={{
+            border: "1px solid var(--border)",
+            background: draft.trim() ? "rgb(var(--primary) / 0.28)" : "transparent",
+            color: draft.trim() ? "#fff" : "var(--text-soft)",
+            borderRadius: 8,
+            padding: "6px 12px",
+            fontSize: 13,
+            cursor: session && draft.trim() ? "pointer" : "default",
+          }}
+        >
+          +
+        </button>
       </div>
     </div>
   );
