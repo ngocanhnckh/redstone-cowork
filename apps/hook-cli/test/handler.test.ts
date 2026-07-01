@@ -132,6 +132,23 @@ describe("processEvent", () => {
     );
   });
 
+  it("refreshes todos only when a task/todo tool ran or on SessionStart", async () => {
+    // SessionStart → includes todos
+    const d1 = baseDeps({ api: makeApi() });
+    await processEvent(ev("SessionStart"), d1);
+    expect(d1.api.pushState).toHaveBeenCalledWith("s1", expect.objectContaining({ todos: expect.anything() }));
+
+    // PostToolUse for a non-task tool → NO todos key (avoids a full-transcript scan)
+    const d2 = baseDeps({ api: makeApi() });
+    await processEvent(ev("PostToolUse", { tool_name: "Bash" }), d2);
+    expect((d2.api.pushState as ReturnType<typeof vi.fn>).mock.calls[0][1]).not.toHaveProperty("todos");
+
+    // PostToolUse for TaskUpdate → includes todos
+    const d3 = baseDeps({ api: makeApi() });
+    await processEvent(ev("PostToolUse", { tool_name: "TaskUpdate" }), d3);
+    expect(d3.api.pushState).toHaveBeenCalledWith("s1", expect.objectContaining({ todos: expect.anything() }));
+  });
+
   it("UserPromptSubmit and PostToolUse push working=true (Claude is mid-turn)", async () => {
     for (const name of ["UserPromptSubmit", "PostToolUse"]) {
       const deps = baseDeps();

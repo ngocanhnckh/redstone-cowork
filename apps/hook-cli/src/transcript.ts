@@ -1,4 +1,4 @@
-import { openSync, fstatSync, readSync, closeSync } from "node:fs";
+import { openSync, fstatSync, readSync, closeSync, readFileSync, statSync } from "node:fs";
 import type { TranscriptMessage, TodoItem } from "@rcw/shared";
 
 /** Cap stored message length — enough to read on expand, small enough not to bloat the payload/DB. */
@@ -156,54 +156,112 @@ export function readRecentMessages(path: string | null | undefined, limit = 40):
   }
 }
 
+/** Upper bound on transcript size we'll fully scan for todos (only done when a
+ * todo/task tool ran, so an occasional large read is fine). */
+const MAX_TODO_SCAN_BYTES = 80 * 1024 * 1024;
+
+function normStatus(s: unknown): TodoItem["status"] | "cancelled" {
+  if (s === "completed") return "completed";
+  if (s === "in_progress") return "in_progress";
+  if (s === "cancelled" || s === "canceled" || s === "deleted") return "cancelled";
+  return "pending";
+}
+
+/** Latest standard `TodoWrite` list from transcript lines (newest wins). */
+function latestTodoWrite(lines: string[]): TodoItem[] | null {
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const line = lines[i].trim();
+    if (!line || !line.includes("TodoWrite")) continue;
+    let obj: TranscriptLine;
+    try { obj = JSON.parse(line); } catch { continue; }
+    const content = obj.message?.content;
+    if (!Array.isArray(content)) continue;
+    for (const b of content) {
+      if (b?.type === "tool_use" && b.name === "TodoWrite") {
+        const raw = (b.input as { todos?: unknown })?.todos;
+        if (!Array.isArray(raw)) continue;
+        const todos: TodoItem[] = [];
+        for (const t of raw as Array<Record<string, unknown>>) {
+          const txt = typeof t?.content === "string" ? t.content : typeof t?.text === "string" ? t.text : "";
+          if (!txt) continue;
+          const st = normStatus(t?.status);
+          if (st === "cancelled") continue;
+          todos.push({ text: txt.slice(0, 300), status: st });
+        }
+        return todos;
+      }
+    }
+  }
+  return null;
+}
+
 /**
- * The current Claude Code to-do list for the session — the input of the most
- * recent `TodoWrite` tool call in the transcript. Claude maintains this itself,
- * so it's the real plan, free to read. Maps Claude's `{content,status}` shape to
- * our `{text,status}`. Returns [] when the session has no todos. Never throws.
+ * The session's current to-do list, from Claude's own plan in the transcript.
+ * Supports two systems:
+ *  - Task plugin (TaskCreate/TaskUpdate, event-sourced): reconstruct the list by
+ *    folding creates (id = creation order) and status updates. Cancelled tasks
+ *    are dropped.
+ *  - Standard TodoWrite: the latest full list.
+ * Reads the whole file (needs early TaskCreate events); falls back to tail-only
+ * TodoWrite for very large transcripts. Never throws.
  */
 export function readLatestTodos(path: string | null | undefined): TodoItem[] {
   if (!path) return [];
-  let fd: number | null = null;
   try {
-    fd = openSync(path, "r");
-    const size = fstatSync(fd).size;
-    const start = Math.max(0, size - TAIL_BYTES);
-    const length = size - start;
-    if (length <= 0) return [];
-    const buf = Buffer.allocUnsafe(length);
-    readSync(fd, buf, 0, length, start);
-    let text = buf.toString("utf8");
-    if (start > 0) { const nl = text.indexOf("\n"); text = nl >= 0 ? text.slice(nl + 1) : ""; }
-    const lines = text.split("\n");
-    // Walk newest→oldest: the latest TodoWrite reflects the live plan.
-    for (let i = lines.length - 1; i >= 0; i--) {
-      const line = lines[i].trim();
-      if (!line || !line.includes("TodoWrite")) continue;
+    const size = statSync(path).size;
+    if (size > MAX_TODO_SCAN_BYTES) {
+      // Too big to fully scan — best-effort TodoWrite from the tail only.
+      let fd: number | null = null;
+      try {
+        fd = openSync(path, "r");
+        const start = Math.max(0, size - TAIL_BYTES);
+        const buf = Buffer.allocUnsafe(size - start);
+        readSync(fd, buf, 0, size - start, start);
+        let text = buf.toString("utf8");
+        const nl = text.indexOf("\n");
+        if (start > 0 && nl >= 0) text = text.slice(nl + 1);
+        return latestTodoWrite(text.split("\n")) ?? [];
+      } finally {
+        if (fd !== null) { try { closeSync(fd); } catch { /* ignore */ } }
+      }
+    }
+
+    const lines = readFileSync(path, "utf8").split("\n");
+    // Reconstruct the Task-plugin list from creates + updates, in order.
+    const tasks: Array<{ text: string; status: TodoItem["status"] | "cancelled" }> = [];
+    let sawTask = false;
+    for (const line of lines) {
+      const t = line.trim();
+      if (!t || (!t.includes("TaskCreate") && !t.includes("TaskUpdate"))) continue;
       let obj: TranscriptLine;
-      try { obj = JSON.parse(line); } catch { continue; }
+      try { obj = JSON.parse(t); } catch { continue; }
       const content = obj.message?.content;
       if (!Array.isArray(content)) continue;
       for (const b of content) {
-        if (b?.type === "tool_use" && b.name === "TodoWrite") {
-          const raw = (b.input as { todos?: unknown })?.todos;
-          if (!Array.isArray(raw)) continue;
-          const todos: TodoItem[] = [];
-          for (const t of raw as Array<Record<string, unknown>>) {
-            const txt = typeof t?.content === "string" ? t.content : typeof t?.text === "string" ? t.text : "";
-            if (!txt) continue;
-            const status = t?.status === "completed" || t?.status === "in_progress" ? t.status : "pending";
-            todos.push({ text: txt.slice(0, 300), status });
-          }
-          return todos;
+        if (b?.type !== "tool_use") continue;
+        if (b.name === "TaskCreate") {
+          sawTask = true;
+          const input = b.input as { subject?: unknown; content?: unknown; text?: unknown };
+          const subj =
+            typeof input?.subject === "string" ? input.subject :
+            typeof input?.content === "string" ? input.content :
+            typeof input?.text === "string" ? input.text : "";
+          tasks.push({ text: subj ? subj.slice(0, 300) : `Task ${tasks.length + 1}`, status: "pending" });
+        } else if (b.name === "TaskUpdate") {
+          sawTask = true;
+          const input = b.input as { taskId?: unknown; status?: unknown };
+          const idx = Number.parseInt(String(input?.taskId ?? ""), 10) - 1;
+          if (idx >= 0 && idx < tasks.length) tasks[idx].status = normStatus(input?.status);
         }
       }
     }
-    return [];
+    if (sawTask) {
+      return tasks.filter((t) => t.status !== "cancelled").map((t) => ({ text: t.text, status: t.status as TodoItem["status"] }));
+    }
+    // No Task plugin — try standard TodoWrite.
+    return latestTodoWrite(lines) ?? [];
   } catch {
     return [];
-  } finally {
-    if (fd !== null) { try { closeSync(fd); } catch { /* ignore */ } }
   }
 }
 

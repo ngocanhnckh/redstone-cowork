@@ -85,10 +85,17 @@ export async function processEvent(
       const working =
         event.hook_event_name === "UserPromptSubmit" ||
         event.hook_event_name === "PostToolUse";
+      // Recomputing todos scans the full transcript (can be large) — only do it
+      // when a todo/task tool actually ran, or on session start (loads existing).
+      // Otherwise omit todos from the patch so we neither clobber nor re-scan.
+      const todoToolRan =
+        event.hook_event_name === "PostToolUse" &&
+        /^(TaskCreate|TaskUpdate|TaskDelete|TodoWrite)$/.test(event.tool_name ?? "");
+      const refreshTodos = todoToolRan || event.hook_event_name === "SessionStart";
       await deps.api.pushState(event.session_id, {
         latestAnswer: deps.lastAssistantText(event),
         transcript: deps.recentMessages(event),
-        todos: deps.latestTodos(event),
+        ...(refreshTodos ? { todos: deps.latestTodos(event) } : {}),
         working,
       });
     }

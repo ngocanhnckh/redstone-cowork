@@ -98,6 +98,29 @@ describe("readLatestTodos", () => {
     expect(readLatestTodos(path)).toEqual([]);
   });
 
+  it("reconstructs the list from TaskCreate/TaskUpdate (id = creation order), dropping cancelled", () => {
+    const create = (subject: string) => ({
+      type: "assistant",
+      message: { role: "assistant", content: [{ type: "tool_use", name: "TaskCreate", input: { subject } }] },
+    });
+    const update = (taskId: string, status: string) => ({
+      type: "assistant",
+      message: { role: "assistant", content: [{ type: "tool_use", name: "TaskUpdate", input: { taskId, status } }] },
+    });
+    const path = writeJsonl([
+      create("Scaffold repo"),
+      create("Write tests"),
+      create("Deploy"),
+      update("1", "completed"),
+      update("2", "in_progress"),
+      update("3", "cancelled"),
+    ]);
+    expect(readLatestTodos(path)).toEqual([
+      { text: "Scaffold repo", status: "completed" },
+      { text: "Write tests", status: "in_progress" },
+    ]);
+  });
+
   it("returns [] for a missing path", () => {
     expect(readLatestTodos(null)).toEqual([]);
   });
