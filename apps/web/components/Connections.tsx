@@ -88,7 +88,7 @@ export function Connections() {
   };
 
   const input: React.CSSProperties = {
-    padding: "8px 10px", borderRadius: 8, border: "1px solid #2a3550", background: "#0e1424", color: "inherit", fontSize: 13,
+    padding: "8px 10px", borderRadius: 8, border: "1px solid var(--border)", background: "rgba(255,255,255,0.03)", color: "inherit", fontSize: 13,
   };
 
   return (
@@ -147,7 +147,7 @@ export function Connections() {
         </select>
         <input placeholder="https://endpoint…" value={endpoint} onChange={(e) => setEndpoint(e.target.value)} style={{ ...input, flex: 1, minWidth: 180 }} />
         <input type="password" placeholder="Personal access token" value={token} onChange={(e) => setToken(e.target.value)} style={{ ...input, flex: 1, minWidth: 160 }} />
-        <button onClick={add} disabled={busy} style={{ ...input, background: busy ? "#2a3550" : "#3b6ef6", color: "white", cursor: busy ? "not-allowed" : "pointer", border: 0, padding: "8px 16px" }}>
+        <button onClick={add} disabled={busy} style={{ ...input, background: busy ? "var(--border)" : "rgb(var(--primary))", color: "white", cursor: busy ? "not-allowed" : "pointer", border: 0, padding: "8px 16px" }}>
           {busy ? "Connecting…" : "Connect"}
         </button>
       </div>

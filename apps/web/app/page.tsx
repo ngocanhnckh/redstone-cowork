@@ -17,9 +17,8 @@ type Session = {
   autoModeEnabled?: boolean;
 };
 
-// Actionable decisions (a question to answer, a permission to grant) surface
-// before passive ones (notifications, completions). Within each, oldest first
-// so nothing gets buried.
+// Actionable decisions (a question, a permission) surface before passive ones
+// (notifications, completions). Within each, oldest first so nothing gets buried.
 const PRIORITY: Record<string, number> = { question: 0, permission: 0 };
 function queueOrder(a: Decision, b: Decision): number {
   const pa = PRIORITY[a.kind] ?? 1;
@@ -27,6 +26,13 @@ function queueOrder(a: Decision, b: Decision): number {
   if (pa !== pb) return pa - pb;
   return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
 }
+
+const STATUS_DOT: Record<string, string> = {
+  active: "rgb(var(--primary-soft))",
+  waiting: "rgb(var(--accent))",
+  stale: "var(--text-faint)",
+  lost: "#e0736a",
+};
 
 export default function Home() {
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -66,62 +72,69 @@ export default function Home() {
   const live = sessions.filter((s) => s.status === "active").length;
 
   return (
-    <main style={{ maxWidth: 760, margin: "0 auto" }}>
-      <h1 style={{ marginBottom: 4 }}>
-        Situation Room <span style={{ fontSize: 14, opacity: 0.5 }}>(M1 preview)</span>
-      </h1>
+    <main style={{ maxWidth: 820, margin: "0 auto", padding: "40px 22px 80px" }}>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "baseline", gap: 14, marginBottom: 6, flexWrap: "wrap" }}>
+        <span className="kicker">Redstone Cowork</span>
+        <span style={{ flex: 1 }} />
+        <NotificationsToggle />
+      </div>
+      <h1 className="display" style={{ fontSize: 46, margin: "0 0 4px" }}>Cockpit</h1>
+      <p className="soft" style={{ fontSize: 13.5, margin: "0 0 30px" }}>
+        {sessions.length
+          ? `${sessions.length} session${sessions.length > 1 ? "s" : ""}${live ? ` · ${live} active` : ""}${waiting ? ` · ${waiting} waiting on you` : ""}`
+          : "No sessions attached yet."}
+      </p>
 
-      <NotificationsToggle />
+      {/* Needs you */}
+      <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 12 }}>
+        <span className="kicker" style={{ color: "rgb(var(--accent))" }}>Needs you</span>
+        {queue.length > 0 && <span className="faint" style={{ fontSize: 12 }}>· {queue.length} waiting</span>}
+      </div>
 
-      {/* ── Focus queue: one decision at a time ─────────────────────────── */}
-      <section style={{ marginTop: 20 }}>
-        <h2 style={{ fontSize: 16, opacity: 0.8, display: "flex", alignItems: "baseline", gap: 8 }}>
-          Needs you
-          {queue.length > 0 && (
-            <span style={{ fontSize: 13, opacity: 0.7 }}>
-              · {queue.length} waiting
-            </span>
-          )}
-        </h2>
-
-        {!current && (
-          <p style={{ opacity: 0.5, padding: "12px 0" }}>All clear, boss. 🟢</p>
-        )}
-
-        {current && (
-          <>
-            <DecisionCard key={current.id} decision={current} onResolved={() => refresh()} />
-            {queue.length > 1 && (
-              <p style={{ fontSize: 12, opacity: 0.45, marginTop: -4 }}>
-                {queue.length - 1} more after this — handle them one at a time.
-              </p>
-            )}
-          </>
-        )}
-      </section>
-
-      {/* ── Monitoring: status of every session ─────────────────────────── */}
-      <section style={{ marginTop: 36 }}>
-        <h2 style={{ fontSize: 16, opacity: 0.8, display: "flex", alignItems: "baseline", gap: 8 }}>
-          Sessions
-          {sessions.length > 0 && (
-            <span style={{ fontSize: 13, opacity: 0.6 }}>
-              · {sessions.length} total{live ? ` · ${live} active` : ""}{waiting ? ` · ${waiting} waiting` : ""}
-            </span>
-          )}
-        </h2>
-        {sessions.length === 0 && (
-          <p style={{ opacity: 0.5 }}>
-            No sessions attached. Run <code>redstone-claude</code> in a project.
+      {!current ? (
+        <div className="glass-surface" style={{ borderRadius: 16, padding: "28px 24px", textAlign: "center", marginBottom: 40 }}>
+          <div className="display" style={{ fontSize: 26, color: "var(--text-soft)" }}>All clear</div>
+          <p className="faint" style={{ fontSize: 13, marginTop: 6, marginBottom: 0 }}>
+            Nothing needs your attention right now.
           </p>
-        )}
-        {sessions.map((s) => (
-          <SessionRow key={s.id} s={s} />
-        ))}
-      </section>
+        </div>
+      ) : (
+        <div style={{ marginBottom: 40 }}>
+          <DecisionCard key={current.id} decision={current} onResolved={() => refresh()} />
+          {queue.length > 1 && (
+            <p className="faint" style={{ fontSize: 12, marginTop: 2 }}>
+              {queue.length - 1} more after this — handle them one at a time.
+            </p>
+          )}
+        </div>
+      )}
 
-      <Connections />
-      <Devices />
+      {/* Sessions */}
+      <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 12 }}>
+        <span className="kicker">Sessions</span>
+        {sessions.length > 0 && (
+          <span className="faint" style={{ fontSize: 12 }}>
+            · {sessions.length} total{live ? ` · ${live} active` : ""}{waiting ? ` · ${waiting} waiting` : ""}
+          </span>
+        )}
+      </div>
+      {sessions.length === 0 ? (
+        <p className="faint" style={{ fontSize: 13 }}>
+          No sessions attached. Run <code>redstone claude</code> in a project.
+        </p>
+      ) : (
+        <div className="glass-surface" style={{ borderRadius: 16, padding: "6px 16px" }}>
+          {sessions.map((s) => (
+            <SessionRow key={s.id} s={s} dot={STATUS_DOT[s.status] ?? "var(--text-faint)"} />
+          ))}
+        </div>
+      )}
+
+      <div style={{ marginTop: 40 }}>
+        <Connections />
+        <Devices />
+      </div>
     </main>
   );
 }

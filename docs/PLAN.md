@@ -59,6 +59,21 @@ Inject the redstone-agent **MCP** into each session (pull discussions, pick next
 React Native: push notifications, answer-anywhere (multiple-choice + custom), file preview, session switching — all via the server.
 **Exit:** answer a waiting session and preview a file from the phone; desktop reflects it live.
 
+### Cockpit Assistant + Agent (LLM)
+Server-proxied, OpenAI-compatible LLM (keys in server env, mirroring `.creds`
+`# OPENAI LLM INFER`). Three roles — **text** (deep), **flash** (quick), **vision**
+— configurable/overridable from the desktop ⚙; custom endpoints stored encrypted;
+context hard-capped under 100k tokens, per-endpoint output cap.
+- **Done:** chat / optimize-prompt / summarize (persists `session.summary`);
+  to-do list pulled from Claude's `TodoWrite`; **Agent mode** = server-side
+  deep-agent tool loop with **Tavily web search**, answers with sources.
+- **Deferred (saved):** **Playwright page-reads** — headless browsing with a real
+  browser UA to read/extract specific pages search surfaces; Cloudflare-protected
+  pages via `github.com/cloudflare/playwright`. Needs the API image to ship
+  headless Chromium (switch base off `node-alpine`). Add as a second agent tool
+  (`read_page`) alongside `web_search`.
+- **Later:** streaming tool-step trace to the UI; more tools (repo/file, jira).
+
 ### Dependency graph
 ```
 M0 ─→ M1 ─→ CP1 ─→ CP2 ─→ CP3 ─→ CP4

@@ -1,0 +1,83 @@
+@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+/* =====================================================================
+   LIQUID GLASS — Warm Ink (ported from the desktop cockpit theme)
+   Clay = the action · Amber = waiting on you.
+   ===================================================================== */
+:root {
+  --primary: 229 77 46;        /* clay */
+  --primary-soft: 240 110 80;
+  --accent: 226 169 91;        /* amber */
+  --app-bg: #15110D;
+  --app-panel: #1E1813;
+  --app-elev: #2A2219;
+  --border: rgba(243, 238, 227, 0.10);
+  --border-strong: rgba(243, 238, 227, 0.20);
+  --text: #F4F1E9;
+  --text-soft: #CFC6B6;
+  --text-faint: #9B9182;
+  --font-display: 'Instrument Serif', Georgia, serif;
+  --font-body: 'Space Grotesk', ui-sans-serif, system-ui;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--app-bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  overflow-x: hidden;
+}
+::selection { background: rgb(var(--primary)); color: #fff; }
+a { color: rgb(var(--primary-soft)); }
+code, .mono { font-family: var(--font-mono); }
+
+/* atmosphere — drifting gradient-mesh blobs */
+.atmosphere { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+.blob { position: absolute; border-radius: 999px; filter: blur(80px); mix-blend-mode: screen; will-change: transform; }
+.blob--a { width: 48vw; height: 48vw; left: 46%; top: -12%; background: radial-gradient(circle, rgb(var(--primary-soft) / 0.6), transparent 70%); animation: floatA 24s ease-in-out infinite; }
+.blob--b { width: 40vw; height: 40vw; left: 60%; top: 34%; background: radial-gradient(circle, rgb(var(--primary) / 0.5), transparent 70%); animation: floatB 29s ease-in-out infinite; }
+.blob--c { width: 34vw; height: 34vw; left: 8%; top: 40%; background: radial-gradient(circle, rgb(var(--accent) / 0.4), transparent 70%); animation: floatC 33s ease-in-out infinite; }
+@keyframes floatA { 0%,100% { transform: translate(0,0) scale(1); } 33% { transform: translate(-12vw,8vh) scale(1.14); } 66% { transform: translate(8vw,-7vh) scale(.92); } }
+@keyframes floatB { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(-15vw,11vh) scale(1.18); } }
+@keyframes floatC { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(13vw,-12vh) scale(.86); } }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+/* glass material */
+.glass-surface {
+  background: color-mix(in srgb, var(--app-panel) 55%, transparent);
+  -webkit-backdrop-filter: blur(28px) saturate(180%); backdrop-filter: blur(28px) saturate(180%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / .12), inset 0 0 0 1px rgb(255 255 255 / .03);
+  border: 1px solid var(--border);
+}
+.glass-inset {
+  background: color-mix(in srgb, var(--app-elev) 40%, transparent);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / .08); border: 1px solid var(--border);
+  transition: background-color .2s, transform .2s, box-shadow .2s;
+}
+.glass-inset:hover { background: color-mix(in srgb, var(--app-elev) 60%, transparent); }
+.glass-btn--clay {
+  border-radius: 999px; background: rgb(var(--primary) / .32);
+  border: 1px solid rgb(var(--primary-soft) / .55); color: #fff;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / .25), 0 12px 32px -14px rgb(var(--primary) / .7);
+  transition: .2s; cursor: pointer;
+}
+.glass-btn--clay:hover { background: rgb(var(--primary-soft) / .45); border-color: rgb(var(--accent) / .7); }
+.glass-btn--clay:disabled { opacity: .5; cursor: not-allowed; }
+
+/* type helpers */
+.display { font-family: var(--font-display); font-weight: 400; letter-spacing: -.02em; line-height: 1; }
+.kicker { font-family: var(--font-mono); font-size: .66rem; letter-spacing: .28em; text-transform: uppercase; color: rgb(var(--primary-soft)); }
+.soft { color: var(--text-soft); }
+.faint { color: var(--text-faint); }
+
+.field {
+  width: 100%; box-sizing: border-box; padding: 12px 14px; border-radius: 10px;
+  border: 1px solid var(--border); background: rgba(255,255,255,.03); color: var(--text);
+  font-size: 14px; outline: none; caret-color: rgb(var(--primary-soft)); font-family: var(--font-body);
+}
+.field::placeholder { color: var(--text-faint); }

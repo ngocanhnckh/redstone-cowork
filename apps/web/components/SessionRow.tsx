@@ -2,8 +2,8 @@
 import { useEffect, useState } from "react";
 
 const COLORS: Record<string, string> = {
-  active: "#3ddc84",
-  waiting: "#f6c945",
+  active: "rgb(var(--accent))",
+  waiting: "rgb(var(--accent))",
   stale: "#8a93a6",
   lost: "#ff6b6b",
 };
@@ -29,7 +29,7 @@ type Session = {
   autoModeEnabled?: boolean;
 };
 
-export function SessionRow({ s }: { s: Session }) {
+export function SessionRow({ s, dot }: { s: Session; dot?: string }) {
   const [cmd, setCmd] = useState("");
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
@@ -87,9 +87,9 @@ export function SessionRow({ s }: { s: Session }) {
   const modes = s.autoModeEnabled ? [...BASE_MODES, AUTO_MODE] : BASE_MODES;
 
   return (
-    <div style={{ padding: "10px 0", borderBottom: "1px solid #1b2440" }}>
+    <div style={{ padding: "10px 0", borderBottom: "1px solid var(--border)" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <span style={{ width: 10, height: 10, borderRadius: 99, background: COLORS[s.status] ?? "#888", flexShrink: 0 }} />
+        <span style={{ width: 9, height: 9, borderRadius: 99, background: dot ?? COLORS[s.status] ?? "#888", flexShrink: 0 }} />
         <code style={{ opacity: 0.8 }}>{s.id.slice(0, 8)}</code>
         <span>{s.machine}</span>
         <span style={{ opacity: 0.6, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.cwd}</span>
@@ -112,8 +112,8 @@ export function SessionRow({ s }: { s: Session }) {
                   style={{
                     padding: "3px 10px",
                     borderRadius: 6,
-                    border: "1px solid #2a3550",
-                    background: isActive ? "#3b82f6" : "#0e1424",
+                    border: "1px solid var(--border)",
+                    background: isActive ? "rgb(var(--primary))" : "rgba(255,255,255,0.03)",
                     color: isActive ? "#fff" : "rgba(255,255,255,0.5)",
                     fontWeight: isActive ? 600 : 400,
                     cursor: switching ? "not-allowed" : isActive ? "default" : "pointer",
@@ -139,8 +139,8 @@ export function SessionRow({ s }: { s: Session }) {
                 minWidth: 200,
                 padding: "8px 12px",
                 borderRadius: 8,
-                border: "1px solid #2a3550",
-                background: "#0e1424",
+                border: "1px solid var(--border)",
+                background: "rgba(255,255,255,0.03)",
                 color: "inherit",
                 fontSize: 13,
               }}
@@ -152,7 +152,7 @@ export function SessionRow({ s }: { s: Session }) {
                 padding: "8px 16px",
                 borderRadius: 8,
                 border: 0,
-                background: sent ? "#3ddc84" : "#2a3550",
+                background: sent ? "rgb(var(--accent))" : "var(--border)",
                 color: "white",
                 cursor: sending || !cmd.trim() ? "not-allowed" : "pointer",
                 fontSize: 13,

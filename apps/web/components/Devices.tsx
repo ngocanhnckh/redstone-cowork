@@ -89,8 +89,8 @@ export function Devices() {
   const input: React.CSSProperties = {
     padding: "8px 10px",
     borderRadius: 8,
-    border: "1px solid #2a3550",
-    background: "#0e1424",
+    border: "1px solid var(--border)",
+    background: "rgba(255,255,255,0.03)",
     color: "inherit",
     fontSize: 13,
   };
@@ -115,7 +115,7 @@ export function Devices() {
           disabled={busy}
           style={{
             ...input,
-            background: busy ? "#2a3550" : "#3b6ef6",
+            background: busy ? "var(--border)" : "rgb(var(--primary))",
             color: "white",
             cursor: busy ? "not-allowed" : "pointer",
             border: 0,

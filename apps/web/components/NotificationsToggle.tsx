@@ -94,8 +94,8 @@ export function NotificationsToggle() {
   const pill: React.CSSProperties = {
     padding: "5px 12px",
     borderRadius: 999,
-    border: "1px solid #2a3550",
-    background: "#0e1424",
+    border: "1px solid var(--border)",
+    background: "rgba(255,255,255,0.03)",
     color: "inherit",
     fontSize: 12,
     cursor: "pointer",

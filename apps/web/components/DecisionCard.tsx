@@ -111,8 +111,8 @@ export function DecisionCard({ decision, onResolved }: { decision: Decision; onR
   };
 
   const card: React.CSSProperties = {
-    background: "#131a2e",
-    border: "1px solid #233052",
+    background: "color-mix(in srgb, var(--app-elev) 45%, transparent)",
+    border: "1px solid var(--border)",
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
@@ -128,8 +128,8 @@ export function DecisionCard({ decision, onResolved }: { decision: Decision; onR
           style={{
             margin: "8px 0",
             padding: "8px 10px",
-            borderLeft: "3px solid #2a3550",
-            background: "#0e1424",
+            borderLeft: "3px solid var(--border)",
+            background: "rgba(255,255,255,0.03)",
             borderRadius: 6,
             fontSize: 12.5,
             lineHeight: 1.5,
@@ -147,7 +147,7 @@ export function DecisionCard({ decision, onResolved }: { decision: Decision; onR
                 padding: 0,
                 border: 0,
                 background: "none",
-                color: "#3b82f6",
+                color: "rgb(var(--primary))",
                 cursor: "pointer",
                 fontSize: 12,
               }}
@@ -185,8 +185,8 @@ export function DecisionCard({ decision, onResolved }: { decision: Decision; onR
                       style={{
                         padding: "8px 14px",
                         borderRadius: 8,
-                        border: picked ? "2px solid #3b6ef6" : "1px solid #2a3550",
-                        background: picked ? "#1d3a7a" : "#0e1424",
+                        border: picked ? "2px solid rgb(var(--primary))" : "1px solid var(--border)",
+                        background: picked ? "rgb(var(--primary) / 0.30)" : "rgba(255,255,255,0.03)",
                         color: "white",
                         opacity: !deliverable ? 0.5 : 1,
                         cursor: !deliverable ? "not-allowed" : "pointer",
@@ -209,8 +209,8 @@ export function DecisionCard({ decision, onResolved }: { decision: Decision; onR
                   boxSizing: "border-box",
                   padding: "7px 10px",
                   borderRadius: 8,
-                  border: otherFor(q) ? "2px solid #3b6ef6" : "1px solid #2a3550",
-                  background: "#0e1424",
+                  border: otherFor(q) ? "2px solid rgb(var(--primary))" : "1px solid var(--border)",
+                  background: "rgba(255,255,255,0.03)",
                   color: "inherit",
                   fontSize: 12.5,
                   opacity: !deliverable ? 0.5 : 1,
@@ -225,7 +225,7 @@ export function DecisionCard({ decision, onResolved }: { decision: Decision; onR
               padding: "10px 18px",
               borderRadius: 8,
               border: 0,
-              background: !deliverable || !allAnswered ? "#2a3550" : "#3b6ef6",
+              background: !deliverable || !allAnswered ? "var(--border)" : "rgb(var(--primary))",
               color: "white",
               opacity: !deliverable || !allAnswered ? 0.5 : 1,
               cursor: busy || !deliverable || !allAnswered ? "not-allowed" : "pointer",
@@ -256,7 +256,7 @@ export function DecisionCard({ decision, onResolved }: { decision: Decision; onR
                   padding: "10px 18px",
                   borderRadius: 8,
                   border: 0,
-                  background: !deliverable ? "#2a3550" : o.label === "Deny" ? "#5a2330" : "#3b6ef6",
+                  background: !deliverable ? "var(--border)" : o.label === "Deny" ? "rgba(224,115,106,0.28)" : "rgb(var(--primary))",
                   color: "white",
                   opacity: !deliverable ? 0.5 : 1,
                   cursor: !deliverable ? "not-allowed" : "pointer",
@@ -272,12 +272,12 @@ export function DecisionCard({ decision, onResolved }: { decision: Decision; onR
                 placeholder="Custom reply…"
                 value={custom}
                 onChange={(e) => setCustom(e.target.value)}
-                style={{ flex: 1, padding: 10, borderRadius: 8, border: "1px solid #2a3550", background: "#0e1424", color: "inherit" }}
+                style={{ flex: 1, padding: 10, borderRadius: 8, border: "1px solid var(--border)", background: "rgba(255,255,255,0.03)", color: "inherit" }}
               />
               <button
                 disabled={busy || !custom}
                 onClick={() => resolve(null)}
-                style={{ padding: "10px 16px", borderRadius: 8, border: 0, background: "#2a3550", color: "white", cursor: busy || !custom ? "not-allowed" : "pointer" }}
+                style={{ padding: "10px 16px", borderRadius: 8, border: 0, background: "var(--border)", color: "white", cursor: busy || !custom ? "not-allowed" : "pointer" }}
               >
                 Send
               </button>
@@ -290,14 +290,14 @@ export function DecisionCard({ decision, onResolved }: { decision: Decision; onR
             <button
               disabled={busy}
               onClick={() => resolve("Acknowledged")}
-              style={{ padding: "8px 16px", borderRadius: 8, border: 0, background: "#2a3550", color: "white", cursor: busy ? "not-allowed" : "pointer" }}
+              style={{ padding: "8px 16px", borderRadius: 8, border: 0, background: "var(--border)", color: "white", cursor: busy ? "not-allowed" : "pointer" }}
             >
               Acknowledge
             </button>
             <button
               disabled={busy}
               onClick={() => setReplying((v) => !v)}
-              style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid #2a3550", background: replying ? "#1d3a7a" : "transparent", color: "white", cursor: busy ? "not-allowed" : "pointer" }}
+              style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid var(--border)", background: replying ? "rgb(var(--primary) / 0.30)" : "transparent", color: "white", cursor: busy ? "not-allowed" : "pointer" }}
             >
               Reply
             </button>
@@ -310,12 +310,12 @@ export function DecisionCard({ decision, onResolved }: { decision: Decision; onR
                 value={custom}
                 onChange={(e) => setCustom(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && reply()}
-                style={{ flex: 1, padding: 10, borderRadius: 8, border: "1px solid #2a3550", background: "#0e1424", color: "inherit" }}
+                style={{ flex: 1, padding: 10, borderRadius: 8, border: "1px solid var(--border)", background: "rgba(255,255,255,0.03)", color: "inherit" }}
               />
               <button
                 disabled={busy || !custom.trim()}
                 onClick={reply}
-                style={{ padding: "10px 16px", borderRadius: 8, border: 0, background: "#3b6ef6", color: "white", cursor: busy || !custom.trim() ? "not-allowed" : "pointer" }}
+                style={{ padding: "10px 16px", borderRadius: 8, border: 0, background: "rgb(var(--primary))", color: "white", cursor: busy || !custom.trim() ? "not-allowed" : "pointer" }}
               >
                 Send
               </button>
