@@ -196,6 +196,13 @@ contextBridge.exposeInMainWorld("cowork", {
   }): Promise<{ id: string; label: string; model: string; kind: "preset" | "custom"; maxTokens?: number | null }> =>
     ipcRenderer.invoke(IPC.llmAddEndpoint, a),
   deleteLlmEndpoint: (id: string): Promise<void> => ipcRenderer.invoke(IPC.llmDeleteEndpoint, { id }),
+  agentEnabled: (): Promise<boolean> => ipcRenderer.invoke(IPC.llmAgentEnabled),
+  llmAgent: (a: {
+    sessionId: string;
+    input: string;
+    modelId?: string;
+  }): Promise<{ text: string; steps: Array<{ tool: string; args: string; result: string }> }> =>
+    ipcRenderer.invoke(IPC.llmAgent, a),
 
   // Stream
   onUpdate: (cb: () => void): (() => void) => {

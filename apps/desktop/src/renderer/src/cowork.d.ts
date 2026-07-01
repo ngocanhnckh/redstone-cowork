@@ -154,6 +154,12 @@ declare global {
         role?: "text" | "flash" | "vision";
       }): Promise<LlmModelInfo>;
       deleteLlmEndpoint(id: string): Promise<void>;
+      agentEnabled(): Promise<boolean>;
+      llmAgent(a: {
+        sessionId: string;
+        input: string;
+        modelId?: string;
+      }): Promise<{ text: string; steps: Array<{ tool: string; args: string; result: string }> }>;
 
       // Stream
       onUpdate(cb: () => void): () => void;

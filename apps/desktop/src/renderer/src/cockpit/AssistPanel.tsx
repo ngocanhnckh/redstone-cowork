@@ -3,8 +3,9 @@ import { useStore } from "../store";
 import Markdown from "./Markdown";
 import Kbd from "./Kbd";
 
-type Msg = { role: "user" | "assistant"; text: string; error?: boolean };
-type Mode = "chat" | "optimize";
+type AgentStep = { tool: string; args: string; result: string };
+type Msg = { role: "user" | "assistant"; text: string; error?: boolean; steps?: AgentStep[] };
+type Mode = "chat" | "optimize" | "agent";
 
 /**
  * Slide-over LLM assistant scoped to the focused session's conversation:
@@ -25,6 +26,7 @@ export default function AssistPanel() {
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const [agentOk, setAgentOk] = useState(false);
   const [manage, setManage] = useState(false);
   const [form, setForm] = useState({ label: "", baseUrl: "", model: "", apiKey: "", maxTokens: "", role: "" });
   const [formErr, setFormErr] = useState<string | null>(null);
@@ -40,10 +42,13 @@ export default function AssistPanel() {
     }
   }, []);
 
-  // Load the configured models once the panel first opens.
+  // Load the configured models + agent availability once the panel first opens.
   useEffect(() => {
     if (open && !models) loadModels();
   }, [open, models, loadModels]);
+  useEffect(() => {
+    if (open) window.cowork.agentEnabled().then(setAgentOk).catch(() => setAgentOk(false));
+  }, [open]);
 
   async function addEndpoint() {
     setFormErr(null);
@@ -106,11 +111,27 @@ export default function AssistPanel() {
     }
   }
 
+  async function runAgent(text: string) {
+    if (!sessionId || busy) return;
+    setMsgs((m) => [...m, { role: "user", text }]);
+    setBusy(true);
+    try {
+      const res = await window.cowork.llmAgent({ sessionId, input: text, modelId: modelId || undefined });
+      setMsgs((m) => [...m, { role: "assistant", text: res.text, steps: res.steps }]);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setMsgs((m) => [...m, { role: "assistant", text: `⚠ ${msg}`, error: true }]);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function send() {
     const text = input.trim();
     if (!text) return;
     setInput("");
-    run(mode, text);
+    if (mode === "agent") runAgent(text);
+    else run(mode, text);
   }
 
   const noModels = models != null && models.length === 0;
@@ -232,7 +253,7 @@ export default function AssistPanel() {
         )}
 
         {/* Quick actions */}
-        <div style={{ display: "flex", gap: 7, padding: "10px 18px", borderBottom: "1px solid var(--border)" }}>
+        <div style={{ display: "flex", gap: 7, padding: "10px 18px", borderBottom: "1px solid var(--border)", flexWrap: "wrap" }}>
           <button onClick={() => run("summarize")} disabled={busy || !sessionId} style={chip}>✦ Summarize</button>
           <button
             onClick={() => setMode((m) => (m === "optimize" ? "chat" : "optimize"))}
@@ -240,6 +261,15 @@ export default function AssistPanel() {
           >
             ✎ Optimize prompt
           </button>
+          {agentOk && (
+            <button
+              onClick={() => setMode((m) => (m === "agent" ? "chat" : "agent"))}
+              title="Agent mode — web search & research, grounded in sources"
+              style={{ ...chip, background: mode === "agent" ? "rgb(var(--accent) / 0.28)" : chip.background, color: mode === "agent" ? "#fff" : chip.color }}
+            >
+              🌐 Agent (web)
+            </button>
+          )}
         </div>
 
         {/* Conversation */}
@@ -254,6 +284,20 @@ export default function AssistPanel() {
           {msgs.map((m, i) =>
             m.role === "assistant" ? (
               <div key={i} className="glass-inset" style={{ padding: "11px 13px", borderRadius: 12, color: m.error ? "#e0736a" : "var(--text)" }}>
+                {m.steps && m.steps.length > 0 && (
+                  <details style={{ marginBottom: 8 }}>
+                    <summary className="mono" style={{ fontSize: 10.5, color: "var(--text-soft)", cursor: "pointer" }}>
+                      🔎 {m.steps.length} tool step{m.steps.length > 1 ? "s" : ""}
+                    </summary>
+                    <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 5 }}>
+                      {m.steps.map((s, j) => (
+                        <div key={j} className="mono faint" style={{ fontSize: 10, lineHeight: 1.4, overflowWrap: "anywhere" }}>
+                          <span style={{ color: "rgb(var(--accent))" }}>{s.tool}</span> {s.args}
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                )}
                 <Markdown>{m.text}</Markdown>
               </div>
             ) : (
@@ -279,13 +323,18 @@ export default function AssistPanel() {
               optimize mode — type a draft instruction to improve
             </div>
           )}
+          {mode === "agent" && (
+            <div className="mono" style={{ fontSize: 10, color: "rgb(var(--accent))", marginBottom: 6 }}>
+              agent mode — researches the web (Tavily) and answers with sources
+            </div>
+          )}
           <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
             <textarea
               className="reply-input no-scrollbar"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-              placeholder={mode === "optimize" ? "Draft instruction…" : "Ask about this session…"}
+              placeholder={mode === "optimize" ? "Draft instruction…" : mode === "agent" ? "Research the web…" : "Ask about this session…"}
               rows={1}
               disabled={noModels}
               style={{

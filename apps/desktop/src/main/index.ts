@@ -267,6 +267,8 @@ ipcMain.handle(IPC.llmModels, () => api.llmModels());
 ipcMain.handle(IPC.llmAssist, (_e, a: Parameters<typeof api.llmAssist>[0]) => api.llmAssist(a));
 ipcMain.handle(IPC.llmAddEndpoint, (_e, a: Parameters<typeof api.addLlmEndpoint>[0]) => api.addLlmEndpoint(a));
 ipcMain.handle(IPC.llmDeleteEndpoint, (_e, a: { id: string }) => api.deleteLlmEndpoint(a.id));
+ipcMain.handle(IPC.llmAgent, (_e, a: Parameters<typeof api.llmAgent>[0]) => api.llmAgent(a));
+ipcMain.handle(IPC.llmAgentEnabled, () => api.agentEnabled());
 
 // Open a URL in the user's real browser.
 ipcMain.handle(IPC.openExternal, (_e, a: { url: string }) => {

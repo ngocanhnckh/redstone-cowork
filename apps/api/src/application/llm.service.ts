@@ -57,6 +57,18 @@ export class LlmService {
     return (await this.allEndpoints()).map((e) => ({ id: e.id, label: e.label, model: e.model, kind: e.kind, maxTokens: e.maxTokens ?? null }));
   }
 
+  /** Public endpoint resolution for the agent loop (with keys). */
+  async resolveEndpoint(modelId?: string): Promise<LlmEndpoint> {
+    return this.resolve(modelId);
+  }
+
+  /** Formatted, token-capped conversation for a session; throws if unknown. */
+  async conversationForSession(sessionId: string): Promise<string> {
+    const session = await this.sessions.get(sessionId);
+    if (!session) throw new BadRequestException("unknown session");
+    return this.formatConversation(session);
+  }
+
   private async resolve(modelId?: string): Promise<LlmEndpoint> {
     const endpoints = await this.allEndpoints();
     if (endpoints.length === 0)

@@ -41,4 +41,6 @@ export const IPC = {
   llmAssist: "api:llm:assist",
   llmAddEndpoint: "api:llm:endpoint:add",
   llmDeleteEndpoint: "api:llm:endpoint:delete",
+  llmAgent: "api:llm:agent",
+  llmAgentEnabled: "api:llm:agent:enabled",
 } as const;

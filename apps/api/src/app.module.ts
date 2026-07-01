@@ -63,6 +63,9 @@ import { PostgresLlmEndpointStore } from "./adapters/persistence/postgres-llm-en
 import { OpenAiCompatibleLlm } from "./adapters/llm/openai-llm.adapter";
 import { endpointsFromEnv } from "./adapters/llm/endpoints-from-env";
 import { llmLimitsFromEnv } from "./adapters/llm/llm-limits";
+import { AgentService } from "./application/agent.service";
+import { AGENT_LLM, AGENT_TOOLS, type AgentTool } from "./domain/agent/agent.port";
+import { TavilySearchTool } from "./adapters/agent/tavily-search.tool";
 import { PromptLoader } from "./infrastructure/prompts/prompt-loader";
 import type { Pool } from "pg";
 
@@ -90,6 +93,18 @@ import type { Pool } from "pg";
     { provide: LLM_PORT, useFactory: () => new OpenAiCompatibleLlm() },
     { provide: LLM_ENDPOINTS, useFactory: () => endpointsFromEnv() },
     { provide: LLM_LIMITS, useFactory: () => llmLimitsFromEnv() },
+    AgentService,
+    { provide: AGENT_LLM, useFactory: () => new OpenAiCompatibleLlm() },
+    {
+      // Tools available to the agent — Tavily web search when TAVILY_KEY is set.
+      provide: AGENT_TOOLS,
+      useFactory: (): AgentTool[] => {
+        const tools: AgentTool[] = [];
+        const tavily = process.env.TAVILY_KEY;
+        if (tavily) tools.push(new TavilySearchTool(tavily));
+        return tools;
+      },
+    },
     {
       provide: LLM_ENDPOINT_STORE,
       inject: [PG_POOL],

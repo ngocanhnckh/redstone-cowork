@@ -143,6 +143,21 @@ export async function deleteLlmEndpoint(id: string): Promise<void> {
   await req(`/llm/endpoints/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
 
+export type AgentStep = { tool: string; args: string; result: string };
+
+export async function agentEnabled(): Promise<boolean> {
+  try {
+    const j = (await (await req("/llm/agent/enabled")).json()) as { enabled: boolean };
+    return !!j.enabled;
+  } catch {
+    return false;
+  }
+}
+
+export async function llmAgent(a: { sessionId: string; input: string; modelId?: string }): Promise<{ text: string; steps: AgentStep[] }> {
+  return (await (await req("/llm/agent", { method: "POST", body: JSON.stringify(a) })).json()) as { text: string; steps: AgentStep[] };
+}
+
 export async function getSshResult(sessionId: string): Promise<SshResult | null> {
   const res = await req(`/sessions/${encodeURIComponent(sessionId)}/ssh-result`);
   const text = await res.text();

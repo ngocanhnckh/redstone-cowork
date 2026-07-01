@@ -1,13 +1,36 @@
 import { BadRequestException, Body, Controller, Delete, Get, HttpCode, Param, Post, UseGuards } from "@nestjs/common";
-import { ZodError } from "zod";
+import { ZodError, z } from "zod";
 import { AssistRequestSchema, LlmChatRequestSchema, LlmEndpointInputSchema } from "@rcw/shared";
 import { LlmService } from "../../application/llm.service";
+import { AgentService } from "../../application/agent.service";
 import { InstanceTokenGuard } from "./instance-token.guard";
+
+const AgentRequestSchema = z.object({
+  sessionId: z.string().min(1),
+  input: z.string().min(1),
+  modelId: z.string().min(1).optional(),
+});
 
 @Controller("llm")
 @UseGuards(InstanceTokenGuard)
 export class LlmController {
-  constructor(private readonly llm: LlmService) {}
+  constructor(private readonly llm: LlmService, private readonly agent: AgentService) {}
+
+  @Get("agent/enabled")
+  agentEnabled() {
+    return { enabled: this.agent.enabled() };
+  }
+
+  @Post("agent")
+  async runAgent(@Body() body: unknown) {
+    try {
+      const req = AgentRequestSchema.parse(body);
+      return await this.agent.run(req);
+    } catch (e) {
+      if (e instanceof ZodError) throw new BadRequestException(e.issues);
+      throw e;
+    }
+  }
 
   @Get("models")
   async models() {
