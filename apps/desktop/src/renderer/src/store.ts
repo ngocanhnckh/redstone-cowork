@@ -48,12 +48,14 @@ type State = {
   activeTab: Record<string, "chat" | "terminal" | "browser" | "ports" | "files">; // sessionId → active workspace tab
   contextCollapsed: boolean; // right context sidebar collapsed (more room for the body)
   assistOpen: boolean; // LLM assistant slide-over
+  settingsOpen: boolean; // connection settings modal
   loading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
   setActiveTab: (sessionId: string, tab: "chat" | "terminal" | "browser" | "ports" | "files") => void;
   toggleContext: () => void;
   toggleAssist: () => void;
+  toggleSettings: () => void;
   setFocus: (id: string) => void;
   setMode: (mode: "flow" | "grid") => void;
   openDetail: (id: string) => void;
@@ -80,6 +82,7 @@ export const useStore = create<State>((set, get) => ({
   activeTab: {},
   contextCollapsed: false,
   assistOpen: false,
+  settingsOpen: false,
   loading: false,
   error: null,
 
@@ -90,6 +93,8 @@ export const useStore = create<State>((set, get) => ({
   toggleContext: () => set((state) => ({ contextCollapsed: !state.contextCollapsed })),
 
   toggleAssist: () => set((state) => ({ assistOpen: !state.assistOpen })),
+
+  toggleSettings: () => set((state) => ({ settingsOpen: !state.settingsOpen })),
 
   refresh: async () => {
     try {

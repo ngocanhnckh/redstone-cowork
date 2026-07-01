@@ -6,6 +6,7 @@ import FocusStage from "./FocusStage";
 import ContextColumn from "./ContextColumn";
 import AgentGrid from "./AgentGrid";
 import AssistPanel from "./AssistPanel";
+import SettingsPanel from "./SettingsPanel";
 
 const noDrag = { WebkitAppRegion: "no-drag" } as CSSProperties;
 
@@ -22,6 +23,7 @@ export default function Cockpit() {
   const contextCollapsed = useStore((s) => s.contextCollapsed);
   const toggleContext = useStore((s) => s.toggleContext);
   const toggleAssist = useStore((s) => s.toggleAssist);
+  const toggleSettings = useStore((s) => s.toggleSettings);
 
   useEffect(() => {
     const unsub = startCockpit();
@@ -137,6 +139,24 @@ export default function Cockpit() {
             redstone cowork
           </span>
           <div style={{ flex: 1 }} />
+          {/* Connection settings */}
+          <button
+            onClick={toggleSettings}
+            title="Connection settings — server & sign-in"
+            style={{
+              ...noDrag,
+              border: "1px solid var(--border)",
+              background: "transparent",
+              color: "var(--text-soft)",
+              borderRadius: 8,
+              padding: "4px 10px",
+              fontSize: 11.5,
+              fontFamily: "var(--font-mono)",
+              cursor: "pointer",
+            }}
+          >
+            ⚙ server
+          </button>
           {/* LLM assistant */}
           <button
             onClick={toggleAssist}
@@ -244,6 +264,7 @@ export default function Cockpit() {
       </div>
 
       <AssistPanel />
+      <SettingsPanel />
     </div>
   );
 }
