@@ -55,6 +55,8 @@ import { InMemoryDeviceTokenStore } from "./adapters/persistence/in-memory-devic
 import { PostgresDeviceTokenStore } from "./adapters/persistence/postgres-device-token-store";
 import { PG_POOL, pgPoolProvider, PoolShutdown } from "./infrastructure/pg-pool.provider";
 import { LlmController } from "./adapters/http/llm.controller";
+import { AuthController } from "./adapters/http/auth.controller";
+import { RedstoneService } from "./application/redstone.service";
 import { LlmService } from "./application/llm.service";
 import { LLM_PORT, LLM_ENDPOINTS, LLM_LIMITS } from "./domain/llm/llm.port";
 import { LLM_ENDPOINT_STORE } from "./domain/llm/llm-endpoint-store.port";
@@ -70,7 +72,7 @@ import { PromptLoader } from "./infrastructure/prompts/prompt-loader";
 import type { Pool } from "pg";
 
 @Module({
-  controllers: [HealthController, EventsController, SessionsController, DecisionsController, StreamController, PushController, ConnectionsController, OAuthController, MicrosoftOAuthController, DevicesController, InstallController, LlmController],
+  controllers: [HealthController, EventsController, SessionsController, DecisionsController, StreamController, PushController, ConnectionsController, OAuthController, MicrosoftOAuthController, DevicesController, InstallController, LlmController, AuthController],
   providers: [
     RecordEventUseCase,
     SessionsService,
@@ -86,6 +88,7 @@ import type { Pool } from "pg";
     DevicesService,
     MasterTokenGuard,
     LlmService,
+    { provide: RedstoneService, useFactory: () => new RedstoneService() },
     {
       provide: PromptLoader,
       useFactory: () => new PromptLoader(process.env.PROMPTS_DIR ?? "prompts"),

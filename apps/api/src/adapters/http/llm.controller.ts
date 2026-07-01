@@ -1,9 +1,9 @@
-import { BadRequestException, Body, Controller, Delete, Get, HttpCode, Param, Post, UseGuards } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Delete, Get, HttpCode, Param, Post, Req, UseGuards } from "@nestjs/common";
 import { ZodError, z } from "zod";
 import { AssistRequestSchema, LlmChatRequestSchema, LlmEndpointInputSchema } from "@rcw/shared";
 import { LlmService } from "../../application/llm.service";
 import { AgentService } from "../../application/agent.service";
-import { InstanceTokenGuard } from "./instance-token.guard";
+import { InstanceTokenGuard, type GuardedRequest } from "./instance-token.guard";
 
 const AgentRequestSchema = z.object({
   sessionId: z.string().min(1),
@@ -22,10 +22,11 @@ export class LlmController {
   }
 
   @Post("agent")
-  async runAgent(@Body() body: unknown) {
+  async runAgent(@Body() body: unknown, @Req() request: GuardedRequest) {
     try {
       const req = AgentRequestSchema.parse(body);
-      return await this.agent.run(req);
+      // Org (Redstone) users get tools that call the Redstone agent as themselves.
+      return await this.agent.run({ ...req, redstoneToken: request.redstoneToken });
     } catch (e) {
       if (e instanceof ZodError) throw new BadRequestException(e.issues);
       throw e;

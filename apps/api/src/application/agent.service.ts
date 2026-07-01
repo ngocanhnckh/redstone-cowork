@@ -3,6 +3,8 @@ import { AGENT_LLM, AGENT_TOOLS, type AgentLlmPort, type AgentMessage, type Agen
 import { LLM_LIMITS, type LlmLimits } from "../domain/llm/llm.port";
 import { PromptLoader } from "../infrastructure/prompts/prompt-loader";
 import { LlmService } from "./llm.service";
+import { RedstoneService } from "./redstone.service";
+import { redstoneToolsFor } from "../adapters/agent/redstone.tools";
 
 export type AgentStep = { tool: string; args: string; result: string };
 export type AgentResult = { text: string; steps: AgentStep[] };
@@ -25,18 +27,26 @@ export class AgentService {
     @Inject(LLM_LIMITS) private readonly limits: LlmLimits,
     private readonly prompts: PromptLoader,
     private readonly llmService: LlmService,
+    private readonly redstone: RedstoneService,
   ) {}
 
-  /** True when at least one tool is configured (e.g. Tavily key present). */
+  /**
+   * True when the agent has any tool: a statically-configured one (e.g. Tavily) or
+   * — for org instances — the per-user Redstone tools that appear once a Redstone
+   * user is signed in.
+   */
   enabled(): boolean {
-    return this.tools.length > 0;
+    return this.tools.length > 0 || this.redstone.enabled();
   }
 
-  private toolDefs(): ToolDef[] {
-    return this.tools.map((t) => ({ type: "function", function: { name: t.name, description: t.description, parameters: t.parameters } }));
+  private toolDefs(tools: AgentTool[]): ToolDef[] {
+    return tools.map((t) => ({ type: "function", function: { name: t.name, description: t.description, parameters: t.parameters } }));
   }
 
-  async run(input: { sessionId: string; input: string; modelId?: string }): Promise<AgentResult> {
+  async run(input: { sessionId: string; input: string; modelId?: string; redstoneToken?: string }): Promise<AgentResult> {
+    // Static tools plus, for a signed-in Redstone (org) user, tools that call the
+    // Redstone agent AS them — so the assistant can pull the user's real context.
+    const tools = [...this.tools, ...redstoneToolsFor(this.redstone, input.redstoneToken)];
     // Default to the Text (deep) model — agent reasoning wants the strong one.
     const endpoint = await this.llmService.resolveEndpoint(input.modelId ?? "text");
     const conversation = await this.llmService.conversationForSession(input.sessionId, endpoint.maxInputTokens);
@@ -55,7 +65,7 @@ export class AgentService {
         apiKey: endpoint.apiKey,
         model: endpoint.model,
         messages,
-        tools: this.toolDefs(),
+        tools: this.toolDefs(tools),
         maxTokens: endpoint.maxTokens ?? this.limits.maxOutputTokens,
       });
       lastContent = turn.content || lastContent;
@@ -71,7 +81,7 @@ export class AgentService {
         tool_calls: turn.toolCalls.map((tc) => ({ id: tc.id, type: "function", function: { name: tc.name, arguments: tc.arguments } })),
       });
       for (const tc of turn.toolCalls) {
-        const tool = this.tools.find((t) => t.name === tc.name);
+        const tool = tools.find((t) => t.name === tc.name);
         let result: string;
         try {
           result = tool ? await tool.run(tc.arguments) : `error: unknown tool ${tc.name}`;
