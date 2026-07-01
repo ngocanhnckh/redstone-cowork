@@ -53,13 +53,20 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
     ...pending.map((p) => ({ role: "user" as const, text: p.text })),
   ];
   // Show the "thinking" indicator from the moment the user sends until Claude's
-  // final answer. Driven primarily by the server `working` flag (true from
-  // prompt-submit through tool runs, false at Stop); the optimistic pending and
-  // last-is-user checks cover the brief gap before the host's first push lands.
-  // Only an ACTIONABLE decision (a question/permission needing you) suppresses it
-  // — a leftover completion/notification card must NOT hide that Claude is working.
-  const lastIsUser = timeline.length > 0 && timeline[timeline.length - 1].role === "user";
-  const isWorking = !actionableDecision && (!!session?.working || pending.length > 0 || lastIsUser);
+  // final answer. Driven by the server `working` flag (true from prompt-submit
+  // through tool runs, false at Stop); the optimistic `pending` check covers the
+  // brief gap before the host's first push lands — pending is pruned exactly when
+  // the transcript grows, which is the same push that sets `working=true`, so
+  // coverage is continuous. We deliberately DON'T fall back to "last message is
+  // the user": a tool-only final turn is skipped by the transcript reader, so the
+  // last captured message can be the user's prompt even after Claude has stopped —
+  // that would wedge the animation on forever. Only an ACTIONABLE decision (a
+  // question/permission needing you) suppresses it — a leftover completion/
+  // notification card must NOT hide that Claude is working.
+  // A `lost` session's poller is gone, so a `working=true` left over from an
+  // interrupted turn (no Stop fired to clear it) can never be trusted — force it off.
+  const isWorking =
+    session?.status !== "lost" && !actionableDecision && (!!session?.working || pending.length > 0);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   // Only auto-scroll to the bottom when the user is already near it, so a poll
