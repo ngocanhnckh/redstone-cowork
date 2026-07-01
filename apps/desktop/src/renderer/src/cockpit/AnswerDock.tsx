@@ -6,9 +6,13 @@ import Kbd from "./Kbd";
 
 interface Props {
   decision: Decision | undefined;
+  /** True while Claude is mid-turn — enables the interrupt (Esc) controls. */
+  working?: boolean;
+  /** The focused session (used when there's no decision to derive it from). */
+  sessionId?: string;
 }
 
-export default function AnswerDock({ decision }: Props) {
+export default function AnswerDock({ decision, working, sessionId: sessionIdProp }: Props) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const idleInputRef = useRef<HTMLTextAreaElement>(null);
   const [sent, setSent] = useState(false);
@@ -19,6 +23,8 @@ export default function AnswerDock({ decision }: Props) {
   const focusId = useStore((s) => s.focusId);
   const queue = useStore((s) => s.queue);
   const instruct = useStore((s) => s.instruct);
+  const interrupt = useStore((s) => s.interrupt);
+  const idleSessionId = sessionIdProp ?? focusId;
 
   // Skip (Ctrl+→) and Snooze (Ctrl+S) shortcuts — only active while a decision is shown.
   useEffect(() => {
@@ -68,7 +74,19 @@ export default function AnswerDock({ decision }: Props) {
   }
 
   if (!decision) {
-    // No pending decision — show Acknowledge to advance focus + free-text instruct
+    // No pending decision. While Claude works, this dock redirects it — sending
+    // interrupts (Esc) the current turn then types the new instruction; a bare
+    // Stop just aborts. When idle, it's a normal free-text instruction + Acknowledge.
+    const submitIdle = () => {
+      const el = idleInputRef.current;
+      const val = el?.value.trim();
+      if (!val || !idleSessionId) return;
+      if (working) interrupt(idleSessionId, val);
+      else instruct(idleSessionId, val);
+      if (el) { el.value = ""; el.style.height = "auto"; }
+      setIdleSent(true);
+      setTimeout(() => setIdleSent(false), 1800);
+    };
     return (
       <div
         style={{
@@ -83,56 +101,51 @@ export default function AnswerDock({ decision }: Props) {
           <textarea
             ref={idleInputRef}
             className="reply-input no-scrollbar"
-            placeholder="Send an instruction…"
+            placeholder={working ? "Interrupt Claude and tell it what to do instead…" : "Send an instruction…"}
             rows={1}
             onInput={(e) => autoGrow(e.currentTarget)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
-                const el = idleInputRef.current;
-                const val = el?.value.trim();
-                if (val && focusId) {
-                  instruct(focusId, val);
-                  if (el) { el.value = ""; el.style.height = "auto"; }
-                  setIdleSent(true);
-                  setTimeout(() => setIdleSent(false), 1800);
-                }
+                submitIdle();
               }
             }}
             style={textareaStyle}
           />
           <button
             className="glass-btn--clay"
-            onClick={() => {
-              const el = idleInputRef.current;
-              const val = el?.value.trim();
-              if (val && focusId) {
-                instruct(focusId, val);
-                if (el) { el.value = ""; el.style.height = "auto"; }
-                setIdleSent(true);
-                setTimeout(() => setIdleSent(false), 1800);
-              }
-            }}
+            onClick={submitIdle}
             style={{ borderRadius: 999, padding: "0 22px", height: 44, fontSize: 13.5, fontWeight: 600, flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 8 }}
           >
-            Send <Kbd>⌅</Kbd>
+            {working ? "Interrupt & send" : "Send"} <Kbd>⌅</Kbd>
           </button>
         </div>
         {idleSent && (
           <span className="mono" style={{ display: "block", fontSize: 11, color: "rgb(var(--accent))", marginBottom: 6 }}>✓ sent</span>
         )}
-        <button
-          className="glass-btn--clay"
-          onClick={() => {
-            if (focusId) {
-              const next = nextAfterAnswer(queue, focusId);
-              if (next) setFocus(next);
-            }
-          }}
-          style={{ padding: "10px 24px", fontSize: 14, fontWeight: 500 }}
-        >
-          Acknowledge
-        </button>
+        {working ? (
+          <button
+            className="glass-btn--clay"
+            onClick={() => { if (idleSessionId) interrupt(idleSessionId); }}
+            title="Interrupt Claude (Esc) without sending anything"
+            style={{ padding: "10px 24px", fontSize: 14, fontWeight: 500, display: "inline-flex", alignItems: "center", gap: 8 }}
+          >
+            ⎋ Stop Claude
+          </button>
+        ) : (
+          <button
+            className="glass-btn--clay"
+            onClick={() => {
+              if (idleSessionId) {
+                const next = nextAfterAnswer(queue, idleSessionId);
+                if (next) setFocus(next);
+              }
+            }}
+            style={{ padding: "10px 24px", fontSize: 14, fontWeight: 500 }}
+          >
+            Acknowledge
+          </button>
+        )}
       </div>
     );
   }
@@ -143,7 +156,10 @@ export default function AnswerDock({ decision }: Props) {
     const el = inputRef.current;
     const val = el?.value.trim();
     if (!val) return;
-    if (decision && (decision.kind === "question" || decision.kind === "permission" || decision.kind === "mode")) {
+    if (working) {
+      // A passive card is showing but Claude is still mid-turn — redirect it.
+      interrupt(decision!.sessionId, val);
+    } else if (decision && (decision.kind === "question" || decision.kind === "permission" || decision.kind === "mode")) {
       answer(decision.id, { custom: val });
     } else {
       instruct(decision!.sessionId, val);
@@ -263,8 +279,29 @@ export default function AnswerDock({ decision }: Props) {
         >
           Snooze 15m <Kbd>⌃S</Kbd>
         </span>
+        {working && (
+          <span
+            className="glass-inset-hover"
+            onClick={() => interrupt(sessionId)}
+            title="Interrupt Claude (Esc) without sending anything"
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: 11,
+              color: "var(--text-soft)",
+              border: "1px solid var(--border)",
+              borderRadius: 999,
+              padding: "6px 12px",
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 7,
+            }}
+          >
+            ⎋ Stop
+          </span>
+        )}
         <span className="mono faint" style={{ marginLeft: "auto", fontSize: 10.5 }}>
-          answer → auto-advance to next
+          {working ? "send → interrupt & redirect" : "answer → auto-advance to next"}
         </span>
       </div>
     </div>

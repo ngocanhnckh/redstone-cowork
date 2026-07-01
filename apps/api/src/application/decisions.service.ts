@@ -80,6 +80,30 @@ export class DecisionsService {
   }
 
   /**
+   * Interrupt Claude's current turn: create a resolved `interrupt` deliverable the
+   * poller turns into an Escape (abort) plus, when `text` is given, a replacement
+   * instruction typed once Claude is back at the prompt. Created resolved (like
+   * `mode`) so it delivers immediately and never surfaces as a pending card.
+   */
+  async interrupt(sessionId: string, input: unknown): Promise<Decision> {
+    const { text } = z.object({ text: z.string().optional() }).parse(input);
+    if (!(await this.sessions.get(sessionId))) throw new NotFoundException("unknown session");
+    const trimmed = text?.trim() || null;
+    const now = new Date();
+    const decision: Decision = {
+      sessionId, kind: "interrupt",
+      title: trimmed ? `Interrupt · ${trimmed.slice(0, 100)}` : "Interrupt",
+      body: {}, options: [],
+      id: randomUUID(), status: "resolved", createdAt: now, resolvedAt: now,
+      resolution: { choice: null, answers: null, custom: trimmed }, deliveredAt: null,
+    };
+    const created = await this.store.create(decision);
+    this.deliveryWaiters.notify(sessionId);
+    this.bus.emit({ type: "decision.created", payload: created });
+    return created;
+  }
+
+  /**
    * Ask the session's host (its running agent poller) to install `publicKey`
    * into the remote `~/.ssh/authorized_keys`. Created as a RESOLVED deliverable
    * (mirrors `switchMode`) so it is delivered to the poller but never surfaces

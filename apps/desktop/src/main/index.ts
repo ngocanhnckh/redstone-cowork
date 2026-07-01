@@ -187,6 +187,9 @@ ipcMain.handle(IPC.pin, (_e, a: { id: string; pinned: boolean }) =>
 ipcMain.handle(IPC.instruct, (_e, a: { sessionId: string; text: string }) =>
   api.instruct(a.sessionId, a.text)
 );
+ipcMain.handle(IPC.interrupt, (_e, a: { sessionId: string; text?: string }) =>
+  api.interrupt(a.sessionId, a.text)
+);
 ipcMain.handle(IPC.mode, (_e, a: { sessionId: string; mode: string }) =>
   api.switchMode(a.sessionId, a.mode)
 );

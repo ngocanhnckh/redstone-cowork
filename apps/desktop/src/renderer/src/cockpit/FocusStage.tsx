@@ -368,7 +368,7 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
       </div>
 
       {/* Answer dock pinned at bottom */}
-      <AnswerDock decision={decision} />
+      <AnswerDock decision={decision} working={isWorking} sessionId={id ?? undefined} />
       </>
       )}
     </div>

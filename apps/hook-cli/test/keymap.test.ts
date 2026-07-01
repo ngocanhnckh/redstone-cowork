@@ -8,6 +8,14 @@ describe("deliveryToKeys", () => {
     expect(deliveryToKeys({ ...base, kind: "instruction", options: [], resolution: { choice: null, answers: null, custom: "pnpm test" } } as never))
       .toEqual([["-l", "pnpm test"], ["Enter"]]);
   });
+  it("bare interrupt -> a single Escape (abort, no text)", () => {
+    expect(deliveryToKeys({ ...base, kind: "interrupt", options: [], resolution: { choice: null, answers: null, custom: null } } as never))
+      .toEqual([["Escape"]]);
+  });
+  it("interrupt with text -> Escape, then the replacement, then Enter", () => {
+    expect(deliveryToKeys({ ...base, kind: "interrupt", options: [], resolution: { choice: null, answers: null, custom: "do X instead" } } as never))
+      .toEqual([["Escape"], ["-l", "do X instead"], ["Enter"]]);
+  });
   it("permission Allow -> digit of the option position", () => {
     expect(deliveryToKeys({ ...base, kind: "permission", options: [{ label: "Allow" }, { label: "Deny" }], resolution: { choice: "Allow", answers: null, custom: null } } as never))
       .toEqual([["1"], ["Enter"]]);

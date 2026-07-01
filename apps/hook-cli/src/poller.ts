@@ -144,6 +144,21 @@ export function pasteSettleMs(text: string): number {
 export const KEY_SETTLE_MS = 180;
 
 /**
+ * Gap after an Escape (interrupt) before the next keystroke. Aborting a turn —
+ * stopping a stream or a running tool and returning to the input prompt — takes
+ * noticeably longer than a normal key press, and a replacement instruction typed
+ * too early would land mid-teardown and be lost. Give Claude time to settle.
+ */
+export const INTERRUPT_SETTLE_MS = 650;
+
+/** How long to wait after a given send-keys sequence before the next one. */
+export function afterKeyDelay(keys: string[]): number {
+  if (keys[0] === "-l") return pasteSettleMs(keys[1] ?? "");
+  if (keys[0] === "Escape") return INTERRUPT_SETTLE_MS;
+  return KEY_SETTLE_MS;
+}
+
+/**
  * Max length of a single `tmux send-keys -l` literal. tmux rejects an
  * over-long command ("command too long"), so a large paste (e.g. a console
  * stack trace) must be split into several send-keys calls that concatenate
@@ -199,9 +214,10 @@ export async function pollOnce(deps: PollOnceDeps): Promise<void> {
           }
           // Let the keystroke register before the next one. After a literal paste
           // Claude's paste buffer needs to settle or the following Enter is absorbed
-          // as a newline; between ordinary keys a short gap lets the selection register.
+          // as a newline; after an Escape the turn needs time to abort; between
+          // ordinary keys a short gap lets the selection register.
           if (i < keySequences.length - 1) {
-            await sleep(keys[0] === "-l" ? pasteSettleMs(keys[1] ?? "") : KEY_SETTLE_MS);
+            await sleep(afterKeyDelay(keys));
           }
         }
       }

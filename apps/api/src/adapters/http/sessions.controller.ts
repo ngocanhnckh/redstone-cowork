@@ -81,6 +81,17 @@ export class SessionsController {
     }
   }
 
+  @Post(":id/interrupt")
+  @HttpCode(201)
+  async interrupt(@Param("id") id: string, @Body() body: unknown) {
+    try {
+      return await this.decisions.interrupt(id, body ?? {});
+    } catch (e) {
+      if (e instanceof ZodError) throw new BadRequestException(e.issues);
+      throw e;
+    }
+  }
+
   @Post(":id/resolve-local")
   @HttpCode(200)
   async resolveLocal(@Param("id") id: string) {

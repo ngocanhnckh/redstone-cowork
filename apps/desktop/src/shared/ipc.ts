@@ -10,6 +10,7 @@ export const IPC = {
   pin: "api:pin",
   streamEvent: "stream:event",
   instruct: "api:instruct",
+  interrupt: "api:interrupt",
   mode: "api:mode",
   userTodoAdd: "api:usertodo:add",
   userTodoToggle: "api:usertodo:toggle",

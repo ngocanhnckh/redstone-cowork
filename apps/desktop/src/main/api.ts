@@ -78,6 +78,15 @@ export async function pin(id: string, pinned: boolean): Promise<void> {
   });
 }
 
+export async function interrupt(sessionId: string, text?: string): Promise<unknown> {
+  return (
+    await req(`/sessions/${encodeURIComponent(sessionId)}/interrupt`, {
+      method: "POST",
+      body: JSON.stringify(text ? { text } : {}),
+    })
+  ).json();
+}
+
 export async function addUserTodo(sessionId: string, text: string): Promise<unknown> {
   return (
     await req(`/sessions/${encodeURIComponent(sessionId)}/user-todos`, {

@@ -22,6 +22,7 @@ declare global {
       snooze(id: string, minutes: number): Promise<void>;
       pin(id: string, pinned: boolean): Promise<void>;
       instruct(sessionId: string, text: string): Promise<unknown>;
+      interrupt(sessionId: string, text?: string): Promise<unknown>;
       switchMode(sessionId: string, mode: string): Promise<unknown>;
       addUserTodo(sessionId: string, text: string): Promise<unknown>;
       toggleUserTodo(sessionId: string, todoId: string): Promise<unknown>;

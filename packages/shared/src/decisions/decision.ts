@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const DecisionKindSchema = z.enum(["permission", "question", "completion", "notification", "instruction", "mode", "ssh-authorize"]);
+export const DecisionKindSchema = z.enum(["permission", "question", "completion", "notification", "instruction", "interrupt", "mode", "ssh-authorize"]);
 
 /**
  * Decision kinds the agent's delivery poller consumes (resolved deliverables it
@@ -9,7 +9,7 @@ export const DecisionKindSchema = z.enum(["permission", "question", "completion"
  * decision stores' "undelivered" filter. `ssh-authorize` is created resolved
  * (like `mode`) so it never surfaces as a pending card.
  */
-export const DELIVERABLE_KINDS = ["permission", "question", "instruction", "mode", "ssh-authorize"] as const;
+export const DELIVERABLE_KINDS = ["permission", "question", "instruction", "interrupt", "mode", "ssh-authorize"] as const;
 export const DecisionOptionSchema = z.object({ label: z.string().min(1), description: z.string().optional() });
 
 export const ResolutionSchema = z.object({

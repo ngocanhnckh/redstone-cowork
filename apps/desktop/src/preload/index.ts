@@ -29,6 +29,8 @@ contextBridge.exposeInMainWorld("cowork", {
     ipcRenderer.invoke(IPC.pin, { id, pinned }),
   instruct: (sessionId: string, text: string): Promise<unknown> =>
     ipcRenderer.invoke(IPC.instruct, { sessionId, text }),
+  interrupt: (sessionId: string, text?: string): Promise<unknown> =>
+    ipcRenderer.invoke(IPC.interrupt, { sessionId, text }),
   switchMode: (sessionId: string, mode: string): Promise<unknown> =>
     ipcRenderer.invoke(IPC.mode, { sessionId, mode }),
   addUserTodo: (sessionId: string, text: string): Promise<unknown> =>

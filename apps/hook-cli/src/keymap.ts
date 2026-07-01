@@ -16,6 +16,7 @@ type Delivery = {
   body?: { btabs?: number; tool_input?: { questions?: Question[] } };
 };
 
+
 /**
  * Map a resolved delivery to an array of tmux send-keys argument arrays.
  * Each inner array is passed as the arguments after `tmux send-keys -t <target>`.
@@ -23,6 +24,19 @@ type Delivery = {
  * Returns null when no keystroke mapping is applicable (caller should ack and skip).
  */
 export function deliveryToKeys(d: Delivery): string[][] | null {
+  // interrupt: abort Claude's current turn with a single Escape (it stops
+  // streaming/running a tool and returns to the input prompt), then optionally
+  // type a replacement instruction. Handled before the resolution guard because a
+  // bare interrupt (stop, no new text) carries no custom text. The poller waits
+  // longer after Escape (see afterKeyDelay) so Claude is back at the prompt before
+  // the text is typed.
+  if (d.kind === "interrupt") {
+    const text = d.resolution?.custom;
+    const seq: string[][] = [["Escape"]];
+    if (text) { seq.push(["-l", text]); seq.push(["Enter"]); }
+    return seq;
+  }
+
   // mode: inject N Shift+Tab presses to cycle Claude Code's permission mode.
   // Handled before the resolution guard because mode deliveries carry no resolution.
   if (d.kind === "mode") {
