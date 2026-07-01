@@ -187,10 +187,11 @@ export const useStore = create<State>((set, get) => ({
   instruct: async (sessionId, text) => {
     try {
       get().recordSent(sessionId, text);
-      // In Flow mode, advance ONLY to a session that's actually waiting for the
-      // user's input (an actionable question/permission), skipping the one we just
-      // messaged and any session merely working or holding a passive card. If none
-      // needs input, STAY here so the user can watch Claude work on this session.
+      // In Flow mode, advance to the next non-busy session on the queue — skipping
+      // the one we just messaged (now busy) and any session actively working — so
+      // the user keeps moving through what needs their attention. Prefer a session
+      // with an actionable decision (a real question/permission), but fall back to
+      // any other waiting session rather than getting stuck on the one we just sent.
       const { mode, queue, decisions } = get();
       let next: string | null = null;
       if (mode === "flow") {
@@ -198,7 +199,8 @@ export const useStore = create<State>((set, get) => ({
         const needsInput = new Set(
           decisions.filter((d) => ACTIONABLE.has(d.kind)).map((d) => d.sessionId)
         );
-        next = queue.find((q) => q.id !== sessionId && needsInput.has(q.id))?.id ?? null;
+        const candidates = queue.filter((q) => q.id !== sessionId && !q.working);
+        next = candidates.find((q) => needsInput.has(q.id))?.id ?? candidates[0]?.id ?? null;
       }
       await window.cowork.instruct(sessionId, text);
       if (next) set({ focusId: next });
