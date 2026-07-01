@@ -81,8 +81,9 @@ export default function AnswerDock({ decision, working, sessionId: sessionIdProp
       const el = idleInputRef.current;
       const val = el?.value.trim();
       if (!val || !idleSessionId) return;
-      if (working) interrupt(idleSessionId, val);
-      else instruct(idleSessionId, val);
+      // Send never interrupts — it just queues the message, exactly like typing in
+      // Claude Code during a turn. Only the Stop button aborts (see below).
+      instruct(idleSessionId, val);
       if (el) { el.value = ""; el.style.height = "auto"; }
       setIdleSent(true);
       setTimeout(() => setIdleSent(false), 1800);
@@ -101,7 +102,7 @@ export default function AnswerDock({ decision, working, sessionId: sessionIdProp
           <textarea
             ref={idleInputRef}
             className="reply-input no-scrollbar"
-            placeholder={working ? "Interrupt Claude and tell it what to do instead…" : "Send an instruction…"}
+            placeholder={working ? "Queue a message for Claude…" : "Send an instruction…"}
             rows={1}
             onInput={(e) => autoGrow(e.currentTarget)}
             onKeyDown={(e) => {
@@ -117,7 +118,7 @@ export default function AnswerDock({ decision, working, sessionId: sessionIdProp
             onClick={submitIdle}
             style={{ borderRadius: 999, padding: "0 22px", height: 44, fontSize: 13.5, fontWeight: 600, flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 8 }}
           >
-            {working ? "Interrupt & send" : "Send"} <Kbd>⌅</Kbd>
+            Send <Kbd>⌅</Kbd>
           </button>
         </div>
         {idleSent && (
@@ -156,12 +157,10 @@ export default function AnswerDock({ decision, working, sessionId: sessionIdProp
     const el = inputRef.current;
     const val = el?.value.trim();
     if (!val) return;
-    if (working) {
-      // A passive card is showing but Claude is still mid-turn — redirect it.
-      interrupt(decision!.sessionId, val);
-    } else if (decision && (decision.kind === "question" || decision.kind === "permission" || decision.kind === "mode")) {
+    if (decision && (decision.kind === "question" || decision.kind === "permission" || decision.kind === "mode")) {
       answer(decision.id, { custom: val });
     } else {
+      // Otherwise just queue the message (never interrupts) — only Stop aborts.
       instruct(decision!.sessionId, val);
     }
     if (el) { el.value = ""; el.style.height = "auto"; }
@@ -301,7 +300,7 @@ export default function AnswerDock({ decision, working, sessionId: sessionIdProp
           </span>
         )}
         <span className="mono faint" style={{ marginLeft: "auto", fontSize: 10.5 }}>
-          {working ? "send → interrupt & redirect" : "answer → auto-advance to next"}
+          {working ? "send → queue · Stop → interrupt" : "answer → auto-advance to next"}
         </span>
       </div>
     </div>
