@@ -53,6 +53,11 @@ export class SessionsController {
   ) {
     const session = await this.sessions.getByWrapper(wrapperId);
     if (!session) throw new NotFoundException();
+    // The running poller long-polls this every ~25s while its tmux lives — treat
+    // that as a heartbeat so an idle-but-live session (Claude blocked on the user,
+    // firing no hooks) stays fresh. Works for any bundle version; a killed session
+    // stops polling and goes stale/lost on its own.
+    await this.sessions.touch(session.id);
     const items = await this.decisions.deliveries(session.id, Number(timeoutMs) || 25_000);
     if (items.length === 0) return res.status(204).send();
     return res.status(200).json(items);

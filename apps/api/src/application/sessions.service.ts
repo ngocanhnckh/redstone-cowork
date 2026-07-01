@@ -61,6 +61,11 @@ export class SessionsService {
     return ok;
   }
 
+  /** Liveness-only touch (no event) — used by the frequent delivery long-poll. */
+  async touch(id: string): Promise<void> {
+    await this.store.touch(id, new Date());
+  }
+
   async patchState(id: string, input: unknown): Promise<AgentSession | null> {
     const patch: SessionStatePatch = SessionStatePatchSchema.parse(input);
     const updated = await this.store.patchState(id, patch);
