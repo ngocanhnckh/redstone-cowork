@@ -8,44 +8,61 @@ function configPath(): string {
 
 interface StoredConfig {
   serverUrl: string;
-  tokenEnc: string; // base64
+  tokenEnc: string; // base64 — the Bearer sent on every request
+  refreshEnc?: string; // base64 — Redstone refresh token (org mode only)
 }
 
-export function saveConfig(serverUrl: string, token: string): void {
-  let tokenEnc: string;
-  if (safeStorage.isEncryptionAvailable()) {
-    tokenEnc = safeStorage.encryptString(token).toString("base64");
-  } else {
-    tokenEnc = Buffer.from(token).toString("base64");
+function enc(value: string): string {
+  return safeStorage.isEncryptionAvailable()
+    ? safeStorage.encryptString(value).toString("base64")
+    : Buffer.from(value).toString("base64");
+}
+function dec(value: string): string {
+  const buf = Buffer.from(value, "base64");
+  return safeStorage.isEncryptionAvailable() ? safeStorage.decryptString(buf) : buf.toString("utf8");
+}
+function read(): StoredConfig | null {
+  try {
+    return JSON.parse(fs.readFileSync(configPath(), "utf8")) as StoredConfig;
+  } catch {
+    return null;
   }
-  const data: StoredConfig = { serverUrl, tokenEnc };
+}
+
+/** Persist the connection. `refreshToken` is set for org (Redstone) sessions only. */
+export function saveConfig(serverUrl: string, token: string, refreshToken?: string): void {
+  const data: StoredConfig = { serverUrl, tokenEnc: enc(token), ...(refreshToken ? { refreshEnc: enc(refreshToken) } : {}) };
   fs.writeFileSync(configPath(), JSON.stringify(data), "utf8");
 }
 
-export function loadConfig(): { serverUrl: string; hasToken: boolean } | null {
-  try {
-    const raw = fs.readFileSync(configPath(), "utf8");
-    const data: StoredConfig = JSON.parse(raw);
-    return { serverUrl: data.serverUrl, hasToken: !!data.tokenEnc };
-  } catch {
-    return null;
-  }
+/** Replace the access (and optionally refresh) token after a silent refresh; keeps serverUrl. */
+export function updateTokens(token: string, refreshToken?: string): void {
+  const cur = read();
+  if (!cur) return;
+  const data: StoredConfig = {
+    serverUrl: cur.serverUrl,
+    tokenEnc: enc(token),
+    refreshEnc: refreshToken ? enc(refreshToken) : cur.refreshEnc,
+  };
+  fs.writeFileSync(configPath(), JSON.stringify(data), "utf8");
+}
+
+export function loadConfig(): { serverUrl: string; hasToken: boolean; isOrg: boolean } | null {
+  const data = read();
+  if (!data) return null;
+  return { serverUrl: data.serverUrl, hasToken: !!data.tokenEnc, isOrg: !!data.refreshEnc };
 }
 
 export function getToken(): string | null {
-  try {
-    const raw = fs.readFileSync(configPath(), "utf8");
-    const data: StoredConfig = JSON.parse(raw);
-    if (!data.tokenEnc) return null;
-    const buf = Buffer.from(data.tokenEnc, "base64");
-    if (safeStorage.isEncryptionAvailable()) {
-      return safeStorage.decryptString(buf);
-    } else {
-      return buf.toString("utf8");
-    }
-  } catch {
-    return null;
-  }
+  const data = read();
+  if (!data?.tokenEnc) return null;
+  try { return dec(data.tokenEnc); } catch { return null; }
+}
+
+export function getRefreshToken(): string | null {
+  const data = read();
+  if (!data?.refreshEnc) return null;
+  try { return dec(data.refreshEnc); } catch { return null; }
 }
 
 export function clearConfig(): void {

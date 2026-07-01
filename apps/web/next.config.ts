@@ -14,6 +14,9 @@ const nextConfig: NextConfig = {
       // Public, unauthenticated — one-line device install.
       { source: "/install.sh", destination: `${API_URL}/install.sh` },
       { source: "/install/redstone.js", destination: `${API_URL}/install/redstone.js` },
+      // Public auth endpoints (org mode / Redstone): discovery + password grant +
+      // refresh. Used by the login page and by the desktop app talking direct.
+      { source: "/auth/:path*", destination: `${API_URL}/auth/:path*` },
       // Bearer-authed API routes used by the host CLI + desktop app.
       { source: "/sessions", destination: `${API_URL}/sessions` },
       { source: "/sessions/:path*", destination: `${API_URL}/sessions/:path*` },

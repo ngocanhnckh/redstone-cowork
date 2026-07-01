@@ -2,6 +2,8 @@ export const IPC = {
   configGet: "config:get",
   configSave: "config:save",
   configClear: "config:clear",
+  authConfig: "auth:config",
+  redstoneLogin: "auth:redstone:login",
   sessions: "api:sessions",
   queue: "api:queue",
   decisions: "api:decisions",

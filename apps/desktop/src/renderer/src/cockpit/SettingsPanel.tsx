@@ -13,14 +13,25 @@ export default function SettingsPanel() {
 
   const [serverUrl, setServerUrl] = useState("");
   const [token, setToken] = useState("");
+  const [mode, setMode] = useState<"token" | "redstone">("token");
+  const [redstoneOn, setRedstoneOn] = useState(false);
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [status, setStatus] = useState<{ kind: "idle" | "saving" | "ok" | "err"; text?: string }>({ kind: "idle" });
 
-  // Load the current server URL each time the panel opens (token is never read back).
+  // Load the current server URL each time the panel opens (tokens are never read
+  // back). Remember whether the current session is org (Redstone) and ask the
+  // server whether it offers Redstone sign-in, so we can show the right controls.
   useEffect(() => {
     if (!open) return;
     setStatus({ kind: "idle" });
-    setToken("");
-    window.cowork.getConfig().then((cfg) => setServerUrl(cfg?.serverUrl ?? "https://cowork.example.com"));
+    setToken(""); setPassword(""); setUsername("");
+    window.cowork.getConfig().then((cfg) => {
+      const url = cfg?.serverUrl ?? "https://cowork.example.com";
+      setServerUrl(url);
+      setMode(cfg?.isOrg ? "redstone" : "token");
+      window.cowork.authConfig(url).then((c) => setRedstoneOn(!!c.redstone)).catch(() => {});
+    });
   }, [open]);
 
   if (!open) return null;
@@ -28,10 +39,16 @@ export default function SettingsPanel() {
   async function saveAndReconnect() {
     const url = serverUrl.trim();
     if (!url) { setStatus({ kind: "err", text: "server URL is required" }); return; }
-    if (!token.trim()) { setStatus({ kind: "err", text: "enter the access token to reconnect" }); return; }
     setStatus({ kind: "saving" });
     try {
-      await window.cowork.saveConfig(url, token.trim());
+      if (mode === "redstone") {
+        if (!username.trim() || !password) { setStatus({ kind: "err", text: "enter your Redstone username and password" }); return; }
+        const r = await window.cowork.redstoneLogin(url, username.trim(), password);
+        if (!r.ok) { setStatus({ kind: "err", text: r.error ?? "Redstone sign-in failed" }); return; }
+      } else {
+        if (!token.trim()) { setStatus({ kind: "err", text: "enter the access token to reconnect" }); return; }
+        await window.cowork.saveConfig(url, token.trim());
+      }
       setStatus({ kind: "ok", text: "saved — reconnecting…" });
       setTimeout(() => window.location.reload(), 500);
     } catch (e) {
@@ -73,17 +90,50 @@ export default function SettingsPanel() {
           The domain or IP:port where your cowork server is reachable. The app calls this for everything.
         </p>
 
-        <label className="soft" style={labelStyle}>Access token</label>
-        <input
-          type="password"
-          value={token}
-          onChange={(e) => setToken(e.target.value)}
-          placeholder="Your INSTANCE_TOKEN (paste to change / reconnect)"
-          style={inputStyle}
-        />
-        <p className="faint" style={{ fontSize: 11, margin: "6px 2px 20px", lineHeight: 1.5 }}>
-          The instance token from the server's <span className="mono">.env</span> — this is how the app authenticates.
-        </p>
+        {redstoneOn && (
+          <div style={{ display: "flex", gap: 6, padding: 4, marginBottom: 16, border: "1px solid var(--border)", borderRadius: 11 }}>
+            {(["redstone", "token"] as const).map((m) => (
+              <button
+                key={m}
+                onClick={() => { setMode(m); setStatus({ kind: "idle" }); }}
+                style={{
+                  flex: 1, padding: "7px 0", fontSize: 12.5, fontWeight: 600, textAlign: "center", cursor: "pointer",
+                  borderRadius: 8, border: 0,
+                  background: mode === m ? "rgb(var(--primary) / 0.28)" : "transparent",
+                  color: mode === m ? "#fff" : "var(--text-soft)",
+                }}
+              >
+                {m === "redstone" ? "Organization" : "Personal"}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {mode === "redstone" && redstoneOn ? (
+          <>
+            <label className="soft" style={labelStyle}>Redstone username</label>
+            <input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="you@yourorg" autoCapitalize="off" autoCorrect="off" spellCheck={false} style={{ ...inputStyle, marginBottom: 12 }} />
+            <label className="soft" style={labelStyle}>Password</label>
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Your Redstone password" autoComplete="current-password" style={inputStyle} />
+            <p className="faint" style={{ fontSize: 11, margin: "6px 2px 20px", lineHeight: 1.5 }}>
+              Sign in with your organization&apos;s Redstone account. The password is exchanged for a token server-side and never stored here.
+            </p>
+          </>
+        ) : (
+          <>
+            <label className="soft" style={labelStyle}>Access token</label>
+            <input
+              type="password"
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+              placeholder="Your INSTANCE_TOKEN (paste to change / reconnect)"
+              style={inputStyle}
+            />
+            <p className="faint" style={{ fontSize: 11, margin: "6px 2px 20px", lineHeight: 1.5 }}>
+              The instance token from the server's <span className="mono">.env</span> — this is how the app authenticates.
+            </p>
+          </>
+        )}
 
         {status.kind !== "idle" && (
           <div className="mono" style={{ fontSize: 11.5, marginBottom: 12, color: status.kind === "err" ? "#e0736a" : "rgb(var(--accent))" }}>

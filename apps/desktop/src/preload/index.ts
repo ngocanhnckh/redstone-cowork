@@ -4,12 +4,16 @@ import type { SshSetupResult } from "../main/ssh-setup";
 
 contextBridge.exposeInMainWorld("cowork", {
   // Config
-  getConfig: (): Promise<{ serverUrl: string; hasToken: boolean } | null> =>
+  getConfig: (): Promise<{ serverUrl: string; hasToken: boolean; isOrg: boolean } | null> =>
     ipcRenderer.invoke(IPC.configGet),
   saveConfig: (serverUrl: string, token: string): Promise<{ ok: boolean }> =>
     ipcRenderer.invoke(IPC.configSave, { serverUrl, token }),
   clearConfig: (): Promise<void> =>
     ipcRenderer.invoke(IPC.configClear),
+  authConfig: (serverUrl: string): Promise<{ redstone: boolean; issuer: string | null }> =>
+    ipcRenderer.invoke(IPC.authConfig, { serverUrl }),
+  redstoneLogin: (serverUrl: string, username: string, password: string): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke(IPC.redstoneLogin, { serverUrl, username, password }),
 
   // Data
   getSessions: (): Promise<unknown[]> =>

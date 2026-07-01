@@ -3,9 +3,11 @@ declare global {
   interface Window {
     cowork: {
       // Config
-      getConfig(): Promise<{ serverUrl: string; hasToken: boolean } | null>;
+      getConfig(): Promise<{ serverUrl: string; hasToken: boolean; isOrg: boolean } | null>;
       saveConfig(serverUrl: string, token: string): Promise<{ ok: boolean }>;
       clearConfig(): Promise<void>;
+      authConfig(serverUrl: string): Promise<{ redstone: boolean; issuer: string | null }>;
+      redstoneLogin(serverUrl: string, username: string, password: string): Promise<{ ok: boolean; error?: string }>;
 
       // Data
       getSessions(): Promise<unknown[]>;

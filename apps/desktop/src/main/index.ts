@@ -170,6 +170,17 @@ ipcMain.handle(IPC.configSave, (_e, args: { serverUrl: string; token: string }) 
   return { ok: true };
 });
 ipcMain.handle(IPC.configClear, () => { clearConfig(); });
+ipcMain.handle(IPC.authConfig, (_e, a: { serverUrl: string }) => api.authConfig(a.serverUrl));
+ipcMain.handle(IPC.redstoneLogin, async (_e, a: { serverUrl: string; username: string; password: string }) => {
+  try {
+    const { access_token, refresh_token } = await api.redstoneLogin(a.serverUrl, a.username, a.password);
+    saveConfig(a.serverUrl, access_token, refresh_token ?? undefined);
+    startForwarding();
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+});
 
 // Data IPC handlers
 ipcMain.handle(IPC.sessions, () => api.getSessions());

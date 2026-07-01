@@ -1,10 +1,12 @@
-import { getToken, loadConfig } from "./config";
+import { getToken, getRefreshToken, loadConfig, updateTokens } from "./config";
 
 let fetchImpl: typeof fetch = (...args) => globalThis.fetch(...args);
 
 export function setFetch(f: typeof fetch): void {
   fetchImpl = f;
 }
+
+const trimUrl = (u: string): string => u.replace(/\/$/, "");
 
 function cfg(): { serverUrl: string; token: string } {
   const config = loadConfig();
@@ -13,18 +15,74 @@ function cfg(): { serverUrl: string; token: string } {
   return { serverUrl: config.serverUrl, token };
 }
 
+/** Org mode only: swap the stored refresh token for a fresh access token. Returns it, or null. */
+async function tryRefresh(serverUrl: string): Promise<string | null> {
+  const refresh = getRefreshToken();
+  if (!refresh) return null;
+  try {
+    const r = await fetchImpl(`${trimUrl(serverUrl)}/auth/redstone/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token: refresh }),
+    });
+    if (!r.ok) return null;
+    const j = (await r.json().catch(() => ({}))) as { access_token?: string; refresh_token?: string };
+    if (!j.access_token) return null;
+    updateTokens(j.access_token, j.refresh_token);
+    return j.access_token;
+  } catch {
+    return null;
+  }
+}
+
 async function req(path: string, init?: RequestInit): Promise<Response> {
   const { serverUrl, token } = cfg();
-  const res = await fetchImpl(serverUrl + path, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-      ...(init?.headers ?? {}),
-    },
-  });
+  const call = (t: string) =>
+    fetchImpl(serverUrl + path, {
+      ...init,
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${t}`, ...(init?.headers ?? {}) },
+    });
+  let res = await call(token);
+  // Org access tokens expire (~24h) — refresh once and retry before failing.
+  if (res.status === 401) {
+    const fresh = await tryRefresh(serverUrl);
+    if (fresh) res = await call(fresh);
+  }
   if (!res.ok) throw new Error(String(res.status));
   return res;
+}
+
+/** Public discovery so the login screen can decide whether to offer Redstone sign-in. */
+export async function authConfig(serverUrl: string): Promise<{ redstone: boolean; issuer: string | null }> {
+  try {
+    const r = await fetchImpl(`${trimUrl(serverUrl)}/auth/config`);
+    if (!r.ok) return { redstone: false, issuer: null };
+    return (await r.json()) as { redstone: boolean; issuer: string | null };
+  } catch {
+    return { redstone: false, issuer: null };
+  }
+}
+
+/** Org sign-in: exchange Redstone username+password for tokens (caller persists them). */
+export async function redstoneLogin(
+  serverUrl: string,
+  username: string,
+  password: string,
+): Promise<{ access_token: string; refresh_token: string | null; user: { username: string | null } | null }> {
+  const r = await fetchImpl(`${trimUrl(serverUrl)}/auth/redstone/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password }),
+  });
+  const j = (await r.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!r.ok || !j.access_token) {
+    throw new Error(String(j.error_description ?? `Sign-in failed (HTTP ${r.status}).`));
+  }
+  return {
+    access_token: String(j.access_token),
+    refresh_token: j.refresh_token ? String(j.refresh_token) : null,
+    user: (j.user as { username: string | null }) ?? null,
+  };
 }
 
 export async function getSessions(): Promise<unknown[]> {
