@@ -252,9 +252,13 @@ export async function runPoller(opts: {
     postSshResult: (sid, result) => api.postSshResult(sid, result),
   });
 
-  // Infinite poll loop with 5s error back-off
+  // Infinite poll loop with 5s error back-off. Each iteration also heartbeats the
+  // session: while the tmux session lives, the poller keeps running even when
+  // Claude is blocked waiting for the user — so the server can tell a live
+  // waiting session from a killed one (whose poller is gone) by staleness.
   for (;;) {
     try {
+      await api.heartbeat(sessionId).catch(() => {});
       await pollOnce({
         deliveries: () =>
           api.deliveries(wrapperId, 25_000) as Promise<Delivery[]>,

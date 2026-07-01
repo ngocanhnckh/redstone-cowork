@@ -1,7 +1,27 @@
 import { describe, it, expect, vi } from "vitest";
-import { SessionsService } from "../src/application/sessions.service";
+import { SessionsService, sessionStatus } from "../src/application/sessions.service";
 import { InMemorySessionStore } from "../src/adapters/persistence/in-memory-session-store";
+import type { AgentSession } from "@rcw/shared";
 import type { EventsBus } from "../src/application/events-bus";
+
+describe("sessionStatus", () => {
+  const now = new Date("2026-07-01T12:00:00Z");
+  const at = (secondsAgo: number): AgentSession =>
+    ({ lastSeenAt: new Date(now.getTime() - secondsAgo * 1000) }) as AgentSession;
+
+  it("fresh + pending → waiting; fresh, no pending → active", () => {
+    expect(sessionStatus(at(5), 1, now)).toBe("waiting");
+    expect(sessionStatus(at(5), 0, now)).toBe("active");
+  });
+  it("a long-silent session is lost even with pending cards (killed tmux/poller)", () => {
+    expect(sessionStatus(at(60 * 60), 3, now)).toBe("lost"); // 1h silent, 3 pending → lost, not waiting
+    expect(sessionStatus(at(60 * 60), 0, now)).toBe("lost");
+  });
+  it("between active and stale windows with no pending → stale", () => {
+    expect(sessionStatus(at(120), 0, now)).toBe("stale"); // 2min, no pending
+    expect(sessionStatus(at(120), 1, now)).toBe("waiting"); // still alive + pending
+  });
+});
 
 const bus = () => ({ emit: vi.fn() }) as unknown as EventsBus;
 

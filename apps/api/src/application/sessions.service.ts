@@ -9,11 +9,15 @@ const ACTIVE_MS = 90_000;
 const STALE_MS = 300_000;
 
 export const sessionStatus = (s: AgentSession, pending: number, now: Date): SessionStatus => {
-  if (pending > 0) return "waiting";
   const age = now.getTime() - s.lastSeenAt.getTime();
+  // A session silent past the stale window is dead (its tmux/poller is gone) even
+  // if it still holds pending decision cards — those can't be delivered anymore,
+  // so it must not linger as "waiting"/online. The live poller heartbeats every
+  // ~25s, so a genuinely-waiting (alive) session never reaches this.
+  if (age >= STALE_MS) return "lost";
+  if (pending > 0) return "waiting";
   if (age < ACTIVE_MS) return "active";
-  if (age < STALE_MS) return "stale";
-  return "lost";
+  return "stale";
 };
 
 @Injectable()
