@@ -110,7 +110,7 @@ export const useStore = create<State>((set, get) => ({
         queue: q,
         sessions: s,
         decisions: d,
-        focusId: pickFocus(q, state.focusId),
+        focusId: pickFocus(q, s, state.focusId),
         pending: prunePending(state.pending, s, q, Date.now()),
         error: null,
       }));
@@ -187,10 +187,19 @@ export const useStore = create<State>((set, get) => ({
   instruct: async (sessionId, text) => {
     try {
       get().recordSent(sessionId, text);
-      // In Flow mode, sending a message means "I'm done here" — advance to the
-      // next waiting session (computed before refresh shuffles the queue).
-      const { mode, queue } = get();
-      const next = mode === "flow" ? nextAfterAnswer(queue, sessionId) : null;
+      // In Flow mode, advance ONLY to a session that's actually waiting for the
+      // user's input (an actionable question/permission), skipping the one we just
+      // messaged and any session merely working or holding a passive card. If none
+      // needs input, STAY here so the user can watch Claude work on this session.
+      const { mode, queue, decisions } = get();
+      let next: string | null = null;
+      if (mode === "flow") {
+        const ACTIONABLE = new Set(["question", "permission", "mode"]);
+        const needsInput = new Set(
+          decisions.filter((d) => ACTIONABLE.has(d.kind)).map((d) => d.sessionId)
+        );
+        next = queue.find((q) => q.id !== sessionId && needsInput.has(q.id))?.id ?? null;
+      }
       await window.cowork.instruct(sessionId, text);
       if (next) set({ focusId: next });
       await get().refresh();

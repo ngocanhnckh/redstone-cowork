@@ -38,9 +38,10 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
     sessions.find((s) => s.id === id) ?? queue.find((s) => s.id === id);
 
   const sessionDecisions = decisions.filter((d) => d.sessionId === id);
-  const decision =
-    sessionDecisions.find((d) => (ACTIONABLE_KINDS as readonly string[]).includes(d.kind)) ??
-    sessionDecisions[0];
+  const actionableDecision = sessionDecisions.find((d) =>
+    (ACTIONABLE_KINDS as readonly string[]).includes(d.kind)
+  );
+  const decision = actionableDecision ?? sessionDecisions[0];
 
   // Server transcript + optimistic sends not yet incorporated by the host. The
   // optimistic copies render instantly so the user sees their message right away;
@@ -55,9 +56,10 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
   // final answer. Driven primarily by the server `working` flag (true from
   // prompt-submit through tool runs, false at Stop); the optimistic pending and
   // last-is-user checks cover the brief gap before the host's first push lands.
-  // Suppressed once a decision needs the user — then it's their turn, not Claude's.
+  // Only an ACTIONABLE decision (a question/permission needing you) suppresses it
+  // — a leftover completion/notification card must NOT hide that Claude is working.
   const lastIsUser = timeline.length > 0 && timeline[timeline.length - 1].role === "user";
-  const isWorking = !decision && (!!session?.working || pending.length > 0 || lastIsUser);
+  const isWorking = !actionableDecision && (!!session?.working || pending.length > 0 || lastIsUser);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   // Only auto-scroll to the bottom when the user is already near it, so a poll

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useStore } from "../store";
 import { Todo } from "../types";
 
@@ -74,6 +74,20 @@ export default function ContextColumn({ sessionId }: { sessionId?: string } = {}
       setSummarizing(false);
     }
   }
+
+  // Auto-summarize the first time we view a session that has a real conversation
+  // but no summary yet. Once per session per app run; the persisted summary (and
+  // this guard) prevent re-spending tokens on every glance.
+  const autoTried = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!id || !session) return;
+    if (session.summary) return;
+    if ((session.transcript?.length ?? 0) < 2) return;
+    if (autoTried.current.has(id)) return;
+    autoTried.current.add(id);
+    summarize();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, session?.summary, session?.transcript?.length]);
 
   return (
     <div
