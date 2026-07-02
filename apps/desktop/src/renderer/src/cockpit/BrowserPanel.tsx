@@ -14,6 +14,7 @@ type WebviewEl = HTMLElement & {
   goBack(): void;
   goForward(): void;
   reload(): void;
+  reloadIgnoringCache(): void;
   loadURL(url: string): Promise<void>;
   getURL(): string;
 };
@@ -201,6 +202,7 @@ export default function BrowserPanel({ sessionId, cwd, machine }: Props) {
         <button style={navBtn} title="Back" onClick={() => webviewRef.current?.goBack()}>◀</button>
         <button style={navBtn} title="Forward" onClick={() => webviewRef.current?.goForward()}>▶</button>
         <button style={navBtn} title="Reload" onClick={() => webviewRef.current?.reload()}>⟳</button>
+        <button style={navBtn} title="Hard reload (bypass cache)" onClick={() => webviewRef.current?.reloadIgnoringCache()}>⤿</button>
         <input
           className="reply-input"
           value={address}
