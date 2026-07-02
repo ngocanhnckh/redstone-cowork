@@ -213,6 +213,12 @@ ipcMain.handle(IPC.userTodoToggle, (_e, a: { sessionId: string; todoId: string }
 ipcMain.handle(IPC.userTodoDelete, (_e, a: { sessionId: string; todoId: string }) =>
   api.deleteUserTodo(a.sessionId, a.todoId)
 );
+ipcMain.handle(IPC.tagAdd, (_e, a: { sessionId: string; tag: string }) =>
+  api.addTag(a.sessionId, a.tag)
+);
+ipcMain.handle(IPC.tagRemove, (_e, a: { sessionId: string; tag: string }) =>
+  api.removeTag(a.sessionId, a.tag)
+);
 
 // Workspace config (per-session .redstone/session.json)
 ipcMain.handle(IPC.workspaceGet, (_e, a: Parameters<typeof getWorkspaceConfig>[0]) =>

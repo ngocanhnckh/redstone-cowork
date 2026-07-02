@@ -79,6 +79,27 @@ describe("SessionsService queue + state", () => {
     expect(s?.userTodos.map((t) => t.text)).toEqual(["first"]);
   });
 
+  it("pins cwd to first attach so a resume in a subfolder doesn't rename the session", async () => {
+    const store = new InMemorySessionStore();
+    const svc = new SessionsService(store, bus());
+    await svc.attach({ id: "p1", machine: "m", cwd: "/work/redstone-agent", gitBranch: "main", wrapperId: "w", permissionMode: "default", autoModeEnabled: false });
+    // Re-attach (e.g. `claude --continue` launched inside a subdir).
+    await svc.attach({ id: "p1", machine: "m", cwd: "/work/redstone-agent/backend", gitBranch: "main", wrapperId: "w2", permissionMode: "default", autoModeEnabled: false });
+    expect((await svc.get("p1"))?.cwd).toBe("/work/redstone-agent");
+  });
+
+  it("tags: add dedupes case-insensitively, remove drops them", async () => {
+    const store = new InMemorySessionStore();
+    const svc = new SessionsService(store, bus());
+    await seed(store, svc);
+    await svc.addTag("s1", "Urgent");
+    await svc.addTag("s1", "urgent"); // dupe (case-insensitive) — ignored
+    await svc.addTag("s1", "backend");
+    expect((await svc.get("s1"))?.tags).toEqual(["Urgent", "backend"]);
+    await svc.removeTag("s1", "URGENT");
+    expect((await svc.get("s1"))?.tags).toEqual(["backend"]);
+  });
+
   it("user-todo ops on an unknown session return null", async () => {
     const store = new InMemorySessionStore();
     const svc = new SessionsService(store, bus());

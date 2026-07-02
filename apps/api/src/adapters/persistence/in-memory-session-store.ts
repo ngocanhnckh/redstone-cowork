@@ -10,11 +10,15 @@ export class InMemorySessionStore implements SessionStore {
           ...existing,
           ...s,
           attachedAt: existing.attachedAt,
+          // Pin the folder to first-attach so a later resume/relaunch inside a
+          // subdirectory doesn't rename the session (title = basename of cwd).
+          cwd: existing.cwd,
           permissionMode: s.permissionMode ?? existing.permissionMode,
           latestAnswer: existing.latestAnswer,
           summary: existing.summary,
           todos: existing.todos,
           userTodos: existing.userTodos,
+          tags: existing.tags,
           transcript: existing.transcript,
           working: existing.working,
           pinned: existing.pinned,
@@ -68,6 +72,13 @@ export class InMemorySessionStore implements SessionStore {
     const s = this.sessions.get(id);
     if (!s) return null;
     const next = { ...s, userTodos: todos };
+    this.sessions.set(id, next);
+    return next;
+  }
+  async setTags(id: string, tags: string[]): Promise<AgentSession | null> {
+    const s = this.sessions.get(id);
+    if (!s) return null;
+    const next = { ...s, tags };
     this.sessions.set(id, next);
     return next;
   }

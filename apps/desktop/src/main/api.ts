@@ -170,6 +170,24 @@ export async function deleteUserTodo(sessionId: string, todoId: string): Promise
   ).json();
 }
 
+export async function addTag(sessionId: string, tag: string): Promise<unknown> {
+  return (
+    await req(`/sessions/${encodeURIComponent(sessionId)}/tags`, {
+      method: "POST",
+      body: JSON.stringify({ tag }),
+    })
+  ).json();
+}
+
+export async function removeTag(sessionId: string, tag: string): Promise<unknown> {
+  return (
+    await req(`/sessions/${encodeURIComponent(sessionId)}/tags/remove`, {
+      method: "POST",
+      body: JSON.stringify({ tag }),
+    })
+  ).json();
+}
+
 export async function switchMode(sessionId: string, mode: string): Promise<unknown> {
   return (
     await req(`/sessions/${encodeURIComponent(sessionId)}/mode`, {

@@ -43,6 +43,10 @@ contextBridge.exposeInMainWorld("cowork", {
     ipcRenderer.invoke(IPC.userTodoToggle, { sessionId, todoId }),
   deleteUserTodo: (sessionId: string, todoId: string): Promise<unknown> =>
     ipcRenderer.invoke(IPC.userTodoDelete, { sessionId, todoId }),
+  addTag: (sessionId: string, tag: string): Promise<unknown> =>
+    ipcRenderer.invoke(IPC.tagAdd, { sessionId, tag }),
+  removeTag: (sessionId: string, tag: string): Promise<unknown> =>
+    ipcRenderer.invoke(IPC.tagRemove, { sessionId, tag }),
 
   // Workspace config
   getWorkspaceConfig: (a: {

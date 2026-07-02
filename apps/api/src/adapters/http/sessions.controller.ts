@@ -214,6 +214,34 @@ export class SessionsController {
     return updated;
   }
 
+  @Post(":id/tags")
+  @HttpCode(201)
+  async addTag(@Param("id") id: string, @Body() body: unknown) {
+    try {
+      const { tag } = z.object({ tag: z.string().min(1) }).parse(body);
+      const updated = await this.sessions.addTag(id, tag);
+      if (!updated) throw new NotFoundException();
+      return updated;
+    } catch (e) {
+      if (e instanceof ZodError) throw new BadRequestException(e.issues);
+      throw e;
+    }
+  }
+
+  @Post(":id/tags/remove")
+  @HttpCode(200)
+  async removeTag(@Param("id") id: string, @Body() body: unknown) {
+    try {
+      const { tag } = z.object({ tag: z.string().min(1) }).parse(body);
+      const updated = await this.sessions.removeTag(id, tag);
+      if (!updated) throw new NotFoundException();
+      return updated;
+    } catch (e) {
+      if (e instanceof ZodError) throw new BadRequestException(e.issues);
+      throw e;
+    }
+  }
+
   @Get()
   async list() {
     const [pending, oldest] = await Promise.all([

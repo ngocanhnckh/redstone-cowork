@@ -11,5 +11,6 @@ export interface SessionStore {
   setPinned(id: string, pinned: boolean): Promise<void>;
   setSnoozedUntil(id: string, until: Date | null): Promise<void>;
   setUserTodos(id: string, todos: UserTodo[]): Promise<AgentSession | null>;
+  setTags(id: string, tags: string[]): Promise<AgentSession | null>;
 }
 export const SESSION_STORE = Symbol("SessionStore");

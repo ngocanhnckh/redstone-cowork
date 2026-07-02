@@ -29,6 +29,8 @@ declare global {
       addUserTodo(sessionId: string, text: string): Promise<unknown>;
       toggleUserTodo(sessionId: string, todoId: string): Promise<unknown>;
       deleteUserTodo(sessionId: string, todoId: string): Promise<unknown>;
+      addTag(sessionId: string, tag: string): Promise<unknown>;
+      removeTag(sessionId: string, tag: string): Promise<unknown>;
 
       // Workspace config
       getWorkspaceConfig(a: {

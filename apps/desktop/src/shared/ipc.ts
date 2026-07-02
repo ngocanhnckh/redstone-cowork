@@ -17,6 +17,8 @@ export const IPC = {
   userTodoAdd: "api:usertodo:add",
   userTodoToggle: "api:usertodo:toggle",
   userTodoDelete: "api:usertodo:delete",
+  tagAdd: "api:tag:add",
+  tagRemove: "api:tag:remove",
   workspaceGet: "api:workspace:get",
   workspaceSave: "api:workspace:save",
   workspaceGetSshHost: "api:workspace:sshhost:get",

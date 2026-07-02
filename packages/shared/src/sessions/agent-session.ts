@@ -47,6 +47,8 @@ export const AgentSessionSchema = z.object({
   summary: z.string().nullable().default(null),
   todos: z.array(TodoItemSchema).default([]),
   userTodos: z.array(UserTodoSchema).default([]),
+  /** User-applied labels for organizing/filtering sessions. */
+  tags: z.array(z.string().min(1)).default([]),
   transcript: z.array(TranscriptMessageSchema).default([]),
   working: z.boolean().default(false),
   pinned: z.boolean().default(false),

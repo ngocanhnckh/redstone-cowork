@@ -73,6 +73,8 @@ type State = {
   addUserTodo: (sessionId: string, text: string) => Promise<void>;
   toggleUserTodo: (sessionId: string, todoId: string) => Promise<void>;
   deleteUserTodo: (sessionId: string, todoId: string) => Promise<void>;
+  addTag: (sessionId: string, tag: string) => Promise<void>;
+  removeTag: (sessionId: string, tag: string) => Promise<void>;
 };
 
 export const useStore = create<State>((set, get) => ({
@@ -240,6 +242,17 @@ export const useStore = create<State>((set, get) => ({
 
   deleteUserTodo: async (sessionId, todoId) => {
     try { await window.cowork.deleteUserTodo(sessionId, todoId); await get().refresh(); }
+    catch (e) { set({ error: e instanceof Error ? e.message : String(e) }); }
+  },
+
+  addTag: async (sessionId, tag) => {
+    if (!tag.trim()) return;
+    try { await window.cowork.addTag(sessionId, tag.trim()); await get().refresh(); }
+    catch (e) { set({ error: e instanceof Error ? e.message : String(e) }); }
+  },
+
+  removeTag: async (sessionId, tag) => {
+    try { await window.cowork.removeTag(sessionId, tag); await get().refresh(); }
     catch (e) { set({ error: e instanceof Error ? e.message : String(e) }); }
   },
 }));

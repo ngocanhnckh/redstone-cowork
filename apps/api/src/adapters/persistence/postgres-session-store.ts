@@ -4,7 +4,7 @@ import type { SessionStore } from "../../domain/sessions/session-store.port";
 
 const ROW = `id, machine, cwd, git_branch AS "gitBranch", attached_at AS "attachedAt", last_seen_at AS "lastSeenAt",
              wrapper_id AS "wrapperId", permission_mode AS "permissionMode", auto_mode_enabled AS "autoModeEnabled",
-             latest_answer AS "latestAnswer", summary, todos, user_todos AS "userTodos", transcript, working, pinned, snoozed_until AS "snoozedUntil"`;
+             latest_answer AS "latestAnswer", summary, todos, user_todos AS "userTodos", tags, transcript, working, pinned, snoozed_until AS "snoozedUntil"`;
 
 export class PostgresSessionStore implements SessionStore {
   constructor(private readonly pool: Pool) {}
@@ -14,7 +14,7 @@ export class PostgresSessionStore implements SessionStore {
       `INSERT INTO sessions (id, machine, cwd, git_branch, attached_at, last_seen_at, wrapper_id, permission_mode, auto_mode_enabled,
          latest_answer, summary, todos, transcript, pinned, snoozed_until)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13::jsonb,$14,$15)
-       ON CONFLICT (id) DO UPDATE SET machine=$2, cwd=$3, git_branch=$4, last_seen_at=$6, wrapper_id=$7,
+       ON CONFLICT (id) DO UPDATE SET machine=$2, git_branch=$4, last_seen_at=$6, wrapper_id=$7,
          permission_mode = COALESCE($8, sessions.permission_mode),
          auto_mode_enabled = $9
        RETURNING ${ROW}`,
@@ -68,6 +68,13 @@ export class PostgresSessionStore implements SessionStore {
     const res = await this.pool.query(
       `UPDATE sessions SET user_todos = $2::jsonb WHERE id = $1 RETURNING ${ROW}`,
       [id, JSON.stringify(todos)]
+    );
+    return res.rows[0] ? AgentSessionSchema.parse(res.rows[0]) : null;
+  }
+  async setTags(id: string, tags: string[]): Promise<AgentSession | null> {
+    const res = await this.pool.query(
+      `UPDATE sessions SET tags = $2::jsonb WHERE id = $1 RETURNING ${ROW}`,
+      [id, JSON.stringify(tags)]
     );
     return res.rows[0] ? AgentSessionSchema.parse(res.rows[0]) : null;
   }

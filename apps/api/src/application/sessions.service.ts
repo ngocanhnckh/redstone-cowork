@@ -48,6 +48,7 @@ export class SessionsService {
       summary: null,
       todos: [],
       userTodos: existing?.userTodos ?? [],
+      tags: existing?.tags ?? [],
       transcript: [],
       working: existing?.working ?? false,
       pinned: false,
@@ -140,6 +141,26 @@ export class SessionsService {
     const s = await this.store.get(id);
     if (!s) return null;
     const updated = await this.store.setUserTodos(id, s.userTodos.filter((t) => t.id !== todoId));
+    if (updated) this.bus.emit({ type: "session.updated", payload: { id } });
+    return updated;
+  }
+
+  async addTag(id: string, tag: string): Promise<AgentSession | null> {
+    const s = await this.store.get(id);
+    if (!s) return null;
+    const clean = tag.trim().slice(0, 40);
+    if (!clean) return s;
+    // Case-insensitive dedupe; keep the first-seen casing.
+    if (s.tags.some((t) => t.toLowerCase() === clean.toLowerCase())) return s;
+    const updated = await this.store.setTags(id, [...s.tags, clean]);
+    if (updated) this.bus.emit({ type: "session.updated", payload: { id } });
+    return updated;
+  }
+
+  async removeTag(id: string, tag: string): Promise<AgentSession | null> {
+    const s = await this.store.get(id);
+    if (!s) return null;
+    const updated = await this.store.setTags(id, s.tags.filter((t) => t.toLowerCase() !== tag.trim().toLowerCase()));
     if (updated) this.bus.emit({ type: "session.updated", payload: { id } });
     return updated;
   }

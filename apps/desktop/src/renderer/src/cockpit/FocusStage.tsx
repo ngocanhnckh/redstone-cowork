@@ -1,6 +1,7 @@
 import { useRef, useEffect } from "react";
 import { useStore } from "../store";
 import AnswerDock from "./AnswerDock";
+import TagBar from "./TagBar";
 import Markdown from "./Markdown";
 import Kbd from "./Kbd";
 import TerminalPanel from "./TerminalPanel";
@@ -191,6 +192,13 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
             );
           })()}
       </div>
+
+      {/* Tags — user-applied labels for this session */}
+      {id && (
+        <div style={{ padding: "0 32px 10px" }}>
+          <TagBar sessionId={id} tags={session.tags ?? []} />
+        </div>
+      )}
 
       {/* Row 2: tab bar — primary nav, with bottom border separating header from body */}
       <div

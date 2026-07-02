@@ -8,6 +8,7 @@ export type SessionView = {
   pendingDecisions: number; waitingSince: string | null;
   latestAnswer: string | null; summary: string | null; todos: Todo[];
   userTodos: UserTodo[];
+  tags: string[];
   transcript: TranscriptMessage[];
   working: boolean;
   pinned: boolean; snoozedUntil: string | null;
