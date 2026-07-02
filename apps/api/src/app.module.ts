@@ -57,6 +57,13 @@ import { PG_POOL, pgPoolProvider, PoolShutdown } from "./infrastructure/pg-pool.
 import { LlmController } from "./adapters/http/llm.controller";
 import { AuthController } from "./adapters/http/auth.controller";
 import { RedstoneService } from "./application/redstone.service";
+import { HostsController } from "./adapters/http/hosts.controller";
+import { InventoryController } from "./adapters/http/inventory.controller";
+import { InventoryService } from "./application/inventory.service";
+import { InventoryWaiters } from "./application/inventory-waiters";
+import { INVENTORY_STORE } from "./domain/inventory/inventory-store.port";
+import { InMemoryInventoryStore } from "./adapters/persistence/in-memory-inventory-store";
+import { PostgresInventoryStore } from "./adapters/persistence/postgres-inventory-store";
 import { LlmService } from "./application/llm.service";
 import { LLM_PORT, LLM_ENDPOINTS, LLM_LIMITS } from "./domain/llm/llm.port";
 import { LLM_ENDPOINT_STORE } from "./domain/llm/llm-endpoint-store.port";
@@ -72,7 +79,7 @@ import { PromptLoader } from "./infrastructure/prompts/prompt-loader";
 import type { Pool } from "pg";
 
 @Module({
-  controllers: [HealthController, EventsController, SessionsController, DecisionsController, StreamController, PushController, ConnectionsController, OAuthController, MicrosoftOAuthController, DevicesController, InstallController, LlmController, AuthController],
+  controllers: [HealthController, EventsController, SessionsController, DecisionsController, StreamController, PushController, ConnectionsController, OAuthController, MicrosoftOAuthController, DevicesController, InstallController, LlmController, AuthController, HostsController, InventoryController],
   providers: [
     RecordEventUseCase,
     SessionsService,
@@ -130,6 +137,14 @@ import type { Pool } from "pg";
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresSessionStore(pool) : new InMemorySessionStore(),
     },
+    {
+      provide: INVENTORY_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresInventoryStore(pool) : new InMemoryInventoryStore(),
+    },
+    InventoryWaiters,
+    InventoryService,
     {
       provide: DECISION_STORE,
       inject: [PG_POOL],

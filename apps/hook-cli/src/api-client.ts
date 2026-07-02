@@ -114,6 +114,27 @@ export class ApiClient {
     await this.req(`/sessions/${encodeURIComponent(sessionId)}/state`, { method: "POST", headers: json(this.cfg.token), body: JSON.stringify(patch) }, 3000);
   }
 
+  // ---- Host agent (session inventory) ----
+
+  async registerHost(h: { hostId: string; machine: string; user: string | null; os: string | null }): Promise<void> {
+    const r = await this.req("/hosts", { method: "POST", headers: json(this.cfg.token), body: JSON.stringify(h) }, 5000);
+    if (!r.ok) throw new Error(`registerHost ${r.status}`);
+  }
+
+  async reportInventory(hostId: string, report: { machine: string; sessions: Array<Record<string, unknown>> }): Promise<void> {
+    const r = await this.req(`/hosts/${encodeURIComponent(hostId)}/inventory`, { method: "POST", headers: json(this.cfg.token), body: JSON.stringify(report) }, 15000);
+    if (!r.ok) throw new Error(`reportInventory ${r.status}`);
+  }
+
+  async hostCommands(hostId: string, timeoutMs: number): Promise<Array<Record<string, unknown>>> {
+    const r = await this.req(`/hosts/${encodeURIComponent(hostId)}/commands?timeoutMs=${timeoutMs}`, { headers: json(this.cfg.token) }, timeoutMs + 5000);
+    return r.status === 200 ? r.json() : [];
+  }
+
+  async postCommandResult(hostId: string, cmdId: string, result: Record<string, unknown>): Promise<void> {
+    await this.req(`/hosts/${encodeURIComponent(hostId)}/commands/${encodeURIComponent(cmdId)}/result`, { method: "POST", headers: json(this.cfg.token), body: JSON.stringify(result) }, 5000);
+  }
+
   /** Report the outcome of an ssh-authorize delivery back to the server. */
   async postSshResult(
     sessionId: string,

@@ -12,6 +12,7 @@ const usage = `redstone <command>
   poll --wrapper <id> --tmux <target>   (internal) delivery poller for redstone-claude sessions
   status                                show config + attach state
   update                                re-download the latest agent bundle from the server
+  agent                                 run the per-host daemon: report all Claude sessions + serve remote commands
   claude [args]    run Claude under the wrapper so cockpit/phone replies type back`;
 
 async function main() {
@@ -45,6 +46,13 @@ async function main() {
     const { runPoller } = await import("./poller");
     const { ApiClient } = await import("./api-client");
     await runPoller({ wrapperId: wrapper, tmuxTarget: tmux, api: new ApiClient(cfg) });
+  } else if (cmd === "agent") {
+    const cfg = loadCliConfig();
+    if (!cfg) { console.error("run `redstone init` first"); exit(1); }
+    const { runAgent } = await import("./agent");
+    const { ApiClient } = await import("./api-client");
+    console.log("redstone agent: reporting session inventory + serving remote commands…");
+    await runAgent({ api: new ApiClient(cfg) });
   } else if (cmd === "update") {
     const { runUpdate } = await import("./updater");
     const r = await runUpdate();
