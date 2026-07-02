@@ -451,51 +451,54 @@ function ChatPane() {
   );
 }
 
-/** A titled, collapsible pane in the console stack. */
-function Pane({ title, hint, grow, collapsed, onToggle, children }: { title: string; hint?: string; grow: number; collapsed: boolean; onToggle: () => void; children: React.ReactNode }) {
+type PanelKey = "chat" | "term" | "files" | "browser";
+type ConsoleView = "ctf" | "cb" | "ctb" | "fb";
+
+/**
+ * Layout catalog. Every view is a CSS-grid arrangement of the SAME four panel
+ * instances — a view only reassigns each panel's grid-area (or hides it). Because
+ * the panels never leave the grid, switching views never remounts them, so shells,
+ * pages and editors keep their state. `areas` maps a panel → its grid-area name
+ * (absent = hidden in that view).
+ */
+const VIEWS: Record<ConsoleView, { label: string; cols: string; rows: string; template: string; areas: Partial<Record<PanelKey, string>> }> = {
+  ctf: { label: "Chat · Term · Files", cols: "1fr", rows: "1.4fr 1fr 1.1fr", template: `"chat" "term" "files"`, areas: { chat: "chat", term: "term", files: "files" } },
+  cb: { label: "Chat · Browser", cols: "1fr 1.3fr", rows: "1fr", template: `"chat browser"`, areas: { chat: "chat", browser: "browser" } },
+  ctb: { label: "Chat · Term · Browser", cols: "1fr 1.2fr", rows: "1.2fr 1fr", template: `"chat browser" "term browser"`, areas: { chat: "chat", term: "term", browser: "browser" } },
+  fb: { label: "Files · Browser", cols: "1fr 1.2fr", rows: "1fr", template: `"files browser"`, areas: { files: "files", browser: "browser" } },
+};
+const VIEW_ORDER: ConsoleView[] = ["ctf", "cb", "ctb", "fb"];
+
+/** A titled grid-positioned panel wrapper. Stays mounted; hidden via display:none. */
+function GridPanel({ title, area, children }: { title: string; area?: string; children: React.ReactNode }) {
+  const shown = !!area;
   return (
-    <div style={{ ...card, padding: 0, display: "flex", flexDirection: "column", flex: collapsed ? "0 0 auto" : grow, minHeight: 0 }}>
-      <div onClick={onToggle} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 13px", borderBottom: collapsed ? "none" : "1px solid var(--border)", cursor: "pointer", flexShrink: 0 }}>
-        <span style={{ fontSize: 9, color: "var(--text-soft)", transform: collapsed ? "rotate(-90deg)" : "none", transition: "transform .2s" }}>▾</span>
+    <div style={{ ...card, padding: 0, gridArea: area, display: shown ? "flex" : "none", flexDirection: "column", minHeight: 0, minWidth: 0 }}>
+      <div style={{ padding: "7px 13px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
         <Decode text={title} className="mono" style={{ fontSize: 10, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--text-soft)" }} />
-        {hint && <span className="mono faint" style={{ fontSize: 9.5 }}>{hint}</span>}
       </div>
-      {!collapsed && <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>{children}</div>}
+      <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>{children}</div>
     </div>
   );
 }
 
-type ConsoleView = "console" | "browser";
-
 /**
- * The HUD center. A view switcher toggles between two layouts, sharing one Chat:
- *   • Console — Chat on top; Terminal + Files as collapsible panes below.
- *   • Browser — Chat and a live Browser in a horizontal split.
- * The Terminal, Files and Browser stay mounted across view switches (display
- * toggled) so shells and pages keep running.
+ * The HUD center. A view switcher picks one of four grid layouts; all four panels
+ * (Chat, Terminal, Files, Browser) stay mounted so switching never reloads them.
  */
 function HudConsole() {
   const focusId = useStore((s) => s.focusId);
   const sessions = useStore((s) => s.sessions);
   const queue = useStore((s) => s.queue);
   const session = sessions.find((s) => s.id === focusId) ?? queue.find((s) => s.id === focusId);
-  const [view, setView] = useState<ConsoleView>("console");
-  const [collapsed, setCollapsed] = useState<{ term: boolean; files: boolean }>({ term: false, files: true });
-  const toggle = (k: "term" | "files") => setCollapsed((c) => ({ ...c, [k]: !c[k] }));
-
-  const viewTab = (v: ConsoleView, label: string) => (
-    <button onClick={() => setView(v)} style={{
-      padding: "5px 13px", borderRadius: 8, fontFamily: "var(--font-mono)", fontSize: 11, cursor: "pointer", border: 0,
-      background: view === v ? "rgb(var(--primary) / 0.28)" : "transparent", color: view === v ? "#fff" : "var(--text-soft)",
-    }}>{label}</button>
-  );
-
-  const browser = view === "browser";
+  const [view, setView] = useState<ConsoleView>("ctf");
+  const cfg = VIEWS[view];
+  const none = <div className="mono faint" style={{ padding: 14, fontSize: 11 }}>no session</div>;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10, minHeight: 0, padding: "12px 14px" }}>
       {/* header: identity + view switcher */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0, flexWrap: "wrap" }}>
         {session && (
           <>
             <span className="display" style={{ fontSize: 16 }}>{projectName(session.cwd)}</span>
@@ -504,34 +507,27 @@ function HudConsole() {
         )}
         <span style={{ flex: 1 }} />
         <div style={{ display: "flex", gap: 3, padding: 3, borderRadius: 999, border: "1px solid var(--border)" }}>
-          {viewTab("console", "Chat · Term · Files")}
-          {viewTab("browser", "Chat · Browser")}
+          {VIEW_ORDER.map((v) => (
+            <button key={v} onClick={() => setView(v)} style={{
+              padding: "5px 11px", borderRadius: 8, fontFamily: "var(--font-mono)", fontSize: 10.5, cursor: "pointer", border: 0, whiteSpace: "nowrap",
+              background: view === v ? "rgb(var(--primary) / 0.28)" : "transparent", color: view === v ? "#fff" : "var(--text-soft)",
+            }}>{VIEWS[v].label}</button>
+          ))}
         </div>
       </div>
 
-      {/* body: chat + secondary; row when Browser, column when Console */}
-      <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: browser ? "row" : "column", gap: 10 }}>
-        <div style={{ ...card, padding: 0, display: "flex", flexDirection: "column", flex: browser ? 1 : 1.5, minHeight: 0, minWidth: 0 }}>
-          <div style={{ padding: "7px 13px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
-            <Decode text="Chat" className="mono" style={{ fontSize: 10, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--text-soft)" }} />
-          </div>
-          <ChatPane />
-        </div>
-
-        {/* Console secondary (Terminal + Files) — kept mounted; hidden in Browser view */}
-        <div style={{ display: browser ? "none" : "flex", flexDirection: "column", gap: 10, flex: 1.6, minHeight: 0 }}>
-          <Pane title="Terminal" grow={1.1} collapsed={collapsed.term} onToggle={() => toggle("term")}>
-            {session ? <MultiTerminal key={`${session.id}-hud-term`} sessionId={session.id} cwd={session.cwd} machine={session.machine} /> : <div className="mono faint" style={{ padding: 14, fontSize: 11 }}>no session</div>}
-          </Pane>
-          <Pane title="Files" grow={1.2} collapsed={collapsed.files} onToggle={() => toggle("files")}>
-            {session ? <FilesPanel key={`${session.id}-hud-files`} sessionId={session.id} cwd={session.cwd} machine={session.machine} /> : <div className="mono faint" style={{ padding: 14, fontSize: 11 }}>no session</div>}
-          </Pane>
-        </div>
-
-        {/* Browser secondary — kept mounted; hidden in Console view */}
-        <div style={{ ...card, padding: 0, display: browser ? "flex" : "none", flexDirection: "column", flex: 1.4, minHeight: 0, minWidth: 0 }}>
-          {session ? <BrowserPanel key={`${session.id}-hud-browser`} sessionId={session.id} cwd={session.cwd} machine={session.machine} /> : <div className="mono faint" style={{ padding: 14, fontSize: 11 }}>no session</div>}
-        </div>
+      {/* grid body — the four panels are always mounted; area/visibility per view */}
+      <div style={{ flex: 1, minHeight: 0, display: "grid", gap: 10, gridTemplateColumns: cfg.cols, gridTemplateRows: cfg.rows, gridTemplateAreas: cfg.template }}>
+        <GridPanel title="Chat" area={cfg.areas.chat}><ChatPane /></GridPanel>
+        <GridPanel title="Terminal" area={cfg.areas.term}>
+          {session ? <MultiTerminal key={`${session.id}-hud-term`} sessionId={session.id} cwd={session.cwd} machine={session.machine} /> : none}
+        </GridPanel>
+        <GridPanel title="Files" area={cfg.areas.files}>
+          {session ? <FilesPanel key={`${session.id}-hud-files`} sessionId={session.id} cwd={session.cwd} machine={session.machine} /> : none}
+        </GridPanel>
+        <GridPanel title="Browser" area={cfg.areas.browser}>
+          {session ? <BrowserPanel key={`${session.id}-hud-browser`} sessionId={session.id} cwd={session.cwd} machine={session.machine} /> : none}
+        </GridPanel>
       </div>
     </div>
   );
