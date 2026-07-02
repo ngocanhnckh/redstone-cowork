@@ -8,6 +8,7 @@ import { configDir } from "./config";
 import { scanSessions } from "./scanner";
 import { sampleTelemetry } from "./telemetry";
 import { sampleDocker } from "./docker";
+import { detectPublicAddress } from "./poller";
 import { readRecentMessages } from "./transcript";
 import type { ApiClient } from "./api-client";
 
@@ -83,7 +84,18 @@ export async function runAgent(opts: { api: ApiClient; sleep?: (ms: number) => P
   const user = (() => { try { return userInfo().username; } catch { return null; } })();
   const os = platform();
 
-  await api.registerHost({ hostId, machine, user, os }).catch(() => {});
+  // Detect the box's reachable public address once so the desktop can auto-resolve
+  // the SSH target for this machine without the user configuring it by hand.
+  const address = await detectPublicAddress();
+  await api.registerHost({ hostId, machine, user, os, address, sshPort: 22 }).catch(() => {});
+  // Re-announce periodically (address can change; keeps last_seen fresh even if idle).
+  const reannounce = async () => {
+    for (;;) {
+      await sleep(10 * 60_000);
+      const addr = await detectPublicAddress();
+      await api.registerHost({ hostId, machine, user, os, address: addr, sshPort: 22 }).catch(() => {});
+    }
+  };
 
   // Scan loop: report the full inventory snapshot on an interval.
   const scanLoop = async () => {
@@ -133,5 +145,5 @@ export async function runAgent(opts: { api: ApiClient; sleep?: (ms: number) => P
     }
   };
 
-  await Promise.all([scanLoop(), telemetryLoop(), dockerLoop(), commandLoop()]);
+  await Promise.all([scanLoop(), telemetryLoop(), dockerLoop(), commandLoop(), reannounce()]);
 }

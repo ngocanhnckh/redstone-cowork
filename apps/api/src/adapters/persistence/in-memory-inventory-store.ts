@@ -8,13 +8,16 @@ export class InMemoryInventoryStore implements InventoryStore {
   private discovered = new Map<string, DiscoveredSession>();
   private commands = new Map<string, HostCommand>();
 
-  async upsertHost(input: { id: string; machine: string; user: string | null; os: string | null; at: Date }): Promise<Host> {
+  async upsertHost(input: { id: string; machine: string; user: string | null; os: string | null; address: string | null; sshPort: number | null; at: Date }): Promise<Host> {
     const existing = this.hosts.get(input.id);
     const host: Host = {
       id: input.id,
       machine: input.machine,
       user: input.user,
       os: input.os,
+      // Keep the last known address if this registration didn't carry one.
+      address: input.address ?? existing?.address ?? null,
+      sshPort: input.sshPort ?? existing?.sshPort ?? null,
       lastSeenAt: input.at,
       createdAt: existing?.createdAt ?? input.at,
     };

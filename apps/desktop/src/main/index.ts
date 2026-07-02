@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join, basename } from "node:path";
 import { saveConfig, loadConfig, clearConfig } from "./config";
 import * as api from "./api";
-import { getWorkspaceConfig, saveWorkspaceConfig, getSshHost, setSshHost, isLocalMachine } from "./workspace";
+import { getWorkspaceConfig, saveWorkspaceConfig, getSshHost, setSshHost, isLocalMachine, setServerHostTargets } from "./workspace";
 import {
   ensureTerminal,
   writeTerminal,
@@ -145,6 +145,25 @@ function createWindow(): void {
 }
 
 let stopStream: (() => void) | null = null;
+let hostTargetsTimer: NodeJS.Timeout | null = null;
+
+/**
+ * Pull each host's agent-reported reachable address from cowork and feed it to the
+ * SSH resolver, so remote terminal/files/git/browser "just work" without the user
+ * configuring an SSH host per machine. Refreshed periodically; failures are ignored.
+ */
+async function refreshHostTargets(): Promise<void> {
+  try {
+    const hosts = await api.getHosts();
+    const map: Record<string, string> = {};
+    for (const h of hosts) {
+      if (h.address) map[h.machine] = h.user ? `${h.user}@${h.address}` : h.address;
+    }
+    setServerHostTargets(map);
+  } catch {
+    // not configured / offline — keep whatever we had
+  }
+}
 
 function startForwarding(): void {
   try {
@@ -158,6 +177,10 @@ function startForwarding(): void {
     });
     // Initial tray sync after connecting
     refreshTrayAndNotify().catch(() => {/* ignore */});
+    // Auto-discover SSH targets now and every 60s.
+    refreshHostTargets();
+    if (hostTargetsTimer) clearInterval(hostTargetsTimer);
+    hostTargetsTimer = setInterval(() => { refreshHostTargets().catch(() => {}); }, 60_000);
   } catch {
     // Bad server config — don't crash the app; stream will retry when config changes.
   }

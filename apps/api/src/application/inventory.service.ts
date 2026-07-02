@@ -20,7 +20,10 @@ export class InventoryService {
 
   async registerHost(input: unknown): Promise<Host> {
     const r = HostRegistrationSchema.parse(input);
-    return this.store.upsertHost({ id: r.hostId, machine: r.machine, user: r.user ?? null, os: r.os ?? null, at: new Date() });
+    return this.store.upsertHost({
+      id: r.hostId, machine: r.machine, user: r.user ?? null, os: r.os ?? null,
+      address: r.address ?? null, sshPort: r.sshPort ?? null, at: new Date(),
+    });
   }
 
   async reportInventory(hostId: string, input: unknown): Promise<void> {

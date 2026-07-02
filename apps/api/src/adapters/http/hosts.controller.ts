@@ -54,6 +54,12 @@ export class HostsController {
     }
   }
 
+  /** All known hosts (incl. reachable address) — lets clients auto-resolve SSH targets. */
+  @Get()
+  async list() {
+    return this.inventory.listHosts();
+  }
+
   @Post(":id/inventory")
   @HttpCode(200)
   async report(@Param("id") id: string, @Body() body: unknown) {

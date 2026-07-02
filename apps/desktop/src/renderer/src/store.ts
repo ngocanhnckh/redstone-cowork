@@ -56,6 +56,7 @@ type State = {
   error: string | null;
   refresh: () => Promise<void>;
   setActiveTab: (sessionId: string, tab: "chat" | "terminal" | "browser" | "ports" | "files") => void;
+  openBrowser: (sessionId: string) => void;
   toggleContext: () => void;
   toggleAssist: () => void;
   toggleSettings: () => void;
@@ -111,6 +112,9 @@ export const useStore = create<State>((set, get) => ({
           : state.openBrowsers,
     }));
   },
+
+  openBrowser: (sessionId) =>
+    set((state) => (state.openBrowsers.includes(sessionId) ? {} : { openBrowsers: [...state.openBrowsers, sessionId] })),
 
   toggleContext: () => set((state) => ({ contextCollapsed: !state.contextCollapsed })),
 

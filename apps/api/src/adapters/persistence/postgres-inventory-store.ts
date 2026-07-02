@@ -5,7 +5,7 @@ import {
 } from "@rcw/shared";
 import type { InventoryStore } from "../../domain/inventory/inventory-store.port";
 
-const HOST_ROW = `id, machine, "user", os, last_seen_at AS "lastSeenAt", created_at AS "createdAt"`;
+const HOST_ROW = `id, machine, "user", os, address, ssh_port AS "sshPort", last_seen_at AS "lastSeenAt", created_at AS "createdAt"`;
 const DISC_ROW = `id, host_id AS "hostId", machine, cwd, folder, title, last_active AS "lastActive",
   message_count AS "messageCount", size_bytes AS "sizeBytes", source, tags, updated_at AS "updatedAt"`;
 const CMD_ROW = `id, host_id AS "hostId", kind, payload, status, result, created_at AS "createdAt"`;
@@ -15,12 +15,13 @@ const folderOf = (cwd: string): string => cwd.split("/").filter(Boolean).pop() ?
 export class PostgresInventoryStore implements InventoryStore {
   constructor(private readonly pool: Pool) {}
 
-  async upsertHost(input: { id: string; machine: string; user: string | null; os: string | null; at: Date }): Promise<Host> {
+  async upsertHost(input: { id: string; machine: string; user: string | null; os: string | null; address: string | null; sshPort: number | null; at: Date }): Promise<Host> {
     const { rows } = await this.pool.query(
-      `INSERT INTO hosts (id, machine, "user", os, last_seen_at) VALUES ($1,$2,$3,$4,$5)
-       ON CONFLICT (id) DO UPDATE SET machine=$2, "user"=$3, os=$4, last_seen_at=$5
+      `INSERT INTO hosts (id, machine, "user", os, address, ssh_port, last_seen_at) VALUES ($1,$2,$3,$4,$5,$6,$7)
+       ON CONFLICT (id) DO UPDATE SET machine=$2, "user"=$3, os=$4,
+         address=COALESCE($5, hosts.address), ssh_port=COALESCE($6, hosts.ssh_port), last_seen_at=$7
        RETURNING ${HOST_ROW}`,
-      [input.id, input.machine, input.user, input.os, input.at]
+      [input.id, input.machine, input.user, input.os, input.address, input.sshPort, input.at]
     );
     return HostSchema.parse(rows[0]);
   }

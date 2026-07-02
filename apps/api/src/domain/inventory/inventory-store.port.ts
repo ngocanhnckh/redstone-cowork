@@ -3,7 +3,7 @@ import type { Host, DiscoveredSession, ScannedSession, HostCommand, HostCommandK
 /** Persistence for the session inventory: hosts, discovered sessions, host commands. */
 export interface InventoryStore {
   // Hosts
-  upsertHost(input: { id: string; machine: string; user: string | null; os: string | null; at: Date }): Promise<Host>;
+  upsertHost(input: { id: string; machine: string; user: string | null; os: string | null; address: string | null; sshPort: number | null; at: Date }): Promise<Host>;
   touchHost(id: string, at: Date): Promise<void>;
   listHosts(): Promise<Host[]>;
 

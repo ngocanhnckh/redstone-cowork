@@ -43,14 +43,29 @@ function readSshHosts(): Record<string, string> {
   }
 }
 
-/** The stored ssh host for a machine, or the machine name itself as the default when unset. */
+// Server-known SSH targets (machine → "user@address"), auto-discovered from the
+// host agents' registrations so the desktop can reach a machine WITHOUT the user
+// configuring anything. A manual mapping in ssh-hosts.json still wins.
+let serverHostTargets: Record<string, string> = {};
+export function setServerHostTargets(targets: Record<string, string>): void {
+  serverHostTargets = targets ?? {};
+}
+
+/**
+ * Resolve a machine to an SSH target. Priority:
+ *   1. a manual override in ssh-hosts.json (user intent wins),
+ *   2. the address the host agent reported to cowork (auto — no setup needed),
+ *   3. the bare machine name as a last resort (works if it's DNS/ssh-config resolvable).
+ */
 export function getSshHost(machine: string): string {
   try {
     const stored = readSshHosts()[machine];
     if (typeof stored === "string" && stored.trim().length > 0) return stored;
   } catch {
-    // ignore — fall through to default
+    // ignore — fall through
   }
+  const auto = serverHostTargets[machine];
+  if (typeof auto === "string" && auto.trim().length > 0) return auto;
   return machine;
 }
 

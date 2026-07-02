@@ -116,7 +116,7 @@ export class ApiClient {
 
   // ---- Host agent (session inventory) ----
 
-  async registerHost(h: { hostId: string; machine: string; user: string | null; os: string | null }): Promise<void> {
+  async registerHost(h: { hostId: string; machine: string; user: string | null; os: string | null; address?: string | null; sshPort?: number | null }): Promise<void> {
     const r = await this.req("/hosts", { method: "POST", headers: json(this.cfg.token), body: JSON.stringify(h) }, 5000);
     if (!r.ok) throw new Error(`registerHost ${r.status}`);
   }

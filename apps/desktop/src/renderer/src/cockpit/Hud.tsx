@@ -5,7 +5,7 @@ import { HostTelemetryView } from "../types";
 import QueueRail from "./QueueRail";
 import MultiTerminal from "./MultiTerminal";
 import FilesPanel from "./FilesPanel";
-import BrowserPanel from "./BrowserPanel";
+import BrowserStack from "./BrowserStack";
 import DockerDeck from "./DockerDeck";
 import AnswerDock from "./AnswerDock";
 import Markdown from "./Markdown";
@@ -503,9 +503,15 @@ function HudConsole() {
   const sessions = useStore((s) => s.sessions);
   const queue = useStore((s) => s.queue);
   const session = sessions.find((s) => s.id === focusId) ?? queue.find((s) => s.id === focusId);
+  const openBrowser = useStore((s) => s.openBrowser);
   const [view, setView] = useState<ConsoleView>("ctf");
   const cfg = VIEWS[view];
+  const browserInView = !!cfg.areas.browser;
   const none = <div className="mono faint" style={{ padding: 14, fontSize: 11 }}>no session</div>;
+
+  // Keep this session's browser alive in the persistent stack the first time a
+  // browser-containing view is shown, so switching sessions never reloads it.
+  useEffect(() => { if (browserInView && session) openBrowser(session.id); }, [browserInView, session?.id, openBrowser]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10, minHeight: 0, padding: "12px 14px" }}>
@@ -538,7 +544,9 @@ function HudConsole() {
           {session ? <FilesPanel key={`${session.id}-hud-files`} sessionId={session.id} cwd={session.cwd} machine={session.machine} /> : none}
         </GridPanel>
         <GridPanel title="Browser" area={cfg.areas.browser}>
-          {session ? <BrowserPanel key={`${session.id}-hud-browser`} sessionId={session.id} cwd={session.cwd} machine={session.machine} /> : none}
+          {/* Keep-alive stack — every opened session's browser stays mounted, only
+              the focused one is shown, so switching sessions never reloads. */}
+          <BrowserStack activeId={session?.id} active={browserInView} />
         </GridPanel>
       </div>
     </div>

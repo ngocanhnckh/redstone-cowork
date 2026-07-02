@@ -6,6 +6,8 @@ export const HostSchema = z.object({
   machine: z.string().min(1),
   user: z.string().nullable().default(null),
   os: z.string().nullable().default(null),
+  address: z.string().nullable().default(null), // reachable public address (for SSH), agent-detected
+  sshPort: z.coerce.number().nullable().default(null),
   lastSeenAt: z.coerce.date(),
   createdAt: z.coerce.date(),
 });
@@ -45,6 +47,8 @@ export const HostRegistrationSchema = z.object({
   machine: z.string().min(1),
   user: z.string().nullable().optional(),
   os: z.string().nullable().optional(),
+  address: z.string().nullable().optional(),
+  sshPort: z.coerce.number().nullable().optional(),
 });
 export type HostRegistration = z.infer<typeof HostRegistrationSchema>;
 
