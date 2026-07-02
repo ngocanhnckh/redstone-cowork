@@ -62,6 +62,7 @@ export default function QueueRail() {
 
   const rows = [...sessions]
     .map((s) => ({ s, kind: kindOf(s) }))
+    .filter((r) => r.kind !== "lost") // hide offline sessions from the rail
     .sort((a, b) => {
       if (rank[a.kind] !== rank[b.kind]) return rank[a.kind] - rank[b.kind];
       // Within "waiting", longest-waiting first.
