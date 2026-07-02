@@ -224,6 +224,9 @@ ipcMain.handle(IPC.inventoryHistory, (_e, a: { id: string }) => api.inventoryHis
 ipcMain.handle(IPC.inventoryRun, (_e, a: { id: string; message: string }) => api.inventoryRun(a.id, a.message));
 ipcMain.handle(IPC.inventoryTagAdd, (_e, a: { id: string; tag: string }) => api.inventoryAddTag(a.id, a.tag));
 ipcMain.handle(IPC.inventoryTagRemove, (_e, a: { id: string; tag: string }) => api.inventoryRemoveTag(a.id, a.tag));
+ipcMain.handle(IPC.accessKeysList, () => api.listAccessKeys());
+ipcMain.handle(IPC.accessKeyCreate, (_e, a: { name: string; scope: "read" | "control" }) => api.createAccessKey(a.name, a.scope));
+ipcMain.handle(IPC.accessKeyRevoke, (_e, a: { id: string }) => api.revokeAccessKey(a.id));
 
 // Workspace config (per-session .redstone/session.json)
 ipcMain.handle(IPC.workspaceGet, (_e, a: Parameters<typeof getWorkspaceConfig>[0]) =>

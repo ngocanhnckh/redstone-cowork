@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useStore } from "../store";
+import AccessKeysManager from "./AccessKeysManager";
 
 /**
  * Connection settings — reachable any time from the title bar. Lets the user see
@@ -67,9 +68,9 @@ export default function SettingsPanel() {
       style={{ position: "fixed", inset: 0, zIndex: 80, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center" }}
     >
       <div
-        className="glass-soft"
+        className="glass-soft no-scrollbar"
         onClick={(e) => e.stopPropagation()}
-        style={{ width: 440, maxWidth: "92vw", borderRadius: 18, border: "1px solid var(--border-strong)", padding: "26px 28px" }}
+        style={{ width: 440, maxWidth: "92vw", maxHeight: "88vh", overflowY: "auto", borderRadius: 18, border: "1px solid var(--border-strong)", padding: "26px 28px" }}
       >
         <div style={{ display: "flex", alignItems: "center", marginBottom: 4 }}>
           <span className="kicker">Connection</span>
@@ -150,6 +151,8 @@ export default function SettingsPanel() {
             Sign out
           </button>
         </div>
+
+        <AccessKeysManager />
       </div>
     </div>
   );

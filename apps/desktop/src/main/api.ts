@@ -170,6 +170,16 @@ export async function deleteUserTodo(sessionId: string, todoId: string): Promise
   ).json();
 }
 
+export async function listAccessKeys(): Promise<unknown[]> {
+  return (await req("/access-keys")).json();
+}
+export async function createAccessKey(name: string, scope: "read" | "control"): Promise<unknown> {
+  return (await req("/access-keys", { method: "POST", body: JSON.stringify({ name, scope }) })).json();
+}
+export async function revokeAccessKey(id: string): Promise<unknown> {
+  return (await req(`/access-keys/${encodeURIComponent(id)}/revoke`, { method: "POST" })).json();
+}
+
 export async function getInventory(): Promise<unknown> {
   return (await req("/inventory")).json();
 }

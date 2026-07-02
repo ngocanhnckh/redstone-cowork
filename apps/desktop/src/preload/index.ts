@@ -57,6 +57,12 @@ contextBridge.exposeInMainWorld("cowork", {
     ipcRenderer.invoke(IPC.inventoryTagAdd, { id, tag }),
   inventoryRemoveTag: (id: string, tag: string): Promise<unknown> =>
     ipcRenderer.invoke(IPC.inventoryTagRemove, { id, tag }),
+  listAccessKeys: (): Promise<Array<{ id: string; name: string; prefix: string; scope: string; lastUsedAt: string | null; revokedAt: string | null }>> =>
+    ipcRenderer.invoke(IPC.accessKeysList),
+  createAccessKey: (name: string, scope: "read" | "control"): Promise<{ id: string; key: string; scope: string }> =>
+    ipcRenderer.invoke(IPC.accessKeyCreate, { name, scope }),
+  revokeAccessKey: (id: string): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke(IPC.accessKeyRevoke, { id }),
 
   // Workspace config
   getWorkspaceConfig: (a: {

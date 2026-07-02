@@ -36,6 +36,9 @@ declare global {
       inventoryRun(id: string, message: string): Promise<{ ok: boolean; reply?: string; error?: string }>;
       inventoryAddTag(id: string, tag: string): Promise<unknown>;
       inventoryRemoveTag(id: string, tag: string): Promise<unknown>;
+      listAccessKeys(): Promise<Array<{ id: string; name: string; prefix: string; scope: string; lastUsedAt: string | null; revokedAt: string | null }>>;
+      createAccessKey(name: string, scope: "read" | "control"): Promise<{ id: string; key: string; scope: string }>;
+      revokeAccessKey(id: string): Promise<{ ok: boolean }>;
 
       // Workspace config
       getWorkspaceConfig(a: {
