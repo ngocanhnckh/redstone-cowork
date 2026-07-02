@@ -346,6 +346,9 @@ function GitPane() {
 // ---------------------------------------------------------------------------
 function TelemetryColumn({ tele }: { tele: HostTelemetryView[] }) {
   const sessions = useStore((s) => s.sessions);
+  const queue = useStore((s) => s.queue);
+  const focusId = useStore((s) => s.focusId);
+  const session = sessions.find((s) => s.id === focusId) ?? queue.find((s) => s.id === focusId);
   const fleet = useMemo(() => {
     const active = sessions.filter((s) => s.status === "active" || s.working).length;
     const waiting = sessions.filter((s) => s.status === "waiting").length;
@@ -353,12 +356,11 @@ function TelemetryColumn({ tele }: { tele: HostTelemetryView[] }) {
     const spent = sessions.reduce((n, s) => n + (s.attachedAt ? Date.now() - new Date(s.attachedAt).getTime() : 0), 0);
     return { active, waiting, prompts, spent };
   }, [sessions]);
+  // Only the host that runs the SELECTED session (matched by machine name).
+  const hostTele = session ? tele.find((t) => t.machine === session.machine) ?? null : null;
   return (
     <motion.div className="no-scrollbar" style={{ flex: 1, minWidth: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: 14, minHeight: 0 }}
       variants={STAGGER} initial="hidden" animate="show">
-      {/* Git activity for the selected session's repo */}
-      <motion.div variants={RISE}><GitPane /></motion.div>
-
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
         <motion.div variants={RISE}><Clock /></motion.div>
         <motion.div variants={RISE} style={card}>
@@ -374,20 +376,22 @@ function TelemetryColumn({ tele }: { tele: HostTelemetryView[] }) {
         </motion.div>
       </div>
 
+      {/* System status — only the host machine of the selected session */}
       <motion.div variants={RISE}>
-        <div className="kicker" style={{ marginBottom: 8 }}>Hosts</div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 12 }}>
-          <AnimatePresence mode="popLayout">
-            {tele.length === 0 ? (
-              <motion.div key="skeleton" variants={RISE} initial="hidden" animate="show" exit={{ opacity: 0 }}><HostSkeleton /></motion.div>
-            ) : tele.map((t) => (
-              <motion.div key={t.hostId} layout initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.96 }} transition={{ type: "spring", stiffness: 240, damping: 26 }}>
-                <HostCard t={t} />
-              </motion.div>
-            ))}
-          </AnimatePresence>
-        </div>
+        <div className="kicker" style={{ marginBottom: 8 }}>System status{session ? ` · ${session.machine}` : ""}</div>
+        <AnimatePresence mode="popLayout">
+          {hostTele ? (
+            <motion.div key={hostTele.hostId} layout initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.96 }} transition={{ type: "spring", stiffness: 240, damping: 26 }}>
+              <HostCard t={hostTele} />
+            </motion.div>
+          ) : (
+            <motion.div key="skeleton" variants={RISE} initial="hidden" animate="show" exit={{ opacity: 0 }}><HostSkeleton /></motion.div>
+          )}
+        </AnimatePresence>
       </motion.div>
+
+      {/* Git activity for the selected session's repo — below system status */}
+      <motion.div variants={RISE}><GitPane /></motion.div>
     </motion.div>
   );
 }
