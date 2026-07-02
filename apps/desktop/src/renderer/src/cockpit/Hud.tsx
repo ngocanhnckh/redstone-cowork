@@ -474,7 +474,7 @@ type ConsoleView = "ctf" | "cb" | "ctb" | "fb";
  * (absent = hidden in that view).
  */
 const VIEWS: Record<ConsoleView, { label: string; cols: string; rows: string; template: string; areas: Partial<Record<PanelKey, string>> }> = {
-  ctf: { label: "Chat · Term · Files", cols: "1fr", rows: "1.4fr 1fr 1.1fr", template: `"chat" "term" "files"`, areas: { chat: "chat", term: "term", files: "files" } },
+  ctf: { label: "Chat · Term · Files", cols: "1.1fr 1fr", rows: "1.5fr 1fr", template: `"files chat" "files term"`, areas: { chat: "chat", term: "term", files: "files" } },
   cb: { label: "Chat · Browser", cols: "1fr 1.3fr", rows: "1fr", template: `"chat browser"`, areas: { chat: "chat", browser: "browser" } },
   ctb: { label: "Chat · Term · Browser", cols: "1fr 1.2fr", rows: "1.2fr 1fr", template: `"chat browser" "term browser"`, areas: { chat: "chat", term: "term", browser: "browser" } },
   fb: { label: "Files · Browser", cols: "1fr 1.2fr", rows: "1fr", template: `"files browser"`, areas: { files: "files", browser: "browser" } },

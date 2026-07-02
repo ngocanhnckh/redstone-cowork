@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, utimesSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { scanSessions } from "../src/scanner";
+import { scanSessions, findTranscriptPath } from "../src/scanner";
 import { runCommand } from "../src/agent";
 
 let root: string;
@@ -46,6 +46,15 @@ describe("scanSessions", () => {
 
   it("returns [] when the projects root doesn't exist", () => {
     expect(scanSessions(join(root, "nope"))).toEqual([]);
+  });
+
+  it("findTranscriptPath locates a session by id regardless of the folder slug", () => {
+    // Folder slug with a dot in it (Claude keeps dots) — recomputing from cwd would miss it.
+    writeSession("-home-youruser-accelrx", "sess-x", [{ cwd: "/home/youruser/accelrx", message: { role: "user", content: "hi" } }]);
+    const p = findTranscriptPath("sess-x", root);
+    expect(p).toContain("-home-youruser-accelrx");
+    expect(p).toContain("sess-x.jsonl");
+    expect(findTranscriptPath("does-not-exist", root)).toBeNull();
   });
 
   it("orders nothing but reports every project dir", () => {

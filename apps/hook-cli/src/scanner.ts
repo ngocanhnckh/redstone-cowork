@@ -16,6 +16,30 @@ export function projectsRoot(): string {
   return join(homedir(), ".claude", "projects");
 }
 
+/**
+ * Locate a session's transcript by its id across ALL project folders. Robust
+ * against how Claude slugifies the cwd into a folder name (dots, spaces, etc.) —
+ * the session id (the jsonl filename) is globally unique, so we just find the file
+ * rather than recomputing the slug. Returns the full path, or null.
+ */
+export function findTranscriptPath(sessionId: string, root = projectsRoot()): string | null {
+  let dirs: string[];
+  try {
+    dirs = readdirSync(root, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name);
+  } catch {
+    return null;
+  }
+  for (const dir of dirs) {
+    const p = join(root, dir, `${sessionId}.jsonl`);
+    try {
+      if (statSync(p).isFile()) return p;
+    } catch {
+      // not in this folder — keep looking
+    }
+  }
+  return null;
+}
+
 /** Read the first `bytes` of a file as UTF-8 (for cheap head parsing of huge transcripts). */
 function readHead(path: string, bytes: number): string {
   let fd: number | null = null;

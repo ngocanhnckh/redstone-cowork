@@ -5,7 +5,7 @@ import { hostname, userInfo, platform } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { configDir } from "./config";
-import { scanSessions } from "./scanner";
+import { scanSessions, findTranscriptPath } from "./scanner";
 import { sampleTelemetry } from "./telemetry";
 import { sampleDocker } from "./docker";
 import { detectPublicAddress } from "./poller";
@@ -61,8 +61,12 @@ export async function runCommand(cmd: HostCommand): Promise<Record<string, unkno
     }
     if (cmd.kind === "fetch_history") {
       const { sessionId, cwd } = cmd.payload;
-      if (!sessionId || !cwd) return { ok: false, error: "missing sessionId/cwd" };
-      const messages = readRecentMessages(transcriptPath(cwd, sessionId));
+      if (!sessionId) return { ok: false, error: "missing sessionId" };
+      // Find the transcript by id (robust to slug differences); fall back to the
+      // computed path only if the lookup somehow fails.
+      const path = findTranscriptPath(sessionId) ?? (cwd ? transcriptPath(cwd, sessionId) : null);
+      if (!path) return { ok: true, messages: [] };
+      const messages = readRecentMessages(path);
       return { ok: true, messages };
     }
     return { ok: false, error: `unknown command kind ${cmd.kind}` };
