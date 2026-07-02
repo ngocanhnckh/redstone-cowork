@@ -32,6 +32,7 @@ const nextConfig: NextConfig = {
       { source: "/inventory/:path*", destination: `${API_URL}/inventory/:path*` },
       { source: "/access-keys", destination: `${API_URL}/access-keys` },
       { source: "/access-keys/:path*", destination: `${API_URL}/access-keys/:path*` },
+      { source: "/telemetry", destination: `${API_URL}/telemetry` },
     ];
   },
 };
