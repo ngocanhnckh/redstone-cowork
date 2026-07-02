@@ -5,6 +5,9 @@ interface Props {
   sessionId: string;
   cwd: string;
   machine: string;
+  /** Extra tabs are ephemeral: they read the session's URL to start, but don't
+   * overwrite the saved workspace config when navigated. */
+  ephemeral?: boolean;
 }
 
 // Minimal typing for Electron's <webview> so JSX type-checks. We only use the
@@ -62,7 +65,7 @@ function portUrl(port: number): string {
   return `http://localhost:${port}`;
 }
 
-export default function BrowserPanel({ sessionId, cwd, machine }: Props) {
+export default function BrowserPanel({ sessionId, cwd, machine, ephemeral }: Props) {
   // Saved override URL (a typed address); when empty the preview is port-driven.
   const [browserUrl, setBrowserUrl] = useState("");
   const [forwardPorts, setForwardPorts] = useState<number[]>([]);
@@ -143,6 +146,7 @@ export default function BrowserPanel({ sessionId, cwd, machine }: Props) {
   }, [loadUrl]);
 
   async function saveConfig(next: { browserUrl: string; previewPort: number | null }) {
+    if (ephemeral) return; // extra tabs navigate freely but don't touch saved config
     try {
       const config = { forwardPorts, browserUrl: next.browserUrl, previewPort: next.previewPort };
       const res = await window.cowork.saveWorkspaceConfig({ sessionId, cwd, machine, config });

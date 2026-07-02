@@ -1,9 +1,9 @@
 // A compact context-window usage gauge (tokens used / model limit), like Claude
-// Code's "% context used". Model id → context window size.
-function contextLimit(model: string | null): number {
+// Code's "% context used". The model id doesn't reliably carry the 1M-beta marker,
+// so also infer the window from the token count: anything past 200k must be 1M.
+function contextLimit(model: string | null, contextTokens: number): number {
   const m = (model ?? "").toLowerCase();
-  if (m.includes("[1m]") || m.includes("-1m")) return 1_000_000;
-  // All current Claude 4.x models are 200k unless the 1M beta is on.
+  if (m.includes("[1m]") || m.includes("-1m") || contextTokens > 200_000) return 1_000_000;
   return 200_000;
 }
 
@@ -11,7 +11,7 @@ const fmtK = (n: number): string => (n >= 1000 ? `${(n / 1000).toFixed(n >= 100_
 
 export default function ContextGauge({ contextTokens, model }: { contextTokens: number | null; model: string | null }) {
   if (contextTokens == null) return null;
-  const limit = contextLimit(model);
+  const limit = contextLimit(model, contextTokens);
   const pct = Math.max(0, Math.min(100, (contextTokens / limit) * 100));
   // Warm→amber→red as it fills; auto-compact tends to kick in ~75-80%.
   const color = pct >= 85 ? "#e0736a" : pct >= 70 ? "#D8A76A" : "rgb(var(--primary-soft))";

@@ -1,5 +1,5 @@
 import { useStore } from "../store";
-import BrowserPanel from "./BrowserPanel";
+import MultiBrowser from "./MultiBrowser";
 
 /**
  * Keep-alive browser layer. Every session whose Browser tab has been opened keeps
@@ -22,7 +22,7 @@ export default function BrowserStack({ activeId, active }: { activeId?: string |
         const show = active && id === activeId;
         return (
           <div key={id} style={{ display: show ? "flex" : "none", flex: show ? 1 : undefined, minHeight: 0, flexDirection: "column" }}>
-            <BrowserPanel sessionId={id} cwd={s.cwd} machine={s.machine} />
+            <MultiBrowser sessionId={id} cwd={s.cwd} machine={s.machine} />
           </div>
         );
       })}

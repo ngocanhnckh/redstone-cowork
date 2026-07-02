@@ -411,6 +411,29 @@ ipcMain.handle(IPC.clipboardWrite, (_e, a: { text: string }) => {
   }
 });
 
+// Right-click context menu (incl. Inspect Element) for the Browser tab's <webview>
+// guests. Wired in the main process because the guest's context-menu can't be
+// handled from the renderer.
+app.on("web-contents-created", (_e, contents) => {
+  if (contents.getType() !== "webview") return;
+  contents.on("context-menu", (_ev, params) => {
+    const nav = contents.navigationHistory;
+    const menu = Menu.buildFromTemplate([
+      { label: "Back", enabled: nav?.canGoBack?.() ?? false, click: () => nav?.goBack?.() },
+      { label: "Forward", enabled: nav?.canGoForward?.() ?? false, click: () => nav?.goForward?.() },
+      { label: "Reload", click: () => contents.reload() },
+      { label: "Hard Reload (bypass cache)", click: () => contents.reloadIgnoringCache() },
+      { type: "separator" },
+      ...(params.editFlags.canCopy ? [{ label: "Copy", role: "copy" as const }] : []),
+      ...(params.editFlags.canPaste ? [{ label: "Paste", role: "paste" as const }] : []),
+      ...(params.selectionText ? [{ label: "Copy Link Address", enabled: !!params.linkURL, click: () => clipboard.writeText(params.linkURL) }] : []),
+      { type: "separator" },
+      { label: "Inspect Element", click: () => contents.inspectElement(params.x, params.y) },
+    ]);
+    menu.popup();
+  });
+});
+
 app.whenReady().then(() => {
   // Create system tray
   try {
