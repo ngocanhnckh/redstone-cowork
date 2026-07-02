@@ -4,15 +4,31 @@ import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
 import ConnectionBar from "./ConnectionBar";
 
-// xterm theme tuned to the liquid-glass tokens (warm ink bg, bone foreground).
+// xterm theme tuned to the liquid-glass tokens: a transparent background so the
+// terminal sits on the warm-ink glass panel (not a solid black box), with a warm
+// ANSI palette (amber accent / sage green) instead of the harsh defaults.
 const THEME = {
-  background: "#15110D",
+  background: "rgba(0,0,0,0)",
   foreground: "#F0ECE1",
-  cursor: "#F0ECE1",
+  cursor: "#E4A672",
   cursorAccent: "#15110D",
-  selectionBackground: "rgba(240,236,225,0.18)",
-  black: "#15110D",
+  selectionBackground: "rgba(228,166,114,0.24)",
+  black: "#2A2118",
   brightBlack: "#6B6052",
+  red: "#E0736A",
+  brightRed: "#EE8A80",
+  green: "#9DBFA8",
+  brightGreen: "#B4D3BD",
+  yellow: "#D8A76A",
+  brightYellow: "#E4A672",
+  blue: "#8FB0C8",
+  brightBlue: "#A9C6DA",
+  magenta: "#C8A0C0",
+  brightMagenta: "#D8B4D0",
+  cyan: "#8FC4C0",
+  brightCyan: "#A9D4D0",
+  white: "#E8E0D2",
+  brightWhite: "#FBF7EE",
 };
 
 export default function TerminalPanel({
@@ -53,6 +69,7 @@ export default function TerminalPanel({
       lineHeight: 1.2,
       cursorBlink: true,
       allowProposedApi: true,
+      allowTransparency: true, // let the warm-ink panel show through the terminal bg
       theme: THEME,
       scrollback: 5000,
     });
@@ -181,7 +198,9 @@ export default function TerminalPanel({
           flex: 1,
           minHeight: 0,
           padding: "10px 16px 12px",
-          background: "var(--app-bg)",
+          // Warm-ink glass instead of a flat black box; the transparent xterm bg
+          // lets this show through.
+          background: "rgb(var(--primary) / 0.04)",
           overflow: "hidden",
           display: error ? "none" : "block",
         }}

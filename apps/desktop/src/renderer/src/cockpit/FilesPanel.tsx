@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import Editor from "@monaco-editor/react";
 import ConnectionBar from "./ConnectionBar";
 import Markdown from "./Markdown";
-import { ensureMonaco, languageForFile } from "./monaco-setup";
+import { ensureMonaco, languageForFile, RCW_MONACO_THEME } from "./monaco-setup";
 
 interface Props {
   sessionId: string;
@@ -505,7 +505,7 @@ export default function FilesPanel({ sessionId, cwd, machine }: Props) {
                 ) : read.encoding === "text" ? (
                   <Editor
                     height="100%"
-                    theme="vs-dark"
+                    theme={RCW_MONACO_THEME}
                     language={languageForFile(baseName(openPath))}
                     path={openPath}
                     value={value}

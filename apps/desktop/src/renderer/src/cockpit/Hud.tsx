@@ -1,9 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence, type Variants } from "motion/react";
 import { useStore } from "../store";
-import { HostTelemetryView, SessionView } from "../types";
+import { HostTelemetryView } from "../types";
 import QueueRail from "./QueueRail";
-import FocusStage from "./FocusStage";
+import TerminalPanel from "./TerminalPanel";
+import FilesPanel from "./FilesPanel";
+import AnswerDock from "./AnswerDock";
+import Markdown from "./Markdown";
 
 // Motion (motion.dev) entrance choreography for the widget column.
 const STAGGER: Variants = { hidden: {}, show: { transition: { staggerChildren: 0.07, delayChildren: 0.05 } } };
@@ -182,7 +185,8 @@ function RotatingGlobe({ geo, size = 150 }: { geo: { lat: number; long: number; 
 /** A slowly-drifting wireframe satellite — the HUD's hero illustration. */
 function Satellite() {
   return (
-    <svg viewBox="0 0 240 150" style={{ width: "100%", height: "auto", display: "block", overflow: "visible" }} className="hud-float">
+    // viewBox padded top/bottom so the antenna dish + pulse ring never clip.
+    <svg viewBox="0 0 240 172" style={{ width: "100%", height: "auto", display: "block", overflow: "visible" }} className="hud-float">
       <g stroke="rgb(var(--primary-soft) / 0.7)" strokeWidth={1} fill="none" strokeLinejoin="round">
         {/* left solar wing */}
         <g className="hud-panel-shimmer">
@@ -372,6 +376,113 @@ function TelemetryColumn({ tele }: { tele: HostTelemetryView[] }) {
 }
 
 // ---------------------------------------------------------------------------
+// Center console: chat + terminal + files, split into three panes
+// ---------------------------------------------------------------------------
+const ACTIONABLE = ["question", "permission", "mode"];
+
+/** Compact terminal-styled chat for the focused session (full markdown render). */
+function ChatPane() {
+  const focusId = useStore((s) => s.focusId);
+  const sessions = useStore((s) => s.sessions);
+  const queue = useStore((s) => s.queue);
+  const decisions = useStore((s) => s.decisions);
+  const pendingMap = useStore((s) => s.pending);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const stick = useRef(true);
+
+  const id = focusId;
+  const session = sessions.find((s) => s.id === id) ?? queue.find((s) => s.id === id);
+  const transcript = session?.transcript ?? [];
+  const pending = id ? pendingMap[id] ?? [] : [];
+  const timeline = [...transcript, ...pending.map((p) => ({ role: "user" as const, text: p.text }))];
+  const sessionDecisions = decisions.filter((d) => d.sessionId === id);
+  const actionable = sessionDecisions.find((d) => ACTIONABLE.includes(d.kind));
+  const decision = actionable ?? sessionDecisions[0];
+  const isWorking = !!session && session.status !== "lost" && !actionable && (!!session.working || pending.length > 0);
+
+  useEffect(() => {
+    if (scrollRef.current && stick.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [session?.transcript, pending.length, isWorking]);
+
+  return (
+    <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+      <div ref={scrollRef} onScroll={() => { const el = scrollRef.current; if (el) stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80; }}
+        className="no-scrollbar" style={{ flex: 1, overflowY: "auto", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 12, fontFamily: "var(--font-mono)" }}>
+        {!session && <span className="mono faint hud-blink" style={{ fontSize: 12 }}>no session selected</span>}
+        {session && timeline.length === 0 && !session.latestAnswer && <span className="mono faint hud-blink" style={{ fontSize: 12 }}>awaiting output…</span>}
+        {timeline.map((m, i) =>
+          m.role === "user" ? (
+            <div key={i} style={{ fontSize: 12.5, lineHeight: 1.55, color: "rgb(var(--accent))", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+              <span style={{ opacity: 0.7 }}>❯ </span>{m.text}
+            </div>
+          ) : (
+            <div key={i} style={{ borderLeft: "2px solid rgb(var(--primary-soft) / 0.4)", paddingLeft: 12 }}>
+              <div className="mono faint" style={{ fontSize: 9, letterSpacing: "0.18em", textTransform: "uppercase", marginBottom: 5, opacity: 0.6 }}>◇ claude</div>
+              <div style={{ fontFamily: "var(--font-body)" }}><Markdown>{m.text}</Markdown></div>
+            </div>
+          )
+        )}
+        {isWorking && (
+          <div style={{ display: "flex", alignItems: "center", gap: 9, color: "var(--text-soft)" }}>
+            <span className="eq">{[0, 1, 2, 3, 4].map((i) => <span key={i} className="eq-bar" style={{ animationDelay: `${i * 0.13}s` }} />)}</span>
+            <span className="shimmer mono" style={{ fontSize: 11.5, letterSpacing: "0.06em" }}>processing<span className="hud-blink">▮</span></span>
+          </div>
+        )}
+      </div>
+      {session && <AnswerDock decision={decision} working={isWorking} sessionId={id ?? undefined} />}
+    </div>
+  );
+}
+
+/** A titled, collapsible pane in the console stack. */
+function Pane({ title, hint, grow, collapsed, onToggle, children }: { title: string; hint?: string; grow: number; collapsed: boolean; onToggle: () => void; children: React.ReactNode }) {
+  return (
+    <div style={{ ...card, padding: 0, display: "flex", flexDirection: "column", flex: collapsed ? "0 0 auto" : grow, minHeight: 0 }}>
+      <div onClick={onToggle} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 13px", borderBottom: collapsed ? "none" : "1px solid var(--border)", cursor: "pointer", flexShrink: 0 }}>
+        <span style={{ fontSize: 9, color: "var(--text-soft)", transform: collapsed ? "rotate(-90deg)" : "none", transition: "transform .2s" }}>▾</span>
+        <Decode text={title} className="mono" style={{ fontSize: 10, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--text-soft)" }} />
+        {hint && <span className="mono faint" style={{ fontSize: 9.5 }}>{hint}</span>}
+      </div>
+      {!collapsed && <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>{children}</div>}
+    </div>
+  );
+}
+
+/** The HUD center: chat, terminal and files stacked as three console panes. */
+function HudConsole() {
+  const focusId = useStore((s) => s.focusId);
+  const sessions = useStore((s) => s.sessions);
+  const queue = useStore((s) => s.queue);
+  const session = sessions.find((s) => s.id === focusId) ?? queue.find((s) => s.id === focusId);
+  const [collapsed, setCollapsed] = useState<{ chat: boolean; term: boolean; files: boolean }>({ chat: false, term: false, files: true });
+  const toggle = (k: "chat" | "term" | "files") => setCollapsed((c) => ({ ...c, [k]: !c[k] }));
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12, minHeight: 0, padding: "14px 14px" }}>
+      {session && (
+        <div style={{ display: "flex", alignItems: "baseline", gap: 10, padding: "0 2px", flexShrink: 0 }}>
+          <span className="display" style={{ fontSize: 17 }}>{projectName(session.cwd)}</span>
+          <span className="mono faint" style={{ fontSize: 10.5 }}>{session.machine} · {session.gitBranch ?? "no-branch"} · {session.permissionMode ?? "default"}</span>
+        </div>
+      )}
+      <Pane title="Chat" grow={1.5} collapsed={collapsed.chat} onToggle={() => toggle("chat")}>
+        <ChatPane />
+      </Pane>
+      <Pane title="Terminal" grow={1} collapsed={collapsed.term} onToggle={() => toggle("term")}>
+        {session
+          ? <TerminalPanel key={`${session.id}-hud-term`} sessionId={session.id} cwd={session.cwd} machine={session.machine} />
+          : <div className="mono faint" style={{ padding: 14, fontSize: 11 }}>no session</div>}
+      </Pane>
+      <Pane title="Files" grow={1.2} collapsed={collapsed.files} onToggle={() => toggle("files")}>
+        {session
+          ? <FilesPanel key={`${session.id}-hud-files`} sessionId={session.id} cwd={session.cwd} machine={session.machine} />
+          : <div className="mono faint" style={{ padding: 14, fontSize: 11 }}>no session</div>}
+      </Pane>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // HUD root
 // ---------------------------------------------------------------------------
 export default function Hud() {
@@ -384,9 +495,9 @@ export default function Hud() {
     return () => { alive = false; clearInterval(timer); };
   }, []);
 
-  // HUD = Flow mode (full FocusStage: all tabs + features + session switching via
-  // the QueueRail) plus the telemetry widget column, over an animated backdrop.
-  // The widget deck can expand to reclaim space from the chat for more widgets.
+  // HUD = QueueRail (session switching) + a 3-pane console (chat / terminal /
+  // files) + the telemetry widget deck, over an animated backdrop. The deck can
+  // expand to reclaim space for more widgets.
   const [wide, setWide] = useState(true);
   const cols = wide ? "214px minmax(360px,1fr) 560px" : "214px minmax(0,1fr) 372px";
   return (
@@ -395,7 +506,7 @@ export default function Hud() {
       <span className="hud-grid" />
       <div style={{ position: "relative", zIndex: 1, height: "100%", display: "grid", gridTemplateColumns: cols, minHeight: 0 }}>
         <QueueRail />
-        <FocusStage />
+        <HudConsole />
         <div style={{ borderLeft: "1px solid var(--border)", padding: "14px 16px", minHeight: 0, display: "flex", flexDirection: "column", position: "relative" }}>
           <button onClick={() => setWide((w) => !w)} title={wide ? "Shrink widget deck" : "Expand widget deck"}
             style={{ position: "absolute", top: 14, left: -13, zIndex: 3, width: 26, height: 26, borderRadius: 999, border: "1px solid var(--border-strong)", background: "var(--app-panel, #1b1712)", color: "var(--text-soft)", cursor: "pointer", fontSize: 12, lineHeight: 1, WebkitAppRegion: "no-drag" } as React.CSSProperties}>

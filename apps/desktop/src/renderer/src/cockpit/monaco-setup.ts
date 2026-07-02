@@ -20,11 +20,43 @@ import tsWorker from "monaco-editor/esm/vs/language/typescript/ts.worker?worker"
   },
 };
 
+/** Warm Ink editor theme — matches the app's liquid-glass tokens instead of vs-dark. */
+export const RCW_MONACO_THEME = "rcw-warm-ink";
+
 let configured = false;
-/** Idempotently point @monaco-editor/react at the bundled monaco instance. */
+/** Idempotently point @monaco-editor/react at the bundled monaco instance + theme. */
 export function ensureMonaco(): void {
   if (configured) return;
   loader.config({ monaco });
+  monaco.editor.defineTheme(RCW_MONACO_THEME, {
+    base: "vs-dark",
+    inherit: true,
+    rules: [
+      { token: "comment", foreground: "6B6052", fontStyle: "italic" },
+      { token: "keyword", foreground: "E4A672" },
+      { token: "string", foreground: "9DBFA8" },
+      { token: "number", foreground: "D8A76A" },
+      { token: "type", foreground: "C8B08A" },
+      { token: "function", foreground: "E8D9BE" },
+      { token: "variable", foreground: "F0ECE1" },
+      { token: "delimiter", foreground: "A89A85" },
+    ],
+    colors: {
+      "editor.background": "#00000000", // transparent — sit on the glass panel
+      "editor.foreground": "#F0ECE1",
+      "editorLineNumber.foreground": "#5A5145",
+      "editorLineNumber.activeForeground": "#B7A98F",
+      "editorCursor.foreground": "#E4A672",
+      "editor.selectionBackground": "#E4A67233",
+      "editor.lineHighlightBackground": "#FFFFFF08",
+      "editorIndentGuide.background1": "#FFFFFF0D",
+      "editorGutter.background": "#00000000",
+      "editorWidget.background": "#1B1712",
+      "editorWidget.border": "#3A3228",
+      "scrollbarSlider.background": "#FFFFFF14",
+      "scrollbarSlider.hoverBackground": "#FFFFFF24",
+    },
+  });
   configured = true;
 }
 
