@@ -49,7 +49,16 @@ const SlashTextarea = forwardRef<HTMLTextAreaElement, Props>(function SlashTexta
   return (
     <div style={{ position: "relative", flex: 1, minWidth: 0, display: "flex" }}>
       {open && filtered.length > 0 && (
-        <div className="glass-soft no-scrollbar" style={{ position: "absolute", bottom: "calc(100% + 6px)", left: 0, right: 0, maxHeight: 260, overflowY: "auto", borderRadius: 12, border: "1px solid var(--border-strong)", padding: 5, zIndex: 40 }}>
+        <div className="no-scrollbar" style={{
+          position: "absolute", bottom: "calc(100% + 6px)", left: 0, right: 0, maxHeight: 260, overflowY: "auto",
+          borderRadius: 12, border: "1px solid var(--border-strong)", padding: 5, zIndex: 40,
+          // Heavily-blurred, mostly-opaque backdrop so the command text stays readable
+          // over whatever's behind (chat, terminal, glass).
+          background: "color-mix(in srgb, var(--app-panel, #1b1712) 92%, transparent)",
+          WebkitBackdropFilter: "blur(28px) saturate(1.4)",
+          backdropFilter: "blur(28px) saturate(1.4)",
+          boxShadow: "0 12px 40px rgba(0,0,0,0.5)",
+        }}>
           {filtered.map((c, i) => (
             <div key={c.source + c.name} onMouseEnter={() => setIndex(i)} onMouseDown={(e) => { e.preventDefault(); complete(c); }}
               style={{ padding: "7px 10px", borderRadius: 8, cursor: "pointer", background: i === index ? "rgb(var(--primary) / 0.22)" : "transparent" }}>
