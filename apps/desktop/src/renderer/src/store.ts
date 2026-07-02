@@ -48,6 +48,7 @@ type State = {
   inventory: DiscoveredSession[]; // all discovered Claude Code sessions
   pending: Record<string, PendingSend[]>; // sessionId → optimistic sends, shown instantly
   activeTab: Record<string, "chat" | "terminal" | "browser" | "ports" | "files">; // sessionId → active workspace tab
+  openBrowsers: string[]; // sessionIds whose browser tab was opened — kept alive (see BrowserStack)
   contextCollapsed: boolean; // right context sidebar collapsed (more room for the body)
   assistOpen: boolean; // LLM assistant slide-over
   settingsOpen: boolean; // connection settings modal
@@ -93,6 +94,7 @@ export const useStore = create<State>((set, get) => ({
   inventory: [],
   pending: {},
   activeTab: {},
+  openBrowsers: [],
   contextCollapsed: false,
   assistOpen: false,
   settingsOpen: false,
@@ -100,7 +102,14 @@ export const useStore = create<State>((set, get) => ({
   error: null,
 
   setActiveTab: (sessionId, tab) => {
-    set((state) => ({ activeTab: { ...state.activeTab, [sessionId]: tab } }));
+    set((state) => ({
+      activeTab: { ...state.activeTab, [sessionId]: tab },
+      // Once a session's browser is opened, keep it in the persistent stack forever.
+      openBrowsers:
+        tab === "browser" && !state.openBrowsers.includes(sessionId)
+          ? [...state.openBrowsers, sessionId]
+          : state.openBrowsers,
+    }));
   },
 
   toggleContext: () => set((state) => ({ contextCollapsed: !state.contextCollapsed })),

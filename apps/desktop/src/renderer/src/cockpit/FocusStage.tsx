@@ -5,7 +5,7 @@ import TagBar from "./TagBar";
 import Markdown from "./Markdown";
 import Kbd from "./Kbd";
 import TerminalPanel from "./TerminalPanel";
-import BrowserPanel from "./BrowserPanel";
+import BrowserStack from "./BrowserStack";
 import PortsPanel from "./PortsPanel";
 import FilesPanel from "./FilesPanel";
 
@@ -249,12 +249,9 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
           machine={session.machine}
         />
       ) : activeTab === "browser" ? (
-        <BrowserPanel
-          key={`${id}-browser`}
-          sessionId={id ?? ""}
-          cwd={session.cwd}
-          machine={session.machine}
-        />
+        // The browser lives in a persistent, keep-alive stack (below) so it never
+        // reloads on tab/session switch — like a Chrome tab. Nothing renders here.
+        null
       ) : activeTab === "ports" ? (
         <PortsPanel
           key={`${id}-ports`}
@@ -379,6 +376,11 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
       <AnswerDock decision={decision} working={isWorking} sessionId={id ?? undefined} />
       </>
       )}
+
+      {/* Keep-alive browser layer: webviews for every opened session stay mounted
+          (shown only for the focused session on the Browser tab) so they never
+          reload on tab/session switch. */}
+      <BrowserStack activeId={id} active={activeTab === "browser"} />
     </div>
   );
 }
