@@ -42,7 +42,9 @@ export function ensureMonaco(): void {
       { token: "delimiter", foreground: "A89A85" },
     ],
     colors: {
-      "editor.background": "#00000000", // transparent — sit on the glass panel
+      // A SOLID warm-ink background — a transparent editor made Monaco's minimap /
+      // scrollbar render black bars. Solid matches the theme without artifacts.
+      "editor.background": "#17130E",
       "editor.foreground": "#F0ECE1",
       "editorLineNumber.foreground": "#5A5145",
       "editorLineNumber.activeForeground": "#B7A98F",
@@ -50,7 +52,11 @@ export function ensureMonaco(): void {
       "editor.selectionBackground": "#E4A67233",
       "editor.lineHighlightBackground": "#FFFFFF08",
       "editorIndentGuide.background1": "#FFFFFF0D",
-      "editorGutter.background": "#00000000",
+      "editorGutter.background": "#17130E",
+      "minimap.background": "#17130E",
+      "minimapSlider.background": "#FFFFFF12",
+      "minimapSlider.hoverBackground": "#FFFFFF20",
+      "editorOverviewRuler.background": "#17130E",
       "editorWidget.background": "#1B1712",
       "editorWidget.border": "#3A3228",
       "scrollbarSlider.background": "#FFFFFF14",
