@@ -117,27 +117,100 @@ function Decode({ text, className, style }: { text: string; className?: string; 
 }
 
 /** Equirectangular mini-map with a pulsing dot at the host's location. */
-function MiniGlobe({ geo }: { geo: { lat: number; long: number; city: string | null } | null }) {
-  const W = 150, H = 78;
-  const x = geo ? ((geo.long + 180) / 360) * W : W * 0.3;
-  const y = geo ? ((90 - geo.lat) / 180) * H : H * 0.4;
+/**
+ * A wireframe globe that actually rotates: meridian ellipses whose horizontal
+ * radius cycles each frame (classic spinning-wireframe look), latitude rings, and
+ * a location marker that orbits with the globe — brightening on the near face and
+ * dimming as it swings around the back.
+ */
+function RotatingGlobe({ geo, size = 150 }: { geo: { lat: number; long: number; city: string | null } | null; size?: number }) {
+  const [t, setT] = useState(0);
+  useEffect(() => { let raf = 0; const loop = () => { setT((x) => x + 0.012); raf = requestAnimationFrame(loop); }; raf = requestAnimationFrame(loop); return () => cancelAnimationFrame(raf); }, []);
+  const R = size / 2 - 4, cx = size / 2, cy = size / 2;
+  const MERIDIANS = 6;
+  // Marker: its longitude sweeps with rotation; sin(lon-t) < 0 ⇒ on the far side.
+  const latRad = geo ? (geo.lat * Math.PI) / 180 : 0.4;
+  const lonRad = geo ? (geo.long * Math.PI) / 180 : 0;
+  const mLon = lonRad - t;
+  const near = Math.cos(mLon) > 0;
+  const mx = cx + R * Math.cos(latRad) * Math.sin(mLon);
+  const my = cy - R * Math.sin(latRad);
+
   return (
-    <div>
-      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: 78, display: "block", borderRadius: 8, background: "rgb(var(--primary) / 0.05)", border: "1px solid var(--border)" }}>
-        {[0.25, 0.5, 0.75].map((f) => <line key={`h${f}`} x1={0} y1={H * f} x2={W} y2={H * f} stroke="var(--border-strong)" strokeWidth={0.4} opacity={0.5} />)}
-        {[0.2, 0.4, 0.6, 0.8].map((f) => <line key={`v${f}`} x1={W * f} y1={0} x2={W * f} y2={H} stroke="var(--border-strong)" strokeWidth={0.4} opacity={0.5} />)}
-        <circle cx={x} cy={y} r={7} fill="none" stroke="rgb(var(--accent))" strokeWidth={0.8}>
-          <animate attributeName="r" values="3;9;3" dur="2.4s" repeatCount="indefinite" />
-          <animate attributeName="opacity" values="0.75;0;0.75" dur="2.4s" repeatCount="indefinite" />
-        </circle>
-        <circle cx={x} cy={y} r={2.4} fill="rgb(var(--accent))" />
-        <line x1={x} y1={0} x2={x} y2={H} stroke="rgb(var(--accent))" strokeWidth={0.4} opacity={0.35} />
-        <line x1={0} y1={y} x2={W} y2={y} stroke="rgb(var(--accent))" strokeWidth={0.4} opacity={0.35} />
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+      <svg viewBox={`0 0 ${size} ${size}`} style={{ width: size, height: size, display: "block", filter: "drop-shadow(0 0 12px rgb(var(--primary-soft) / 0.15))" }}>
+        <defs>
+          <radialGradient id="globeglow" cx="42%" cy="38%" r="70%">
+            <stop offset="0%" stopColor="rgb(var(--primary-soft) / 0.18)" />
+            <stop offset="100%" stopColor="transparent" />
+          </radialGradient>
+        </defs>
+        <circle cx={cx} cy={cy} r={R} fill="url(#globeglow)" stroke="rgb(var(--primary-soft) / 0.55)" strokeWidth={1} />
+        {/* latitude rings (static) */}
+        {[-0.6, -0.3, 0, 0.3, 0.6].map((f, i) => {
+          const ry = R * Math.cos((f * Math.PI) / 2) * 0.001 + R * 0.16 * (2 - Math.abs(f) * 2);
+          const yy = cy - R * f;
+          const rx = R * Math.sqrt(Math.max(0, 1 - f * f));
+          return <ellipse key={`lat${i}`} cx={cx} cy={yy} rx={rx} ry={Math.max(2, ry)} fill="none" stroke="rgb(var(--primary-soft) / 0.28)" strokeWidth={0.6} />;
+        })}
+        {/* meridians (rotating) */}
+        {Array.from({ length: MERIDIANS }, (_, i) => {
+          const phase = t + (i * Math.PI) / MERIDIANS;
+          const rx = Math.abs(R * Math.cos(phase));
+          const front = Math.sin(phase) > 0;
+          return <ellipse key={`mer${i}`} cx={cx} cy={cy} rx={Math.max(0.5, rx)} ry={R} fill="none" stroke="rgb(var(--primary-soft))" strokeWidth={0.7} opacity={front ? 0.5 : 0.18} />;
+        })}
+        {/* orbit ring + moving satellite tick */}
+        <ellipse cx={cx} cy={cy} rx={R + 6} ry={(R + 6) * 0.34} fill="none" stroke="rgb(var(--accent) / 0.35)" strokeWidth={0.7} strokeDasharray="2 3" transform={`rotate(-18 ${cx} ${cy})`} />
+        {(() => { const a = t * 1.6; const ox = cx + (R + 6) * Math.cos(a); const oy = cy + (R + 6) * 0.34 * Math.sin(a); return <circle cx={ox} cy={oy} r={1.8} fill="rgb(var(--accent))" transform={`rotate(-18 ${cx} ${cy})`} />; })()}
+        {/* location marker */}
+        <g opacity={near ? 1 : 0.25}>
+          <circle cx={mx} cy={my} r={7} fill="none" stroke="rgb(var(--accent))" strokeWidth={0.8}>
+            <animate attributeName="r" values="3;9;3" dur="2.4s" repeatCount="indefinite" />
+            <animate attributeName="opacity" values="0.8;0;0.8" dur="2.4s" repeatCount="indefinite" />
+          </circle>
+          <circle cx={mx} cy={my} r={2.6} fill="rgb(var(--accent))" />
+        </g>
       </svg>
-      <div className="mono faint" style={{ fontSize: 10, marginTop: 5 }}>
-        {geo ? `${geo.city ?? "unknown"} · ${geo.lat.toFixed(2)}, ${geo.long.toFixed(2)}` : "location: acquiring…"}
+      <div className="mono faint" style={{ fontSize: 10, marginTop: 4, textAlign: "center" }}>
+        {geo ? <>{geo.city ?? "unknown"}<br />{geo.lat.toFixed(2)}°, {geo.long.toFixed(2)}°</> : "location: acquiring…"}
       </div>
     </div>
+  );
+}
+
+/** A slowly-drifting wireframe satellite — the HUD's hero illustration. */
+function Satellite() {
+  return (
+    <svg viewBox="0 0 240 150" style={{ width: "100%", height: "auto", display: "block", overflow: "visible" }} className="hud-float">
+      <g stroke="rgb(var(--primary-soft) / 0.7)" strokeWidth={1} fill="none" strokeLinejoin="round">
+        {/* left solar wing */}
+        <g className="hud-panel-shimmer">
+          <path d="M20 62 L88 82 L88 104 L20 84 Z" />
+          {[0, 1, 2, 3].map((i) => <line key={`lw${i}`} x1={20 + i * 17} y1={62 + i * 5.6} x2={20 + i * 17} y2={84 + i * 5.6} />)}
+          <line x1={20} y1={73} x2={88} y2={93} />
+        </g>
+        {/* right solar wing */}
+        <g className="hud-panel-shimmer">
+          <path d="M152 82 L220 62 L220 84 L152 104 Z" />
+          {[0, 1, 2, 3].map((i) => <line key={`rw${i}`} x1={152 + i * 17} y1={104 - i * 5.6} x2={152 + i * 17} y2={82 - i * 5.6} />)}
+          <line x1={152} y1={93} x2={220} y2={73} />
+        </g>
+        {/* central body */}
+        <path d="M96 74 L120 64 L144 74 L144 104 L120 114 L96 104 Z" fill="rgb(var(--primary) / 0.06)" />
+        <path d="M96 74 L120 84 L144 74 M120 84 L120 114" />
+        {/* antenna dish */}
+        <ellipse cx={120} cy={44} rx={16} ry={7} transform="rotate(-16 120 44)" />
+        <line x1={120} y1={64} x2={120} y2={50} />
+        <circle cx={120} cy={44} r={2} fill="rgb(var(--accent))" stroke="none" />
+        {/* thruster */}
+        <path d="M120 114 L114 126 L126 126 Z" />
+      </g>
+      <circle cx={120} cy={44} r={3} fill="none" stroke="rgb(var(--accent) / 0.6)" strokeWidth={0.6}>
+        <animate attributeName="r" values="2;10;2" dur="3s" repeatCount="indefinite" />
+        <animate attributeName="opacity" values="0.7;0;0.7" dur="3s" repeatCount="indefinite" />
+      </circle>
+    </svg>
   );
 }
 
@@ -197,7 +270,7 @@ function HostCard({ t }: { t: HostTelemetryView }) {
           </div>
           <Sparkline data={t.netRxHistory} color="rgb(var(--accent))" height={28} />
         </div>
-        <div style={{ gridColumn: "1 / -1" }}><MiniGlobe geo={t.latest.geo} /></div>
+        <div style={{ gridColumn: "1 / -1", display: "flex", justifyContent: "center", marginTop: 4 }}><RotatingGlobe geo={t.latest.geo} size={128} /></div>
       </div>
     </div>
   );
@@ -226,39 +299,12 @@ function HostSkeleton() {
   );
 }
 
-function sessionMetrics(s: SessionView) {
-  const prompts = (s.transcript ?? []).filter((m) => m.role === "user").length;
-  const all = [...(s.todos ?? []).map((t) => t.status === "completed"), ...(s.userTodos ?? []).map((t) => t.done)];
-  return { prompts, todosDone: all.filter(Boolean).length, todosTotal: all.length, spentMs: s.attachedAt ? Date.now() - new Date(s.attachedAt).getTime() : 0 };
-}
-
-function SessionCard({ s, onClick, active }: { s: SessionView; onClick: () => void; active: boolean }) {
-  const m = sessionMetrics(s);
-  const waiting = s.status === "waiting";
-  return (
-    <div onClick={onClick} style={{ ...card, padding: "11px 13px", cursor: "pointer", borderColor: active ? "rgb(var(--primary-soft) / 0.6)" : "var(--border)", boxShadow: active ? "inset 0 0 0 1px rgb(var(--primary-soft) / 0.4)" : undefined }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 9 }}>
-        <span style={{ width: 7, height: 7, borderRadius: 999, background: waiting ? "rgb(var(--accent))" : s.working ? "rgb(var(--primary-soft))" : "var(--border-strong)", boxShadow: waiting ? "0 0 0 3px rgb(var(--accent) / 0.18)" : "none" }} className={s.working ? "hud-pulse" : undefined} />
-        <span style={{ fontSize: 13, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{projectName(s.cwd)}</span>
-        <span style={{ flex: 1 }} />
-        <span className="mono faint" style={{ fontSize: 9.5 }}>{s.machine}</span>
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
-        {metric("Prompts", String(m.prompts))}
-        {metric("Time", fmtDur(m.spentMs))}
-        {metric("Todos", m.todosTotal ? `${m.todosDone}/${m.todosTotal}` : "—")}
-      </div>
-    </div>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // Right: telemetry column
 // ---------------------------------------------------------------------------
 function TelemetryColumn({ tele }: { tele: HostTelemetryView[] }) {
   const sessions = useStore((s) => s.sessions);
-  const focusId = useStore((s) => s.focusId);
-  const setFocus = useStore((s) => s.setFocus);
   const fleet = useMemo(() => {
     const active = sessions.filter((s) => s.status === "active" || s.working).length;
     const waiting = sessions.filter((s) => s.status === "waiting").length;
@@ -266,28 +312,50 @@ function TelemetryColumn({ tele }: { tele: HostTelemetryView[] }) {
     const spent = sessions.reduce((n, s) => n + (s.attachedAt ? Date.now() - new Date(s.attachedAt).getTime() : 0), 0);
     return { active, waiting, prompts, spent };
   }, [sessions]);
+  const primaryGeo = tele.find((t) => t.latest.geo)?.latest.geo ?? null;
 
   return (
     <motion.div className="no-scrollbar" style={{ flex: 1, minWidth: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: 14, minHeight: 0 }}
       variants={STAGGER} initial="hidden" animate="show">
-      <motion.div variants={RISE}><Clock /></motion.div>
-
-      <motion.div variants={RISE} style={card}>
+      {/* Hero: wireframe satellite over a rotating orbital-location globe */}
+      <motion.div variants={RISE} style={{ ...card, padding: "16px 16px 14px" }}>
         <span className="hud-corner" />
-        {kicker("Transmission")}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 14, marginBottom: 12 }}>
-          {metric("Active", String(fleet.active))}
-          {metric("Waiting", String(fleet.waiting))}
-          {metric("Prompts", String(fleet.prompts))}
-          {metric("Uptime", fmtDur(fleet.spent))}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+          <span className="ai-core" style={{ width: 8, height: 8 }} />
+          <Decode text="RCW-ORBITAL" className="mono" style={{ fontSize: 12, letterSpacing: "0.12em" }} />
+          <span style={{ flex: 1 }} />
+          <span className="mono" style={{ fontSize: 9, padding: "1px 7px", borderRadius: 999, background: "rgb(var(--accent) / 0.16)", color: "rgb(var(--accent))" }}>◉ IN ORBIT</span>
         </div>
-        <div className="mono faint" style={{ fontSize: 9.5, marginBottom: 4 }}>THROUGHPUT</div>
-        <WaveLine height={34} color="rgb(var(--accent))" />
+        <Satellite />
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 150px", gap: 12, alignItems: "center", marginTop: 6 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+            {kicker("Orbital Location")}
+            {metric("Nodes", `${tele.length} host${tele.length === 1 ? "" : "s"}`)}
+            {metric("Sessions", String(sessions.length))}
+            {metric("Velocity", "27,540 km/h")}
+          </div>
+          <RotatingGlobe geo={primaryGeo} size={150} />
+        </div>
       </motion.div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+        <motion.div variants={RISE}><Clock /></motion.div>
+        <motion.div variants={RISE} style={card}>
+          <span className="hud-corner" />
+          {kicker("Transmission")}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 10 }}>
+            {metric("Active", String(fleet.active))}
+            {metric("Waiting", String(fleet.waiting))}
+            {metric("Prompts", String(fleet.prompts))}
+            {metric("Uptime", fmtDur(fleet.spent))}
+          </div>
+          <WaveLine height={30} color="rgb(var(--accent))" />
+        </motion.div>
+      </div>
 
       <motion.div variants={RISE}>
         <div className="kicker" style={{ marginBottom: 8 }}>Hosts</div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 12 }}>
           <AnimatePresence mode="popLayout">
             {tele.length === 0 ? (
               <motion.div key="skeleton" variants={RISE} initial="hidden" animate="show" exit={{ opacity: 0 }}><HostSkeleton /></motion.div>
@@ -297,18 +365,6 @@ function TelemetryColumn({ tele }: { tele: HostTelemetryView[] }) {
               </motion.div>
             ))}
           </AnimatePresence>
-        </div>
-      </motion.div>
-
-      <motion.div variants={RISE}>
-        <div className="kicker" style={{ marginBottom: 8 }}>Sessions</div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {sessions.map((s) => (
-            <motion.div key={s.id} layout whileHover={{ scale: 1.015 }} whileTap={{ scale: 0.99 }} transition={{ type: "spring", stiffness: 400, damping: 30 }}>
-              <SessionCard s={s} active={s.id === focusId} onClick={() => setFocus(s.id)} />
-            </motion.div>
-          ))}
-          {sessions.length === 0 && <span className="mono faint" style={{ fontSize: 11 }}>no sessions</span>}
         </div>
       </motion.div>
     </motion.div>
@@ -330,14 +386,21 @@ export default function Hud() {
 
   // HUD = Flow mode (full FocusStage: all tabs + features + session switching via
   // the QueueRail) plus the telemetry widget column, over an animated backdrop.
+  // The widget deck can expand to reclaim space from the chat for more widgets.
+  const [wide, setWide] = useState(true);
+  const cols = wide ? "214px minmax(360px,1fr) 560px" : "214px minmax(0,1fr) 372px";
   return (
     <div className="hud-root" style={{ flex: 1, minHeight: 0, position: "relative", overflow: "hidden" }}>
       <HudStyles />
       <span className="hud-grid" />
-      <div style={{ position: "relative", zIndex: 1, height: "100%", display: "grid", gridTemplateColumns: "214px minmax(0,1fr) 372px", minHeight: 0 }}>
+      <div style={{ position: "relative", zIndex: 1, height: "100%", display: "grid", gridTemplateColumns: cols, minHeight: 0 }}>
         <QueueRail />
         <FocusStage />
-        <div style={{ borderLeft: "1px solid var(--border)", padding: "16px 16px", minHeight: 0, display: "flex" }}>
+        <div style={{ borderLeft: "1px solid var(--border)", padding: "14px 16px", minHeight: 0, display: "flex", flexDirection: "column", position: "relative" }}>
+          <button onClick={() => setWide((w) => !w)} title={wide ? "Shrink widget deck" : "Expand widget deck"}
+            style={{ position: "absolute", top: 14, left: -13, zIndex: 3, width: 26, height: 26, borderRadius: 999, border: "1px solid var(--border-strong)", background: "var(--app-panel, #1b1712)", color: "var(--text-soft)", cursor: "pointer", fontSize: 12, lineHeight: 1, WebkitAppRegion: "no-drag" } as React.CSSProperties}>
+            {wide ? "›" : "‹"}
+          </button>
           <TelemetryColumn tele={tele} />
         </div>
       </div>
@@ -374,6 +437,10 @@ function HudStyles() {
         background: repeating-linear-gradient(to bottom, transparent 0, transparent 2px, rgb(var(--primary-soft) / 0.03) 3px, transparent 4px);
         animation: hud-scan 6s linear infinite; }
       @keyframes hud-scan { from { background-position:0 0; } to { background-position:0 200px; } }
+      .hud-float { animation: hud-float 7s ease-in-out infinite; transform-origin: 50% 50%; }
+      @keyframes hud-float { 0%,100% { transform: translateY(0) rotate(-1.2deg);} 50% { transform: translateY(-6px) rotate(1.2deg);} }
+      .hud-panel-shimmer { animation: hud-panel 4.5s ease-in-out infinite; }
+      @keyframes hud-panel { 0%,100% { opacity:0.55;} 50% { opacity:1;} }
     `}</style>
   );
 }
