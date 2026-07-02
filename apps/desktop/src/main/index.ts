@@ -220,6 +220,7 @@ ipcMain.handle(IPC.tagRemove, (_e, a: { sessionId: string; tag: string }) =>
   api.removeTag(a.sessionId, a.tag)
 );
 ipcMain.handle(IPC.inventoryList, () => api.getInventory());
+ipcMain.handle(IPC.telemetryList, () => api.getTelemetry());
 ipcMain.handle(IPC.inventoryHistory, (_e, a: { id: string }) => api.inventoryHistory(a.id));
 ipcMain.handle(IPC.inventoryRun, (_e, a: { id: string; message: string }) => api.inventoryRun(a.id, a.message));
 ipcMain.handle(IPC.inventoryTagAdd, (_e, a: { id: string; tag: string }) => api.inventoryAddTag(a.id, a.tag));

@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { configDir } from "./config";
 import { scanSessions } from "./scanner";
+import { sampleTelemetry } from "./telemetry";
 import { readRecentMessages } from "./transcript";
 import type { ApiClient } from "./api-client";
 
@@ -13,6 +14,7 @@ const execFileP = promisify(execFile);
 
 const SCAN_INTERVAL_MS = 60_000;
 const COMMAND_POLL_MS = 25_000;
+const TELEMETRY_INTERVAL_MS = 10_000;
 
 /** Stable per-machine id, persisted so a host keeps its identity across restarts. */
 export function loadOrCreateHostId(): string {
@@ -92,6 +94,17 @@ export async function runAgent(opts: { api: ApiClient; sleep?: (ms: number) => P
     }
   };
 
+  // Telemetry loop: sample host CPU/RAM/net/uptime/geo and report for the HUD.
+  const telemetryLoop = async () => {
+    for (;;) {
+      try {
+        const sample = await sampleTelemetry();
+        await api.reportTelemetry(hostId, sample as unknown as Record<string, unknown>);
+      } catch { /* transient — next tick */ }
+      await sleep(TELEMETRY_INTERVAL_MS);
+    }
+  };
+
   // Command loop: long-poll for work, execute, post the result.
   const commandLoop = async () => {
     for (;;) {
@@ -107,5 +120,5 @@ export async function runAgent(opts: { api: ApiClient; sleep?: (ms: number) => P
     }
   };
 
-  await Promise.all([scanLoop(), commandLoop()]);
+  await Promise.all([scanLoop(), telemetryLoop(), commandLoop()]);
 }

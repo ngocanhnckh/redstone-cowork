@@ -180,6 +180,10 @@ export async function revokeAccessKey(id: string): Promise<unknown> {
   return (await req(`/access-keys/${encodeURIComponent(id)}/revoke`, { method: "POST" })).json();
 }
 
+export async function getTelemetry(): Promise<unknown[]> {
+  return (await req("/telemetry")).json();
+}
+
 export async function getInventory(): Promise<unknown> {
   return (await req("/inventory")).json();
 }

@@ -42,7 +42,7 @@ type State = {
   queue: SessionView[];
   decisions: Decision[];
   focusId: string | null;
-  mode: "flow" | "grid" | "history";
+  mode: "flow" | "grid" | "history" | "hud";
   detailId: string | null; // session shown in the grid's drill-in detail
   hosts: Host[]; // machines reporting via the redstone agent
   inventory: DiscoveredSession[]; // all discovered Claude Code sessions
@@ -59,7 +59,7 @@ type State = {
   toggleAssist: () => void;
   toggleSettings: () => void;
   setFocus: (id: string) => void;
-  setMode: (mode: "flow" | "grid" | "history") => void;
+  setMode: (mode: "flow" | "grid" | "history" | "hud") => void;
   fetchInventory: () => Promise<void>;
   inventoryAddTag: (id: string, tag: string) => Promise<void>;
   inventoryRemoveTag: (id: string, tag: string) => Promise<void>;
@@ -153,7 +153,7 @@ export const useStore = create<State>((set, get) => ({
     set({ focusId: id });
   },
 
-  setMode: (mode: "flow" | "grid" | "history") => {
+  setMode: (mode: "flow" | "grid" | "history" | "hud") => {
     set({ mode, detailId: null });
     if (mode === "history") get().fetchInventory();
   },

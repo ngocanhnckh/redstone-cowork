@@ -54,6 +54,38 @@ export const InventoryReportSchema = z.object({
 });
 export type InventoryReport = z.infer<typeof InventoryReportSchema>;
 
+/** Approximate, city-level location of a host (from its public IP). */
+export const HostGeoSchema = z.object({
+  lat: z.number(),
+  long: z.number(),
+  city: z.string().nullable().default(null),
+  country: z.string().nullable().default(null),
+});
+export type HostGeo = z.infer<typeof HostGeoSchema>;
+
+/** One telemetry sample a host agent reports (bytes/seconds coerced — may arrive as strings). */
+export const HostTelemetrySchema = z.object({
+  cpuPct: z.coerce.number().min(0).max(100),
+  ramUsed: z.coerce.number().nonnegative(),
+  ramTotal: z.coerce.number().nonnegative(),
+  netRxBps: z.coerce.number().nonnegative().nullable().default(null),
+  netTxBps: z.coerce.number().nonnegative().nullable().default(null),
+  uptimeSec: z.coerce.number().nonnegative(),
+  geo: HostGeoSchema.nullable().default(null),
+});
+export type HostTelemetry = z.infer<typeof HostTelemetrySchema>;
+
+/** Server view of a host's telemetry: latest sample + short history for sparklines. */
+export type HostTelemetryView = {
+  hostId: string;
+  machine: string;
+  at: string;
+  latest: HostTelemetry;
+  cpuHistory: number[];
+  netRxHistory: number[];
+  netTxHistory: number[];
+};
+
 /** A command the server queues for a host agent to execute. */
 export const HostCommandKindSchema = z.enum(["passive_run", "fetch_history"]);
 export type HostCommandKind = z.infer<typeof HostCommandKindSchema>;

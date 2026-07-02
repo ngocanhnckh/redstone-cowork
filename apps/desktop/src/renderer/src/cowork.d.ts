@@ -32,6 +32,7 @@ declare global {
       addTag(sessionId: string, tag: string): Promise<unknown>;
       removeTag(sessionId: string, tag: string): Promise<unknown>;
       getInventory(): Promise<{ hosts: unknown[]; sessions: unknown[] }>;
+      getTelemetry(): Promise<import("./types").HostTelemetryView[]>;
       inventoryHistory(id: string): Promise<{ ok: boolean; messages?: Array<{ role: string; text: string }>; error?: string }>;
       inventoryRun(id: string, message: string): Promise<{ ok: boolean; reply?: string; error?: string }>;
       inventoryAddTag(id: string, tag: string): Promise<unknown>;

@@ -3,6 +3,7 @@ import { BadRequestException } from "@nestjs/common";
 import type { Response } from "express";
 import { z, ZodError } from "zod";
 import { InventoryService } from "../../application/inventory.service";
+import { TelemetryService } from "../../application/telemetry.service";
 import { ExternalApiGuard } from "./external-api.guard";
 
 /**
@@ -13,7 +14,22 @@ import { ExternalApiGuard } from "./external-api.guard";
 @Controller("hosts")
 @UseGuards(ExternalApiGuard)
 export class HostsController {
-  constructor(private readonly inventory: InventoryService) {}
+  constructor(
+    private readonly inventory: InventoryService,
+    private readonly telemetry: TelemetryService,
+  ) {}
+
+  @Post(":id/telemetry")
+  @HttpCode(200)
+  async reportTelemetry(@Param("id") id: string, @Body() body: unknown) {
+    try {
+      this.telemetry.record(id, body);
+      return { ok: true };
+    } catch (e) {
+      if (e instanceof ZodError) throw new BadRequestException(e.issues);
+      throw e;
+    }
+  }
 
   @Post()
   @HttpCode(200)

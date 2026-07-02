@@ -6,6 +6,7 @@ import FocusStage from "./FocusStage";
 import ContextColumn from "./ContextColumn";
 import AgentGrid from "./AgentGrid";
 import AllSessions from "./AllSessions";
+import Hud from "./Hud";
 import AssistPanel from "./AssistPanel";
 import SettingsPanel from "./SettingsPanel";
 
@@ -70,7 +71,7 @@ export default function Cockpit() {
     return () => window.removeEventListener("keydown", onKey);
   }, [toggleAssist]);
 
-  const seg = (m: "flow" | "grid" | "history", label: string) => (
+  const seg = (m: "flow" | "grid" | "history" | "hud", label: string) => (
     <button
       onClick={() => setMode(m)}
       style={{
@@ -204,11 +205,14 @@ export default function Cockpit() {
             {seg("flow", `Flow${queue.length ? ` · ${queue.length}` : ""}`)}
             {seg("grid", `Grid${sessions.length ? ` · ${sessions.length}` : ""}`)}
             {seg("history", "All Sessions")}
+            {seg("hud", "HUD")}
           </div>
         </div>
 
         {/* Main content */}
-        {mode === "history" ? (
+        {mode === "hud" ? (
+          <Hud />
+        ) : mode === "history" ? (
           <AllSessions />
         ) : mode === "grid" ? (
           detailId ? (

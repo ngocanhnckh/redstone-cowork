@@ -27,6 +27,7 @@ export const IPC = {
   accessKeysList: "api:accesskeys:list",
   accessKeyCreate: "api:accesskeys:create",
   accessKeyRevoke: "api:accesskeys:revoke",
+  telemetryList: "api:telemetry:list",
   workspaceGet: "api:workspace:get",
   workspaceSave: "api:workspace:save",
   workspaceGetSshHost: "api:workspace:sshhost:get",

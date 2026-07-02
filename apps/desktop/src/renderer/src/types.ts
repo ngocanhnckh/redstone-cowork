@@ -22,6 +22,16 @@ export type DiscoveredSession = {
   source: "cowork" | "external"; tags: string[];
 };
 
+export type HostGeo = { lat: number; long: number; city: string | null; country: string | null };
+export type HostTelemetry = {
+  cpuPct: number; ramUsed: number; ramTotal: number;
+  netRxBps: number | null; netTxBps: number | null; uptimeSec: number; geo: HostGeo | null;
+};
+export type HostTelemetryView = {
+  hostId: string; machine: string; at: string; latest: HostTelemetry;
+  cpuHistory: number[]; netRxHistory: number[]; netTxHistory: number[];
+};
+
 export type DecisionOption = { label: string; description?: string };
 export type Decision = {
   id: string; sessionId: string;

@@ -61,6 +61,8 @@ import { HostsController } from "./adapters/http/hosts.controller";
 import { InventoryController } from "./adapters/http/inventory.controller";
 import { InventoryService } from "./application/inventory.service";
 import { InventoryWaiters } from "./application/inventory-waiters";
+import { TelemetryService } from "./application/telemetry.service";
+import { TelemetryController } from "./adapters/http/telemetry.controller";
 import { INVENTORY_STORE } from "./domain/inventory/inventory-store.port";
 import { InMemoryInventoryStore } from "./adapters/persistence/in-memory-inventory-store";
 import { PostgresInventoryStore } from "./adapters/persistence/postgres-inventory-store";
@@ -88,7 +90,7 @@ import { PromptLoader } from "./infrastructure/prompts/prompt-loader";
 import type { Pool } from "pg";
 
 @Module({
-  controllers: [HealthController, EventsController, SessionsController, DecisionsController, StreamController, PushController, ConnectionsController, OAuthController, MicrosoftOAuthController, DevicesController, InstallController, LlmController, AuthController, HostsController, InventoryController, AccessKeysController],
+  controllers: [HealthController, EventsController, SessionsController, DecisionsController, StreamController, PushController, ConnectionsController, OAuthController, MicrosoftOAuthController, DevicesController, InstallController, LlmController, AuthController, HostsController, InventoryController, AccessKeysController, TelemetryController],
   providers: [
     RecordEventUseCase,
     SessionsService,
@@ -154,6 +156,7 @@ import type { Pool } from "pg";
     },
     InventoryWaiters,
     InventoryService,
+    TelemetryService,
     {
       provide: ACCESS_KEY_STORE,
       inject: [PG_POOL],

@@ -126,6 +126,10 @@ export class ApiClient {
     if (!r.ok) throw new Error(`reportInventory ${r.status}`);
   }
 
+  async reportTelemetry(hostId: string, sample: Record<string, unknown>): Promise<void> {
+    await this.req(`/hosts/${encodeURIComponent(hostId)}/telemetry`, { method: "POST", headers: json(this.cfg.token), body: JSON.stringify(sample) }, 8000).catch(() => {});
+  }
+
   async hostCommands(hostId: string, timeoutMs: number): Promise<Array<Record<string, unknown>>> {
     const r = await this.req(`/hosts/${encodeURIComponent(hostId)}/commands?timeoutMs=${timeoutMs}`, { headers: json(this.cfg.token) }, timeoutMs + 5000);
     return r.status === 200 ? r.json() : [];
