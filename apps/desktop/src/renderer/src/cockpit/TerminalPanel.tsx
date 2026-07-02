@@ -35,11 +35,18 @@ export default function TerminalPanel({
   sessionId,
   cwd,
   machine,
+  ptyId,
+  hideChrome,
 }: {
   sessionId: string;
   cwd: string;
   machine: string;
+  /** PTY key — distinct per terminal so a session can have several. Defaults to sessionId. */
+  ptyId?: string;
+  /** Hide the ConnectionBar + restart toolbar (a MultiTerminal provides its own chrome). */
+  hideChrome?: boolean;
 }) {
+  const pty = ptyId ?? sessionId;
   const containerRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   // Bumping this re-runs the effect to (re)spawn the shell.
@@ -48,7 +55,7 @@ export default function TerminalPanel({
   async function restart() {
     setError(null);
     try {
-      await window.cowork.killTerminal(sessionId);
+      await window.cowork.killTerminal(pty);
     } catch {
       /* ignore */
     }
@@ -57,7 +64,7 @@ export default function TerminalPanel({
 
   useEffect(() => {
     const container = containerRef.current;
-    if (!container || !sessionId) return;
+    if (!container || !pty) return;
 
     let disposed = false;
     const cleanups: Array<() => void> = [];
@@ -88,18 +95,18 @@ export default function TerminalPanel({
 
     // Pipe user keystrokes → main.
     const dataSub = term.onData((data) => {
-      window.cowork.sendTerminalInput({ id: sessionId, data });
+      window.cowork.sendTerminalInput({ id: pty, data });
     });
     cleanups.push(() => dataSub.dispose());
 
     // Receive bytes from the pty (filtered by our id).
     const offData = window.cowork.onTerminalData(({ id, data }) => {
-      if (id === sessionId && !disposed) term.write(data);
+      if (id === pty && !disposed) term.write(data);
     });
     cleanups.push(offData);
 
     const offExit = window.cowork.onTerminalExit(({ id }) => {
-      if (id === sessionId && !disposed) {
+      if (id === pty && !disposed) {
         term.write("\r\n\x1b[2m[session ended]\x1b[0m\r\n");
       }
     });
@@ -108,7 +115,7 @@ export default function TerminalPanel({
     // Spawn (or re-attach to) the pty, then replay scrollback.
     window.cowork
       .startTerminal({
-        id: sessionId,
+        id: pty,
         cwd,
         machine,
         cols: term.cols,
@@ -130,11 +137,14 @@ export default function TerminalPanel({
     // Keep the pty sized to the container.
     const pushResize = () => {
       safeFit();
-      window.cowork.resizeTerminal({ id: sessionId, cols: term.cols, rows: term.rows });
+      window.cowork.resizeTerminal({ id: pty, cols: term.cols, rows: term.rows });
     };
     const ro = new ResizeObserver(() => pushResize());
     ro.observe(container);
     window.addEventListener("resize", pushResize);
+    // A fit right after mount/layout settles avoids the last row being clipped.
+    const settle = setTimeout(pushResize, 60);
+    cleanups.push(() => clearTimeout(settle));
 
     return () => {
       disposed = true;
@@ -150,38 +160,40 @@ export default function TerminalPanel({
       // Dispose xterm but DO NOT kill the pty — it persists across tab switches.
       term.dispose();
     };
-  }, [sessionId, cwd, machine, restartKey]);
+  }, [pty, cwd, machine, restartKey]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
-      <ConnectionBar sessionId={sessionId} machine={machine} onHostChange={() => restart()} />
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "flex-end",
-          gap: 8,
-          padding: "6px 32px",
-          borderBottom: "1px solid var(--border)",
-        }}
-      >
-        <button
-          onClick={() => restart()}
-          title="Restart the shell"
+      {!hideChrome && <ConnectionBar sessionId={sessionId} machine={machine} onHostChange={() => restart()} />}
+      {!hideChrome && (
+        <div
           style={{
-            border: "1px solid var(--border)",
-            background: "transparent",
-            color: "var(--text-soft)",
-            borderRadius: 7,
-            padding: "3px 11px",
-            fontSize: 10.5,
-            fontFamily: "var(--font-mono)",
-            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "flex-end",
+            gap: 8,
+            padding: "6px 32px",
+            borderBottom: "1px solid var(--border)",
           }}
         >
-          ⟳ restart
-        </button>
-      </div>
+          <button
+            onClick={() => restart()}
+            title="Restart the shell"
+            style={{
+              border: "1px solid var(--border)",
+              background: "transparent",
+              color: "var(--text-soft)",
+              borderRadius: 7,
+              padding: "3px 11px",
+              fontSize: 10.5,
+              fontFamily: "var(--font-mono)",
+              cursor: "pointer",
+            }}
+          >
+            ⟳ restart
+          </button>
+        </div>
+      )}
       {error ? (
         <div style={{ flex: 1, padding: "18px 32px", overflowY: "auto" }} className="no-scrollbar">
           <div

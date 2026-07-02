@@ -3,8 +3,9 @@ import { motion, AnimatePresence, type Variants } from "motion/react";
 import { useStore } from "../store";
 import { HostTelemetryView } from "../types";
 import QueueRail from "./QueueRail";
-import TerminalPanel from "./TerminalPanel";
+import MultiTerminal from "./MultiTerminal";
 import FilesPanel from "./FilesPanel";
+import BrowserPanel from "./BrowserPanel";
 import AnswerDock from "./AnswerDock";
 import Markdown from "./Markdown";
 
@@ -448,36 +449,74 @@ function Pane({ title, hint, grow, collapsed, onToggle, children }: { title: str
   );
 }
 
-/** The HUD center: chat, terminal and files stacked as three console panes. */
+type ConsoleView = "console" | "browser";
+
+/**
+ * The HUD center. A view switcher toggles between two layouts, sharing one Chat:
+ *   • Console — Chat on top; Terminal + Files as collapsible panes below.
+ *   • Browser — Chat and a live Browser in a horizontal split.
+ * The Terminal, Files and Browser stay mounted across view switches (display
+ * toggled) so shells and pages keep running.
+ */
 function HudConsole() {
   const focusId = useStore((s) => s.focusId);
   const sessions = useStore((s) => s.sessions);
   const queue = useStore((s) => s.queue);
   const session = sessions.find((s) => s.id === focusId) ?? queue.find((s) => s.id === focusId);
-  const [collapsed, setCollapsed] = useState<{ chat: boolean; term: boolean; files: boolean }>({ chat: false, term: false, files: true });
-  const toggle = (k: "chat" | "term" | "files") => setCollapsed((c) => ({ ...c, [k]: !c[k] }));
+  const [view, setView] = useState<ConsoleView>("console");
+  const [collapsed, setCollapsed] = useState<{ term: boolean; files: boolean }>({ term: false, files: true });
+  const toggle = (k: "term" | "files") => setCollapsed((c) => ({ ...c, [k]: !c[k] }));
+
+  const viewTab = (v: ConsoleView, label: string) => (
+    <button onClick={() => setView(v)} style={{
+      padding: "5px 13px", borderRadius: 8, fontFamily: "var(--font-mono)", fontSize: 11, cursor: "pointer", border: 0,
+      background: view === v ? "rgb(var(--primary) / 0.28)" : "transparent", color: view === v ? "#fff" : "var(--text-soft)",
+    }}>{label}</button>
+  );
+
+  const browser = view === "browser";
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12, minHeight: 0, padding: "14px 14px" }}>
-      {session && (
-        <div style={{ display: "flex", alignItems: "baseline", gap: 10, padding: "0 2px", flexShrink: 0 }}>
-          <span className="display" style={{ fontSize: 17 }}>{projectName(session.cwd)}</span>
-          <span className="mono faint" style={{ fontSize: 10.5 }}>{session.machine} · {session.gitBranch ?? "no-branch"} · {session.permissionMode ?? "default"}</span>
+    <div style={{ display: "flex", flexDirection: "column", gap: 10, minHeight: 0, padding: "12px 14px" }}>
+      {/* header: identity + view switcher */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+        {session && (
+          <>
+            <span className="display" style={{ fontSize: 16 }}>{projectName(session.cwd)}</span>
+            <span className="mono faint" style={{ fontSize: 10 }}>{session.machine} · {session.gitBranch ?? "no-branch"}</span>
+          </>
+        )}
+        <span style={{ flex: 1 }} />
+        <div style={{ display: "flex", gap: 3, padding: 3, borderRadius: 999, border: "1px solid var(--border)" }}>
+          {viewTab("console", "Chat · Term · Files")}
+          {viewTab("browser", "Chat · Browser")}
         </div>
-      )}
-      <Pane title="Chat" grow={1.5} collapsed={collapsed.chat} onToggle={() => toggle("chat")}>
-        <ChatPane />
-      </Pane>
-      <Pane title="Terminal" grow={1} collapsed={collapsed.term} onToggle={() => toggle("term")}>
-        {session
-          ? <TerminalPanel key={`${session.id}-hud-term`} sessionId={session.id} cwd={session.cwd} machine={session.machine} />
-          : <div className="mono faint" style={{ padding: 14, fontSize: 11 }}>no session</div>}
-      </Pane>
-      <Pane title="Files" grow={1.2} collapsed={collapsed.files} onToggle={() => toggle("files")}>
-        {session
-          ? <FilesPanel key={`${session.id}-hud-files`} sessionId={session.id} cwd={session.cwd} machine={session.machine} />
-          : <div className="mono faint" style={{ padding: 14, fontSize: 11 }}>no session</div>}
-      </Pane>
+      </div>
+
+      {/* body: chat + secondary; row when Browser, column when Console */}
+      <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: browser ? "row" : "column", gap: 10 }}>
+        <div style={{ ...card, padding: 0, display: "flex", flexDirection: "column", flex: browser ? 1 : 1.5, minHeight: 0, minWidth: 0 }}>
+          <div style={{ padding: "7px 13px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
+            <Decode text="Chat" className="mono" style={{ fontSize: 10, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--text-soft)" }} />
+          </div>
+          <ChatPane />
+        </div>
+
+        {/* Console secondary (Terminal + Files) — kept mounted; hidden in Browser view */}
+        <div style={{ display: browser ? "none" : "flex", flexDirection: "column", gap: 10, flex: 1.6, minHeight: 0 }}>
+          <Pane title="Terminal" grow={1.1} collapsed={collapsed.term} onToggle={() => toggle("term")}>
+            {session ? <MultiTerminal key={`${session.id}-hud-term`} sessionId={session.id} cwd={session.cwd} machine={session.machine} /> : <div className="mono faint" style={{ padding: 14, fontSize: 11 }}>no session</div>}
+          </Pane>
+          <Pane title="Files" grow={1.2} collapsed={collapsed.files} onToggle={() => toggle("files")}>
+            {session ? <FilesPanel key={`${session.id}-hud-files`} sessionId={session.id} cwd={session.cwd} machine={session.machine} /> : <div className="mono faint" style={{ padding: 14, fontSize: 11 }}>no session</div>}
+          </Pane>
+        </div>
+
+        {/* Browser secondary — kept mounted; hidden in Console view */}
+        <div style={{ ...card, padding: 0, display: browser ? "flex" : "none", flexDirection: "column", flex: 1.4, minHeight: 0, minWidth: 0 }}>
+          {session ? <BrowserPanel key={`${session.id}-hud-browser`} sessionId={session.id} cwd={session.cwd} machine={session.machine} /> : <div className="mono faint" style={{ padding: 14, fontSize: 11 }}>no session</div>}
+        </div>
+      </div>
     </div>
   );
 }

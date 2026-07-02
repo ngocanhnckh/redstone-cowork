@@ -4,7 +4,7 @@ import AnswerDock from "./AnswerDock";
 import TagBar from "./TagBar";
 import Markdown from "./Markdown";
 import Kbd from "./Kbd";
-import TerminalPanel from "./TerminalPanel";
+import MultiTerminal from "./MultiTerminal";
 import BrowserStack from "./BrowserStack";
 import PortsPanel from "./PortsPanel";
 import FilesPanel from "./FilesPanel";
@@ -242,7 +242,7 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
       </div>
 
       {activeTab === "terminal" ? (
-        <TerminalPanel
+        <MultiTerminal
           key={`${id}-terminal`}
           sessionId={id ?? ""}
           cwd={session.cwd}
