@@ -134,6 +134,10 @@ export class ApiClient {
     await this.req(`/hosts/${encodeURIComponent(hostId)}/docker`, { method: "POST", headers: json(this.cfg.token), body: JSON.stringify(snapshot) }, 8000).catch(() => {});
   }
 
+  async reportCaps(hostId: string, snapshot: Record<string, unknown>): Promise<void> {
+    await this.req(`/hosts/${encodeURIComponent(hostId)}/caps`, { method: "POST", headers: json(this.cfg.token), body: JSON.stringify(snapshot) }, 8000).catch(() => {});
+  }
+
   async hostCommands(hostId: string, timeoutMs: number): Promise<Array<Record<string, unknown>>> {
     const r = await this.req(`/hosts/${encodeURIComponent(hostId)}/commands?timeoutMs=${timeoutMs}`, { headers: json(this.cfg.token) }, timeoutMs + 5000);
     return r.status === 200 ? r.json() : [];

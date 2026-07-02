@@ -119,6 +119,28 @@ export type DockerHostView = {
   containers: DockerContainer[];
 };
 
+/** A Claude Code capability (a skill or a slash command) discovered on a host. */
+export const CapItemSchema = z.object({
+  name: z.string(),
+  description: z.string().nullable().default(null),
+  source: z.string().default("personal"), // "personal" | "plugin:<name>"
+});
+export type CapItem = z.infer<typeof CapItemSchema>;
+
+export const CapsReportSchema = z.object({
+  skills: z.array(CapItemSchema).default([]),
+  commands: z.array(CapItemSchema).default([]),
+});
+export type CapsReport = z.infer<typeof CapsReportSchema>;
+
+export type CapsHostView = {
+  hostId: string;
+  machine: string;
+  at: string;
+  skills: CapItem[];
+  commands: CapItem[];
+};
+
 /** A command the server queues for a host agent to execute. */
 export const HostCommandKindSchema = z.enum(["passive_run", "fetch_history"]);
 export type HostCommandKind = z.infer<typeof HostCommandKindSchema>;

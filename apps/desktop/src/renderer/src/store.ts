@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { SessionView, Decision, Host, DiscoveredSession } from "./types";
+import { SessionView, Decision, Host, DiscoveredSession, CapsHostView } from "./types";
 import { pickFocus, nextWaiting } from "./autoAdvance";
 
 /**
@@ -46,6 +46,8 @@ type State = {
   detailId: string | null; // session shown in the grid's drill-in detail
   hosts: Host[]; // machines reporting via the redstone agent
   inventory: DiscoveredSession[]; // all discovered Claude Code sessions
+  caps: CapsHostView[]; // installed skills + slash commands per host
+  capsOpen: boolean; // the skills/commands browser modal
   pending: Record<string, PendingSend[]>; // sessionId → optimistic sends, shown instantly
   activeTab: Record<string, "chat" | "terminal" | "browser" | "ports" | "files">; // sessionId → active workspace tab
   openBrowsers: string[]; // sessionIds whose browser tab was opened — kept alive (see BrowserStack)
@@ -65,6 +67,8 @@ type State = {
   setFocus: (id: string) => void;
   setMode: (mode: "flow" | "grid" | "history" | "hud") => void;
   fetchInventory: () => Promise<void>;
+  fetchCaps: () => Promise<void>;
+  toggleCaps: () => void;
   inventoryAddTag: (id: string, tag: string) => Promise<void>;
   inventoryRemoveTag: (id: string, tag: string) => Promise<void>;
   openDetail: (id: string) => void;
@@ -95,6 +99,8 @@ export const useStore = create<State>((set, get) => ({
   detailId: null,
   hosts: [],
   inventory: [],
+  caps: [],
+  capsOpen: false,
   pending: {},
   activeTab: {},
   openBrowsers: [],
@@ -189,6 +195,21 @@ export const useStore = create<State>((set, get) => ({
     } catch (e) {
       set({ error: e instanceof Error ? e.message : String(e) });
     }
+  },
+
+  fetchCaps: async () => {
+    try {
+      const caps = await window.cowork.getCaps();
+      set({ caps: caps as CapsHostView[] });
+    } catch (e) {
+      set({ error: e instanceof Error ? e.message : String(e) });
+    }
+  },
+
+  toggleCaps: () => {
+    const opening = !get().capsOpen;
+    set({ capsOpen: opening });
+    if (opening) get().fetchCaps();
   },
 
   inventoryAddTag: async (id, tag) => {
@@ -309,6 +330,9 @@ export const useStore = create<State>((set, get) => ({
 
 export function startCockpit(): () => void {
   useStore.getState().refresh();
+  // Load installed skills/commands for slash-autocomplete; refresh occasionally.
+  useStore.getState().fetchCaps();
+  const capsTimer = setInterval(() => useStore.getState().fetchCaps(), 5 * 60_000);
   const unsub = window.cowork.onUpdate(() => useStore.getState().refresh());
-  return unsub;
+  return () => { clearInterval(capsTimer); unsub(); };
 }

@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { HostTelemetrySchema, DockerReportSchema, type HostTelemetry, type DockerContainer } from "@rcw/shared";
+import { HostTelemetrySchema, DockerReportSchema, CapsReportSchema, type HostTelemetry, type DockerContainer, type CapItem } from "@rcw/shared";
 
 type Entry = {
   latest: HostTelemetry;
@@ -10,6 +10,7 @@ type Entry = {
 };
 
 type DockerEntry = { available: boolean; containers: DockerContainer[]; at: Date };
+type CapsEntry = { skills: CapItem[]; commands: CapItem[]; at: Date };
 
 const HISTORY = 30; // samples kept per host for sparklines
 
@@ -22,6 +23,7 @@ const HISTORY = 30; // samples kept per host for sparklines
 export class TelemetryService {
   private readonly byHost = new Map<string, Entry>();
   private readonly dockerByHost = new Map<string, DockerEntry>();
+  private readonly capsByHost = new Map<string, CapsEntry>();
 
   record(hostId: string, input: unknown): void {
     const t = HostTelemetrySchema.parse(input);
@@ -49,5 +51,14 @@ export class TelemetryService {
 
   allDocker(): Map<string, DockerEntry> {
     return this.dockerByHost;
+  }
+
+  recordCaps(hostId: string, input: unknown): void {
+    const { skills, commands } = CapsReportSchema.parse(input);
+    this.capsByHost.set(hostId, { skills, commands, at: new Date() });
+  }
+
+  allCaps(): Map<string, CapsEntry> {
+    return this.capsByHost;
   }
 }

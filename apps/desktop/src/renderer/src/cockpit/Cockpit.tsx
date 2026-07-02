@@ -9,6 +9,7 @@ import AllSessions from "./AllSessions";
 import Hud from "./Hud";
 import AssistPanel from "./AssistPanel";
 import SettingsPanel from "./SettingsPanel";
+import CapsModal from "./CapsModal";
 
 const noDrag = { WebkitAppRegion: "no-drag" } as CSSProperties;
 
@@ -26,6 +27,7 @@ export default function Cockpit() {
   const toggleContext = useStore((s) => s.toggleContext);
   const toggleAssist = useStore((s) => s.toggleAssist);
   const toggleSettings = useStore((s) => s.toggleSettings);
+  const toggleCaps = useStore((s) => s.toggleCaps);
 
   useEffect(() => {
     const unsub = startCockpit();
@@ -180,6 +182,24 @@ export default function Cockpit() {
           >
             <span className="ai-core" style={{ width: 11, height: 11 }} /> assist
           </button>
+          {/* Skills & commands browser */}
+          <button
+            onClick={toggleCaps}
+            title="Installed skills & slash commands"
+            style={{
+              ...noDrag,
+              border: "1px solid var(--border)",
+              background: "transparent",
+              color: "var(--text-soft)",
+              borderRadius: 8,
+              padding: "4px 10px",
+              fontSize: 11.5,
+              fontFamily: "var(--font-mono)",
+              cursor: "pointer",
+            }}
+          >
+            ⌘ skills
+          </button>
           {/* Collapse / expand the right details sidebar */}
           <button
             onClick={toggleContext}
@@ -273,6 +293,7 @@ export default function Cockpit() {
 
       <AssistPanel />
       <SettingsPanel />
+      <CapsModal />
     </div>
   );
 }

@@ -186,6 +186,9 @@ export async function getTelemetry(): Promise<unknown[]> {
 export async function getDocker(): Promise<unknown[]> {
   return (await req("/telemetry/docker")).json();
 }
+export async function getCaps(): Promise<unknown[]> {
+  return (await req("/telemetry/caps")).json();
+}
 export async function getHosts(): Promise<Array<{ machine: string; user: string | null; address: string | null; sshPort: number | null }>> {
   return (await req("/hosts")).json();
 }

@@ -8,6 +8,7 @@ import { configDir } from "./config";
 import { scanSessions, findTranscriptPath } from "./scanner";
 import { sampleTelemetry } from "./telemetry";
 import { sampleDocker } from "./docker";
+import { scanCaps } from "./caps";
 import { detectPublicAddress } from "./poller";
 import { readRecentMessages } from "./transcript";
 import type { ApiClient } from "./api-client";
@@ -134,6 +135,16 @@ export async function runAgent(opts: { api: ApiClient; sleep?: (ms: number) => P
     }
   };
 
+  // Caps loop: report installed skills + slash commands (static-ish, every 5 min).
+  const capsLoop = async () => {
+    for (;;) {
+      try {
+        await api.reportCaps(hostId, scanCaps() as unknown as Record<string, unknown>);
+      } catch { /* transient */ }
+      await sleep(5 * 60_000);
+    }
+  };
+
   // Command loop: long-poll for work, execute, post the result.
   const commandLoop = async () => {
     for (;;) {
@@ -149,5 +160,5 @@ export async function runAgent(opts: { api: ApiClient; sleep?: (ms: number) => P
     }
   };
 
-  await Promise.all([scanLoop(), telemetryLoop(), dockerLoop(), commandLoop(), reannounce()]);
+  await Promise.all([scanLoop(), telemetryLoop(), dockerLoop(), capsLoop(), commandLoop(), reannounce()]);
 }

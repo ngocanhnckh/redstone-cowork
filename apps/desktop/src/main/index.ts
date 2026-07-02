@@ -245,6 +245,7 @@ ipcMain.handle(IPC.tagRemove, (_e, a: { sessionId: string; tag: string }) =>
 );
 ipcMain.handle(IPC.inventoryList, () => api.getInventory());
 ipcMain.handle(IPC.dockerList, () => api.getDocker());
+ipcMain.handle(IPC.capsList, () => api.getCaps());
 ipcMain.handle(IPC.gitInfo, (_e, a: { cwd: string; machine: string }) => gitInfo(a.cwd, a.machine));
 ipcMain.handle(IPC.telemetryList, () => api.getTelemetry());
 ipcMain.handle(IPC.inventoryHistory, (_e, a: { id: string }) => api.inventoryHistory(a.id));

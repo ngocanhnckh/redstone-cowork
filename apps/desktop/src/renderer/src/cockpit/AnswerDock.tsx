@@ -2,6 +2,8 @@ import { useRef, useState, useEffect } from "react";
 import { Decision } from "../types";
 import { useStore } from "../store";
 import { nextWaiting } from "../autoAdvance";
+import { commandsFor } from "./caps";
+import SlashTextarea from "./SlashTextarea";
 import Kbd from "./Kbd";
 
 interface Props {
@@ -25,7 +27,12 @@ export default function AnswerDock({ decision, working, sessionId: sessionIdProp
   const decisions = useStore((s) => s.decisions);
   const instruct = useStore((s) => s.instruct);
   const interrupt = useStore((s) => s.interrupt);
+  const sessions = useStore((s) => s.sessions);
+  const caps = useStore((s) => s.caps);
   const idleSessionId = sessionIdProp ?? focusId;
+  // Slash-command suggestions for the focused session's host.
+  const machine = (sessions.find((s) => s.id === (decision?.sessionId ?? idleSessionId)) ?? queue.find((s) => s.id === (decision?.sessionId ?? idleSessionId)))?.machine;
+  const commands = commandsFor(caps, machine);
 
   // Skip (Ctrl+→) and Snooze (Ctrl+S) shortcuts — only active while a decision is shown.
   useEffect(() => {
@@ -100,18 +107,12 @@ export default function AnswerDock({ decision, working, sessionId: sessionIdProp
         }}
       >
         <div style={{ display: "flex", gap: 9, marginBottom: 10, alignItems: "flex-end", minWidth: 0 }}>
-          <textarea
+          <SlashTextarea
             ref={idleInputRef}
+            commands={commands}
             className="reply-input no-scrollbar"
-            placeholder={working ? "Queue a message for Claude…" : "Send an instruction…"}
-            rows={1}
-            onInput={(e) => autoGrow(e.currentTarget)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                submitIdle();
-              }
-            }}
+            placeholder={working ? "Queue a message for Claude…  (/ for commands)" : "Send an instruction…  (/ for commands)"}
+            onSubmit={submitIdle}
             style={textareaStyle}
           />
           <button
@@ -213,18 +214,12 @@ export default function AnswerDock({ decision, working, sessionId: sessionIdProp
       </div>
 
       <div style={{ display: "flex", gap: 9, marginTop: 11, alignItems: "flex-end", minWidth: 0 }}>
-        <textarea
+        <SlashTextarea
           ref={inputRef}
+          commands={commands}
           className="reply-input no-scrollbar"
-          placeholder="Type a custom reply…"
-          rows={1}
-          onInput={(e) => autoGrow(e.currentTarget)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              handleSend();
-            }
-          }}
+          placeholder="Type a custom reply…  (/ for commands)"
+          onSubmit={handleSend}
           style={textareaStyle}
         />
         <button

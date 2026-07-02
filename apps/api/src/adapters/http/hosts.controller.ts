@@ -43,6 +43,18 @@ export class HostsController {
     }
   }
 
+  @Post(":id/caps")
+  @HttpCode(200)
+  async reportCaps(@Param("id") id: string, @Body() body: unknown) {
+    try {
+      this.telemetry.recordCaps(id, body);
+      return { ok: true };
+    } catch (e) {
+      if (e instanceof ZodError) throw new BadRequestException(e.issues);
+      throw e;
+    }
+  }
+
   @Post()
   @HttpCode(200)
   async register(@Body() body: unknown) {
