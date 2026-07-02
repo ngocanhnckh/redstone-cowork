@@ -46,8 +46,13 @@ WRAPPER
 chmod +x "$HOME/.local/bin/redstone"
 export PATH="$HOME/.local/bin:$PATH"
 redstone init --server "$SERVER" --token "$TOKEN"
+# Install + start the background agent as a boot-persistent service (systemd on
+# Linux, launchd on macOS) so this host reports sessions/telemetry/docker and
+# serves remote commands automatically — including across reboots. Best-effort.
+redstone service install || echo "(agent service not installed automatically — run 'redstone service install' to enable telemetry + remote control)"
 echo ""
 echo "redstone installed. If 'redstone' is not found, add to your shell: export PATH=\\"\\$HOME/.local/bin:\\$PATH\\""
+echo "The background agent is running (telemetry + remote control). Manage it with: redstone service uninstall"
 echo "Next: cd <your project> && redstone hook && claude --resume"
 echo "Later: run 'redstone update' anytime to pull the latest agent."
 `;

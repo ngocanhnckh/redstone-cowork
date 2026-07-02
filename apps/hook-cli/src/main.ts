@@ -13,6 +13,7 @@ const usage = `redstone <command>
   status                                show config + attach state
   update                                re-download the latest agent bundle from the server
   agent                                 run the per-host daemon: report all Claude sessions + serve remote commands
+  service install|uninstall             install/remove the agent as a boot-persistent service (systemd/launchd)
   claude [args]    run Claude under the wrapper so cockpit/phone replies type back`;
 
 async function main() {
@@ -53,6 +54,17 @@ async function main() {
     const { ApiClient } = await import("./api-client");
     console.log("redstone agent: reporting session inventory + serving remote commands…");
     await runAgent({ api: new ApiClient(cfg) });
+  } else if (cmd === "service") {
+    const sub = argv[3];
+    const { installService, uninstallService } = await import("./service");
+    if (sub === "uninstall") {
+      console.log(uninstallService());
+    } else if (sub === "install" || sub === undefined) {
+      const scriptPath = realpathSync(argv[1]);
+      console.log(installService({ nodePath: process.execPath, scriptPath }));
+    } else {
+      console.error("usage: redstone service install|uninstall"); exit(1);
+    }
   } else if (cmd === "update") {
     const { runUpdate } = await import("./updater");
     const r = await runUpdate();
