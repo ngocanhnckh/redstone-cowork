@@ -25,6 +25,13 @@ const nextConfig: NextConfig = {
       { source: "/stream", destination: `${API_URL}/stream` },
       // LLM assistant + agent (models, chat, assist, agent, custom endpoints).
       { source: "/llm/:path*", destination: `${API_URL}/llm/:path*` },
+      // Session inventory + external API (host agent, inventory, access keys).
+      { source: "/hosts", destination: `${API_URL}/hosts` },
+      { source: "/hosts/:path*", destination: `${API_URL}/hosts/:path*` },
+      { source: "/inventory", destination: `${API_URL}/inventory` },
+      { source: "/inventory/:path*", destination: `${API_URL}/inventory/:path*` },
+      { source: "/access-keys", destination: `${API_URL}/access-keys` },
+      { source: "/access-keys/:path*", destination: `${API_URL}/access-keys/:path*` },
     ];
   },
 };
