@@ -479,6 +479,72 @@ function ChatPane() {
 
 type PanelKey = "chat" | "term" | "files" | "browser";
 type ConsoleView = "ctf" | "cb" | "ctb" | "fb";
+type HudLayout = "grid" | "windows";
+
+// ---------------------------------------------------------------------------
+// Windows sub-mode: free-floating window geometry (persisted to localStorage)
+// ---------------------------------------------------------------------------
+type WinState = { x: number; y: number; w: number; h: number; min: boolean };
+type WinMap = Record<PanelKey, WinState> & { z: PanelKey[]; _init: boolean };
+const WIN_KEY = "rcw.hud.windows";
+const WIN_MIN_W = 280;
+const WIN_MIN_H = 170;
+const PANELS: { key: PanelKey; title: string; icon: string }[] = [
+  { key: "chat", title: "Chat", icon: "◇" },
+  { key: "term", title: "Terminal", icon: "❯_" },
+  { key: "files", title: "Files", icon: "▤" },
+  { key: "browser", title: "Browser", icon: "◍" },
+];
+
+// Near-solid dark glass shared by floating window frames + the app dock, so text
+// behind them stays fully legible (mirrors the slash-command popup treatment).
+const WIN_GLASS: React.CSSProperties = {
+  background: "color-mix(in srgb, var(--app-panel, #1b1712) 94%, transparent)",
+  backdropFilter: "blur(30px) saturate(1.4)",
+  WebkitBackdropFilter: "blur(30px) saturate(1.4)",
+};
+
+/** Clamp a window so it is never larger than the canvas and stays fully in view. */
+function clampWin(win: WinState, cw: number, ch: number): WinState {
+  const w = Math.min(win.w, Math.max(WIN_MIN_W, cw));
+  const h = Math.min(win.h, Math.max(WIN_MIN_H, ch));
+  const x = Math.max(0, Math.min(win.x, cw - w));
+  const y = Math.max(0, Math.min(win.y, ch - h));
+  return { ...win, x, y, w, h };
+}
+
+/** Sensible default 2×2 tiling once the console area has a measured size. */
+function tiledWins(rect: { width: number; height: number }): Pick<WinMap, PanelKey> {
+  const pad = 8, gap = 12;
+  const w = Math.max(WIN_MIN_W, (rect.width - pad * 2 - gap) / 2);
+  const h = Math.max(WIN_MIN_H, (rect.height - pad * 2 - gap) / 2);
+  const c2 = pad + w + gap, r2 = pad + h + gap;
+  return {
+    chat: { x: pad, y: pad, w, h, min: false },
+    term: { x: c2, y: pad, w, h, min: false },
+    files: { x: pad, y: r2, w, h, min: false },
+    browser: { x: c2, y: r2, w, h, min: false },
+  };
+}
+
+/** Load persisted geometry, or a placeholder that gets tiled on first paint. */
+function loadWins(): WinMap {
+  const fallback: WinState = { x: 20, y: 20, w: 520, h: 320, min: false };
+  const blank: WinMap = {
+    chat: { ...fallback }, term: { ...fallback, x: 560 }, files: { ...fallback, y: 360 }, browser: { ...fallback, x: 560, y: 360 },
+    z: ["chat", "term", "files", "browser"], _init: false,
+  };
+  try {
+    const raw = localStorage.getItem(WIN_KEY);
+    if (!raw) return blank;
+    const p = JSON.parse(raw) as Partial<WinMap>;
+    const pick = (k: PanelKey): WinState => ({ ...blank[k], ...(p[k] ?? {}) });
+    const z = Array.isArray(p.z) && p.z.length === 4 ? (p.z as PanelKey[]) : blank.z;
+    return { chat: pick("chat"), term: pick("term"), files: pick("files"), browser: pick("browser"), z, _init: p._init ?? true };
+  } catch {
+    return blank;
+  }
+}
 
 /**
  * Layout catalog. Every view is a CSS-grid arrangement of the SAME four panel
@@ -495,22 +561,112 @@ const VIEWS: Record<ConsoleView, { label: string; cols: string; rows: string; te
 };
 const VIEW_ORDER: ConsoleView[] = ["ctf", "cb", "ctb", "fb"];
 
-/** A titled grid-positioned panel wrapper. Stays mounted; hidden via display:none. */
-function GridPanel({ title, area, children }: { title: string; area?: string; children: React.ReactNode }) {
-  const shown = !!area;
+/**
+ * A single titled panel wrapper that stays mounted at all times. Its CSS switches
+ * between two placement regimes without ever re-parenting the child panel:
+ *   • Grid mode   — CSS grid-area placement (hidden via display:none when absent).
+ *   • Windows mode — absolute-positioned floating window (drag / resize / raise).
+ * This one-wrapper-two-styles design is what preserves the no-remount invariant:
+ * terminals, browsers and editors inside `children` never unmount when the user
+ * toggles Grid ↔ Windows, switches views, or raises a window.
+ */
+function PanelShell({
+  layout, title, area, win, zIndex, canvasRef, onFocus, onChange, onMinimize, children,
+}: {
+  layout: HudLayout;
+  title: string;
+  area?: string;
+  win: WinState;
+  zIndex: number;
+  canvasRef: React.RefObject<HTMLDivElement | null>;
+  onFocus: () => void;
+  onChange: (patch: Partial<WinState>) => void;
+  onMinimize: () => void;
+  children: React.ReactNode;
+}) {
+  const grid = layout === "grid";
+  const shown = grid ? !!area : !win.min;
+
+  // Pointer-driven drag of the whole window (title-bar handle).
+  const startDrag = (e: React.PointerEvent) => {
+    if (grid) return;
+    e.preventDefault();
+    onFocus();
+    const rect = canvasRef.current?.getBoundingClientRect();
+    const sx = e.clientX, sy = e.clientY, ox = win.x, oy = win.y;
+    const move = (ev: PointerEvent) => {
+      let nx = ox + (ev.clientX - sx), ny = oy + (ev.clientY - sy);
+      if (rect) { nx = Math.max(0, Math.min(nx, rect.width - win.w)); ny = Math.max(0, Math.min(ny, rect.height - win.h)); }
+      onChange({ x: nx, y: ny });
+    };
+    const up = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
+
+  // Pointer-driven resize from the bottom-right corner.
+  const startResize = (e: React.PointerEvent) => {
+    if (grid) return;
+    e.preventDefault();
+    e.stopPropagation();
+    onFocus();
+    const rect = canvasRef.current?.getBoundingClientRect();
+    const sx = e.clientX, sy = e.clientY, ow = win.w, oh = win.h;
+    const move = (ev: PointerEvent) => {
+      let nw = Math.max(WIN_MIN_W, ow + (ev.clientX - sx));
+      let nh = Math.max(WIN_MIN_H, oh + (ev.clientY - sy));
+      if (rect) { nw = Math.min(nw, rect.width - win.x); nh = Math.min(nh, rect.height - win.y); }
+      onChange({ w: nw, h: nh });
+    };
+    const up = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
+
+  const wrapperStyle: React.CSSProperties = grid
+    ? { ...card, padding: 0, gridArea: area, display: shown ? "flex" : "none", flexDirection: "column", minHeight: 0, minWidth: 0 }
+    : {
+        ...card, ...WIN_GLASS, padding: 0, position: "absolute", left: win.x, top: win.y, width: win.w, height: win.h,
+        display: shown ? "flex" : "none", flexDirection: "column", minHeight: 0, minWidth: 0, zIndex,
+        boxShadow: "0 12px 40px rgb(0 0 0 / 0.5)",
+      };
+
   return (
-    <div style={{ ...card, padding: 0, gridArea: area, display: shown ? "flex" : "none", flexDirection: "column", minHeight: 0, minWidth: 0 }}>
-      <div style={{ padding: "7px 13px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
+    <div style={wrapperStyle} onPointerDown={grid ? undefined : onFocus}>
+      <div
+        onPointerDown={startDrag}
+        style={{
+          display: "flex", alignItems: "center", gap: 8, padding: "7px 13px", borderBottom: "1px solid var(--border)", flexShrink: 0,
+          cursor: grid ? "default" : "move", ...(grid ? {} : ({ WebkitAppRegion: "no-drag", userSelect: "none" } as React.CSSProperties)),
+        }}
+      >
+        {!grid && <span style={{ width: 7, height: 7, borderRadius: 999, background: "rgb(var(--accent))", flexShrink: 0 }} className="hud-pulse" />}
         <Decode text={title} className="mono" style={{ fontSize: 10, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--text-soft)" }} />
+        {!grid && (
+          <>
+            <span style={{ flex: 1 }} />
+            <button onPointerDown={(e) => e.stopPropagation()} onClick={onFocus} title="Bring to front"
+              style={{ border: "1px solid var(--border)", background: "transparent", color: "var(--text-soft)", borderRadius: 6, padding: "0 7px", fontSize: 11, lineHeight: "18px", cursor: "pointer" }}>⤒</button>
+            <button onPointerDown={(e) => e.stopPropagation()} onClick={onMinimize} title="Minimize"
+              style={{ border: "1px solid var(--border)", background: "transparent", color: "var(--text-soft)", borderRadius: 6, padding: "0 7px", fontSize: 11, lineHeight: "18px", cursor: "pointer" }}>—</button>
+          </>
+        )}
       </div>
       <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>{children}</div>
+      {!grid && (
+        <div onPointerDown={startResize} title="Resize"
+          style={{ position: "absolute", right: 0, bottom: 0, width: 18, height: 18, cursor: "nwse-resize",
+            background: "linear-gradient(135deg, transparent 0 50%, rgb(var(--primary-soft) / 0.55) 50% 60%, transparent 60% 72%, rgb(var(--primary-soft) / 0.55) 72% 82%, transparent 82%)" }} />
+      )}
     </div>
   );
 }
 
 /**
- * The HUD center. A view switcher picks one of four grid layouts; all four panels
- * (Chat, Terminal, Files, Browser) stay mounted so switching never reloads them.
+ * The HUD center. Two sub-modes over the SAME four always-mounted panel instances:
+ *   • Grid    — a view switcher picks one of four CSS-grid layouts.
+ *   • Windows — the four panels become draggable / resizable floating windows.
+ * Switching sub-modes only changes each panel wrapper's CSS, so panels never remount.
  */
 function HudConsole() {
   const focusId = useStore((s) => s.focusId);
@@ -520,20 +676,85 @@ function HudConsole() {
   const openBrowser = useStore((s) => s.openBrowser);
   const openTerminal = useStore((s) => s.openTerminal);
   const [view, setView] = useState<ConsoleView>("ctf");
+  const [layout, setLayout] = useState<HudLayout>("grid");
+  const [wins, setWins] = useState<WinMap>(loadWins);
+  const canvasRef = useRef<HTMLDivElement>(null);
   const cfg = VIEWS[view];
-  const browserInView = !!cfg.areas.browser;
-  const termInView = !!cfg.areas.term;
   const none = <div className="mono faint" style={{ padding: 14, fontSize: 11 }}>no session</div>;
 
+  // Persist window geometry / z-order / minimized flags.
+  useEffect(() => { try { localStorage.setItem(WIN_KEY, JSON.stringify(wins)); } catch { /* ignore */ } }, [wins]);
+
+  // First time Windows mode is shown with no saved layout, tile from the console size.
+  useEffect(() => {
+    if (layout === "windows" && !wins._init && canvasRef.current) {
+      const rect = canvasRef.current.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) setWins((w) => ({ ...w, ...tiledWins(rect), _init: true }));
+    }
+  }, [layout, wins._init]);
+
+  // Keep every window inside the console canvas: whenever the canvas resizes (e.g.
+  // leaving macOS fullscreen shrinks it), reflow each window so it is never larger
+  // than the canvas and never sits out of view. Clamped values are persisted.
+  useEffect(() => {
+    const el = canvasRef.current;
+    if (!el) return;
+    const reflow = () => {
+      const rect = el.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return;
+      setWins((w) => {
+        let changed = false;
+        const next = { ...w };
+        for (const p of PANELS) {
+          const c = clampWin(w[p.key], rect.width, rect.height);
+          const cur = w[p.key];
+          if (c.x !== cur.x || c.y !== cur.y || c.w !== cur.w || c.h !== cur.h) { next[p.key] = c; changed = true; }
+        }
+        return changed ? next : w;
+      });
+    };
+    const ro = new ResizeObserver(reflow);
+    ro.observe(el);
+    reflow();
+    return () => ro.disconnect();
+  }, []);
+
+  // A panel is "active" (kept alive / streaming) when visible in the current mode.
+  const grid = layout === "grid";
+  const termActive = grid ? !!cfg.areas.term : !wins.term.min;
+  const browserActive = grid ? !!cfg.areas.browser : !wins.browser.min;
+
   // Keep this session's browser/terminal alive in their persistent stacks the
-  // first time a view containing them is shown, so switching sessions never
-  // reloads/recreates them.
-  useEffect(() => { if (browserInView && session) openBrowser(session.id); }, [browserInView, session?.id, openBrowser]);
-  useEffect(() => { if (termInView && session) openTerminal(session.id); }, [termInView, session?.id, openTerminal]);
+  // first time they become visible, so switching sessions never reloads them.
+  useEffect(() => { if (browserActive && session) openBrowser(session.id); }, [browserActive, session?.id, openBrowser]);
+  useEffect(() => { if (termActive && session) openTerminal(session.id); }, [termActive, session?.id, openTerminal]);
+
+  const raise = (key: PanelKey) => setWins((w) => (w.z[w.z.length - 1] === key ? w : { ...w, z: [...w.z.filter((k) => k !== key), key] }));
+  const patchWin = (key: PanelKey, patch: Partial<WinState>) => setWins((w) => ({ ...w, [key]: { ...w[key], ...patch } }));
+
+  // Dock item click: minimized/hidden → restore + raise; visible-but-behind → raise
+  // to front; visible-and-frontmost → toggle-minimize (second click hides it).
+  const dockClick = (key: PanelKey) => setWins((w) => {
+    const front = w.z[w.z.length - 1];
+    if (w[key].min) {
+      return { ...w, [key]: { ...w[key], min: false }, z: [...w.z.filter((k) => k !== key), key] };
+    }
+    if (front === key) return { ...w, [key]: { ...w[key], min: true } };
+    return { ...w, z: [...w.z.filter((k) => k !== key), key] };
+  });
+
+  const childFor = (key: PanelKey): React.ReactNode => {
+    switch (key) {
+      case "chat": return <ChatPane />;
+      case "term": return <TerminalStack activeId={session?.id} active={termActive} />;
+      case "files": return session ? <FilesPanel key={`${session.id}-hud-files`} sessionId={session.id} cwd={session.cwd} machine={session.machine} /> : none;
+      case "browser": return <BrowserStack activeId={session?.id} active={browserActive} />;
+    }
+  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10, minHeight: 0, padding: "12px 14px" }}>
-      {/* header: identity + view switcher */}
+      {/* header: identity + (grid) view switcher + Grid/Windows sub-mode toggle */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0, flexWrap: "wrap" }}>
         {session && (
           <>
@@ -542,31 +763,84 @@ function HudConsole() {
           </>
         )}
         <span style={{ flex: 1 }} />
+        {grid && (
+          <div style={{ display: "flex", gap: 3, padding: 3, borderRadius: 999, border: "1px solid var(--border)" }}>
+            {VIEW_ORDER.map((v) => (
+              <button key={v} onClick={() => setView(v)} style={{
+                padding: "5px 11px", borderRadius: 8, fontFamily: "var(--font-mono)", fontSize: 10.5, cursor: "pointer", border: 0, whiteSpace: "nowrap",
+                background: view === v ? "rgb(var(--primary) / 0.28)" : "transparent", color: view === v ? "#fff" : "var(--text-soft)",
+              }}>{VIEWS[v].label}</button>
+            ))}
+          </div>
+        )}
+        {/* Minimized windows are restored from the app dock (Windows mode). */}
+        {/* Grid ↔ Windows sub-mode toggle. */}
         <div style={{ display: "flex", gap: 3, padding: 3, borderRadius: 999, border: "1px solid var(--border)" }}>
-          {VIEW_ORDER.map((v) => (
-            <button key={v} onClick={() => setView(v)} style={{
+          {(["grid", "windows"] as HudLayout[]).map((l) => (
+            <button key={l} onClick={() => setLayout(l)} title={l === "grid" ? "Tiled grid" : "Free-floating windows"} style={{
               padding: "5px 11px", borderRadius: 8, fontFamily: "var(--font-mono)", fontSize: 10.5, cursor: "pointer", border: 0, whiteSpace: "nowrap",
-              background: view === v ? "rgb(var(--primary) / 0.28)" : "transparent", color: view === v ? "#fff" : "var(--text-soft)",
-            }}>{VIEWS[v].label}</button>
+              background: layout === l ? "rgb(var(--primary) / 0.28)" : "transparent", color: layout === l ? "#fff" : "var(--text-soft)",
+            }}>{l === "grid" ? "Grid" : "Windows"}</button>
           ))}
         </div>
       </div>
 
-      {/* grid body — the four panels are always mounted; area/visibility per view */}
-      <div style={{ flex: 1, minHeight: 0, display: "grid", gap: 10, gridTemplateColumns: cfg.cols, gridTemplateRows: cfg.rows, gridTemplateAreas: cfg.template }}>
-        <GridPanel title="Chat" area={cfg.areas.chat}><ChatPane /></GridPanel>
-        <GridPanel title="Terminal" area={cfg.areas.term}>
-          {/* Keep-alive stack — each opened session's shells stay mounted. */}
-          <TerminalStack activeId={session?.id} active={termInView} />
-        </GridPanel>
-        <GridPanel title="Files" area={cfg.areas.files}>
-          {session ? <FilesPanel key={`${session.id}-hud-files`} sessionId={session.id} cwd={session.cwd} machine={session.machine} /> : none}
-        </GridPanel>
-        <GridPanel title="Browser" area={cfg.areas.browser}>
-          {/* Keep-alive stack — every opened session's browser stays mounted, only
-              the focused one is shown, so switching sessions never reloads. */}
-          <BrowserStack activeId={session?.id} active={browserInView} />
-        </GridPanel>
+      {/* console body — the four panels are ALWAYS mounted here. In grid mode the
+          container is a CSS grid; in windows mode it is a positioning canvas. Each
+          PanelShell switches its own placement CSS; the child panels never remount. */}
+      <div ref={canvasRef} style={grid
+        ? { flex: 1, minHeight: 0, display: "grid", gap: 10, gridTemplateColumns: cfg.cols, gridTemplateRows: cfg.rows, gridTemplateAreas: cfg.template }
+        : { flex: 1, minHeight: 0, position: "relative", overflow: "hidden" }}>
+        {PANELS.map((p) => (
+          <PanelShell
+            key={p.key}
+            layout={layout}
+            title={p.title}
+            area={cfg.areas[p.key]}
+            win={wins[p.key]}
+            zIndex={wins.z.indexOf(p.key) + 1}
+            canvasRef={canvasRef}
+            onFocus={() => raise(p.key)}
+            onChange={(patch) => patchWin(p.key, patch)}
+            onMinimize={() => patchWin(p.key, { min: true })}
+          >
+            {childFor(p.key)}
+          </PanelShell>
+        ))}
+
+        {/* macOS-style app dock — the single place to restore / focus windows. */}
+        {!grid && (
+          <div style={{
+            position: "absolute", left: "50%", bottom: 14, transform: "translateX(-50%)", zIndex: 1000,
+            display: "flex", alignItems: "flex-end", gap: 6, padding: "8px 10px 6px", borderRadius: 18,
+            border: "1px solid var(--border-strong)", boxShadow: "0 12px 40px rgb(0 0 0 / 0.5)", ...WIN_GLASS,
+          }}>
+            <span className="hud-corner" />
+            {PANELS.map((p) => {
+              const open = !wins[p.key].min;
+              const front = open && wins.z[wins.z.length - 1] === p.key;
+              return (
+                <button key={p.key} onClick={() => dockClick(p.key)}
+                  title={open ? (front ? `${p.title} (click to minimize)` : `Focus ${p.title}`) : `Restore ${p.title}`}
+                  style={{
+                    display: "flex", flexDirection: "column", alignItems: "center", gap: 4, width: 46, padding: "6px 0 3px",
+                    borderRadius: 12, cursor: "pointer", fontFamily: "var(--font-mono)",
+                    border: front ? "1px solid rgb(var(--accent) / 0.55)" : "1px solid transparent",
+                    background: front ? "rgb(var(--primary) / 0.22)" : open ? "rgb(var(--primary) / 0.10)" : "transparent",
+                    color: open ? "var(--text)" : "var(--text-soft)", opacity: open ? 1 : 0.6,
+                    transition: "background .18s, opacity .18s, border-color .18s",
+                  }}>
+                  <span style={{ fontSize: 15, lineHeight: 1 }}>{p.icon}</span>
+                  <span style={{ fontSize: 8, letterSpacing: "0.08em", textTransform: "uppercase" }}>{p.title}</span>
+                  <span style={{
+                    width: 4, height: 4, borderRadius: 999, marginTop: 1,
+                    background: open ? "rgb(var(--accent))" : "transparent",
+                  }} className={front ? "hud-pulse" : undefined} />
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );
