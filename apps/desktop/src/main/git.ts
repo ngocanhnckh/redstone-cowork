@@ -39,7 +39,13 @@ export async function gitInfo(cwd: string, machine: string, limit = 12): Promise
     // Is it a repo at all?
     await run(machine, ["git", "-C", cwd, "rev-parse", "--is-inside-work-tree"]);
   } catch (e) {
-    return { ...empty, ok: true, repo: false, error: e instanceof Error ? e.message : undefined };
+    const msg = (e instanceof Error ? e.message : String(e)) || "";
+    // Only a genuine non-repo when git itself says so. Anything else (ssh can't
+    // resolve/connect, host unreachable, git missing) is a real error to surface —
+    // NOT "not a git repository", which was misleading.
+    if (/not a git repository/i.test(msg)) return { ...empty, ok: true, repo: false };
+    const firstLine = msg.split("\n").map((l) => l.trim()).filter(Boolean).pop() ?? msg;
+    return { ...empty, ok: false, repo: false, error: firstLine };
   }
   try {
     const fmt = ["%h", "%an", "%cr", "%cI", "%s"].join(SEP) + REC;

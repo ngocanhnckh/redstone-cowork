@@ -308,6 +308,14 @@ function GitPane() {
         <span className="mono faint" style={{ fontSize: 11 }}>no session selected</span>
       ) : loading && !info ? (
         <span className="mono faint hud-blink" style={{ fontSize: 11 }}>reading repo…</span>
+      ) : info && !info.ok ? (
+        <div style={{ fontSize: 11 }}>
+          <div style={{ color: "#e0736a" }}>couldn't read repo</div>
+          <div className="mono faint" style={{ fontSize: 10, marginTop: 4, lineHeight: 1.5, wordBreak: "break-word" }}>{info.error}</div>
+          {/(resolve|connect|timed out|refused|Host)/i.test(info.error ?? "") && (
+            <div className="mono faint" style={{ fontSize: 10, marginTop: 4 }}>SSH host for <b>{session.machine}</b> may not be set up — configure it in the Terminal/Browser tab.</div>
+          )}
+        </div>
       ) : !info?.repo ? (
         <span className="mono faint" style={{ fontSize: 11 }}>not a git repository</span>
       ) : (
