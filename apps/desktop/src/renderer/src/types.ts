@@ -15,6 +15,13 @@ export type SessionView = {
   lastSeenAt: string | null; attachedAt: string | null;
   permissionMode: string | null; autoModeEnabled: boolean;
 };
+export type Host = { id: string; machine: string; user: string | null; os: string | null; lastSeenAt: string };
+export type DiscoveredSession = {
+  id: string; hostId: string; machine: string; cwd: string; folder: string;
+  title: string | null; lastActive: string; messageCount: number; sizeBytes: number;
+  source: "cowork" | "external"; tags: string[];
+};
+
 export type DecisionOption = { label: string; description?: string };
 export type Decision = {
   id: string; sessionId: string;

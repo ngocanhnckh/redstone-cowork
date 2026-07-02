@@ -170,6 +170,22 @@ export async function deleteUserTodo(sessionId: string, todoId: string): Promise
   ).json();
 }
 
+export async function getInventory(): Promise<unknown> {
+  return (await req("/inventory")).json();
+}
+export async function inventoryHistory(id: string): Promise<unknown> {
+  return (await req(`/inventory/${encodeURIComponent(id)}/history`)).json();
+}
+export async function inventoryRun(id: string, message: string): Promise<unknown> {
+  return (await req(`/inventory/${encodeURIComponent(id)}/run`, { method: "POST", body: JSON.stringify({ message }) })).json();
+}
+export async function inventoryAddTag(id: string, tag: string): Promise<unknown> {
+  return (await req(`/inventory/${encodeURIComponent(id)}/tags`, { method: "POST", body: JSON.stringify({ tag }) })).json();
+}
+export async function inventoryRemoveTag(id: string, tag: string): Promise<unknown> {
+  return (await req(`/inventory/${encodeURIComponent(id)}/tags/remove`, { method: "POST", body: JSON.stringify({ tag }) })).json();
+}
+
 export async function addTag(sessionId: string, tag: string): Promise<unknown> {
   return (
     await req(`/sessions/${encodeURIComponent(sessionId)}/tags`, {

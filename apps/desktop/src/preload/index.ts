@@ -47,6 +47,16 @@ contextBridge.exposeInMainWorld("cowork", {
     ipcRenderer.invoke(IPC.tagAdd, { sessionId, tag }),
   removeTag: (sessionId: string, tag: string): Promise<unknown> =>
     ipcRenderer.invoke(IPC.tagRemove, { sessionId, tag }),
+  getInventory: (): Promise<{ hosts: unknown[]; sessions: unknown[] }> =>
+    ipcRenderer.invoke(IPC.inventoryList),
+  inventoryHistory: (id: string): Promise<{ ok: boolean; messages?: Array<{ role: string; text: string }>; error?: string }> =>
+    ipcRenderer.invoke(IPC.inventoryHistory, { id }),
+  inventoryRun: (id: string, message: string): Promise<{ ok: boolean; reply?: string; error?: string }> =>
+    ipcRenderer.invoke(IPC.inventoryRun, { id, message }),
+  inventoryAddTag: (id: string, tag: string): Promise<unknown> =>
+    ipcRenderer.invoke(IPC.inventoryTagAdd, { id, tag }),
+  inventoryRemoveTag: (id: string, tag: string): Promise<unknown> =>
+    ipcRenderer.invoke(IPC.inventoryTagRemove, { id, tag }),
 
   // Workspace config
   getWorkspaceConfig: (a: {

@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { SessionView, Decision } from "./types";
+import { SessionView, Decision, Host, DiscoveredSession } from "./types";
 import { pickFocus, nextAfterAnswer } from "./autoAdvance";
 
 /**
@@ -42,8 +42,10 @@ type State = {
   queue: SessionView[];
   decisions: Decision[];
   focusId: string | null;
-  mode: "flow" | "grid";
+  mode: "flow" | "grid" | "history";
   detailId: string | null; // session shown in the grid's drill-in detail
+  hosts: Host[]; // machines reporting via the redstone agent
+  inventory: DiscoveredSession[]; // all discovered Claude Code sessions
   pending: Record<string, PendingSend[]>; // sessionId → optimistic sends, shown instantly
   activeTab: Record<string, "chat" | "terminal" | "browser" | "ports" | "files">; // sessionId → active workspace tab
   contextCollapsed: boolean; // right context sidebar collapsed (more room for the body)
@@ -57,7 +59,10 @@ type State = {
   toggleAssist: () => void;
   toggleSettings: () => void;
   setFocus: (id: string) => void;
-  setMode: (mode: "flow" | "grid") => void;
+  setMode: (mode: "flow" | "grid" | "history") => void;
+  fetchInventory: () => Promise<void>;
+  inventoryAddTag: (id: string, tag: string) => Promise<void>;
+  inventoryRemoveTag: (id: string, tag: string) => Promise<void>;
   openDetail: (id: string) => void;
   closeDetail: () => void;
   recordSent: (sessionId: string, text: string) => void;
@@ -84,6 +89,8 @@ export const useStore = create<State>((set, get) => ({
   focusId: null,
   mode: "flow",
   detailId: null,
+  hosts: [],
+  inventory: [],
   pending: {},
   activeTab: {},
   contextCollapsed: false,
@@ -146,8 +153,29 @@ export const useStore = create<State>((set, get) => ({
     set({ focusId: id });
   },
 
-  setMode: (mode: "flow" | "grid") => {
+  setMode: (mode: "flow" | "grid" | "history") => {
     set({ mode, detailId: null });
+    if (mode === "history") get().fetchInventory();
+  },
+
+  fetchInventory: async () => {
+    try {
+      const { hosts, sessions } = await window.cowork.getInventory();
+      set({ hosts: hosts as Host[], inventory: sessions as DiscoveredSession[] });
+    } catch (e) {
+      set({ error: e instanceof Error ? e.message : String(e) });
+    }
+  },
+
+  inventoryAddTag: async (id, tag) => {
+    if (!tag.trim()) return;
+    try { await window.cowork.inventoryAddTag(id, tag.trim()); await get().fetchInventory(); }
+    catch (e) { set({ error: e instanceof Error ? e.message : String(e) }); }
+  },
+
+  inventoryRemoveTag: async (id, tag) => {
+    try { await window.cowork.inventoryRemoveTag(id, tag); await get().fetchInventory(); }
+    catch (e) { set({ error: e instanceof Error ? e.message : String(e) }); }
   },
 
   openDetail: (id: string) => {

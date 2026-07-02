@@ -31,6 +31,11 @@ declare global {
       deleteUserTodo(sessionId: string, todoId: string): Promise<unknown>;
       addTag(sessionId: string, tag: string): Promise<unknown>;
       removeTag(sessionId: string, tag: string): Promise<unknown>;
+      getInventory(): Promise<{ hosts: unknown[]; sessions: unknown[] }>;
+      inventoryHistory(id: string): Promise<{ ok: boolean; messages?: Array<{ role: string; text: string }>; error?: string }>;
+      inventoryRun(id: string, message: string): Promise<{ ok: boolean; reply?: string; error?: string }>;
+      inventoryAddTag(id: string, tag: string): Promise<unknown>;
+      inventoryRemoveTag(id: string, tag: string): Promise<unknown>;
 
       // Workspace config
       getWorkspaceConfig(a: {
