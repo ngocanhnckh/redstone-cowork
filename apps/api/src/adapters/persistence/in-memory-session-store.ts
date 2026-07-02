@@ -23,6 +23,9 @@ export class InMemorySessionStore implements SessionStore {
           working: existing.working,
           contextTokens: existing.contextTokens,
           model: existing.model,
+          tokensInput: existing.tokensInput,
+          tokensOutput: existing.tokensOutput,
+          tokenSeries: existing.tokenSeries,
           pinned: existing.pinned,
           snoozedUntil: existing.snoozedUntil,
         }
@@ -60,6 +63,9 @@ export class InMemorySessionStore implements SessionStore {
       ...(patch.working !== undefined ? { working: patch.working } : {}),
       ...(patch.contextTokens !== undefined ? { contextTokens: patch.contextTokens } : {}),
       ...(patch.model !== undefined ? { model: patch.model } : {}),
+      ...(patch.tokensInput !== undefined ? { tokensInput: patch.tokensInput } : {}),
+      ...(patch.tokensOutput !== undefined ? { tokensOutput: patch.tokensOutput } : {}),
+      ...(patch.tokenSeries !== undefined ? { tokenSeries: patch.tokenSeries } : {}),
     };
     this.sessions.set(id, next);
     return next;

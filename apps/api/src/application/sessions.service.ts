@@ -53,6 +53,9 @@ export class SessionsService {
       working: existing?.working ?? false,
       contextTokens: existing?.contextTokens ?? null,
       model: existing?.model ?? null,
+      tokensInput: existing?.tokensInput ?? 0,
+      tokensOutput: existing?.tokensOutput ?? 0,
+      tokenSeries: existing?.tokenSeries ?? [],
       pinned: false,
       snoozedUntil: null,
     });
@@ -71,8 +74,19 @@ export class SessionsService {
     await this.store.touch(id, new Date());
   }
 
+  private static readonly TOKEN_SERIES_MAX = 80;
+
   async patchState(id: string, input: unknown): Promise<AgentSession | null> {
     const patch: SessionStatePatch = SessionStatePatchSchema.parse(input);
+    // When the hook reports fresh cumulative spend, append a time-series point
+    // (bounded) so the client can chart tokens-over-time without extra storage.
+    if (patch.tokensOutput !== undefined) {
+      const cur = await this.store.get(id);
+      if (cur && (patch.tokensOutput !== cur.tokensOutput || (patch.tokensInput ?? cur.tokensInput) !== cur.tokensInput)) {
+        const point = { t: new Date(), input: patch.tokensInput ?? cur.tokensInput, output: patch.tokensOutput };
+        patch.tokenSeries = [...cur.tokenSeries, point].slice(-SessionsService.TOKEN_SERIES_MAX);
+      }
+    }
     const updated = await this.store.patchState(id, patch);
     if (updated) this.bus.emit({ type: "session.updated", payload: { id } });
     return updated;

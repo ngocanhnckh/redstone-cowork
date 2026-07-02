@@ -21,6 +21,7 @@ const baseDeps = (overrides: Partial<Deps> = {}): Deps => ({
   recentMessages: vi.fn().mockReturnValue([]),
   latestTodos: vi.fn().mockReturnValue([]),
   latestUsage: vi.fn().mockReturnValue({ contextTokens: null, model: null }),
+  totalUsage: vi.fn().mockReturnValue({ tokensInput: 0, tokensOutput: 0 }),
   ...overrides,
 });
 

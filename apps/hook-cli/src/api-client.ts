@@ -110,7 +110,7 @@ export class ApiClient {
     );
   }
 
-  async pushState(sessionId: string, patch: { latestAnswer?: string | null; transcript?: Array<{ role: "user" | "assistant"; text: string }>; todos?: Array<{ text: string; status: "pending" | "in_progress" | "completed" }>; working?: boolean; contextTokens?: number | null; model?: string | null }): Promise<void> {
+  async pushState(sessionId: string, patch: { latestAnswer?: string | null; transcript?: Array<{ role: "user" | "assistant"; text: string }>; todos?: Array<{ text: string; status: "pending" | "in_progress" | "completed" }>; working?: boolean; contextTokens?: number | null; model?: string | null; tokensInput?: number; tokensOutput?: number }): Promise<void> {
     await this.req(`/sessions/${encodeURIComponent(sessionId)}/state`, { method: "POST", headers: json(this.cfg.token), body: JSON.stringify(patch) }, 3000);
   }
 

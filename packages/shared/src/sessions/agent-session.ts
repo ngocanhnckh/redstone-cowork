@@ -7,6 +7,14 @@ export const TodoItemSchema = z.object({
 });
 export type TodoItem = z.infer<typeof TodoItemSchema>;
 
+/** One cumulative token-spend sample over the session's lifetime (for the chart). */
+export const TokenSampleSchema = z.object({
+  t: z.coerce.date(),
+  input: z.coerce.number().nonnegative(),
+  output: z.coerce.number().nonnegative(),
+});
+export type TokenSample = z.infer<typeof TokenSampleSchema>;
+
 /** A user-managed checklist item (distinct from Claude's auto-derived plan todos). */
 export const UserTodoSchema = z.object({
   id: z.string().min(1),
@@ -33,6 +41,11 @@ export const SessionStatePatchSchema = z
     contextTokens: z.number().int().nonnegative().nullable().optional(),
     /** The model id from the latest turn (used to pick the context-window limit). */
     model: z.string().nullable().optional(),
+    /** Cumulative token spend so far (from the hook's full-transcript scan on Stop). */
+    tokensInput: z.number().int().nonnegative().optional(),
+    tokensOutput: z.number().int().nonnegative().optional(),
+    /** Server-appended time-series (not sent by the hook). */
+    tokenSeries: z.array(TokenSampleSchema).optional(),
   })
   .strict();
 export type SessionStatePatch = z.infer<typeof SessionStatePatchSchema>;
@@ -57,6 +70,9 @@ export const AgentSessionSchema = z.object({
   working: z.boolean().default(false),
   contextTokens: z.coerce.number().int().nonnegative().nullable().default(null),
   model: z.string().nullable().default(null),
+  tokensInput: z.coerce.number().int().nonnegative().default(0),
+  tokensOutput: z.coerce.number().int().nonnegative().default(0),
+  tokenSeries: z.array(TokenSampleSchema).default([]),
   pinned: z.boolean().default(false),
   snoozedUntil: z.coerce.date().nullable().default(null),
 });

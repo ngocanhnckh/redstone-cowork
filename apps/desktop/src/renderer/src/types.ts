@@ -13,6 +13,9 @@ export type SessionView = {
   working: boolean;
   contextTokens: number | null;
   model: string | null;
+  tokensInput: number;
+  tokensOutput: number;
+  tokenSeries: { t: string; input: number; output: number }[];
   pinned: boolean; snoozedUntil: string | null;
   lastSeenAt: string | null; attachedAt: string | null;
   permissionMode: string | null; autoModeEnabled: boolean;

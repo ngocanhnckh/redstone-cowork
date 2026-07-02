@@ -11,6 +11,7 @@ import AnswerDock from "./AnswerDock";
 import Markdown from "./Markdown";
 import ContextGauge from "./ContextGauge";
 import ModeSelect from "./ModeSelect";
+import TokenSpendWidget from "./TokenSpendWidget";
 import { GitInfo } from "../types";
 
 // Motion (motion.dev) entrance choreography for the widget column.
@@ -399,6 +400,9 @@ function TelemetryColumn({ tele }: { tele: HostTelemetryView[] }) {
           )}
         </AnimatePresence>
       </motion.div>
+
+      {/* Token spend for the selected session */}
+      <motion.div variants={RISE}><TokenSpendWidget /></motion.div>
 
       {/* Git activity for the selected session's repo — below system status */}
       <motion.div variants={RISE}><GitPane /></motion.div>

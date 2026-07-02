@@ -304,6 +304,34 @@ export function readLatestUsage(path: string | null | undefined): { contextToken
   }
 }
 
+/**
+ * Cumulative token spend for the whole session: summed across every assistant turn,
+ * `input` = input_tokens + cache_creation (fresh input we paid to process; cache
+ * reads are excluded as ~free), `output` = output_tokens (what Claude generated).
+ * Full (bounded) scan — call sparingly (on Stop, once per turn). Never throws.
+ */
+export function readTotalUsage(path: string | null | undefined): { tokensInput: number; tokensOutput: number } {
+  const empty = { tokensInput: 0, tokensOutput: 0 };
+  if (!path) return empty;
+  try {
+    const size = statSync(path).size;
+    if (size > MAX_TODO_SCAN_BYTES) return empty; // too big to fully scan safely
+    let input = 0, output = 0;
+    for (const line of readFileSync(path, "utf8").split("\n")) {
+      if (!line.includes("usage")) continue;
+      let obj: { message?: { role?: string; usage?: Record<string, number> } };
+      try { obj = JSON.parse(line); } catch { continue; }
+      const u = obj.message?.usage;
+      if (obj.message?.role !== "assistant" || !u) continue;
+      input += (u.input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0);
+      output += u.output_tokens ?? 0;
+    }
+    return { tokensInput: input, tokensOutput: output };
+  } catch {
+    return empty;
+  }
+}
+
 export function readLastAssistantText(path: string | null | undefined): string | null {
   if (!path) return null;
   let fd: number | null = null;

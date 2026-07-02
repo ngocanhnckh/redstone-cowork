@@ -3,7 +3,7 @@ import { loadCliConfig } from "./config";
 import { ApiClient } from "./api-client";
 import { isArmed as isArmedFs, disarm as disarmFs } from "./state";
 import { buildDecisionSpec } from "./decision-spec";
-import { readLastAssistantText, readRecentMessages, readLatestTodos, readLatestUsage } from "./transcript";
+import { readLastAssistantText, readRecentMessages, readLatestTodos, readLatestUsage, readTotalUsage } from "./transcript";
 
 export type HookEvent = {
   hook_event_name: string;
@@ -34,6 +34,8 @@ export type Deps = {
   latestTodos: (event: HookEvent) => import("@rcw/shared").TodoItem[];
   /** Current context-window size (tokens) + model from the transcript's latest turn. */
   latestUsage: (event: HookEvent) => { contextTokens: number | null; model: string | null };
+  /** Cumulative token spend across the whole session (full scan — Stop only). */
+  totalUsage: (event: HookEvent) => { tokensInput: number; tokensOutput: number };
 };
 
 export async function processEvent(
@@ -98,12 +100,15 @@ export async function processEvent(
       const refreshTodos =
         todoToolRan || event.hook_event_name === "SessionStart" || event.hook_event_name === "Stop";
       const usage = deps.latestUsage(event);
+      // Cumulative spend needs a full transcript scan — only on Stop (once per turn).
+      const total = event.hook_event_name === "Stop" ? deps.totalUsage(event) : null;
       await deps.api.pushState(event.session_id, {
         latestAnswer: deps.lastAssistantText(event),
         transcript: deps.recentMessages(event),
         ...(refreshTodos ? { todos: deps.latestTodos(event) } : {}),
         working,
         ...(usage.contextTokens != null ? { contextTokens: usage.contextTokens, model: usage.model } : {}),
+        ...(total && total.tokensOutput > 0 ? { tokensInput: total.tokensInput, tokensOutput: total.tokensOutput } : {}),
       });
     }
 
@@ -181,6 +186,7 @@ export async function handle(): Promise<void> {
     recentMessages: (e) => readRecentMessages(e.transcript_path),
     latestTodos: (e) => readLatestTodos(e.transcript_path),
     latestUsage: (e) => readLatestUsage(e.transcript_path),
+    totalUsage: (e) => readTotalUsage(e.transcript_path),
   });
   if (out) process.stdout.write(JSON.stringify(out));
 }
