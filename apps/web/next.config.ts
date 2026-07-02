@@ -33,6 +33,7 @@ const nextConfig: NextConfig = {
       { source: "/access-keys", destination: `${API_URL}/access-keys` },
       { source: "/access-keys/:path*", destination: `${API_URL}/access-keys/:path*` },
       { source: "/telemetry", destination: `${API_URL}/telemetry` },
+      { source: "/telemetry/:path*", destination: `${API_URL}/telemetry/:path*` },
     ];
   },
 };

@@ -86,6 +86,35 @@ export type HostTelemetryView = {
   netTxHistory: number[];
 };
 
+/** One Docker container on a host, as reported by the agent (`docker ps` + `stats`). */
+export const DockerContainerSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  image: z.string(),
+  state: z.string(), // running | exited | paused | restarting | created
+  status: z.string(), // human status, e.g. "Up 2 hours (healthy)"
+  ports: z.string().nullable().default(null),
+  cpuPct: z.coerce.number().nullable().default(null),
+  memUsed: z.coerce.number().nullable().default(null), // bytes
+  memPct: z.coerce.number().nullable().default(null),
+});
+export type DockerContainer = z.infer<typeof DockerContainerSchema>;
+
+export const DockerReportSchema = z.object({
+  available: z.boolean().default(true), // false when docker isn't installed / no permission
+  containers: z.array(DockerContainerSchema).default([]),
+});
+export type DockerReport = z.infer<typeof DockerReportSchema>;
+
+/** Server view of a host's Docker state: latest snapshot + when it arrived. */
+export type DockerHostView = {
+  hostId: string;
+  machine: string;
+  at: string;
+  available: boolean;
+  containers: DockerContainer[];
+};
+
 /** A command the server queues for a host agent to execute. */
 export const HostCommandKindSchema = z.enum(["passive_run", "fetch_history"]);
 export type HostCommandKind = z.infer<typeof HostCommandKindSchema>;

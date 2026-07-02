@@ -183,6 +183,9 @@ export async function revokeAccessKey(id: string): Promise<unknown> {
 export async function getTelemetry(): Promise<unknown[]> {
   return (await req("/telemetry")).json();
 }
+export async function getDocker(): Promise<unknown[]> {
+  return (await req("/telemetry/docker")).json();
+}
 
 export async function getInventory(): Promise<unknown> {
   return (await req("/inventory")).json();

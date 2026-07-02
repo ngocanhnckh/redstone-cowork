@@ -21,6 +21,7 @@ import {
 } from "./forwarding";
 import { sshSetup, type SshSetupArgs } from "./ssh-setup";
 import { listDir, readFileAt, writeFileAt, deletePath, makeDir, createFile, uploadLocalFile } from "./files";
+import { gitInfo } from "./git";
 import { IPC } from "../shared/ipc";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -220,6 +221,8 @@ ipcMain.handle(IPC.tagRemove, (_e, a: { sessionId: string; tag: string }) =>
   api.removeTag(a.sessionId, a.tag)
 );
 ipcMain.handle(IPC.inventoryList, () => api.getInventory());
+ipcMain.handle(IPC.dockerList, () => api.getDocker());
+ipcMain.handle(IPC.gitInfo, (_e, a: { cwd: string; machine: string }) => gitInfo(a.cwd, a.machine));
 ipcMain.handle(IPC.telemetryList, () => api.getTelemetry());
 ipcMain.handle(IPC.inventoryHistory, (_e, a: { id: string }) => api.inventoryHistory(a.id));
 ipcMain.handle(IPC.inventoryRun, (_e, a: { id: string; message: string }) => api.inventoryRun(a.id, a.message));

@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 import { configDir } from "./config";
 import { scanSessions } from "./scanner";
 import { sampleTelemetry } from "./telemetry";
+import { sampleDocker } from "./docker";
 import { readRecentMessages } from "./transcript";
 import type { ApiClient } from "./api-client";
 
@@ -15,6 +16,7 @@ const execFileP = promisify(execFile);
 const SCAN_INTERVAL_MS = 60_000;
 const COMMAND_POLL_MS = 25_000;
 const TELEMETRY_INTERVAL_MS = 10_000;
+const DOCKER_INTERVAL_MS = 15_000;
 
 /** Stable per-machine id, persisted so a host keeps its identity across restarts. */
 export function loadOrCreateHostId(): string {
@@ -105,6 +107,17 @@ export async function runAgent(opts: { api: ApiClient; sleep?: (ms: number) => P
     }
   };
 
+  // Docker loop: sample container state (best-effort) for the docker widget.
+  const dockerLoop = async () => {
+    for (;;) {
+      try {
+        const snap = await sampleDocker();
+        await api.reportDocker(hostId, snap as unknown as Record<string, unknown>);
+      } catch { /* transient — next tick */ }
+      await sleep(DOCKER_INTERVAL_MS);
+    }
+  };
+
   // Command loop: long-poll for work, execute, post the result.
   const commandLoop = async () => {
     for (;;) {
@@ -120,5 +133,5 @@ export async function runAgent(opts: { api: ApiClient; sleep?: (ms: number) => P
     }
   };
 
-  await Promise.all([scanLoop(), telemetryLoop(), commandLoop()]);
+  await Promise.all([scanLoop(), telemetryLoop(), dockerLoop(), commandLoop()]);
 }

@@ -51,6 +51,10 @@ contextBridge.exposeInMainWorld("cowork", {
     ipcRenderer.invoke(IPC.inventoryList),
   getTelemetry: (): Promise<unknown[]> =>
     ipcRenderer.invoke(IPC.telemetryList),
+  getDocker: (): Promise<unknown[]> =>
+    ipcRenderer.invoke(IPC.dockerList),
+  gitInfo: (cwd: string, machine: string): Promise<{ ok: boolean; repo: boolean; branch: string | null; ahead: number; behind: number; dirty: number; commits: Array<{ hash: string; author: string; relative: string; date: string; subject: string }>; error?: string }> =>
+    ipcRenderer.invoke(IPC.gitInfo, { cwd, machine }),
   inventoryHistory: (id: string): Promise<{ ok: boolean; messages?: Array<{ role: string; text: string }>; error?: string }> =>
     ipcRenderer.invoke(IPC.inventoryHistory, { id }),
   inventoryRun: (id: string, message: string): Promise<{ ok: boolean; reply?: string; error?: string }> =>

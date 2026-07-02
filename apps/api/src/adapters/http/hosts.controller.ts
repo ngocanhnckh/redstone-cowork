@@ -31,6 +31,18 @@ export class HostsController {
     }
   }
 
+  @Post(":id/docker")
+  @HttpCode(200)
+  async reportDocker(@Param("id") id: string, @Body() body: unknown) {
+    try {
+      this.telemetry.recordDocker(id, body);
+      return { ok: true };
+    } catch (e) {
+      if (e instanceof ZodError) throw new BadRequestException(e.issues);
+      throw e;
+    }
+  }
+
   @Post()
   @HttpCode(200)
   async register(@Body() body: unknown) {

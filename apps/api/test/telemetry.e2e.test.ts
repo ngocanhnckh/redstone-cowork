@@ -42,4 +42,21 @@ describe("host telemetry HTTP", () => {
     await auth(request(srv()).post("/hosts/th/telemetry")).send({ ...sample(20, 100), cpuPct: 250 }).expect(400);
     await request(srv()).get("/telemetry").expect(401);
   });
+
+  it("ingests a docker snapshot and returns it joined with the machine name", async () => {
+    await auth(request(srv()).post("/hosts")).send({ hostId: "dk", machine: "docker-box" }).expect(200);
+    await auth(request(srv()).post("/hosts/dk/docker")).send({
+      available: true,
+      containers: [
+        { id: "abc123", name: "api", image: "rcw-api:latest", state: "running", status: "Up 2 hours", ports: "3001", cpuPct: 12.5, memUsed: 50_000_000, memPct: 3.1 },
+        { id: "def456", name: "pg", image: "postgres:16", state: "exited", status: "Exited (0)", ports: null, cpuPct: null, memUsed: null, memPct: null },
+      ],
+    }).expect(200);
+    const res = await auth(request(srv()).get("/telemetry/docker")).expect(200);
+    const host = res.body.find((h: { hostId: string }) => h.hostId === "dk");
+    expect(host.machine).toBe("docker-box");
+    expect(host.available).toBe(true);
+    expect(host.containers).toHaveLength(2);
+    expect(host.containers[0]).toMatchObject({ name: "api", state: "running", cpuPct: 12.5 });
+  });
 });

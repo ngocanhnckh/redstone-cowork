@@ -32,6 +32,15 @@ export type HostTelemetryView = {
   cpuHistory: number[]; netRxHistory: number[]; netTxHistory: number[];
 };
 
+export type DockerContainer = {
+  id: string; name: string; image: string; state: string; status: string;
+  ports: string | null; cpuPct: number | null; memUsed: number | null; memPct: number | null;
+};
+export type DockerHostView = { hostId: string; machine: string; at: string; available: boolean; containers: DockerContainer[] };
+
+export type Commit = { hash: string; author: string; relative: string; date: string; subject: string };
+export type GitInfo = { ok: boolean; repo: boolean; branch: string | null; ahead: number; behind: number; dirty: number; commits: Commit[]; error?: string };
+
 export type DecisionOption = { label: string; description?: string };
 export type Decision = {
   id: string; sessionId: string;

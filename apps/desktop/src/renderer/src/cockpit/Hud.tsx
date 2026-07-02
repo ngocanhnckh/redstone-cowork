@@ -6,8 +6,10 @@ import QueueRail from "./QueueRail";
 import MultiTerminal from "./MultiTerminal";
 import FilesPanel from "./FilesPanel";
 import BrowserPanel from "./BrowserPanel";
+import DockerDeck from "./DockerDeck";
 import AnswerDock from "./AnswerDock";
 import Markdown from "./Markdown";
+import { GitInfo } from "../types";
 
 // Motion (motion.dev) entrance choreography for the widget column.
 const STAGGER: Variants = { hidden: {}, show: { transition: { staggerChildren: 0.07, delayChildren: 0.05 } } };
@@ -183,42 +185,6 @@ function RotatingGlobe({ geo, size = 150 }: { geo: { lat: number; long: number; 
   );
 }
 
-/** A slowly-drifting wireframe satellite — the HUD's hero illustration. */
-function Satellite() {
-  return (
-    // viewBox padded top/bottom so the antenna dish + pulse ring never clip.
-    <svg viewBox="0 0 240 172" style={{ width: "100%", height: "auto", display: "block", overflow: "visible" }} className="hud-float">
-      <g stroke="rgb(var(--primary-soft) / 0.7)" strokeWidth={1} fill="none" strokeLinejoin="round">
-        {/* left solar wing */}
-        <g className="hud-panel-shimmer">
-          <path d="M20 62 L88 82 L88 104 L20 84 Z" />
-          {[0, 1, 2, 3].map((i) => <line key={`lw${i}`} x1={20 + i * 17} y1={62 + i * 5.6} x2={20 + i * 17} y2={84 + i * 5.6} />)}
-          <line x1={20} y1={73} x2={88} y2={93} />
-        </g>
-        {/* right solar wing */}
-        <g className="hud-panel-shimmer">
-          <path d="M152 82 L220 62 L220 84 L152 104 Z" />
-          {[0, 1, 2, 3].map((i) => <line key={`rw${i}`} x1={152 + i * 17} y1={104 - i * 5.6} x2={152 + i * 17} y2={82 - i * 5.6} />)}
-          <line x1={152} y1={93} x2={220} y2={73} />
-        </g>
-        {/* central body */}
-        <path d="M96 74 L120 64 L144 74 L144 104 L120 114 L96 104 Z" fill="rgb(var(--primary) / 0.06)" />
-        <path d="M96 74 L120 84 L144 74 M120 84 L120 114" />
-        {/* antenna dish */}
-        <ellipse cx={120} cy={44} rx={16} ry={7} transform="rotate(-16 120 44)" />
-        <line x1={120} y1={64} x2={120} y2={50} />
-        <circle cx={120} cy={44} r={2} fill="rgb(var(--accent))" stroke="none" />
-        {/* thruster */}
-        <path d="M120 114 L114 126 L126 126 Z" />
-      </g>
-      <circle cx={120} cy={44} r={3} fill="none" stroke="rgb(var(--accent) / 0.6)" strokeWidth={0.6}>
-        <animate attributeName="r" values="2;10;2" dur="3s" repeatCount="indefinite" />
-        <animate attributeName="opacity" values="0.7;0;0.7" dur="3s" repeatCount="indefinite" />
-      </circle>
-    </svg>
-  );
-}
-
 const card: React.CSSProperties = { border: "1px solid var(--border)", borderRadius: 14, padding: "14px 16px", background: "rgb(var(--primary) / 0.03)", position: "relative", overflow: "hidden" };
 const kicker = (t: string) => <div style={{ marginBottom: 10 }}><Decode text={t} className="mono" style={{ fontSize: 10, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--text-soft)" }} /></div>;
 const metric = (label: string, value: string) => (
@@ -304,6 +270,76 @@ function HostSkeleton() {
   );
 }
 
+/** Latest commits + working-tree status for the focused session's repo. */
+function GitPane() {
+  const focusId = useStore((s) => s.focusId);
+  const sessions = useStore((s) => s.sessions);
+  const queue = useStore((s) => s.queue);
+  const session = sessions.find((s) => s.id === focusId) ?? queue.find((s) => s.id === focusId);
+  const [info, setInfo] = useState<GitInfo | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const load = () => {
+    if (!session) { setInfo(null); return; }
+    setLoading(true);
+    window.cowork.gitInfo(session.cwd, session.machine)
+      .then((r) => setInfo(r as GitInfo))
+      .catch(() => setInfo({ ok: false, repo: false, branch: null, ahead: 0, behind: 0, dirty: 0, commits: [] }))
+      .finally(() => setLoading(false));
+  };
+  useEffect(load, [session?.id, session?.cwd, session?.machine]);
+  // Refresh periodically so new commits appear (git ops happen out of band).
+  useEffect(() => { const t = setInterval(load, 20_000); return () => clearInterval(t); }, [session?.id, session?.cwd, session?.machine]);
+
+  return (
+    <div style={{ ...card, padding: "13px 15px" }}>
+      <span className="hud-corner" />
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+        <span style={{ fontSize: 12 }}>⎇</span>
+        <Decode text="Git Activity" className="mono" style={{ fontSize: 10, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--text-soft)" }} />
+        <span style={{ flex: 1 }} />
+        {info?.repo && info.branch && (
+          <span className="mono" style={{ fontSize: 9.5, padding: "1px 8px", borderRadius: 999, background: "rgb(var(--primary) / 0.16)" }}>{info.branch}</span>
+        )}
+        <button onClick={load} title="Refresh" style={{ border: "1px solid var(--border)", background: "transparent", color: "var(--text-soft)", borderRadius: 6, padding: "1px 7px", fontSize: 10, cursor: "pointer" }}>↻</button>
+      </div>
+
+      {!session ? (
+        <span className="mono faint" style={{ fontSize: 11 }}>no session selected</span>
+      ) : loading && !info ? (
+        <span className="mono faint hud-blink" style={{ fontSize: 11 }}>reading repo…</span>
+      ) : !info?.repo ? (
+        <span className="mono faint" style={{ fontSize: 11 }}>not a git repository</span>
+      ) : (
+        <>
+          <div style={{ display: "flex", gap: 14, marginBottom: 11 }}>
+            {metric("Ahead", `↑${info.ahead}`)}
+            {metric("Behind", `↓${info.behind}`)}
+            {metric("Dirty", info.dirty ? `● ${info.dirty}` : "clean")}
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+            {info.commits.length === 0 && <span className="mono faint" style={{ fontSize: 11 }}>no commits</span>}
+            {info.commits.map((c, i) => (
+              <div key={c.hash + i} style={{ display: "flex", gap: 9, padding: "6px 0", borderTop: i === 0 ? "none" : "1px solid var(--border)" }}>
+                <span style={{ display: "flex", flexDirection: "column", alignItems: "center", flexShrink: 0 }}>
+                  <span style={{ width: 7, height: 7, borderRadius: 999, background: i === 0 ? "rgb(var(--accent))" : "var(--border-strong)", marginTop: 3 }} className={i === 0 ? "hud-pulse" : undefined} />
+                  {i < info.commits.length - 1 && <span style={{ width: 1, flex: 1, background: "var(--border)", marginTop: 2 }} />}
+                </span>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={c.subject}>{c.subject}</div>
+                  <div className="mono faint" style={{ fontSize: 9.5, marginTop: 1 }}>
+                    <span style={{ color: "rgb(var(--primary-soft))" }}>{c.hash}</span> · {c.author} · {c.relative}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 
 // ---------------------------------------------------------------------------
 // Right: telemetry column
@@ -317,31 +353,11 @@ function TelemetryColumn({ tele }: { tele: HostTelemetryView[] }) {
     const spent = sessions.reduce((n, s) => n + (s.attachedAt ? Date.now() - new Date(s.attachedAt).getTime() : 0), 0);
     return { active, waiting, prompts, spent };
   }, [sessions]);
-  const primaryGeo = tele.find((t) => t.latest.geo)?.latest.geo ?? null;
-
   return (
     <motion.div className="no-scrollbar" style={{ flex: 1, minWidth: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: 14, minHeight: 0 }}
       variants={STAGGER} initial="hidden" animate="show">
-      {/* Hero: wireframe satellite over a rotating orbital-location globe */}
-      <motion.div variants={RISE} style={{ ...card, padding: "16px 16px 14px" }}>
-        <span className="hud-corner" />
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-          <span className="ai-core" style={{ width: 8, height: 8 }} />
-          <Decode text="RCW-ORBITAL" className="mono" style={{ fontSize: 12, letterSpacing: "0.12em" }} />
-          <span style={{ flex: 1 }} />
-          <span className="mono" style={{ fontSize: 9, padding: "1px 7px", borderRadius: 999, background: "rgb(var(--accent) / 0.16)", color: "rgb(var(--accent))" }}>◉ IN ORBIT</span>
-        </div>
-        <Satellite />
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 150px", gap: 12, alignItems: "center", marginTop: 6 }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
-            {kicker("Orbital Location")}
-            {metric("Nodes", `${tele.length} host${tele.length === 1 ? "" : "s"}`)}
-            {metric("Sessions", String(sessions.length))}
-            {metric("Velocity", "27,540 km/h")}
-          </div>
-          <RotatingGlobe geo={primaryGeo} size={150} />
-        </div>
-      </motion.div>
+      {/* Git activity for the selected session's repo */}
+      <motion.div variants={RISE}><GitPane /></motion.div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
         <motion.div variants={RISE}><Clock /></motion.div>
@@ -544,7 +560,11 @@ export default function Hud() {
       <HudStyles />
       <span className="hud-grid" />
       <div style={{ position: "relative", zIndex: 1, height: "100%", display: "grid", gridTemplateColumns: cols, minHeight: 0 }}>
-        <QueueRail />
+        {/* Left column: sessions queue (top half) + Docker status deck (bottom half) */}
+        <div style={{ display: "flex", flexDirection: "column", minHeight: 0, borderRight: "1px solid var(--border)" }}>
+          <div style={{ flex: "1 1 50%", minHeight: 0, display: "flex", flexDirection: "column" }}><QueueRail /></div>
+          <div style={{ flex: "1 1 50%", minHeight: 0, display: "flex", flexDirection: "column", padding: "0 10px 10px" }}><DockerDeck /></div>
+        </div>
         <HudConsole />
         <div style={{ borderLeft: "1px solid var(--border)", padding: "14px 16px", minHeight: 0, display: "flex", flexDirection: "column", position: "relative" }}>
           <button onClick={() => setWide((w) => !w)} title={wide ? "Shrink widget deck" : "Expand widget deck"}

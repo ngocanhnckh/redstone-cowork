@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { HostTelemetrySchema, type HostTelemetry } from "@rcw/shared";
+import { HostTelemetrySchema, DockerReportSchema, type HostTelemetry, type DockerContainer } from "@rcw/shared";
 
 type Entry = {
   latest: HostTelemetry;
@@ -8,6 +8,8 @@ type Entry = {
   netRxHistory: number[];
   netTxHistory: number[];
 };
+
+type DockerEntry = { available: boolean; containers: DockerContainer[]; at: Date };
 
 const HISTORY = 30; // samples kept per host for sparklines
 
@@ -19,6 +21,7 @@ const HISTORY = 30; // samples kept per host for sparklines
 @Injectable()
 export class TelemetryService {
   private readonly byHost = new Map<string, Entry>();
+  private readonly dockerByHost = new Map<string, DockerEntry>();
 
   record(hostId: string, input: unknown): void {
     const t = HostTelemetrySchema.parse(input);
@@ -37,5 +40,14 @@ export class TelemetryService {
   /** Latest + history per host, keyed by hostId (machine is joined by the caller). */
   all(): Map<string, Entry> {
     return this.byHost;
+  }
+
+  recordDocker(hostId: string, input: unknown): void {
+    const { available, containers } = DockerReportSchema.parse(input);
+    this.dockerByHost.set(hostId, { available, containers, at: new Date() });
+  }
+
+  allDocker(): Map<string, DockerEntry> {
+    return this.dockerByHost;
   }
 }
