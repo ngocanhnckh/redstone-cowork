@@ -3,7 +3,7 @@ import { BadRequestException } from "@nestjs/common";
 import type { Response } from "express";
 import { z, ZodError } from "zod";
 import { InventoryService } from "../../application/inventory.service";
-import { InstanceTokenGuard } from "./instance-token.guard";
+import { ExternalApiGuard } from "./external-api.guard";
 
 /**
  * The host-agent surface: the `redstone agent` daemon registers its machine,
@@ -11,7 +11,7 @@ import { InstanceTokenGuard } from "./instance-token.guard";
  * Authenticated like the rest of the CLI (instance token / access key).
  */
 @Controller("hosts")
-@UseGuards(InstanceTokenGuard)
+@UseGuards(ExternalApiGuard)
 export class HostsController {
   constructor(private readonly inventory: InventoryService) {}
 

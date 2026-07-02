@@ -2,6 +2,7 @@ import { Body, Controller, Get, HttpCode, HttpException, Post } from "@nestjs/co
 import { BadRequestException } from "@nestjs/common";
 import { z, ZodError } from "zod";
 import { RedstoneService, RedstoneAuthError } from "../../application/redstone.service";
+import { SettingsService } from "../../application/settings.service";
 
 /**
  * Public (unguarded) auth endpoints. Personal mode still authenticates with the
@@ -12,7 +13,10 @@ import { RedstoneService, RedstoneAuthError } from "../../application/redstone.s
  */
 @Controller("auth")
 export class AuthController {
-  constructor(private readonly redstone: RedstoneService) {}
+  constructor(
+    private readonly redstone: RedstoneService,
+    private readonly settings: SettingsService,
+  ) {}
 
   /** Lets the login UI decide whether to offer the "Sign in with Redstone" option. */
   @Get("config")
@@ -28,6 +32,8 @@ export class AuthController {
         .object({ username: z.string().min(1), password: z.string().min(1), scope: z.string().optional() })
         .parse(body);
       const { tokens, user } = await this.redstone.login(username, password, scope);
+      // First org login binds this installation to that Redstone user (owner).
+      await this.settings.claimOwnerIfUnset(user.sub);
       return { ...tokens, user };
     } catch (e) {
       throw toHttp(e);

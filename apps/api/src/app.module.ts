@@ -64,6 +64,15 @@ import { InventoryWaiters } from "./application/inventory-waiters";
 import { INVENTORY_STORE } from "./domain/inventory/inventory-store.port";
 import { InMemoryInventoryStore } from "./adapters/persistence/in-memory-inventory-store";
 import { PostgresInventoryStore } from "./adapters/persistence/postgres-inventory-store";
+import { AccessKeysController } from "./adapters/http/access-keys.controller";
+import { AccessKeysService } from "./application/access-keys.service";
+import { ACCESS_KEY_STORE } from "./domain/access-keys/access-key-store.port";
+import { InMemoryAccessKeyStore } from "./adapters/persistence/in-memory-access-key-store";
+import { PostgresAccessKeyStore } from "./adapters/persistence/postgres-access-key-store";
+import { ExternalApiGuard } from "./adapters/http/external-api.guard";
+import { SettingsService, SETTINGS_STORE } from "./application/settings.service";
+import { InMemorySettingsStore } from "./adapters/persistence/in-memory-settings-store";
+import { PostgresSettingsStore } from "./adapters/persistence/postgres-settings-store";
 import { LlmService } from "./application/llm.service";
 import { LLM_PORT, LLM_ENDPOINTS, LLM_LIMITS } from "./domain/llm/llm.port";
 import { LLM_ENDPOINT_STORE } from "./domain/llm/llm-endpoint-store.port";
@@ -79,7 +88,7 @@ import { PromptLoader } from "./infrastructure/prompts/prompt-loader";
 import type { Pool } from "pg";
 
 @Module({
-  controllers: [HealthController, EventsController, SessionsController, DecisionsController, StreamController, PushController, ConnectionsController, OAuthController, MicrosoftOAuthController, DevicesController, InstallController, LlmController, AuthController, HostsController, InventoryController],
+  controllers: [HealthController, EventsController, SessionsController, DecisionsController, StreamController, PushController, ConnectionsController, OAuthController, MicrosoftOAuthController, DevicesController, InstallController, LlmController, AuthController, HostsController, InventoryController, AccessKeysController],
   providers: [
     RecordEventUseCase,
     SessionsService,
@@ -145,6 +154,21 @@ import type { Pool } from "pg";
     },
     InventoryWaiters,
     InventoryService,
+    {
+      provide: ACCESS_KEY_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresAccessKeyStore(pool) : new InMemoryAccessKeyStore(),
+    },
+    {
+      provide: SETTINGS_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresSettingsStore(pool) : new InMemorySettingsStore(),
+    },
+    AccessKeysService,
+    SettingsService,
+    ExternalApiGuard,
     {
       provide: DECISION_STORE,
       inject: [PG_POOL],

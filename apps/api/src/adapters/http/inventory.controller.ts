@@ -1,7 +1,8 @@
-import { BadRequestException, Body, Controller, Get, HttpCode, NotFoundException, Param, Post, Query, UseGuards } from "@nestjs/common";
+import { BadRequestException, Body, Controller, ForbiddenException, Get, HttpCode, NotFoundException, Param, Post, Query, Req, UseGuards } from "@nestjs/common";
 import { z, ZodError } from "zod";
 import { InventoryService } from "../../application/inventory.service";
-import { InstanceTokenGuard } from "./instance-token.guard";
+import { ExternalApiGuard } from "./external-api.guard";
+import type { GuardedRequest } from "./instance-token.guard";
 
 /**
  * The consumer surface: browse all discovered sessions grouped by host → folder,
@@ -9,7 +10,7 @@ import { InstanceTokenGuard } from "./instance-token.guard";
  * also reachable by external callers via an access key (see access-key auth kind).
  */
 @Controller("inventory")
-@UseGuards(InstanceTokenGuard)
+@UseGuards(ExternalApiGuard)
 export class InventoryController {
   constructor(private readonly inventory: InventoryService) {}
 
@@ -34,8 +35,12 @@ export class InventoryController {
 
   @Post(":id/run")
   @HttpCode(200)
-  async run(@Param("id") id: string, @Body() body: unknown) {
+  async run(@Param("id") id: string, @Body() body: unknown, @Req() request: GuardedRequest) {
     try {
+      // Sending a message is a control action — an access key needs `control` scope.
+      if (request.authKind === "accesskey" && request.accessScope !== "control") {
+        throw new ForbiddenException("this access key is read-only (needs 'control' scope)");
+      }
       const { message } = z.object({ message: z.string().min(1) }).parse(body);
       return await this.inventory.requestRun(id, message);
     } catch (e) {
