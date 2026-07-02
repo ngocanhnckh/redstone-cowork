@@ -83,4 +83,17 @@ describe("session inventory HTTP", () => {
   it("rejects unauthenticated inventory access", async () => {
     await request(base()).get("/inventory").expect(401);
   });
+
+  it("accepts a device token on the host-agent surface (the redstone agent's auth)", async () => {
+    // Mint a device token (as `redstone init` does) and use it like the agent.
+    const reg = await auth(request(base()).post("/devices")).send({ label: "agent-box" }).expect(201);
+    const deviceToken = reg.body.token as string;
+    const dauth = (r: request.Test) => r.set("Authorization", `Bearer ${deviceToken}`);
+    await dauth(request(base()).post("/hosts")).send({ hostId: "dh", machine: "agentmac" }).expect(200);
+    await dauth(request(base()).post("/hosts/dh/inventory")).send({
+      machine: "agentmac", sessions: [{ id: "ds1", cwd: "/w/x", title: "t", lastActive: new Date().toISOString(), messageCount: 1, sizeBytes: 10 }],
+    }).expect(200);
+    const res = await dauth(request(base()).get("/inventory")).expect(200);
+    expect(res.body.sessions.map((s: { id: string }) => s.id)).toContain("ds1");
+  });
 });
