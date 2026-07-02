@@ -1,8 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+const updateTokens = vi.fn();
 vi.mock("./config", () => ({
   getToken: () => "tok",
   loadConfig: () => ({ serverUrl: "http://x", hasToken: true }),
+  getRefreshToken: () => "refresh1",
+  updateTokens: (...args: unknown[]) => updateTokens(...args),
 }));
 
 import * as api from "./api";
@@ -30,6 +33,26 @@ describe("desktop api client", () => {
     expect(url).toBe("http://x/decisions/d1/resolve");
     expect((init as RequestInit).method).toBe("POST");
     expect(String((init as RequestInit).body)).toContain("\"choice\":\"yes\"");
+  });
+
+  it("concurrent 401s trigger only ONE refresh (single-flight), then retry succeeds", async () => {
+    const fetchMock = vi.fn(async (url: unknown, init?: RequestInit) => {
+      if (String(url).endsWith("/auth/redstone/refresh"))
+        return new Response(JSON.stringify({ access_token: "new", refresh_token: "r2" }), { status: 200 });
+      const auth = (init?.headers as Record<string, string> | undefined)?.Authorization;
+      return auth === "Bearer new"
+        ? new Response(JSON.stringify([{ id: "s1" }]), { status: 200 })
+        : new Response("", { status: 401 });
+    });
+    api.setFetch(fetchMock as unknown as typeof fetch);
+
+    // Four data calls all 401 with the stale token at the same time.
+    const results = await Promise.all([api.getQueue(), api.getQueue(), api.getQueue(), api.getQueue()]);
+    results.forEach((r) => expect(r).toEqual([{ id: "s1" }]));
+
+    const refreshCalls = fetchMock.mock.calls.filter((c) => String(c[0]).endsWith("/auth/redstone/refresh"));
+    expect(refreshCalls).toHaveLength(1); // refresh token rotated exactly once
+    expect(updateTokens).toHaveBeenCalledWith("new", "r2");
   });
 
   it("parseSseBlock parses a data: line", () => {

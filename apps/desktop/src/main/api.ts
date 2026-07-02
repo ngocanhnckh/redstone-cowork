@@ -35,6 +35,22 @@ async function tryRefresh(serverUrl: string): Promise<string | null> {
   }
 }
 
+// Single-flight the refresh: many requests 401 at once when the access token
+// expires (queue, telemetry, docker, decisions all fire together). Without this,
+// each would POST /auth/redstone/refresh with the SAME refresh token; Redstone
+// rotates refresh tokens on use, so only the first succeeds and the rest fail —
+// and a racing updateTokens() write can persist a dead token, wedging auth until
+// the user signs out. Sharing one in-flight promise means the token rotates once.
+let refreshInFlight: Promise<string | null> | null = null;
+function sharedRefresh(serverUrl: string): Promise<string | null> {
+  if (!refreshInFlight) {
+    refreshInFlight = tryRefresh(serverUrl).finally(() => {
+      refreshInFlight = null;
+    });
+  }
+  return refreshInFlight;
+}
+
 async function req(path: string, init?: RequestInit): Promise<Response> {
   const { serverUrl, token } = cfg();
   const call = (t: string) =>
@@ -44,8 +60,9 @@ async function req(path: string, init?: RequestInit): Promise<Response> {
     });
   let res = await call(token);
   // Org access tokens expire (~24h) — refresh once and retry before failing.
+  // sharedRefresh() dedupes concurrent 401s so the refresh token rotates only once.
   if (res.status === 401) {
-    const fresh = await tryRefresh(serverUrl);
+    const fresh = await sharedRefresh(serverUrl);
     if (fresh) res = await call(fresh);
   }
   if (!res.ok) throw new Error(String(res.status));
