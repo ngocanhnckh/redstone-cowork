@@ -66,6 +66,12 @@ import { TelemetryController } from "./adapters/http/telemetry.controller";
 import { INVENTORY_STORE } from "./domain/inventory/inventory-store.port";
 import { InMemoryInventoryStore } from "./adapters/persistence/in-memory-inventory-store";
 import { PostgresInventoryStore } from "./adapters/persistence/postgres-inventory-store";
+import { SkillsController } from "./adapters/http/skills.controller";
+import { SkillRegistryService } from "./application/skill-registry.service";
+import { SkillSyncService } from "./application/skill-sync.service";
+import { SKILL_REGISTRY_STORE } from "./domain/skills/skill-registry.port";
+import { InMemorySkillRegistryStore } from "./adapters/persistence/in-memory-skill-registry-store";
+import { PostgresSkillRegistryStore } from "./adapters/persistence/postgres-skill-registry-store";
 import { AccessKeysController } from "./adapters/http/access-keys.controller";
 import { AccessKeysService } from "./application/access-keys.service";
 import { ACCESS_KEY_STORE } from "./domain/access-keys/access-key-store.port";
@@ -90,7 +96,7 @@ import { PromptLoader } from "./infrastructure/prompts/prompt-loader";
 import type { Pool } from "pg";
 
 @Module({
-  controllers: [HealthController, EventsController, SessionsController, DecisionsController, StreamController, PushController, ConnectionsController, OAuthController, MicrosoftOAuthController, DevicesController, InstallController, LlmController, AuthController, HostsController, InventoryController, AccessKeysController, TelemetryController],
+  controllers: [HealthController, EventsController, SessionsController, DecisionsController, StreamController, PushController, ConnectionsController, OAuthController, MicrosoftOAuthController, DevicesController, InstallController, LlmController, AuthController, HostsController, InventoryController, AccessKeysController, TelemetryController, SkillsController],
   providers: [
     RecordEventUseCase,
     SessionsService,
@@ -157,6 +163,14 @@ import type { Pool } from "pg";
     InventoryWaiters,
     InventoryService,
     TelemetryService,
+    {
+      provide: SKILL_REGISTRY_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresSkillRegistryStore(pool) : new InMemorySkillRegistryStore(),
+    },
+    SkillRegistryService,
+    SkillSyncService,
     {
       provide: ACCESS_KEY_STORE,
       inject: [PG_POOL],

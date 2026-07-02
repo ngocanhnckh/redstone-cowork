@@ -70,6 +70,19 @@ export class InventoryService {
     return !!done;
   }
 
+  /** Pending (not-yet-executed) commands for a host — used to dedupe fan-out enqueues. */
+  async pendingCommands(hostId: string): Promise<HostCommand[]> {
+    return this.store.listPendingCommands(hostId);
+  }
+
+  /** Fire-and-forget enqueue (no waiting for a result) — used by skill sync fan-out. */
+  async enqueue(hostId: string, kind: HostCommandKind, payload: Record<string, unknown>): Promise<HostCommand> {
+    const cmd: HostCommand = { id: randomUUID(), hostId, kind, payload, status: "pending", result: null, createdAt: new Date() };
+    await this.store.enqueueCommand(cmd);
+    this.waiters.notifyHost(hostId);
+    return cmd;
+  }
+
   private async enqueueAndWait(hostId: string, kind: HostCommandKind, payload: Record<string, unknown>): Promise<HostCommand | null> {
     const cmd: HostCommand = { id: randomUUID(), hostId, kind, payload, status: "pending", result: null, createdAt: new Date() };
     await this.store.enqueueCommand(cmd);

@@ -8,7 +8,7 @@ import { configDir } from "./config";
 import { scanSessions, findTranscriptPath } from "./scanner";
 import { sampleTelemetry } from "./telemetry";
 import { sampleDocker } from "./docker";
-import { scanCaps } from "./caps";
+import { scanCaps, readSkillContent, installSkill, type SkillContent } from "./caps";
 import { detectPublicAddress } from "./poller";
 import { readRecentMessages } from "./transcript";
 import type { ApiClient } from "./api-client";
@@ -35,7 +35,10 @@ export function loadOrCreateHostId(): string {
   return id;
 }
 
-type HostCommand = { id: string; kind: string; payload: { sessionId?: string; cwd?: string; message?: string } };
+type HostCommand = { id: string; kind: string; payload: { sessionId?: string; cwd?: string; message?: string; name?: string; skill?: SkillContent } };
+
+/** Context the skill-sync commands need (api client + this host's id). */
+export type CommandCtx = { api: ApiClient; hostId: string };
 
 /** Locate a session's transcript file from its cwd (project slug) + id. */
 function transcriptPath(cwd: string, sessionId: string): string {
@@ -47,8 +50,22 @@ function transcriptPath(cwd: string, sessionId: string): string {
  * Execute one host command and return the result object to post back. Defensive:
  * any failure becomes an `{ ok: false, error }` result rather than throwing.
  */
-export async function runCommand(cmd: HostCommand): Promise<Record<string, unknown>> {
+export async function runCommand(cmd: HostCommand, ctx?: CommandCtx): Promise<Record<string, unknown>> {
   try {
+    if (cmd.kind === "upload_skill") {
+      const { name } = cmd.payload;
+      if (!name) return { ok: false, error: "missing name" };
+      const content = readSkillContent(name);
+      if (!content) return { ok: false, error: `skill ${name} not found` };
+      if (ctx) await ctx.api.uploadSkillContent(ctx.hostId, content as unknown as Record<string, unknown>);
+      return { ok: true, name, files: content.files.length, hash: content.hash };
+    }
+    if (cmd.kind === "install_skill") {
+      const skill = cmd.payload.skill;
+      if (!skill || !skill.name) return { ok: false, error: "missing skill" };
+      const written = installSkill(skill);
+      return { ok: true, name: skill.name, written };
+    }
     if (cmd.kind === "passive_run") {
       const { sessionId, cwd, message } = cmd.payload;
       if (!sessionId || !cwd || !message) return { ok: false, error: "missing sessionId/cwd/message" };
@@ -151,7 +168,7 @@ export async function runAgent(opts: { api: ApiClient; sleep?: (ms: number) => P
       try {
         const cmds = (await api.hostCommands(hostId, COMMAND_POLL_MS)) as HostCommand[];
         for (const cmd of cmds) {
-          const result = await runCommand(cmd);
+          const result = await runCommand(cmd, { api, hostId });
           await api.postCommandResult(hostId, cmd.id, result).catch(() => {});
         }
       } catch {

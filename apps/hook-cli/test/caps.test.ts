@@ -2,7 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { scanCaps } from "../src/caps";
+import { readFileSync, existsSync } from "node:fs";
+import { scanCaps, readSkillContent, installSkill, hashSkillFiles } from "../src/caps";
 
 let home: string;
 beforeEach(() => { home = mkdtempSync(join(tmpdir(), "rcw-caps-")); });
@@ -35,5 +36,59 @@ describe("scanCaps", () => {
 
   it("returns empty when nothing is installed", () => {
     expect(scanCaps(home)).toEqual({ skills: [], commands: [] });
+  });
+
+  it("reports a stable per-skill hash that changes when content changes", () => {
+    write(".claude/skills/hasher/SKILL.md", "---\nname: hasher\n---\nbody v1");
+    write(".claude/skills/hasher/extra.md", "reference");
+    const h1 = scanCaps(home).skills.find((s) => s.name === "hasher")?.hash;
+    expect(h1).toMatch(/^[0-9a-f]{64}$/);
+    // Same content → same hash.
+    expect(scanCaps(home).skills.find((s) => s.name === "hasher")?.hash).toBe(h1);
+    // Changed content → different hash.
+    write(".claude/skills/hasher/SKILL.md", "---\nname: hasher\n---\nbody v2");
+    expect(scanCaps(home).skills.find((s) => s.name === "hasher")?.hash).not.toBe(h1);
+  });
+});
+
+describe("readSkillContent", () => {
+  it("returns all files under the skill dir with a matching hash", () => {
+    write(".claude/skills/full/SKILL.md", "---\nname: full\ndescription: A full skill\n---\nmain");
+    write(".claude/skills/full/refs/notes.md", "some notes");
+    const content = readSkillContent("full", home);
+    expect(content).not.toBeNull();
+    expect(content!.name).toBe("full");
+    expect(content!.description).toBe("A full skill");
+    expect(content!.files.map((f) => f.path).sort()).toEqual(["SKILL.md", "refs/notes.md"]);
+    expect(content!.hash).toBe(hashSkillFiles(content!.files));
+  });
+
+  it("returns null for an unknown skill", () => {
+    expect(readSkillContent("nope", home)).toBeNull();
+  });
+});
+
+describe("installSkill", () => {
+  it("writes files under ~/.claude/skills/<name>/ and rejects traversal", () => {
+    const written = installSkill(
+      {
+        name: "dist",
+        description: "distributed",
+        source: "org",
+        hash: "x",
+        files: [
+          { path: "SKILL.md", content: "---\nname: dist\n---\nhello" },
+          { path: "sub/doc.md", content: "doc" },
+          { path: "../evil.md", content: "nope" },
+        ],
+      },
+      home,
+    );
+    expect(written).toBe(2);
+    expect(readFileSync(join(home, ".claude/skills/dist/SKILL.md"), "utf8")).toContain("hello");
+    expect(readFileSync(join(home, ".claude/skills/dist/sub/doc.md"), "utf8")).toBe("doc");
+    expect(existsSync(join(home, ".claude/evil.md"))).toBe(false);
+    // The written skill round-trips through the scanner.
+    expect(scanCaps(home).skills.map((s) => s.name)).toContain("dist");
   });
 });

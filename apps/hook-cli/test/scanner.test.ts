@@ -94,4 +94,26 @@ describe("runCommand", () => {
     const res = await runCommand({ id: "c3", kind: "passive_run", payload: { sessionId: "x" } });
     expect(res).toEqual({ ok: false, error: "missing sessionId/cwd/message" });
   });
+
+  it("install_skill writes the skill's files into ~/.claude/skills and reports the count", async () => {
+    const home = mkdtempSync(join(tmpdir(), "rcw-inst-"));
+    const prevHome = process.env.HOME;
+    process.env.HOME = home;
+    try {
+      const res = await runCommand({
+        id: "c4",
+        kind: "install_skill",
+        payload: { skill: { name: "beamed", description: null, source: "org", hash: "h", files: [{ path: "SKILL.md", content: "---\nname: beamed\n---\nhi" }] } },
+      });
+      expect(res).toMatchObject({ ok: true, name: "beamed", written: 1 });
+    } finally {
+      process.env.HOME = prevHome;
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it("install_skill without a skill payload fails cleanly", async () => {
+    const res = await runCommand({ id: "c5", kind: "install_skill", payload: {} });
+    expect(res).toEqual({ ok: false, error: "missing skill" });
+  });
 });

@@ -2,8 +2,11 @@ import { Body, Controller, Get, HttpCode, NotFoundException, Param, Post, Query,
 import { BadRequestException } from "@nestjs/common";
 import type { Response } from "express";
 import { z, ZodError } from "zod";
+import { SkillContentSchema } from "@rcw/shared";
 import { InventoryService } from "../../application/inventory.service";
 import { TelemetryService } from "../../application/telemetry.service";
+import { SkillRegistryService } from "../../application/skill-registry.service";
+import { SkillSyncService } from "../../application/skill-sync.service";
 import { ExternalApiGuard } from "./external-api.guard";
 
 /**
@@ -17,6 +20,8 @@ export class HostsController {
   constructor(
     private readonly inventory: InventoryService,
     private readonly telemetry: TelemetryService,
+    private readonly registry: SkillRegistryService,
+    private readonly skillSync: SkillSyncService,
   ) {}
 
   @Post(":id/telemetry")
@@ -48,7 +53,25 @@ export class HostsController {
   async reportCaps(@Param("id") id: string, @Body() body: unknown) {
     try {
       this.telemetry.recordCaps(id, body);
+      // Reconcile this host against the cross-host union (best-effort, never throws).
+      const skills = this.telemetry.allCaps().get(id)?.skills ?? [];
+      await this.skillSync.onCapsReported(id, skills);
       return { ok: true };
+    } catch (e) {
+      if (e instanceof ZodError) throw new BadRequestException(e.issues);
+      throw e;
+    }
+  }
+
+  /** Agent uploads a skill's full contents (in response to an upload_skill command). */
+  @Post(":id/skills")
+  @HttpCode(200)
+  async uploadSkill(@Param("id") id: string, @Body() body: unknown) {
+    try {
+      const content = SkillContentSchema.parse(body);
+      const entry = await this.registry.upsert(content, id);
+      const { enqueued } = await this.skillSync.fanOutInstall(entry);
+      return { ok: true, name: entry.name, installing: enqueued.length };
     } catch (e) {
       if (e instanceof ZodError) throw new BadRequestException(e.issues);
       throw e;

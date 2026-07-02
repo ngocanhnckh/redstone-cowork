@@ -138,6 +138,12 @@ export class ApiClient {
     await this.req(`/hosts/${encodeURIComponent(hostId)}/caps`, { method: "POST", headers: json(this.cfg.token), body: JSON.stringify(snapshot) }, 8000).catch(() => {});
   }
 
+  /** Upload a skill's full contents in response to an upload_skill command. */
+  async uploadSkillContent(hostId: string, content: Record<string, unknown>): Promise<void> {
+    const r = await this.req(`/hosts/${encodeURIComponent(hostId)}/skills`, { method: "POST", headers: json(this.cfg.token), body: JSON.stringify(content) }, 15000);
+    if (!r.ok) throw new Error(`uploadSkillContent ${r.status}`);
+  }
+
   async hostCommands(hostId: string, timeoutMs: number): Promise<Array<Record<string, unknown>>> {
     const r = await this.req(`/hosts/${encodeURIComponent(hostId)}/commands?timeoutMs=${timeoutMs}`, { headers: json(this.cfg.token) }, timeoutMs + 5000);
     return r.status === 200 ? r.json() : [];

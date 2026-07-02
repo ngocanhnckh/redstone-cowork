@@ -124,8 +124,49 @@ export const CapItemSchema = z.object({
   name: z.string(),
   description: z.string().nullable().default(null),
   source: z.string().default("personal"), // "personal" | "plugin:<name>"
+  // Content hash — reported for skills so the server can cheaply tell which host
+  // has which skill and whether the content diverged. Commands don't need it.
+  hash: z.string().optional(),
 });
 export type CapItem = z.infer<typeof CapItemSchema>;
+
+/** One file inside a skill directory (path is relative to the skill dir). */
+export const SkillFileSchema = z.object({
+  path: z.string().min(1),
+  content: z.string(),
+});
+export type SkillFile = z.infer<typeof SkillFileSchema>;
+
+/** A skill's full transferable contents — what the server distributes across hosts. */
+export const SkillContentSchema = z.object({
+  name: z.string().min(1),
+  description: z.string().nullable().default(null),
+  source: z.string().default("personal"),
+  hash: z.string().min(1),
+  files: z.array(SkillFileSchema).default([]),
+});
+export type SkillContent = z.infer<typeof SkillContentSchema>;
+
+/** Union-registry list item for GET /skills: a skill + fleet coverage. */
+export const SkillListItemSchema = z.object({
+  name: z.string(),
+  description: z.string().nullable().default(null),
+  source: z.string().default("personal"),
+  hash: z.string().nullable().default(null),
+  hosts: z.array(z.string()).default([]), // hostIds whose latest caps have this skill
+  present: z.number().int().nonnegative().default(0),
+  totalHosts: z.number().int().nonnegative().default(0),
+});
+export type SkillListItem = z.infer<typeof SkillListItemSchema>;
+
+/** Body for POST /skills — an org system pushing a new/updated skill to the fleet. */
+export const SkillPushBodySchema = z.object({
+  name: z.string().min(1),
+  description: z.string().nullable().optional(),
+  files: z.array(SkillFileSchema).min(1),
+  force: z.boolean().optional(), // install even to hosts that already have it
+});
+export type SkillPushBody = z.infer<typeof SkillPushBodySchema>;
 
 export const CapsReportSchema = z.object({
   skills: z.array(CapItemSchema).default([]),
@@ -142,7 +183,12 @@ export type CapsHostView = {
 };
 
 /** A command the server queues for a host agent to execute. */
-export const HostCommandKindSchema = z.enum(["passive_run", "fetch_history"]);
+export const HostCommandKindSchema = z.enum([
+  "passive_run",
+  "fetch_history",
+  "upload_skill", // payload { name } — host uploads a skill's full SkillContent
+  "install_skill", // payload { skill: SkillContent } — host writes files under ~/.claude/skills/<name>/
+]);
 export type HostCommandKind = z.infer<typeof HostCommandKindSchema>;
 
 export const HostCommandSchema = z.object({
