@@ -20,8 +20,9 @@ export const DiscoveredSessionSchema = z.object({
   folder: z.string().min(1), // basename(cwd)
   title: z.string().nullable().default(null), // first user prompt, truncated
   lastActive: z.coerce.date(),
-  messageCount: z.number().int().nonnegative().default(0),
-  sizeBytes: z.number().int().nonnegative().default(0),
+  // bigint columns come back from pg as strings — coerce so parsing succeeds.
+  messageCount: z.coerce.number().int().nonnegative().default(0),
+  sizeBytes: z.coerce.number().int().nonnegative().default(0),
   source: z.enum(["cowork", "external"]).default("external"),
   tags: z.array(z.string().min(1)).default([]),
   updatedAt: z.coerce.date(),
