@@ -49,6 +49,7 @@ type State = {
   pending: Record<string, PendingSend[]>; // sessionId → optimistic sends, shown instantly
   activeTab: Record<string, "chat" | "terminal" | "browser" | "ports" | "files">; // sessionId → active workspace tab
   openBrowsers: string[]; // sessionIds whose browser tab was opened — kept alive (see BrowserStack)
+  openTerminals: string[]; // sessionIds whose terminal was opened — kept alive (see TerminalStack)
   contextCollapsed: boolean; // right context sidebar collapsed (more room for the body)
   assistOpen: boolean; // LLM assistant slide-over
   settingsOpen: boolean; // connection settings modal
@@ -57,6 +58,7 @@ type State = {
   refresh: () => Promise<void>;
   setActiveTab: (sessionId: string, tab: "chat" | "terminal" | "browser" | "ports" | "files") => void;
   openBrowser: (sessionId: string) => void;
+  openTerminal: (sessionId: string) => void;
   toggleContext: () => void;
   toggleAssist: () => void;
   toggleSettings: () => void;
@@ -96,6 +98,7 @@ export const useStore = create<State>((set, get) => ({
   pending: {},
   activeTab: {},
   openBrowsers: [],
+  openTerminals: [],
   contextCollapsed: false,
   assistOpen: false,
   settingsOpen: false,
@@ -105,16 +108,24 @@ export const useStore = create<State>((set, get) => ({
   setActiveTab: (sessionId, tab) => {
     set((state) => ({
       activeTab: { ...state.activeTab, [sessionId]: tab },
-      // Once a session's browser is opened, keep it in the persistent stack forever.
+      // Once a session's browser/terminal is opened, keep it in the persistent
+      // stack forever so switching sessions never reloads/recreates it.
       openBrowsers:
         tab === "browser" && !state.openBrowsers.includes(sessionId)
           ? [...state.openBrowsers, sessionId]
           : state.openBrowsers,
+      openTerminals:
+        tab === "terminal" && !state.openTerminals.includes(sessionId)
+          ? [...state.openTerminals, sessionId]
+          : state.openTerminals,
     }));
   },
 
   openBrowser: (sessionId) =>
     set((state) => (state.openBrowsers.includes(sessionId) ? {} : { openBrowsers: [...state.openBrowsers, sessionId] })),
+
+  openTerminal: (sessionId) =>
+    set((state) => (state.openTerminals.includes(sessionId) ? {} : { openTerminals: [...state.openTerminals, sessionId] })),
 
   toggleContext: () => set((state) => ({ contextCollapsed: !state.contextCollapsed })),
 

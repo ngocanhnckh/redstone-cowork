@@ -3,7 +3,7 @@ import { motion, AnimatePresence, type Variants } from "motion/react";
 import { useStore } from "../store";
 import { HostTelemetryView } from "../types";
 import QueueRail from "./QueueRail";
-import MultiTerminal from "./MultiTerminal";
+import TerminalStack from "./TerminalStack";
 import FilesPanel from "./FilesPanel";
 import BrowserStack from "./BrowserStack";
 import DockerDeck from "./DockerDeck";
@@ -504,14 +504,18 @@ function HudConsole() {
   const queue = useStore((s) => s.queue);
   const session = sessions.find((s) => s.id === focusId) ?? queue.find((s) => s.id === focusId);
   const openBrowser = useStore((s) => s.openBrowser);
+  const openTerminal = useStore((s) => s.openTerminal);
   const [view, setView] = useState<ConsoleView>("ctf");
   const cfg = VIEWS[view];
   const browserInView = !!cfg.areas.browser;
+  const termInView = !!cfg.areas.term;
   const none = <div className="mono faint" style={{ padding: 14, fontSize: 11 }}>no session</div>;
 
-  // Keep this session's browser alive in the persistent stack the first time a
-  // browser-containing view is shown, so switching sessions never reloads it.
+  // Keep this session's browser/terminal alive in their persistent stacks the
+  // first time a view containing them is shown, so switching sessions never
+  // reloads/recreates them.
   useEffect(() => { if (browserInView && session) openBrowser(session.id); }, [browserInView, session?.id, openBrowser]);
+  useEffect(() => { if (termInView && session) openTerminal(session.id); }, [termInView, session?.id, openTerminal]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10, minHeight: 0, padding: "12px 14px" }}>
@@ -538,7 +542,8 @@ function HudConsole() {
       <div style={{ flex: 1, minHeight: 0, display: "grid", gap: 10, gridTemplateColumns: cfg.cols, gridTemplateRows: cfg.rows, gridTemplateAreas: cfg.template }}>
         <GridPanel title="Chat" area={cfg.areas.chat}><ChatPane /></GridPanel>
         <GridPanel title="Terminal" area={cfg.areas.term}>
-          {session ? <MultiTerminal key={`${session.id}-hud-term`} sessionId={session.id} cwd={session.cwd} machine={session.machine} /> : none}
+          {/* Keep-alive stack — each opened session's shells stay mounted. */}
+          <TerminalStack activeId={session?.id} active={termInView} />
         </GridPanel>
         <GridPanel title="Files" area={cfg.areas.files}>
           {session ? <FilesPanel key={`${session.id}-hud-files`} sessionId={session.id} cwd={session.cwd} machine={session.machine} /> : none}

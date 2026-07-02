@@ -4,7 +4,7 @@ import AnswerDock from "./AnswerDock";
 import TagBar from "./TagBar";
 import Markdown from "./Markdown";
 import Kbd from "./Kbd";
-import MultiTerminal from "./MultiTerminal";
+import TerminalStack from "./TerminalStack";
 import BrowserStack from "./BrowserStack";
 import PortsPanel from "./PortsPanel";
 import FilesPanel from "./FilesPanel";
@@ -242,12 +242,9 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
       </div>
 
       {activeTab === "terminal" ? (
-        <MultiTerminal
-          key={`${id}-terminal`}
-          sessionId={id ?? ""}
-          cwd={session.cwd}
-          machine={session.machine}
-        />
+        // Terminals live in a persistent, keep-alive stack (below) so they never
+        // reload/recreate on tab/session switch. Nothing renders here.
+        null
       ) : activeTab === "browser" ? (
         // The browser lives in a persistent, keep-alive stack (below) so it never
         // reloads on tab/session switch — like a Chrome tab. Nothing renders here.
@@ -377,10 +374,11 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
       </>
       )}
 
-      {/* Keep-alive browser layer: webviews for every opened session stay mounted
-          (shown only for the focused session on the Browser tab) so they never
-          reload on tab/session switch. */}
+      {/* Keep-alive layers: browsers and terminals for every opened session stay
+          mounted (shown only for the focused session on their tab) so they never
+          reload/recreate on tab/session switch. */}
       <BrowserStack activeId={id} active={activeTab === "browser"} />
+      <TerminalStack activeId={id} active={activeTab === "terminal"} />
     </div>
   );
 }
