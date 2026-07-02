@@ -1,7 +1,7 @@
 import { useRef, useState, useEffect } from "react";
 import { Decision } from "../types";
 import { useStore } from "../store";
-import { nextAfterAnswer } from "../autoAdvance";
+import { nextWaiting } from "../autoAdvance";
 import Kbd from "./Kbd";
 
 interface Props {
@@ -22,6 +22,7 @@ export default function AnswerDock({ decision, working, sessionId: sessionIdProp
   const setFocus = useStore((s) => s.setFocus);
   const focusId = useStore((s) => s.focusId);
   const queue = useStore((s) => s.queue);
+  const decisions = useStore((s) => s.decisions);
   const instruct = useStore((s) => s.instruct);
   const interrupt = useStore((s) => s.interrupt);
   const idleSessionId = sessionIdProp ?? focusId;
@@ -34,7 +35,7 @@ export default function AnswerDock({ decision, working, sessionId: sessionIdProp
       if (!e.ctrlKey || e.metaKey || e.altKey) return;
       if (e.key === "ArrowRight") {
         e.preventDefault();
-        const next = nextAfterAnswer(queue, sid);
+        const next = nextWaiting(queue, decisions, sid);
         if (next) setFocus(next);
       } else if (e.key.toLowerCase() === "s" && !e.shiftKey) {
         e.preventDefault();
@@ -138,7 +139,7 @@ export default function AnswerDock({ decision, working, sessionId: sessionIdProp
             className="glass-btn--clay"
             onClick={() => {
               if (idleSessionId) {
-                const next = nextAfterAnswer(queue, idleSessionId);
+                const next = nextWaiting(queue, decisions, idleSessionId);
                 if (next) setFocus(next);
               }
             }}
@@ -242,7 +243,7 @@ export default function AnswerDock({ decision, working, sessionId: sessionIdProp
         <span
           className="glass-inset-hover"
           onClick={() => {
-            const next = nextAfterAnswer(queue, sessionId);
+            const next = nextWaiting(queue, decisions, sessionId);
             if (next) setFocus(next);
           }}
           style={{

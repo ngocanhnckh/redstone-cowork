@@ -13,6 +13,24 @@ export function pickFocus(
   if (current && allSessions.some((s) => s.id === current)) return current;
   return queue[0]?.id ?? null;
 }
-export function nextAfterAnswer(queue: { id: string }[], answeredId: string): string | null {
-  return queue.find((q) => q.id !== answeredId)?.id ?? null;
+/** Decision kinds that mean a session is genuinely waiting for the user's answer. */
+const ACTIONABLE_KINDS = new Set(["question", "permission"]);
+
+/**
+ * The next session actually waiting for the user's answer: the first queue entry
+ * (queue is pre-sorted pinned → longest-waiting) that has a PENDING actionable
+ * decision (question/permission) and isn't `excludeId`. Returns null when nothing
+ * needs input — callers must NOT fall back to an arbitrary session, otherwise the
+ * focus jumps to a session that's merely thinking or only showing a passive
+ * completion/notification card (which still counts as "waiting" in the queue).
+ */
+export function nextWaiting(
+  queue: { id: string }[],
+  decisions: { sessionId: string; kind: string }[],
+  excludeId?: string | null
+): string | null {
+  const needsInput = new Set(
+    decisions.filter((d) => ACTIONABLE_KINDS.has(d.kind)).map((d) => d.sessionId)
+  );
+  return queue.find((q) => q.id !== excludeId && needsInput.has(q.id))?.id ?? null;
 }

@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { SessionView, Decision, Host, DiscoveredSession } from "./types";
-import { pickFocus, nextAfterAnswer } from "./autoAdvance";
+import { pickFocus, nextWaiting } from "./autoAdvance";
 
 /**
  * A reply shown instantly in the timeline before the host echoes it back. We
@@ -200,9 +200,12 @@ export const useStore = create<State>((set, get) => ({
         custom: null,
         ...resolution,
       });
-      const next = sessionId ? nextAfterAnswer(get().queue, sessionId) : null;
-      if (next) set({ focusId: next });
+      // Refresh first, then advance to the next session actually waiting for input
+      // (fresh data + actionable-only, so we don't land on a thinking / passive one).
       await get().refresh();
+      const { queue, decisions } = get();
+      const next = sessionId ? nextWaiting(queue, decisions, sessionId) : null;
+      if (next) set({ focusId: next });
     } catch (e) {
       set({ error: e instanceof Error ? e.message : String(e) });
     }
@@ -221,24 +224,19 @@ export const useStore = create<State>((set, get) => ({
   instruct: async (sessionId, text) => {
     try {
       get().recordSent(sessionId, text);
-      // In Flow mode, advance to the next non-busy session on the queue — skipping
-      // the one we just messaged (now busy) and any session actively working — so
-      // the user keeps moving through what needs their attention. Prefer a session
-      // with an actionable decision (a real question/permission), but fall back to
-      // any other waiting session rather than getting stuck on the one we just sent.
-      const { mode, queue, decisions } = get();
-      let next: string | null = null;
-      if (mode === "flow") {
-        const ACTIONABLE = new Set(["question", "permission", "mode"]);
-        const needsInput = new Set(
-          decisions.filter((d) => ACTIONABLE.has(d.kind)).map((d) => d.sessionId)
-        );
-        const candidates = queue.filter((q) => q.id !== sessionId && !q.working);
-        next = candidates.find((q) => needsInput.has(q.id))?.id ?? candidates[0]?.id ?? null;
-      }
       await window.cowork.instruct(sessionId, text);
-      if (next) set({ focusId: next });
+      // Refresh FIRST so the advance decision uses fresh queue + decisions (a stale
+      // snapshot was picking sessions that had since been answered / started thinking).
       await get().refresh();
+      // In Flow mode, advance ONLY to a session genuinely waiting for the user's
+      // answer (a pending question/permission), skipping the one we just messaged.
+      // If nothing needs input, STAY — never jump to a thinking session or one that
+      // only holds a passive completion card.
+      if (get().mode === "flow") {
+        const { queue, decisions } = get();
+        const next = nextWaiting(queue, decisions, sessionId);
+        if (next) set({ focusId: next });
+      }
     } catch (e) { set({ error: e instanceof Error ? e.message : String(e) }); }
   },
 
