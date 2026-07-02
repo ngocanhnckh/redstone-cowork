@@ -3,7 +3,7 @@ import { loadCliConfig } from "./config";
 import { ApiClient } from "./api-client";
 import { isArmed as isArmedFs, disarm as disarmFs } from "./state";
 import { buildDecisionSpec } from "./decision-spec";
-import { readLastAssistantText, readRecentMessages, readLatestTodos } from "./transcript";
+import { readLastAssistantText, readRecentMessages, readLatestTodos, readLatestUsage } from "./transcript";
 
 export type HookEvent = {
   hook_event_name: string;
@@ -32,6 +32,8 @@ export type Deps = {
   recentMessages: (event: HookEvent) => import("@rcw/shared").TranscriptMessage[];
   /** Claude's current to-do list (latest TodoWrite) from the transcript. */
   latestTodos: (event: HookEvent) => import("@rcw/shared").TodoItem[];
+  /** Current context-window size (tokens) + model from the transcript's latest turn. */
+  latestUsage: (event: HookEvent) => { contextTokens: number | null; model: string | null };
 };
 
 export async function processEvent(
@@ -95,11 +97,13 @@ export async function processEvent(
       // Stop (once per turn — cheap enough, keeps the list current for the user).
       const refreshTodos =
         todoToolRan || event.hook_event_name === "SessionStart" || event.hook_event_name === "Stop";
+      const usage = deps.latestUsage(event);
       await deps.api.pushState(event.session_id, {
         latestAnswer: deps.lastAssistantText(event),
         transcript: deps.recentMessages(event),
         ...(refreshTodos ? { todos: deps.latestTodos(event) } : {}),
         working,
+        ...(usage.contextTokens != null ? { contextTokens: usage.contextTokens, model: usage.model } : {}),
       });
     }
 
@@ -176,6 +180,7 @@ export async function handle(): Promise<void> {
     lastAssistantText: (e) => readLastAssistantText(e.transcript_path),
     recentMessages: (e) => readRecentMessages(e.transcript_path),
     latestTodos: (e) => readLatestTodos(e.transcript_path),
+    latestUsage: (e) => readLatestUsage(e.transcript_path),
   });
   if (out) process.stdout.write(JSON.stringify(out));
 }

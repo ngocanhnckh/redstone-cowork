@@ -29,6 +29,10 @@ export const SessionStatePatchSchema = z
     transcript: z.array(TranscriptMessageSchema).optional(),
     /** True while Claude is mid-turn (prompt submitted / running tools), false once it stops. */
     working: z.boolean().optional(),
+    /** Current context-window size in tokens (last request's input + cache tokens). */
+    contextTokens: z.number().int().nonnegative().nullable().optional(),
+    /** The model id from the latest turn (used to pick the context-window limit). */
+    model: z.string().nullable().optional(),
   })
   .strict();
 export type SessionStatePatch = z.infer<typeof SessionStatePatchSchema>;
@@ -51,6 +55,8 @@ export const AgentSessionSchema = z.object({
   tags: z.array(z.string().min(1)).default([]),
   transcript: z.array(TranscriptMessageSchema).default([]),
   working: z.boolean().default(false),
+  contextTokens: z.coerce.number().int().nonnegative().nullable().default(null),
+  model: z.string().nullable().default(null),
   pinned: z.boolean().default(false),
   snoozedUntil: z.coerce.date().nullable().default(null),
 });

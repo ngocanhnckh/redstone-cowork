@@ -20,6 +20,7 @@ const baseDeps = (overrides: Partial<Deps> = {}): Deps => ({
   lastAssistantText: vi.fn().mockReturnValue(null),
   recentMessages: vi.fn().mockReturnValue([]),
   latestTodos: vi.fn().mockReturnValue([]),
+  latestUsage: vi.fn().mockReturnValue({ contextTokens: null, model: null }),
   ...overrides,
 });
 

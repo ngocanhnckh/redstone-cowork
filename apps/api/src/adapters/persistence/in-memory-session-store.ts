@@ -21,6 +21,8 @@ export class InMemorySessionStore implements SessionStore {
           tags: existing.tags,
           transcript: existing.transcript,
           working: existing.working,
+          contextTokens: existing.contextTokens,
+          model: existing.model,
           pinned: existing.pinned,
           snoozedUntil: existing.snoozedUntil,
         }
@@ -56,6 +58,8 @@ export class InMemorySessionStore implements SessionStore {
       ...(patch.todos !== undefined ? { todos: patch.todos } : {}),
       ...(patch.transcript !== undefined ? { transcript: patch.transcript } : {}),
       ...(patch.working !== undefined ? { working: patch.working } : {}),
+      ...(patch.contextTokens !== undefined ? { contextTokens: patch.contextTokens } : {}),
+      ...(patch.model !== undefined ? { model: patch.model } : {}),
     };
     this.sessions.set(id, next);
     return next;

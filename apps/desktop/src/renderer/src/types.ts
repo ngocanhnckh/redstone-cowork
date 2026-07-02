@@ -11,6 +11,8 @@ export type SessionView = {
   tags: string[];
   transcript: TranscriptMessage[];
   working: boolean;
+  contextTokens: number | null;
+  model: string | null;
   pinned: boolean; snoozedUntil: string | null;
   lastSeenAt: string | null; attachedAt: string | null;
   permissionMode: string | null; autoModeEnabled: boolean;

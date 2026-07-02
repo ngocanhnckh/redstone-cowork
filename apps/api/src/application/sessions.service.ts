@@ -51,6 +51,8 @@ export class SessionsService {
       tags: existing?.tags ?? [],
       transcript: [],
       working: existing?.working ?? false,
+      contextTokens: existing?.contextTokens ?? null,
+      model: existing?.model ?? null,
       pinned: false,
       snoozedUntil: null,
     });

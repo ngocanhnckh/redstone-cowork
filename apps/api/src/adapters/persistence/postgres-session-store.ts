@@ -4,7 +4,8 @@ import type { SessionStore } from "../../domain/sessions/session-store.port";
 
 const ROW = `id, machine, cwd, git_branch AS "gitBranch", attached_at AS "attachedAt", last_seen_at AS "lastSeenAt",
              wrapper_id AS "wrapperId", permission_mode AS "permissionMode", auto_mode_enabled AS "autoModeEnabled",
-             latest_answer AS "latestAnswer", summary, todos, user_todos AS "userTodos", tags, transcript, working, pinned, snoozed_until AS "snoozedUntil"`;
+             latest_answer AS "latestAnswer", summary, todos, user_todos AS "userTodos", tags, transcript, working,
+             context_tokens AS "contextTokens", model, pinned, snoozed_until AS "snoozedUntil"`;
 
 export class PostgresSessionStore implements SessionStore {
   constructor(private readonly pool: Pool) {}
@@ -54,6 +55,8 @@ export class PostgresSessionStore implements SessionStore {
     if (patch.todos !== undefined) { vals.push(JSON.stringify(patch.todos)); sets.push(`todos = $${vals.length}::jsonb`); }
     if (patch.transcript !== undefined) { vals.push(JSON.stringify(patch.transcript)); sets.push(`transcript = $${vals.length}::jsonb`); }
     if (patch.working !== undefined) { vals.push(patch.working); sets.push(`working = $${vals.length}`); }
+    if (patch.contextTokens !== undefined) { vals.push(patch.contextTokens); sets.push(`context_tokens = $${vals.length}`); }
+    if (patch.model !== undefined) { vals.push(patch.model); sets.push(`model = $${vals.length}`); }
     if (sets.length === 0) return this.get(id);
     const res = await this.pool.query(`UPDATE sessions SET ${sets.join(", ")} WHERE id = $1 RETURNING ${ROW}`, vals);
     return res.rows[0] ? AgentSessionSchema.parse(res.rows[0]) : null;

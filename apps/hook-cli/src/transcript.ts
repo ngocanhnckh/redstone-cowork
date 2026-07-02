@@ -265,6 +265,45 @@ export function readLatestTodos(path: string | null | undefined): TodoItem[] {
   }
 }
 
+/**
+ * The current context-window size (tokens) + model from the latest assistant turn.
+ * Claude Code records per-turn `usage`; the context size is the total INPUT of the
+ * last request = input_tokens + cache_read + cache_creation (output isn't context).
+ * Tail-bounded; never throws.
+ */
+export function readLatestUsage(path: string | null | undefined): { contextTokens: number | null; model: string | null } {
+  const empty = { contextTokens: null, model: null };
+  if (!path) return empty;
+  let fd: number | null = null;
+  try {
+    fd = openSync(path, "r");
+    const size = fstatSync(fd).size;
+    const start = Math.max(0, size - TAIL_BYTES);
+    const length = size - start;
+    if (length <= 0) return empty;
+    const buf = Buffer.allocUnsafe(length);
+    readSync(fd, buf, 0, length, start);
+    let text = buf.toString("utf8");
+    if (start > 0) { const nl = text.indexOf("\n"); text = nl >= 0 ? text.slice(nl + 1) : ""; }
+    const lines = text.split("\n");
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const line = lines[i].trim();
+      if (!line || !line.includes("usage")) continue;
+      let obj: { message?: { role?: string; model?: string; usage?: Record<string, number> } };
+      try { obj = JSON.parse(line); } catch { continue; }
+      const u = obj.message?.usage;
+      if (obj.message?.role !== "assistant" || !u) continue;
+      const ctx = (u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0);
+      return { contextTokens: ctx > 0 ? ctx : null, model: obj.message?.model ?? null };
+    }
+    return empty;
+  } catch {
+    return empty;
+  } finally {
+    if (fd !== null) { try { closeSync(fd); } catch { /* ignore */ } }
+  }
+}
+
 export function readLastAssistantText(path: string | null | undefined): string | null {
   if (!path) return null;
   let fd: number | null = null;

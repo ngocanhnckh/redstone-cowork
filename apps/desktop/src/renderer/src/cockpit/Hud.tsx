@@ -9,6 +9,8 @@ import BrowserStack from "./BrowserStack";
 import DockerDeck from "./DockerDeck";
 import AnswerDock from "./AnswerDock";
 import Markdown from "./Markdown";
+import ContextGauge from "./ContextGauge";
+import ModeSelect from "./ModeSelect";
 import { GitInfo } from "../types";
 
 // Motion (motion.dev) entrance choreography for the widget column.
@@ -435,6 +437,14 @@ function ChatPane() {
 
   return (
     <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+      {/* Toolbar: permission-mode dropdown + context-window gauge */}
+      {session && (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 14px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
+          <ModeSelect session={session} />
+          <span style={{ flex: 1 }} />
+          <ContextGauge contextTokens={session.contextTokens} model={session.model} />
+        </div>
+      )}
       <div ref={scrollRef} onScroll={() => { const el = scrollRef.current; if (el) stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80; }}
         className="no-scrollbar" style={{ flex: 1, overflowY: "auto", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 12, fontFamily: "var(--font-mono)" }}>
         {!session && <span className="mono faint hud-blink" style={{ fontSize: 12 }}>no session selected</span>}

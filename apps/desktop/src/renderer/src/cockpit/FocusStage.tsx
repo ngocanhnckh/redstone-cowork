@@ -1,6 +1,7 @@
 import { useRef, useEffect } from "react";
 import { useStore } from "../store";
 import AnswerDock from "./AnswerDock";
+import ContextGauge from "./ContextGauge";
 import TagBar from "./TagBar";
 import Markdown from "./Markdown";
 import Kbd from "./Kbd";
@@ -149,6 +150,7 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
             {session.machine} · {session.gitBranch ?? "no branch"}
             {session.wrapperId ? ` · tmux rcw-${session.wrapperId}` : ` · #${session.id.slice(0, 4)}`}
           </span>
+          {activeTab === "chat" && <ContextGauge contextTokens={session.contextTokens} model={session.model} />}
         </div>
 
         {/* Mode selector — only relevant to Claude, so shown on the Chat tab */}
