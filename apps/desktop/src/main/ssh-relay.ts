@@ -110,6 +110,16 @@ export function buildRelayOpts(coords: TunnelCoordinates): string[] {
     `ssh -i ${shQuote(jumpKeyPath())}` +
     ` -o StrictHostKeyChecking=accept-new` +
     ` -o UserKnownHostsFile=${shQuote(relayKnownHostsPath())}` +
+    // Publickey-only / non-interactive so a rejected jump key fails as ONE clean
+    // attempt instead of falling through none/password/keyboard-interactive — the
+    // multi-method sequence is what fail2ban bans as a brute-force login.
+    ` -o BatchMode=yes` +
+    ` -o IdentitiesOnly=yes` +
+    ` -o PreferredAuthentications=publickey` +
+    ` -o PasswordAuthentication=no` +
+    ` -o KbdInteractiveAuthentication=no` +
+    ` -o NumberOfPasswordPrompts=0` +
+    ` -o ConnectTimeout=10` +
     ` -W localhost:${coords.tunnelPort}` +
     ` -p ${coords.relayPort}` +
     ` ${coords.tunnelUser}@${coords.relayHost}`;

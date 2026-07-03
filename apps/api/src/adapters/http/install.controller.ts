@@ -27,16 +27,21 @@ export class InstallController {
 
 const INSTALL_SH = `#!/usr/bin/env bash
 set -euo pipefail
-SERVER=""; TOKEN=""
+SERVER=""; TOKEN=""; RELAY=""
 while [ $# -gt 0 ]; do case "$1" in
   --server) SERVER="$2"; shift 2;;
   --token) TOKEN="$2"; shift 2;;
+  --relay) RELAY="1"; shift;;
   *) echo "unknown arg: $1" >&2; exit 1;; esac; done
-[ -n "$SERVER" ] && [ -n "$TOKEN" ] || { echo "usage: install.sh --server <url> --token <token>" >&2; exit 1; }
+[ -n "$SERVER" ] && [ -n "$TOKEN" ] || { echo "usage: install.sh --server <url> --token <token> [--relay]" >&2; exit 1; }
 command -v node >/dev/null 2>&1 || { echo "Node.js is required (>= 20). Install it then re-run." >&2; exit 1; }
 NODE_MAJOR="$(node -p 'process.versions.node.split(".")[0]')"
 [ "$NODE_MAJOR" -ge 20 ] || { echo "Node >= 20 required (found $(node -v))." >&2; exit 1; }
 mkdir -p "$HOME/.redstone" "$HOME/.local/bin"
+# Reverse SSH relay is OPT-IN (only for NAT'd hosts with no inbound SSH). The
+# marker gates the agent's tunnel loop; without it the agent never touches the
+# relay, so directly-reachable hosts can't trip fail2ban with rcwtun auth.
+if [ -n "$RELAY" ]; then touch "$HOME/.redstone/tunnel.enabled"; echo "reverse relay enabled (NAT'd host)"; else rm -f "$HOME/.redstone/tunnel.enabled" 2>/dev/null || true; fi
 echo "Downloading redstone..."
 curl -fsSL "$SERVER/install/redstone.js?t=$(date +%s)" -o "$HOME/.redstone/redstone.js"
 cat > "$HOME/.local/bin/redstone" <<'WRAPPER'

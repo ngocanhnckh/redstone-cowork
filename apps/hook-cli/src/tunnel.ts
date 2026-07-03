@@ -66,6 +66,16 @@ export function buildTunnelArgs(
     "-o", "ServerAliveCountMax=3",
     "-o", "StrictHostKeyChecking=accept-new",
     "-o", `UserKnownHostsFile=${knownHostsPath}`,
+    // Publickey-only, non-interactive: never fall through to `none`/`password`/
+    // keyboard-interactive. A rejected key must fail as ONE clean attempt, not a
+    // multi-method sequence that fail2ban reads as a brute-force login.
+    "-o", "BatchMode=yes",
+    "-o", "IdentitiesOnly=yes",
+    "-o", "PreferredAuthentications=publickey",
+    "-o", "PasswordAuthentication=no",
+    "-o", "KbdInteractiveAuthentication=no",
+    "-o", "NumberOfPasswordPrompts=0",
+    "-o", "ConnectTimeout=10",
     "-i", privKeyPath,
     "-R", `${coords.tunnelPort}:localhost:22`,
     "-p", String(coords.relayPort),

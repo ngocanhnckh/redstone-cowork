@@ -66,10 +66,29 @@ describe("buildTunnelArgs", () => {
       "-o", "ServerAliveCountMax=3",
       "-o", "StrictHostKeyChecking=accept-new",
       "-o", "UserKnownHostsFile=/home/u/.redstone/relay_known_hosts",
+      "-o", "BatchMode=yes",
+      "-o", "IdentitiesOnly=yes",
+      "-o", "PreferredAuthentications=publickey",
+      "-o", "PasswordAuthentication=no",
+      "-o", "KbdInteractiveAuthentication=no",
+      "-o", "NumberOfPasswordPrompts=0",
+      "-o", "ConnectTimeout=10",
       "-i", "/home/u/.redstone/tunnel_ed25519",
       "-R", "30001:localhost:22",
       "-p", "22",
       "rcwtun@your-server.example.com",
     ]);
+  });
+
+  it("forces publickey-only, non-interactive auth (no password fall-through)", () => {
+    const args = buildTunnelArgs(
+      { relayHost: "h", relayPort: 22, tunnelUser: "rcwtun", tunnelPort: 30000 },
+      "/k",
+      "/kh"
+    );
+    expect(args).toContain("BatchMode=yes");
+    expect(args).toContain("PreferredAuthentications=publickey");
+    expect(args).toContain("PasswordAuthentication=no");
+    expect(args).not.toContain("PasswordAuthentication=yes");
   });
 });

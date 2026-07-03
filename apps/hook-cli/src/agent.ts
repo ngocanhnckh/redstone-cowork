@@ -1,6 +1,6 @@
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { hostname, userInfo, platform } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -182,6 +182,15 @@ export async function runAgent(opts: { api: ApiClient; sleep?: (ms: number) => P
   // (no inbound port) stays reachable from the cockpit. Fully fail-safe: if keygen,
   // provisioning, or ssh fails, it backs off and retries — never crashes the agent.
   const tunnelLoop = async () => {
+    // OPT-IN ONLY. The reverse tunnel is for genuinely NAT'd hosts with no inbound
+    // SSH. Directly-reachable hosts must NOT run it: an unprovisioned relay (no
+    // `rcwtun` user yet) turns every reconnect into a failed-auth burst that
+    // fail2ban reads as a brute-force attack and bans the source. Enable per host
+    // with env REDSTONE_TUNNEL=1 or by touching `<configDir>/tunnel.enabled`.
+    const enabled =
+      process.env.REDSTONE_TUNNEL === "1" || existsSync(join(configDir(), "tunnel.enabled"));
+    if (!enabled) return;
+
     let key: Awaited<ReturnType<typeof ensureTunnelKey>> = null;
     try {
       key = await ensureTunnelKey(configDir());
@@ -194,7 +203,7 @@ export async function runAgent(opts: { api: ApiClient; sleep?: (ms: number) => P
     const knownHosts = relayKnownHostsPath(configDir());
     let coords: TunnelCoordinates | null = null;
     let provisionFails = 0;
-    let backoff = 5_000;
+    let backoff = 10_000;
 
     for (;;) {
       try {
@@ -204,13 +213,14 @@ export async function runAgent(opts: { api: ApiClient; sleep?: (ms: number) => P
           if (!coords) {
             // Server not ready yet — capped backoff, then retry.
             provisionFails++;
-            await sleep(Math.min(60_000, 5_000 * Math.min(provisionFails, 12)));
+            await sleep(Math.min(120_000, 10_000 * Math.min(provisionFails, 12)));
             continue;
           }
           provisionFails = 0;
         }
 
         const args = buildTunnelArgs(coords, key.privKeyPath, knownHosts);
+        const startedAt = Date.now();
         const exitCode = await new Promise<number>((resolve) => {
           try {
             const child = spawn("ssh", args, { stdio: ["ignore", "ignore", "ignore"] });
@@ -220,17 +230,26 @@ export async function runAgent(opts: { api: ApiClient; sleep?: (ms: number) => P
             resolve(255);
           }
         });
+        const ranMs = Date.now() - startedAt;
 
-        // ExitOnForwardFailure=yes → a taken/changed port surfaces as a non-zero
-        // exit; drop coords so we re-provision (may get a fresh port) next round.
-        if (exitCode !== 0) coords = null;
-        else backoff = 5_000; // tunnel had come up cleanly — reconnect promptly
+        if (exitCode === 0) {
+          backoff = 10_000; // clean shutdown — reconnect promptly
+        } else if (ranMs < 8_000) {
+          // Fast failure = auth reject / port taken / relay down. Drop coords and
+          // back off HARD (up to 5 min) so a misconfigured relay can never turn
+          // into an SSH-auth storm. This is the fail2ban-safety valve.
+          coords = null;
+          backoff = Math.min(300_000, Math.max(backoff, 30_000) * 2);
+        } else {
+          // Ran a while then dropped (network blip) — re-provision, reconnect soon.
+          coords = null;
+          backoff = 10_000;
+        }
       } catch {
         // Any unexpected error — force a clean re-provision next iteration.
         coords = null;
       }
       await sleep(backoff);
-      backoff = Math.min(30_000, Math.round(backoff * 1.5)); // 5s → 30s cap
     }
   };
 
