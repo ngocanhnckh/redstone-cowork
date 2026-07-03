@@ -66,7 +66,7 @@ export default function TokenSpendWidget() {
         <span className="mono faint" style={{ fontSize: 11 }}>no usage recorded yet</span>
       ) : (
         <>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12, marginBottom: 12 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(72px, 1fr))", gap: 12, marginBottom: 12 }}>
             {metric("Total", fmt(total))}
             {metric("Output", fmt(output), "rgb(var(--accent))")}
             {metric("Input", fmt(input), "rgb(var(--primary-soft))")}

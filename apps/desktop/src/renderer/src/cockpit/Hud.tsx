@@ -188,6 +188,29 @@ function RotatingGlobe({ geo, size = 150 }: { geo: { lat: number; long: number; 
   );
 }
 
+/**
+ * Wraps RotatingGlobe in a measured container so the globe scales to the column
+ * width instead of a fixed pixel size (canvas-style SVG needs a px size, so this
+ * is one of the few places a ResizeObserver earns its keep). Capped so it never
+ * grows gaudy or overflows the card horizontally.
+ */
+function ResponsiveGlobe({ geo }: { geo: { lat: number; long: number; city: string | null } | null }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState(128);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setSize(Math.max(96, Math.min(150, el.clientWidth - 8))));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return (
+    <div ref={ref} style={{ width: "100%", display: "flex", justifyContent: "center", overflow: "hidden" }}>
+      <RotatingGlobe geo={geo} size={size} />
+    </div>
+  );
+}
+
 const card: React.CSSProperties = { border: "1px solid var(--border)", borderRadius: 14, padding: "14px 16px", background: "rgb(var(--primary) / 0.03)", position: "relative", overflow: "hidden" };
 const kicker = (t: string) => <div style={{ marginBottom: 10 }}><Decode text={t} className="mono" style={{ fontSize: 10, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--text-soft)" }} /></div>;
 const metric = (label: string, value: string) => (
@@ -198,10 +221,10 @@ function Clock() {
   const [now, setNow] = useState(new Date());
   useEffect(() => { const t = setInterval(() => setNow(new Date()), 1000); return () => clearInterval(t); }, []);
   return (
-    <div style={card}>
+    <div style={{ ...card, containerType: "inline-size" }}>
       <span className="hud-corner" />
       {kicker("Mission Time")}
-      <div className="display" style={{ fontSize: 38, lineHeight: 1, fontVariantNumeric: "tabular-nums", letterSpacing: "0.02em" }}>
+      <div className="display" style={{ fontSize: "clamp(24px, 20cqw, 38px)", lineHeight: 1, fontVariantNumeric: "tabular-nums", letterSpacing: "0.02em", whiteSpace: "nowrap" }}>
         {now.toLocaleTimeString(undefined, { hour12: false })}<span className="hud-blink">▮</span>
       </div>
       <div className="mono faint" style={{ fontSize: 11, marginTop: 6 }}>
@@ -222,18 +245,18 @@ function HostCard({ t }: { t: HostTelemetryView }) {
         <span style={{ flex: 1 }} />
         <span className="mono faint" style={{ fontSize: 10 }}>up {fmtUptime(t.latest.uptimeSec)}</span>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-        <div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 14 }}>
+        <div style={{ minWidth: 0 }}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
             <span className="mono faint" style={{ fontSize: 9.5, letterSpacing: "0.1em", textTransform: "uppercase" }}>CPU</span>
             <span className="mono" style={{ fontSize: 12 }}>{Math.round(t.latest.cpuPct)}%</span>
           </div>
           <Sparkline data={t.cpuHistory} max={100} />
         </div>
-        <div>
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
-            <span className="mono faint" style={{ fontSize: 9.5, letterSpacing: "0.1em", textTransform: "uppercase" }}>RAM</span>
-            <span className="mono" style={{ fontSize: 12 }}>{fmtBytes(t.latest.ramUsed)} / {fmtBytes(t.latest.ramTotal)}</span>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 6, marginBottom: 2 }}>
+            <span className="mono faint" style={{ fontSize: 9.5, letterSpacing: "0.1em", textTransform: "uppercase", flexShrink: 0 }}>RAM</span>
+            <span className="mono" style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{fmtBytes(t.latest.ramUsed)} / {fmtBytes(t.latest.ramTotal)}</span>
           </div>
           <div style={{ marginTop: 14 }}><Bar pct={ramPct} /></div>
         </div>
@@ -244,7 +267,7 @@ function HostCard({ t }: { t: HostTelemetryView }) {
           </div>
           <Sparkline data={t.netRxHistory} color="rgb(var(--accent))" height={28} />
         </div>
-        <div style={{ gridColumn: "1 / -1", display: "flex", justifyContent: "center", marginTop: 4 }}><RotatingGlobe geo={t.latest.geo} size={128} /></div>
+        <div style={{ gridColumn: "1 / -1", marginTop: 4 }}><ResponsiveGlobe geo={t.latest.geo} /></div>
       </div>
     </div>
   );
@@ -323,7 +346,7 @@ function GitPane() {
         <span className="mono faint" style={{ fontSize: 11 }}>not a git repository</span>
       ) : (
         <>
-          <div style={{ display: "flex", gap: 14, marginBottom: 11 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 14, marginBottom: 11 }}>
             {metric("Ahead", `↑${info.ahead}`)}
             {metric("Behind", `↓${info.behind}`)}
             {metric("Dirty", info.dirty ? `● ${info.dirty}` : "clean")}
@@ -372,12 +395,12 @@ function TelemetryColumn({ tele }: { tele: HostTelemetryView[] }) {
   return (
     <motion.div className="no-scrollbar" style={{ flex: 1, minWidth: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: 14, minHeight: 0 }}
       variants={STAGGER} initial="hidden" animate="show">
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 14 }}>
         <motion.div variants={RISE}><Clock /></motion.div>
-        <motion.div variants={RISE} style={card}>
+        <motion.div variants={RISE} style={{ ...card, minWidth: 0 }}>
           <span className="hud-corner" />
           {kicker("Transmission")}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 10 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(64px, 1fr))", gap: 12, marginBottom: 10 }}>
             {metric("Active", String(fleet.active))}
             {metric("Waiting", String(fleet.waiting))}
             {metric("Prompts", String(fleet.prompts))}
@@ -849,6 +872,22 @@ function HudConsole() {
 // ---------------------------------------------------------------------------
 // HUD root
 // ---------------------------------------------------------------------------
+// The right telemetry column is user-resizable via a drag handle on its left
+// edge. Width is clamped to [RIGHT_MIN, min(RIGHT_MAX_ABS, 40% of the HUD)] and
+// persisted so it survives reloads.
+const HUD_RIGHT_KEY = "rcw.hud.rightWidth";
+const RIGHT_MIN = 240;
+const RIGHT_MAX_ABS = 560;
+const RIGHT_DEFAULT = 420;
+const loadRightWidth = (): number => {
+  try {
+    const v = Number(localStorage.getItem(HUD_RIGHT_KEY));
+    if (Number.isFinite(v) && v >= RIGHT_MIN) return v;
+  } catch { /* ignore */ }
+  return RIGHT_DEFAULT;
+};
+const maxRightWidth = (hudWidth: number): number => Math.max(RIGHT_MIN, Math.min(RIGHT_MAX_ABS, hudWidth * 0.4));
+
 export default function Hud() {
   const [tele, setTele] = useState<HostTelemetryView[]>([]);
   useEffect(() => {
@@ -860,12 +899,51 @@ export default function Hud() {
   }, []);
 
   // HUD = QueueRail (session switching) + a 3-pane console (chat / terminal /
-  // files) + the telemetry widget deck, over an animated backdrop. The deck can
-  // expand to reclaim space for more widgets.
-  const [wide, setWide] = useState(true);
-  const cols = wide ? "214px minmax(360px,1fr) 560px" : "214px minmax(0,1fr) 372px";
+  // files) + the telemetry widget deck, over an animated backdrop. The right
+  // deck is drag-resizable; the center console flexes to fill what's left.
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [rightWidth, setRightWidth] = useState(loadRightWidth);
+  const [resizing, setResizing] = useState(false);
+
+  // Persist the chosen width.
+  useEffect(() => { try { localStorage.setItem(HUD_RIGHT_KEY, String(Math.round(rightWidth))); } catch { /* ignore */ } }, [rightWidth]);
+
+  // Re-clamp whenever the HUD itself resizes (e.g. window shrink / leaving
+  // fullscreen) so the right column never exceeds 40% of the available width.
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => {
+      const max = maxRightWidth(el.getBoundingClientRect().width);
+      setRightWidth((w) => Math.min(w, max));
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // Drag the handle left to widen / right to narrow. Pointer capture keeps the
+  // stream flowing even while the cursor passes over the center console iframes.
+  const startResize = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const handle = e.currentTarget;
+    handle.setPointerCapture(e.pointerId);
+    const max = maxRightWidth(rootRef.current?.getBoundingClientRect().width ?? window.innerWidth);
+    const sx = e.clientX, sw = rightWidth;
+    setResizing(true);
+    const move = (ev: PointerEvent) => setRightWidth(Math.max(RIGHT_MIN, Math.min(max, sw - (ev.clientX - sx))));
+    const up = (ev: PointerEvent) => {
+      setResizing(false);
+      try { handle.releasePointerCapture(ev.pointerId); } catch { /* ignore */ }
+      handle.removeEventListener("pointermove", move);
+      handle.removeEventListener("pointerup", up);
+    };
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", up);
+  };
+
+  const cols = `214px minmax(0,1fr) ${Math.round(rightWidth)}px`;
   return (
-    <div className="hud-root" style={{ flex: 1, minHeight: 0, position: "relative", overflow: "hidden" }}>
+    <div ref={rootRef} className="hud-root" style={{ flex: 1, minHeight: 0, position: "relative", overflow: "hidden" }}>
       <HudStyles />
       <span className="hud-grid" />
       <div style={{ position: "relative", zIndex: 1, height: "100%", display: "grid", gridTemplateColumns: cols, minHeight: 0 }}>
@@ -876,10 +954,13 @@ export default function Hud() {
         </div>
         <HudConsole />
         <div style={{ borderLeft: "1px solid var(--border)", padding: "14px 16px", minHeight: 0, display: "flex", flexDirection: "column", position: "relative" }}>
-          <button onClick={() => setWide((w) => !w)} title={wide ? "Shrink widget deck" : "Expand widget deck"}
-            style={{ position: "absolute", top: 14, left: -13, zIndex: 3, width: 26, height: 26, borderRadius: 999, border: "1px solid var(--border-strong)", background: "var(--app-panel, #1b1712)", color: "var(--text-soft)", cursor: "pointer", fontSize: 12, lineHeight: 1, WebkitAppRegion: "no-drag" } as React.CSSProperties}>
-            {wide ? "›" : "‹"}
-          </button>
+          {/* Drag handle straddling the left border of the telemetry column. */}
+          <div
+            className={`hud-resize-handle${resizing ? " dragging" : ""}`}
+            onPointerDown={startResize}
+            onDoubleClick={() => setRightWidth(RIGHT_DEFAULT)}
+            title="Drag to resize · double-click to reset"
+          />
           <TelemetryColumn tele={tele} />
         </div>
       </div>
@@ -911,6 +992,12 @@ function HudStyles() {
       .hud-corner { position:absolute; top:0; right:0; width:16px; height:16px; pointer-events:none;
         border-top:1px solid rgb(var(--primary-soft) / 0.5); border-right:1px solid rgb(var(--primary-soft) / 0.5);
         border-top-right-radius:14px; }
+      .hud-resize-handle { position:absolute; top:0; left:-6px; width:12px; height:100%; z-index:6;
+        cursor:col-resize; touch-action:none; display:flex; align-items:center; justify-content:center; }
+      .hud-resize-handle::before { content:""; width:2px; height:44px; border-radius:2px; background:var(--border-strong);
+        transition: background .18s, box-shadow .18s, height .18s; }
+      .hud-resize-handle:hover::before, .hud-resize-handle.dragging::before {
+        background: rgb(var(--primary-soft) / 0.75); box-shadow: 0 0 10px rgb(var(--primary-soft) / 0.45); height:84px; }
       .hud-rail-row:hover { background: rgb(var(--primary) / 0.09) !important; }
       .hud-term .hud-scanlines { position:absolute; inset:0; pointer-events:none; z-index:0; opacity:0.35;
         background: repeating-linear-gradient(to bottom, transparent 0, transparent 2px, rgb(var(--primary-soft) / 0.03) 3px, transparent 4px);
