@@ -37,4 +37,21 @@ describe("/sessions", () => {
     await request(app.getHttpServer()).post("/sessions").set(auth)
       .send({ id: "sess-1", machine: "devbox", cwd: "/p" }).expect(201);
   });
+
+  it("dismiss closes a session and drops it from GET /sessions", async () => {
+    await request(app.getHttpServer()).post("/sessions").set(auth)
+      .send({ id: "sess-dismiss", machine: "devbox", cwd: "/p" }).expect(201);
+    let res = await request(app.getHttpServer()).get("/sessions").set(auth).expect(200);
+    expect(res.body.map((x: { id: string }) => x.id)).toContain("sess-dismiss");
+
+    const dis = await request(app.getHttpServer()).post("/sessions/sess-dismiss/dismiss").set(auth).expect(200);
+    expect(dis.body).toEqual({ ok: true });
+
+    res = await request(app.getHttpServer()).get("/sessions").set(auth).expect(200);
+    expect(res.body.map((x: { id: string }) => x.id)).not.toContain("sess-dismiss");
+  });
+
+  it("404s dismiss for an unknown session", async () => {
+    await request(app.getHttpServer()).post("/sessions/nope/dismiss").set(auth).expect(404);
+  });
 });

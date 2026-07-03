@@ -217,6 +217,9 @@ ipcMain.handle(IPC.snooze, (_e, a: { id: string; minutes: number }) =>
 ipcMain.handle(IPC.pin, (_e, a: { id: string; pinned: boolean }) =>
   api.pin(a.id, a.pinned)
 );
+ipcMain.handle(IPC.dismiss, (_e, a: { id: string }) =>
+  api.dismissSession(a.id)
+);
 ipcMain.handle(IPC.instruct, (_e, a: { sessionId: string; text: string }) =>
   api.instruct(a.sessionId, a.text)
 );

@@ -153,6 +153,11 @@ export async function pin(id: string, pinned: boolean): Promise<void> {
   });
 }
 
+/** Soft-close a stale/ghost session server-side; it then drops out of /sessions + /sessions/queue. */
+export async function dismissSession(id: string): Promise<void> {
+  await req(`/sessions/${encodeURIComponent(id)}/dismiss`, { method: "POST" });
+}
+
 export async function interrupt(sessionId: string, text?: string): Promise<unknown> {
   return (
     await req(`/sessions/${encodeURIComponent(sessionId)}/interrupt`, {

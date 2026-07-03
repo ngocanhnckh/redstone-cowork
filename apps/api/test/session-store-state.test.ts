@@ -55,6 +55,28 @@ describe("InMemorySessionStore rich state", () => {
     expect(await store.patchState("nope", { summary: "x" })).toBeNull();
   });
 
+  it("close() stamps closedAt and excludes the session from list()", async () => {
+    const store = new InMemorySessionStore();
+    await store.upsert(base("s1"));
+    await store.upsert(base("s2"));
+    const at = new Date();
+    await store.close("s1", at);
+    // still retrievable by id (history kept), but gone from the list
+    const s1 = await store.get("s1");
+    expect(s1?.closedAt?.getTime()).toBe(at.getTime());
+    const ids = (await store.list()).map((s) => s.id);
+    expect(ids).toEqual(["s2"]);
+  });
+
+  it("close() is idempotent — a second close keeps the original time", async () => {
+    const store = new InMemorySessionStore();
+    await store.upsert(base("s1"));
+    const first = new Date(Date.now() - 10_000);
+    await store.close("s1", first);
+    await store.close("s1", new Date());
+    expect((await store.get("s1"))?.closedAt?.getTime()).toBe(first.getTime());
+  });
+
   it("setPinned / setSnoozedUntil persist and survive a re-upsert (heartbeat/attach)", async () => {
     const store = new InMemorySessionStore();
     await store.upsert(base("s1"));

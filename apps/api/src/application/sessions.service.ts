@@ -58,6 +58,7 @@ export class SessionsService {
       tokenSeries: existing?.tokenSeries ?? [],
       pinned: false,
       snoozedUntil: null,
+      closedAt: null, // a fresh attach reopens a previously-reaped/dismissed session
     });
     this.bus.emit({ type: "session.updated", payload: { id: session.id } });
     return session;
@@ -179,6 +180,15 @@ export class SessionsService {
     const updated = await this.store.setTags(id, s.tags.filter((t) => t.toLowerCase() !== tag.trim().toLowerCase()));
     if (updated) this.bus.emit({ type: "session.updated", payload: { id } });
     return updated;
+  }
+
+  /** Soft-close a session (manual dismiss). Returns false for an unknown id. */
+  async dismiss(id: string): Promise<boolean> {
+    const s = await this.store.get(id);
+    if (!s) return false;
+    await this.store.close(id, new Date());
+    this.bus.emit({ type: "session.updated", payload: { id } });
+    return true;
   }
 
   get(id: string) { return this.store.get(id); }

@@ -40,7 +40,8 @@ export class InMemorySessionStore implements SessionStore {
     return true;
   }
   async get(id: string) { return this.sessions.get(id) ?? null; }
-  async list() { return [...this.sessions.values()]; }
+  // Closed sessions keep their history (retrievable by id) but drop out of lists.
+  async list() { return [...this.sessions.values()].filter((s) => !s.closedAt); }
   async getByWrapper(wrapperId: string): Promise<AgentSession | null> {
     const matches = [...this.sessions.values()]
       .filter((s) => s.wrapperId === wrapperId)
@@ -91,5 +92,9 @@ export class InMemorySessionStore implements SessionStore {
     const next = { ...s, tags };
     this.sessions.set(id, next);
     return next;
+  }
+  async close(id: string, at: Date): Promise<void> {
+    const s = this.sessions.get(id);
+    if (s) this.sessions.set(id, { ...s, closedAt: s.closedAt ?? at });
   }
 }

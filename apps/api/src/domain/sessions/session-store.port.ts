@@ -12,5 +12,7 @@ export interface SessionStore {
   setSnoozedUntil(id: string, until: Date | null): Promise<void>;
   setUserTodos(id: string, todos: UserTodo[]): Promise<AgentSession | null>;
   setTags(id: string, tags: string[]): Promise<AgentSession | null>;
+  /** Soft-close: stamp closedAt=now (idempotent — keeps the first close time). */
+  close(id: string, at: Date): Promise<void>;
 }
 export const SESSION_STORE = Symbol("SessionStore");

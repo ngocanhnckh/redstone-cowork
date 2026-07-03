@@ -2,13 +2,17 @@ import { Inject, Injectable } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
 import {
   HostRegistrationSchema, InventoryReportSchema,
-  type Host, type DiscoveredSession, type HostCommand, type HostCommandKind,
+  type Host, type DiscoveredSession, type HostCommand, type HostCommandKind, type AgentSession,
 } from "@rcw/shared";
 import { INVENTORY_STORE, type InventoryStore } from "../domain/inventory/inventory-store.port";
 import { SESSION_STORE, type SessionStore } from "../domain/sessions/session-store.port";
 import { InventoryWaiters } from "./inventory-waiters";
+import { EventsBus } from "./events-bus";
 
 const RESULT_WAIT_MS = 120_000; // passive runs can take a while
+
+// Don't reap a just-attached session that hasn't yet shown up in a scan snapshot.
+const REAP_GRACE_MS = 120_000;
 
 @Injectable()
 export class InventoryService {
@@ -16,6 +20,7 @@ export class InventoryService {
     @Inject(INVENTORY_STORE) private readonly store: InventoryStore,
     @Inject(SESSION_STORE) private readonly sessions: SessionStore,
     private readonly waiters: InventoryWaiters,
+    private readonly bus: EventsBus,
   ) {}
 
   async registerHost(input: unknown): Promise<Host> {
@@ -28,9 +33,33 @@ export class InventoryService {
 
   async reportInventory(hostId: string, input: unknown): Promise<void> {
     const { machine, sessions } = InventoryReportSchema.parse(input);
-    const coworkIds = new Set((await this.sessions.list()).map((s) => s.id));
+    const attached = await this.sessions.list();
+    const coworkIds = new Set(attached.map((s) => s.id));
     await this.store.reportInventory(hostId, machine, sessions, coworkIds, new Date());
     await this.store.touchHost(hostId, new Date());
+    // Auto-reap: a scan reports EVERY transcript on the host, so an attached
+    // session whose id is absent has lost its transcript (cleared/rotated) — its
+    // tmux poller is a ghost. Soft-close it so it leaves the cockpit. Never throws
+    // into the ingest path.
+    try {
+      await this.reapMissing(machine, new Set(sessions.map((s) => s.id)), attached, new Date());
+    } catch {
+      /* reaping is best-effort — never break inventory ingest */
+    }
+  }
+
+  /** Close attached sessions on `machine` that vanished from the latest scan snapshot. */
+  private async reapMissing(machine: string, scannedIds: Set<string>, attached: AgentSession[], now: Date): Promise<void> {
+    // Empty scan = likely a scan error; never mass-close on it.
+    if (scannedIds.size === 0) return;
+    for (const s of attached) {
+      if (s.machine !== machine) continue;
+      if (s.closedAt) continue; // already retired
+      if (scannedIds.has(s.id)) continue; // still has a transcript
+      if (now.getTime() - s.attachedAt.getTime() < REAP_GRACE_MS) continue; // too fresh to judge
+      await this.sessions.close(s.id, now);
+      this.bus.emit({ type: "session.updated", payload: { id: s.id } });
+    }
   }
 
   async listHosts(): Promise<Host[]> { return this.store.listHosts(); }

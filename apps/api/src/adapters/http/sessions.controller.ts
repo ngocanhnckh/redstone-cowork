@@ -166,6 +166,13 @@ export class SessionsController {
     }
   }
 
+  @Post(":id/dismiss")
+  @HttpCode(200)
+  async dismiss(@Param("id") id: string) {
+    if (!(await this.sessions.dismiss(id))) throw new NotFoundException();
+    return { ok: true };
+  }
+
   @Post(":id/snooze")
   @HttpCode(200)
   async snooze(@Param("id") id: string, @Body() body: unknown) {

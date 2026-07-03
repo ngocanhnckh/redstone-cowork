@@ -46,6 +46,8 @@ export const SessionStatePatchSchema = z
     tokensOutput: z.number().int().nonnegative().optional(),
     /** Server-appended time-series (not sent by the hook). */
     tokenSeries: z.array(TokenSampleSchema).optional(),
+    /** Soft-close timestamp: when set, the session is retired and hidden from lists. */
+    closedAt: z.coerce.date().nullable().optional(),
   })
   .strict();
 export type SessionStatePatch = z.infer<typeof SessionStatePatchSchema>;
@@ -75,6 +77,8 @@ export const AgentSessionSchema = z.object({
   tokenSeries: z.array(TokenSampleSchema).default([]),
   pinned: z.boolean().default(false),
   snoozedUntil: z.coerce.date().nullable().default(null),
+  /** Soft-close timestamp: closed sessions keep their history but drop out of the cockpit. */
+  closedAt: z.coerce.date().nullable().default(null),
 });
 export type AgentSession = z.infer<typeof AgentSessionSchema>;
 

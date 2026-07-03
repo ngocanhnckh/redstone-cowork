@@ -6,7 +6,7 @@ const ROW = `id, machine, cwd, git_branch AS "gitBranch", attached_at AS "attach
              wrapper_id AS "wrapperId", permission_mode AS "permissionMode", auto_mode_enabled AS "autoModeEnabled",
              latest_answer AS "latestAnswer", summary, todos, user_todos AS "userTodos", tags, transcript, working,
              context_tokens AS "contextTokens", model, token_input AS "tokensInput", token_output AS "tokensOutput",
-             token_series AS "tokenSeries", pinned, snoozed_until AS "snoozedUntil"`;
+             token_series AS "tokenSeries", pinned, snoozed_until AS "snoozedUntil", closed_at AS "closedAt"`;
 
 export class PostgresSessionStore implements SessionStore {
   constructor(private readonly pool: Pool) {}
@@ -18,7 +18,8 @@ export class PostgresSessionStore implements SessionStore {
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13::jsonb,$14,$15)
        ON CONFLICT (id) DO UPDATE SET machine=$2, git_branch=$4, last_seen_at=$6, wrapper_id=$7,
          permission_mode = COALESCE($8, sessions.permission_mode),
-         auto_mode_enabled = $9
+         auto_mode_enabled = $9,
+         closed_at = NULL
        RETURNING ${ROW}`,
       [s.id, s.machine, s.cwd, s.gitBranch, s.attachedAt, s.lastSeenAt, s.wrapperId ?? null,
        s.permissionMode ?? null, s.autoModeEnabled ?? false,
@@ -35,7 +36,8 @@ export class PostgresSessionStore implements SessionStore {
     return rows[0] ? AgentSessionSchema.parse(rows[0]) : null;
   }
   async list(): Promise<AgentSession[]> {
-    const { rows } = await this.pool.query(`SELECT ${ROW} FROM sessions ORDER BY last_seen_at DESC`);
+    // Closed sessions keep their history (retrievable by id) but drop out of lists.
+    const { rows } = await this.pool.query(`SELECT ${ROW} FROM sessions WHERE closed_at IS NULL ORDER BY last_seen_at DESC`);
     return rows.map((r) => AgentSessionSchema.parse(r));
   }
   async getByWrapper(wrapperId: string): Promise<AgentSession | null> {
@@ -84,5 +86,9 @@ export class PostgresSessionStore implements SessionStore {
       [id, JSON.stringify(tags)]
     );
     return res.rows[0] ? AgentSessionSchema.parse(res.rows[0]) : null;
+  }
+  async close(id: string, at: Date): Promise<void> {
+    // Idempotent — only stamps the first close, so a re-reap keeps the original time.
+    await this.pool.query(`UPDATE sessions SET closed_at = $2 WHERE id = $1 AND closed_at IS NULL`, [id, at]);
   }
 }

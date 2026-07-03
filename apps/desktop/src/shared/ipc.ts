@@ -10,6 +10,7 @@ export const IPC = {
   resolve: "api:resolve",
   snooze: "api:snooze",
   pin: "api:pin",
+  dismiss: "api:session:dismiss",
   streamEvent: "stream:event",
   instruct: "api:instruct",
   interrupt: "api:interrupt",

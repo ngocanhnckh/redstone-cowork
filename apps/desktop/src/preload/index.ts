@@ -31,6 +31,8 @@ contextBridge.exposeInMainWorld("cowork", {
     ipcRenderer.invoke(IPC.snooze, { id, minutes }),
   pin: (id: string, pinned: boolean): Promise<void> =>
     ipcRenderer.invoke(IPC.pin, { id, pinned }),
+  dismissSession: (id: string): Promise<void> =>
+    ipcRenderer.invoke(IPC.dismiss, { id }),
   instruct: (sessionId: string, text: string): Promise<unknown> =>
     ipcRenderer.invoke(IPC.instruct, { sessionId, text }),
   interrupt: (sessionId: string, text?: string): Promise<unknown> =>

@@ -37,6 +37,7 @@ const META: Record<Kind, { label: string; color: string; pulse: boolean }> = {
 
 export default function QueueRail() {
   const [, tick] = useState(0);
+  const [hoverId, setHoverId] = useState<string | null>(null);
   useEffect(() => {
     const id = setInterval(() => tick((n) => n + 1), 1000);
     return () => clearInterval(id);
@@ -47,6 +48,7 @@ export default function QueueRail() {
   const decisions = useStore((s) => s.decisions);
   const focusId = useStore((s) => s.focusId);
   const setFocus = useStore((s) => s.setFocus);
+  const dismissSession = useStore((s) => s.dismissSession);
 
   const needsInput = new Set(decisions.filter((d) => ACTIONABLE.has(d.kind)).map((d) => d.sessionId));
   const waitingSince = new Map(queue.map((q) => [q.id, q.waitingSince] as const));
@@ -93,6 +95,8 @@ export default function QueueRail() {
             key={session.id}
             className={focused ? "glass-inset" : "glass-inset glass-inset-hover"}
             onClick={() => setFocus(session.id)}
+            onMouseEnter={() => setHoverId(session.id)}
+            onMouseLeave={() => setHoverId((h) => (h === session.id ? null : h))}
             style={{
               display: "flex", gap: 11, alignItems: "center", padding: "11px 12px", borderRadius: 13,
               cursor: "pointer", position: "relative", width: "100%",
@@ -133,11 +137,34 @@ export default function QueueRail() {
                 {detail}
               </div>
             </div>
-            {kind === "working" && (
+            {kind === "working" && hoverId !== session.id && (
               <span className="eq" style={{ flexShrink: 0 }}>
                 {[0, 1, 2].map((i) => <span key={i} className="eq-bar" style={{ animationDelay: `${i * 0.13}s` }} />)}
               </span>
             )}
+            {/* Dismiss (soft-close) — revealed on hover; small + stopPropagation so it
+                never selects the card. Muted, red-ish on hover to match the HUD. */}
+            <button
+              title="Dismiss session"
+              aria-label="Dismiss session"
+              onClick={(e) => {
+                e.stopPropagation();
+                dismissSession(session.id);
+              }}
+              style={{
+                flexShrink: 0, width: 18, height: 18, borderRadius: 6, padding: 0,
+                display: "grid", placeItems: "center", cursor: "pointer",
+                border: "none", background: "transparent", lineHeight: 1, fontSize: 13,
+                color: "var(--border-strong)",
+                opacity: hoverId === session.id ? 0.85 : 0,
+                transition: "opacity 120ms, color 120ms",
+                pointerEvents: hoverId === session.id ? "auto" : "none",
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = "#e0736a"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = "var(--border-strong)"; }}
+            >
+              ✕
+            </button>
           </div>
         );
       })}
