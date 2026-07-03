@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
+import { createPortal } from "react-dom";
 import Editor from "@monaco-editor/react";
 import ConnectionBar from "./ConnectionBar";
 import Markdown from "./Markdown";
@@ -11,6 +12,17 @@ interface Props {
 }
 
 ensureMonaco();
+
+/**
+ * Render `children` into `document.body` so `position: fixed` overlays escape the
+ * panel's stacking/containing block. In HUD Windows mode the panel wrapper has a
+ * `backdrop-filter` (glass), which per spec makes it the containing block for
+ * fixed descendants — without this portal the context menu / toast / modals would
+ * be positioned relative to the window corner and fly off-screen.
+ */
+function Portal({ children }: { children: React.ReactNode }) {
+  return createPortal(children, document.body);
+}
 
 function baseName(p: string): string {
   return p.split("/").filter(Boolean).pop() ?? p;
@@ -243,27 +255,30 @@ export default function FilesPanel({ sessionId, cwd, machine }: Props) {
     setMenu({ x: e.clientX, y: e.clientY, target });
   }
 
-  async function copyRel(p: string) {
+  /** Copy arbitrary text with the same renderer-first / IPC-fallback strategy. */
+  async function copyText(text: string) {
     setMenu(null);
-    const rel = relPath(p);
     // Renderer-side copy first (no IPC / main restart needed); fall back to the
     // native clipboard over IPC if execCommand is unavailable.
-    let ok = copyToClipboard(rel);
+    let ok = copyToClipboard(text);
     if (!ok) {
       try {
-        const r = await window.cowork.copyText(rel);
+        const r = await window.cowork.copyText(text);
         ok = !!r?.ok;
       } catch {
         ok = false;
       }
     }
     if (ok) {
-      setToast(`Copied ${rel}`);
+      setToast(`Copied ${text}`);
       setTimeout(() => setToast(null), 1800);
     } else {
       setOpError("couldn't copy to clipboard");
     }
   }
+
+  const copyRel = (p: string) => copyText(relPath(p));
+  const copyAbs = (p: string) => copyText(p);
 
   function beginCreate(parent: string, kind: "file" | "folder") {
     setMenu(null);
@@ -529,6 +544,7 @@ export default function FilesPanel({ sessionId, cwd, machine }: Props) {
 
       {/* Transient feedback toast (copy / upload / errors outside a modal) */}
       {(toast || (opError && creating == null && !deleteTarget)) && (
+        <Portal>
         <div
           className="glass-menu mono"
           style={{
@@ -536,7 +552,7 @@ export default function FilesPanel({ sessionId, cwd, machine }: Props) {
             bottom: 22,
             left: "50%",
             transform: "translateX(-50%)",
-            zIndex: 70,
+            zIndex: 2147483000,
             fontSize: 11.5,
             padding: "8px 16px",
             borderRadius: 999,
@@ -547,18 +563,20 @@ export default function FilesPanel({ sessionId, cwd, machine }: Props) {
         >
           {toast ?? opError}
         </div>
+        </Portal>
       )}
 
       {/* Right-click context menu */}
       {menu && (
+        <Portal>
         <div
           className="glass-menu"
           onClick={(e) => e.stopPropagation()}
           style={{
             position: "fixed",
             left: Math.min(menu.x, window.innerWidth - 190),
-            top: Math.min(menu.y, window.innerHeight - 180),
-            zIndex: 50,
+            top: Math.min(menu.y, window.innerHeight - 200),
+            zIndex: 2147483000,
             minWidth: 176,
             borderRadius: 10,
             border: "1px solid var(--border-strong)",
@@ -567,7 +585,10 @@ export default function FilesPanel({ sessionId, cwd, machine }: Props) {
           }}
         >
           {menu.target.kind !== "root" && (
-            <MenuItem onClick={() => copyRel(menu.target.path)}>Copy relative path</MenuItem>
+            <>
+              <MenuItem onClick={() => copyAbs(menu.target.path)}>Copy path</MenuItem>
+              <MenuItem onClick={() => copyRel(menu.target.path)}>Copy relative path</MenuItem>
+            </>
           )}
           <MenuItem onClick={() => beginCreate(menu.target.parent, "file")}>New file…</MenuItem>
           <MenuItem onClick={() => beginCreate(menu.target.parent, "folder")}>New folder…</MenuItem>
@@ -589,6 +610,7 @@ export default function FilesPanel({ sessionId, cwd, machine }: Props) {
             </>
           )}
         </div>
+        </Portal>
       )}
 
       {/* New file / folder name dialog */}
@@ -667,18 +689,20 @@ function MenuItem({ children, onClick, danger }: { children: React.ReactNode; on
 /** Centered modal overlay used for folder-name input and delete confirmation. */
 function Modal({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
   return (
-    <div
-      onClick={onClose}
-      style={{ position: "fixed", inset: 0, zIndex: 60, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center" }}
-    >
+    <Portal>
       <div
-        className="glass-menu"
-        onClick={(e) => e.stopPropagation()}
-        style={{ width: 320, borderRadius: 14, border: "1px solid var(--border-strong)", padding: "18px 18px 16px" }}
+        onClick={onClose}
+        style={{ position: "fixed", inset: 0, zIndex: 2147483000, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center" }}
       >
-        {children}
+        <div
+          className="glass-menu"
+          onClick={(e) => e.stopPropagation()}
+          style={{ width: 320, borderRadius: 14, border: "1px solid var(--border-strong)", padding: "18px 18px 16px" }}
+        >
+          {children}
+        </div>
       </div>
-    </div>
+    </Portal>
   );
 }
 

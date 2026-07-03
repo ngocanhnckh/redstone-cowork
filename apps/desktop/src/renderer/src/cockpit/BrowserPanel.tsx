@@ -76,7 +76,16 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral }: Pro
   const [address, setAddress] = useState("");
   const [status, setStatus] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [saving, setSaving] = useState(false);
+  // Collapse the address/nav toolbar to reclaim vertical space (persisted).
+  const [barHidden, setBarHidden] = useState(() => {
+    try { return localStorage.getItem("rcw.browser.barHidden") === "1"; } catch { return false; }
+  });
   const webviewRef = useRef<WebviewEl | null>(null);
+
+  function toggleBar(hidden: boolean) {
+    setBarHidden(hidden);
+    try { localStorage.setItem("rcw.browser.barHidden", hidden ? "1" : "0"); } catch { /* ignore */ }
+  }
 
   // Ensure the preview port's tunnel is up before loading (idempotent; no-op when local).
   async function ensureForward(port: number) {
@@ -192,7 +201,29 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral }: Pro
         }}
       />
 
+      {/* Collapsed: a slim strip with just a reveal button, to reclaim space. */}
+      {barHidden && (
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "flex-end",
+            alignItems: "center",
+            padding: "2px 8px",
+            borderBottom: "1px solid var(--border)",
+          }}
+        >
+          <button
+            style={{ ...navBtn, padding: "1px 10px", fontSize: 11, lineHeight: 1.4 }}
+            title="Show address bar"
+            onClick={() => toggleBar(false)}
+          >
+            ▾ url
+          </button>
+        </div>
+      )}
+
       {/* Single compact toolbar: nav · address · go · open · preview-port */}
+      {!barHidden && (
       <div
         style={{
           display: "flex",
@@ -271,7 +302,15 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral }: Pro
             {status.kind === "ok" ? "✓" : "⚠"}
           </span>
         )}
+        <button
+          style={{ ...navBtn, padding: "6px 9px", flexShrink: 0 }}
+          title="Hide address bar"
+          onClick={() => toggleBar(true)}
+        >
+          ▴
+        </button>
       </div>
+      )}
 
       {/* Preview */}
       <div style={{ flex: 1, minHeight: 0, position: "relative", background: "rgba(0,0,0,0.18)" }}>
