@@ -44,7 +44,9 @@ const parsePct = (s: string | undefined): number | null => {
 export async function sampleDocker(): Promise<DockerSnapshot> {
   let psOut: string;
   try {
-    const { stdout } = await execFileP("docker", ["ps", "-a", "--no-trunc", "--format", "{{json .}}"], { timeout: 8000, maxBuffer: 4 * 1024 * 1024 });
+    // 20s (not 8s): on a heavily-loaded daemon `docker ps -a` can take 5s+; an
+    // 8s cap made busy hosts intermittently time out and flap to available:false.
+    const { stdout } = await execFileP("docker", ["ps", "-a", "--no-trunc", "--format", "{{json .}}"], { timeout: 20000, maxBuffer: 4 * 1024 * 1024 });
     psOut = stdout;
   } catch {
     return { available: false, containers: [] };
@@ -74,7 +76,7 @@ export async function sampleDocker(): Promise<DockerSnapshot> {
 
   // Best-effort live stats for running containers (skip if it hangs/errors).
   try {
-    const { stdout } = await execFileP("docker", ["stats", "--no-stream", "--format", "{{json .}}"], { timeout: 8000, maxBuffer: 4 * 1024 * 1024 });
+    const { stdout } = await execFileP("docker", ["stats", "--no-stream", "--format", "{{json .}}"], { timeout: 20000, maxBuffer: 4 * 1024 * 1024 });
     const byName = new Map(containers.map((c) => [c.name, c]));
     for (const line of stdout.split("\n")) {
       const t = line.trim();

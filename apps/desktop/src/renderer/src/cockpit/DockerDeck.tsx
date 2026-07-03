@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { DockerHostView, DockerContainer } from "../types";
+import { useStore } from "../store";
 
 const fmtBytes = (b: number | null): string => {
   if (!b || b <= 0) return "—";
@@ -51,9 +52,16 @@ function ContainerRow({ c }: { c: DockerContainer }) {
   );
 }
 
-/** Docker containers across all reporting hosts — a futuristic status deck. */
+/** Docker containers on the host that runs the SELECTED session (matched by
+ * machine name), mirroring the System-status widget — not all hosts at once. */
 export default function DockerDeck() {
   const [hosts, setHosts] = useState<DockerHostView[]>([]);
+  const focusId = useStore((s) => s.focusId);
+  const sessions = useStore((s) => s.sessions);
+  const queue = useStore((s) => s.queue);
+  const session = sessions.find((s) => s.id === focusId) ?? queue.find((s) => s.id === focusId);
+  const machine = session?.machine ?? null;
+
   useEffect(() => {
     let alive = true;
     const load = () => window.cowork.getDocker().then((d) => { if (alive) setHosts(d as DockerHostView[]); }).catch(() => {});
@@ -62,31 +70,36 @@ export default function DockerDeck() {
     return () => { alive = false; clearInterval(t); };
   }, []);
 
-  const withContainers = hosts.filter((h) => h.available && h.containers.length > 0);
-  const totalRunning = withContainers.reduce((n, h) => n + h.containers.filter((c) => c.state === "running").length, 0);
-  const total = withContainers.reduce((n, h) => n + h.containers.length, 0);
+  // Only the docker report for the focused session's host.
+  const host = machine ? hosts.find((h) => h.machine === machine) ?? null : null;
+  const containers = host?.available ? host.containers : [];
+  const totalRunning = containers.filter((c) => c.state === "running").length;
+  const total = containers.length;
+
+  const empty = (msg: React.ReactNode) => (
+    <span className="mono faint" style={{ fontSize: 10.5, padding: "4px 6px", lineHeight: 1.5 }}>{msg}</span>
+  );
 
   return (
     <div style={{ display: "flex", flexDirection: "column", minHeight: 0, borderTop: "1px solid var(--border)", paddingTop: 10 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "0 4px 8px" }}>
         <span style={{ fontSize: 13 }}>🐳</span>
-        <span className="mono" style={{ fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-soft)" }}>Docker</span>
+        <span className="mono" style={{ fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-soft)" }}>
+          Docker{machine ? ` · ${machine}` : ""}
+        </span>
         <span style={{ flex: 1 }} />
         {total > 0 && <span className="mono" style={{ fontSize: 9.5, color: "rgb(var(--accent))" }}>{totalRunning}/{total} up</span>}
       </div>
-      <div className="no-scrollbar" style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 10 }}>
-        {withContainers.length === 0 ? (
-          <span className="mono faint" style={{ fontSize: 10.5, padding: "4px 6px", lineHeight: 1.5 }}>
-            No containers reported. Run <span className="mono" style={{ color: "var(--text)" }}>redstone agent</span> on a Docker host.
-          </span>
-        ) : withContainers.map((h) => (
-          <div key={h.hostId}>
-            <div className="mono faint" style={{ fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase", padding: "0 4px 5px" }}>{h.machine}</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-              {h.containers.map((c) => <ContainerRow key={c.id || c.name} c={c} />)}
-            </div>
-          </div>
-        ))}
+      <div className="no-scrollbar" style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 5 }}>
+        {!session
+          ? empty("Select a session to see its host's containers.")
+          : !host
+          ? empty(<>No Docker report from <span className="mono" style={{ color: "var(--text)" }}>{machine}</span> yet.</>)
+          : !host.available
+          ? empty(<>Docker is not available on <span className="mono" style={{ color: "var(--text)" }}>{machine}</span>.</>)
+          : containers.length === 0
+          ? empty(<>No containers running on <span className="mono" style={{ color: "var(--text)" }}>{machine}</span>.</>)
+          : containers.map((c) => <ContainerRow key={c.id || c.name} c={c} />)}
       </div>
     </div>
   );
