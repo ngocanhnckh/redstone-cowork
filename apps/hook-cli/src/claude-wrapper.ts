@@ -10,6 +10,25 @@ import { installHooks } from "./installer";
 export const shq = (a: string) => `'${a.replace(/'/g, `'\\''`)}'`;
 
 /**
+ * Build the inline `KEY='VALUE' ...` env prefix that precedes `claude` in the
+ * tmux command. Auto-mode vars come first, then the named-config env so a
+ * profile can override auto-mode. Values are shell-quoted; keys are trusted
+ * (validated on `config set`). Returns "" when there is nothing to inject.
+ */
+export function buildEnvPrefix(
+  autoMode: boolean,
+  wrapperId: string,
+  configEnv?: Record<string, string> | null,
+): string {
+  const parts = [`RCW_WRAPPER_ID=${wrapperId}`];
+  if (autoMode) parts.push("RCW_AUTO_MODE=1");
+  if (configEnv) {
+    for (const [k, v] of Object.entries(configEnv)) parts.push(`${k}=${shq(v)}`);
+  }
+  return parts.join(" ");
+}
+
+/**
  * Build the list of tmux arg-arrays needed to start a redstone-claude session.
  * Returned in execution order:
  *   [0] new-session (background, sets up RCW_WRAPPER_ID env + claude)
@@ -23,12 +42,11 @@ export function buildTmuxCommands(
   cwd: string,
   args: string[],
   mainBin: string,
+  configEnv?: Record<string, string> | null,
 ): string[][] {
   const session = `rcw-${wrapperId}`;
   const autoMode = args.includes("--enable-auto-mode");
-  const envPrefix = autoMode
-    ? `RCW_WRAPPER_ID=${wrapperId} RCW_AUTO_MODE=1`
-    : `RCW_WRAPPER_ID=${wrapperId}`;
+  const envPrefix = buildEnvPrefix(autoMode, wrapperId, configEnv);
   const claudeCmd = `${envPrefix} claude ${args.map(shq).join(" ")}`;
   const pollCmd = `node ${mainBin} poll --wrapper ${wrapperId} --tmux ${session}:0`;
 
@@ -46,8 +64,9 @@ export function buildTmuxCommands(
   ];
 }
 
-export function runWrapper(args: string[], mainBin: string): void {
-  if (!loadCliConfig()) {
+export async function runWrapper(args: string[], mainBin: string, configName?: string): Promise<void> {
+  const cfg = loadCliConfig();
+  if (!cfg) {
     console.error("run `redstone init --server <url> --token <token>` first");
     exit(1);
   }
@@ -55,9 +74,24 @@ export function runWrapper(args: string[], mainBin: string): void {
     console.error("redstone claude requires tmux (on Windows: run inside WSL2). Install tmux and retry.");
     exit(1);
   }
+
+  // Fetch the named config profile's env, if requested. Fail-safe: a bad/unknown
+  // profile prints a warning and continues WITHOUT env — never blocks the session.
+  let configEnv: Record<string, string> | null = null;
+  if (configName) {
+    try {
+      const { ApiClient } = await import("./api-client");
+      const profile = await new ApiClient(cfg).getConfig(configName);
+      if (profile) configEnv = profile.env;
+      else console.error(`redstone: config profile "${configName}" not found — continuing without its env`);
+    } catch {
+      console.error(`redstone: could not fetch config "${configName}" — continuing without its env`);
+    }
+  }
+
   const wrapperId = randomBytes(4).toString("hex");
   installHooks(process.cwd(), `node ${mainBin}`);
-  const cmds = buildTmuxCommands(wrapperId, process.cwd(), args, mainBin);
+  const cmds = buildTmuxCommands(wrapperId, process.cwd(), args, mainBin, configEnv);
   for (let i = 0; i < cmds.length - 2; i++) execFileSync("tmux", cmds[i]);
   spawnSync("tmux", cmds[cmds.length - 2], { stdio: "inherit" });
   spawnSync("tmux", cmds[cmds.length - 1], { stdio: "ignore" });
@@ -68,5 +102,5 @@ export function runWrapper(args: string[], mainBin: string): void {
 if (require.main === module) {
   const wrapperBin = realpathSync(argv[1]);
   const mainBin = wrapperBin.replace(/claude-wrapper\.js$/, "main.js");
-  runWrapper(argv.slice(2), mainBin);
+  runWrapper(argv.slice(2), mainBin).catch(() => exit(0));
 }

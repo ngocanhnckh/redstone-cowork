@@ -78,6 +78,11 @@ import { AuthorizedKeysWriter } from "./application/authorized-keys-writer";
 import { HOST_TUNNEL_STORE } from "./domain/tunnels/host-tunnel.port";
 import { InMemoryHostTunnelStore } from "./adapters/persistence/in-memory-host-tunnel-store";
 import { PostgresHostTunnelStore } from "./adapters/persistence/postgres-host-tunnel-store";
+import { ClaudeConfigsController } from "./adapters/http/claude-configs.controller";
+import { ClaudeConfigService } from "./application/claude-config.service";
+import { CLAUDE_CONFIG_STORE } from "./domain/claude-configs/claude-config.port";
+import { InMemoryClaudeConfigStore } from "./adapters/persistence/in-memory-claude-config-store";
+import { PostgresClaudeConfigStore } from "./adapters/persistence/postgres-claude-config-store";
 import { AccessKeysController } from "./adapters/http/access-keys.controller";
 import { AccessKeysService } from "./application/access-keys.service";
 import { ACCESS_KEY_STORE } from "./domain/access-keys/access-key-store.port";
@@ -102,7 +107,7 @@ import { PromptLoader } from "./infrastructure/prompts/prompt-loader";
 import type { Pool } from "pg";
 
 @Module({
-  controllers: [HealthController, EventsController, SessionsController, DecisionsController, StreamController, PushController, ConnectionsController, OAuthController, MicrosoftOAuthController, DevicesController, InstallController, LlmController, AuthController, HostsController, InventoryController, AccessKeysController, TelemetryController, SkillsController, TunnelController],
+  controllers: [HealthController, EventsController, SessionsController, DecisionsController, StreamController, PushController, ConnectionsController, OAuthController, MicrosoftOAuthController, DevicesController, InstallController, LlmController, AuthController, HostsController, InventoryController, AccessKeysController, TelemetryController, SkillsController, TunnelController, ClaudeConfigsController],
   providers: [
     RecordEventUseCase,
     SessionsService,
@@ -185,6 +190,13 @@ import type { Pool } from "pg";
     },
     AuthorizedKeysWriter,
     TunnelService,
+    {
+      provide: CLAUDE_CONFIG_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresClaudeConfigStore(pool) : new InMemoryClaudeConfigStore(),
+    },
+    ClaudeConfigService,
     {
       provide: ACCESS_KEY_STORE,
       inject: [PG_POOL],

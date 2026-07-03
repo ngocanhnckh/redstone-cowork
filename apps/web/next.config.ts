@@ -37,6 +37,13 @@ const nextConfig: NextConfig = {
       // Cross-host skill sync + distribution API (union list, org push).
       { source: "/skills", destination: `${API_URL}/skills` },
       { source: "/skills/:path*", destination: `${API_URL}/skills/:path*` },
+      // NAT'd-host SSH relay: cockpit-key registration. (Agent provision + cockpit
+      // coordinate fetch live under /hosts/:id/tunnel, already covered by /hosts above.)
+      { source: "/tunnel", destination: `${API_URL}/tunnel` },
+      { source: "/tunnel/:path*", destination: `${API_URL}/tunnel/:path*` },
+      // Named Claude endpoint config profiles.
+      { source: "/configs", destination: `${API_URL}/configs` },
+      { source: "/configs/:path*", destination: `${API_URL}/configs/:path*` },
     ];
   },
 };

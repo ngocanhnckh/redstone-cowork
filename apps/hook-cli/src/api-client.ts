@@ -177,6 +177,57 @@ export class ApiClient {
     }
   }
 
+  // ---- Named Claude endpoint config profiles ----
+
+  /** GET /configs — list profile names. Fail-safe: [] on any error. */
+  async listConfigs(): Promise<string[]> {
+    try {
+      const r = await this.req("/configs", { headers: json(this.cfg.token) }, 5000);
+      if (!r.ok) return [];
+      const rows = (await r.json()) as Array<{ name?: string }>;
+      return Array.isArray(rows) ? rows.map((x) => x.name).filter((n): n is string => typeof n === "string") : [];
+    } catch {
+      return [];
+    }
+  }
+
+  /** GET /configs/:name — the profile's env map, or null if missing/unreachable. */
+  async getConfig(name: string): Promise<{ name: string; env: Record<string, string> } | null> {
+    try {
+      const r = await this.req(`/configs/${encodeURIComponent(name)}`, { headers: json(this.cfg.token) }, 5000);
+      if (!r.ok) return null;
+      const body = (await r.json()) as { name?: string; env?: Record<string, string> };
+      if (!body || typeof body.env !== "object" || body.env === null) return null;
+      return { name: body.name ?? name, env: body.env };
+    } catch {
+      return null;
+    }
+  }
+
+  /** PUT /configs/:name — save a profile. Returns false on any error. */
+  async setConfig(name: string, env: Record<string, string>): Promise<boolean> {
+    try {
+      const r = await this.req(
+        `/configs/${encodeURIComponent(name)}`,
+        { method: "PUT", headers: json(this.cfg.token), body: JSON.stringify({ env }) },
+        5000
+      );
+      return r.ok;
+    } catch {
+      return false;
+    }
+  }
+
+  /** DELETE /configs/:name — remove a profile. Returns false on any error. */
+  async deleteConfig(name: string): Promise<boolean> {
+    try {
+      const r = await this.req(`/configs/${encodeURIComponent(name)}`, { method: "DELETE", headers: json(this.cfg.token) }, 5000);
+      return r.ok;
+    } catch {
+      return false;
+    }
+  }
+
   /** Report the outcome of an ssh-authorize delivery back to the server. */
   async postSshResult(
     sessionId: string,
