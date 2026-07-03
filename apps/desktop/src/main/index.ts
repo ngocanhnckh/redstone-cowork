@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join, basename } from "node:path";
 import { saveConfig, loadConfig, clearConfig } from "./config";
 import * as api from "./api";
-import { getWorkspaceConfig, saveWorkspaceConfig, getSshHost, setSshHost, isLocalMachine, setServerHostTargets } from "./workspace";
+import { getWorkspaceConfig, saveWorkspaceConfig, getSshHost, setSshHost, isLocalMachine, setServerHosts } from "./workspace";
 import {
   ensureTerminal,
   writeTerminal,
@@ -155,11 +155,9 @@ let hostTargetsTimer: NodeJS.Timeout | null = null;
 async function refreshHostTargets(): Promise<void> {
   try {
     const hosts = await api.getHosts();
-    const map: Record<string, string> = {};
-    for (const h of hosts) {
-      if (h.address) map[h.machine] = h.user ? `${h.user}@${h.address}` : h.address;
-    }
-    setServerHostTargets(map);
+    // Feed the full records (incl. hostId + sshPort) so the SSH resolver can both
+    // auto-discover direct addresses AND look up a relay tunnel for NAT'd hosts.
+    setServerHosts(hosts);
   } catch {
     // not configured / offline — keep whatever we had
   }

@@ -4,6 +4,8 @@ import os from "node:os";
 import path from "node:path";
 import { execFile } from "node:child_process";
 import { sshMuxOpts } from "./ssh-common";
+import { buildRelayOpts, ensureCockpitKeyRegistered, probeTcp } from "./ssh-relay";
+import { getHostTunnel, type TunnelCoordinates } from "./api";
 
 export type WorkspaceConfig = {
   forwardPorts: number[];
@@ -51,6 +53,31 @@ export function setServerHostTargets(targets: Record<string, string>): void {
   serverHostTargets = targets ?? {};
 }
 
+// Full server-known host records (machine → {id, address, sshPort, …}). Needed for
+// the SSH relay: when a host is unreachable directly we look up its tunnel by hostId.
+export type ServerHost = {
+  id: string;
+  machine: string;
+  user: string | null;
+  address: string | null;
+  sshPort: number | null;
+};
+let serverHosts: Record<string, ServerHost> = {};
+
+/** Feed the full /hosts list — builds both the string target map (for getSshHost)
+ *  and the id-bearing record map (for getSshTarget's relay lookup). */
+export function setServerHosts(hosts: ServerHost[]): void {
+  const byMachine: Record<string, ServerHost> = {};
+  const targets: Record<string, string> = {};
+  for (const h of hosts ?? []) {
+    byMachine[h.machine] = h;
+    if (h.address) targets[h.machine] = h.user ? `${h.user}@${h.address}` : h.address;
+  }
+  serverHosts = byMachine;
+  serverHostTargets = targets;
+  probeCache.clear(); // host set changed → re-evaluate reachability
+}
+
 /**
  * Resolve a machine to an SSH target. Priority:
  *   1. a manual override in ssh-hosts.json (user intent wins),
@@ -76,6 +103,92 @@ export function setSshHost(machine: string, host: string): void {
     fs.writeFileSync(sshHostsStorePath(), JSON.stringify(all, null, 2), "utf8");
   } catch {
     // best-effort; never throw
+  }
+}
+
+// ---------------------------------------------------------------------------
+// SSH target resolution WITH relay fallback (getSshTarget).
+//
+// Returns the host string (unchanged — kept for host-key identity / ssh config /
+// end-to-end auth) plus extra ssh `-o` opts. For a directly-reachable host the
+// opts are empty (current behavior). For a NAT'd host with no open port, the opts
+// carry a `-o ProxyCommand=…` that jumps through the cowork relay. Fail-safe: any
+// lookup error yields the plain direct host with no opts.
+// ---------------------------------------------------------------------------
+
+export type SshTarget = { host: string; opts: string[] };
+
+const PROBE_TTL_MS = 30_000; // cache the reachability decision briefly (git poll / forwards)
+const PROBE_TIMEOUT_MS = 2_500;
+const DEFAULT_SSH_PORT = 22;
+
+const probeCache = new Map<string, { at: number; target: SshTarget }>();
+
+// Injectable for tests — default to the real net/API implementations.
+let probeReachable: (host: string, port: number, timeoutMs: number) => Promise<boolean> = probeTcp;
+let fetchTunnel: (hostId: string) => Promise<TunnelCoordinates> = getHostTunnel;
+let ensureRegistered: () => Promise<boolean> = ensureCockpitKeyRegistered;
+
+/** Test-only seam to inject fake reachability / tunnel-fetch / key-registration. */
+export function __setRelayDepsForTest(deps: {
+  probe?: typeof probeReachable;
+  fetchTunnel?: typeof fetchTunnel;
+  ensureRegistered?: typeof ensureRegistered;
+}): void {
+  if (deps.probe) probeReachable = deps.probe;
+  if (deps.fetchTunnel) fetchTunnel = deps.fetchTunnel;
+  if (deps.ensureRegistered) ensureRegistered = deps.ensureRegistered;
+  probeCache.clear();
+}
+
+/** Extract the bare address (drop `user@`) from a `user@address` host string. */
+function hostAddress(host: string): string {
+  const at = host.lastIndexOf("@");
+  return at >= 0 ? host.slice(at + 1) : host;
+}
+
+async function resolveSshTarget(machine: string): Promise<SshTarget> {
+  const host = getSshHost(machine);
+  const rec = serverHosts[machine];
+  const port = rec?.sshPort ?? DEFAULT_SSH_PORT;
+
+  // 1. Try the direct TCP path (manual override, server address, or bare name).
+  try {
+    if (await probeReachable(hostAddress(host), port, PROBE_TIMEOUT_MS)) {
+      return { host, opts: [] };
+    }
+  } catch {
+    // probe threw → treat as unreachable, fall through to relay
+  }
+
+  // 2. Unreachable directly. Relay needs the server-known hostId; without it we
+  //    can only fall back to the direct string (fail-safe, current behavior).
+  if (!rec?.id) return { host, opts: [] };
+  try {
+    if (!(await ensureRegistered())) return { host, opts: [] };
+    const coords = await fetchTunnel(rec.id);
+    return { host, opts: buildRelayOpts(coords) };
+  } catch {
+    return { host, opts: [] };
+  }
+}
+
+/**
+ * Resolve a machine to an SSH target (host + extra opts), preferring a direct
+ * connection and falling back to the cowork relay for NAT'd hosts. Cached per
+ * machine for a short TTL so we don't TCP-probe on every git poll / forward.
+ * Never throws.
+ */
+export async function getSshTarget(machine: string): Promise<SshTarget> {
+  try {
+    const cached = probeCache.get(machine);
+    if (cached && Date.now() - cached.at < PROBE_TTL_MS) return cached.target;
+    const target = await resolveSshTarget(machine);
+    probeCache.set(machine, { at: Date.now(), target });
+    return target;
+  } catch {
+    // absolute last resort — never break a session
+    return { host: getSshHost(machine), opts: [] };
   }
 }
 
@@ -106,11 +219,11 @@ function writeCache(sessionId: string, config: WorkspaceConfig): void {
 }
 
 /** Run ssh with argv as an array (no shell concatenation). The remote command is a single string arg. */
-function sshExec(sshHost: string, remoteCommand: string, stdin?: string): Promise<void> {
+function sshExec(target: SshTarget, remoteCommand: string, stdin?: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = execFile(
       "ssh",
-      [...sshMuxOpts(), "-o", "BatchMode=yes", "-o", `ConnectTimeout=8`, sshHost, remoteCommand],
+      [...sshMuxOpts(), ...target.opts, "-o", "BatchMode=yes", "-o", `ConnectTimeout=8`, target.host, remoteCommand],
       { timeout: SSH_TIMEOUT_MS },
       (err) => (err ? reject(err) : resolve())
     );
@@ -121,11 +234,11 @@ function sshExec(sshHost: string, remoteCommand: string, stdin?: string): Promis
 }
 
 /** Run ssh and resolve with the command's stdout. */
-function sshCapture(sshHost: string, remoteCommand: string): Promise<string> {
+function sshCapture(target: SshTarget, remoteCommand: string): Promise<string> {
   return new Promise((resolve, reject) => {
     execFile(
       "ssh",
-      [...sshMuxOpts(), "-o", "BatchMode=yes", "-o", `ConnectTimeout=8`, sshHost, remoteCommand],
+      [...sshMuxOpts(), ...target.opts, "-o", "BatchMode=yes", "-o", `ConnectTimeout=8`, target.host, remoteCommand],
       { timeout: SSH_TIMEOUT_MS },
       (err, stdout) => (err ? reject(err) : resolve(stdout))
     );
@@ -175,17 +288,17 @@ export async function saveWorkspaceConfig(
       fs.writeFileSync(path.join(dir, "session.json"), json + "\n", "utf8");
       localGitignoreEnsure(cwd);
     } else {
-      const sshHost = getSshHost(machine);
+      const target = await getSshTarget(machine);
       const qCwd = shellQuote(cwd);
       // Create the dir and write the file from stdin.
       await sshExec(
-        sshHost,
+        target,
         `mkdir -p ${qCwd}/.redstone && cat > ${qCwd}/.redstone/session.json`,
         json + "\n"
       );
       // Ensure .gitignore contains .redstone/ only if absent.
       await sshExec(
-        sshHost,
+        target,
         `touch ${qCwd}/.gitignore && grep -qxF '.redstone/' ${qCwd}/.gitignore || echo '.redstone/' >> ${qCwd}/.gitignore`
       );
     }
@@ -211,7 +324,7 @@ export async function getWorkspaceConfig(args: Args): Promise<WorkspaceConfig | 
     // Remote session — read the file over ssh.
     try {
       const qCwd = shellQuote(cwd);
-      const raw = await sshCapture(getSshHost(machine), `cat ${qCwd}/.redstone/session.json`);
+      const raw = await sshCapture(await getSshTarget(machine), `cat ${qCwd}/.redstone/session.json`);
       return normalizeConfig(JSON.parse(raw) as Partial<WorkspaceConfig>);
     } catch {
       // unreachable / missing — fall through to cache

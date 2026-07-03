@@ -72,6 +72,12 @@ import { SkillSyncService } from "./application/skill-sync.service";
 import { SKILL_REGISTRY_STORE } from "./domain/skills/skill-registry.port";
 import { InMemorySkillRegistryStore } from "./adapters/persistence/in-memory-skill-registry-store";
 import { PostgresSkillRegistryStore } from "./adapters/persistence/postgres-skill-registry-store";
+import { TunnelController } from "./adapters/http/tunnel.controller";
+import { TunnelService } from "./application/tunnel.service";
+import { AuthorizedKeysWriter } from "./application/authorized-keys-writer";
+import { HOST_TUNNEL_STORE } from "./domain/tunnels/host-tunnel.port";
+import { InMemoryHostTunnelStore } from "./adapters/persistence/in-memory-host-tunnel-store";
+import { PostgresHostTunnelStore } from "./adapters/persistence/postgres-host-tunnel-store";
 import { AccessKeysController } from "./adapters/http/access-keys.controller";
 import { AccessKeysService } from "./application/access-keys.service";
 import { ACCESS_KEY_STORE } from "./domain/access-keys/access-key-store.port";
@@ -96,7 +102,7 @@ import { PromptLoader } from "./infrastructure/prompts/prompt-loader";
 import type { Pool } from "pg";
 
 @Module({
-  controllers: [HealthController, EventsController, SessionsController, DecisionsController, StreamController, PushController, ConnectionsController, OAuthController, MicrosoftOAuthController, DevicesController, InstallController, LlmController, AuthController, HostsController, InventoryController, AccessKeysController, TelemetryController, SkillsController],
+  controllers: [HealthController, EventsController, SessionsController, DecisionsController, StreamController, PushController, ConnectionsController, OAuthController, MicrosoftOAuthController, DevicesController, InstallController, LlmController, AuthController, HostsController, InventoryController, AccessKeysController, TelemetryController, SkillsController, TunnelController],
   providers: [
     RecordEventUseCase,
     SessionsService,
@@ -171,6 +177,14 @@ import type { Pool } from "pg";
     },
     SkillRegistryService,
     SkillSyncService,
+    {
+      provide: HOST_TUNNEL_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresHostTunnelStore(pool) : new InMemoryHostTunnelStore(),
+    },
+    AuthorizedKeysWriter,
+    TunnelService,
     {
       provide: ACCESS_KEY_STORE,
       inject: [PG_POOL],

@@ -153,6 +153,30 @@ export class ApiClient {
     await this.req(`/hosts/${encodeURIComponent(hostId)}/commands/${encodeURIComponent(cmdId)}/result`, { method: "POST", headers: json(this.cfg.token), body: JSON.stringify(result) }, 5000);
   }
 
+  /**
+   * Provision a reverse-tunnel slot for this host. POSTs the agent's tunnel pubkey
+   * and returns the relay coordinates, or `null` if the server isn't ready yet
+   * (non-2xx / unreachable) so the caller can retry with backoff.
+   */
+  async provisionTunnel(
+    hostId: string,
+    pubkey: string
+  ): Promise<{ relayHost: string; relayPort: number; tunnelUser: string; tunnelPort: number } | null> {
+    try {
+      const r = await this.req(
+        `/hosts/${encodeURIComponent(hostId)}/tunnel`,
+        { method: "POST", headers: json(this.cfg.token), body: JSON.stringify({ pubkey, kind: "agent" }) },
+        8000
+      );
+      if (!r.ok) return null;
+      const c = (await r.json()) as { relayHost?: string; relayPort?: number; tunnelUser?: string; tunnelPort?: number };
+      if (!c.relayHost || !c.relayPort || !c.tunnelUser || !c.tunnelPort) return null;
+      return { relayHost: c.relayHost, relayPort: c.relayPort, tunnelUser: c.tunnelUser, tunnelPort: c.tunnelPort };
+    } catch {
+      return null;
+    }
+  }
+
   /** Report the outcome of an ssh-authorize delivery back to the server. */
   async postSshResult(
     sessionId: string,

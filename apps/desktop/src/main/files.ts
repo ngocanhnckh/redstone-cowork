@@ -3,7 +3,7 @@ import fsp from "node:fs/promises";
 import path from "node:path";
 import { execFile } from "node:child_process";
 import { sshMuxOpts } from "./ssh-common";
-import { isLocalMachine, getSshHost } from "./workspace";
+import { isLocalMachine, getSshTarget, type SshTarget } from "./workspace";
 
 // ---------------------------------------------------------------------------
 // File browser backend — list directories, read files (text or binary), and
@@ -38,22 +38,22 @@ function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
-function sshCapture(sshHost: string, remoteCommand: string, encoding: "utf8" | "buffer" = "utf8"): Promise<string> {
+function sshCapture(target: SshTarget, remoteCommand: string, encoding: "utf8" | "buffer" = "utf8"): Promise<string> {
   return new Promise((resolve, reject) => {
     execFile(
       "ssh",
-      [...sshMuxOpts(), "-o", "BatchMode=yes", "-o", "ConnectTimeout=8", sshHost, remoteCommand],
+      [...sshMuxOpts(), ...target.opts, "-o", "BatchMode=yes", "-o", "ConnectTimeout=8", target.host, remoteCommand],
       { timeout: SSH_TIMEOUT_MS, maxBuffer: 64 * 1024 * 1024, encoding: encoding === "buffer" ? "buffer" : "utf8" },
       (err, stdout) => (err ? reject(err) : resolve(stdout as unknown as string))
     );
   });
 }
 
-function sshWrite(sshHost: string, remoteCommand: string, stdin: string | Buffer): Promise<void> {
+function sshWrite(target: SshTarget, remoteCommand: string, stdin: string | Buffer): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = execFile(
       "ssh",
-      [...sshMuxOpts(), "-o", "BatchMode=yes", "-o", "ConnectTimeout=8", sshHost, remoteCommand],
+      [...sshMuxOpts(), ...target.opts, "-o", "BatchMode=yes", "-o", "ConnectTimeout=8", target.host, remoteCommand],
       { timeout: SSH_TIMEOUT_MS },
       (err) => (err ? reject(err) : resolve())
     );
@@ -124,10 +124,10 @@ export async function listDir(args: Loc & { dir: string }): Promise<{ ok: true; 
       return { ok: true, entries: sortEntries(entries) };
     }
     // Remote: one stat call per entry is too chatty; use a single find with printf.
-    const sshHost = getSshHost(machine);
+    const sshTarget = await getSshTarget(machine);
     // %y = file type (d/f/l...), %s = size, %p = path. NUL-separate fields & records.
     const cmd = `cd ${shellQuote(dir)} && for n in * .*; do [ "$n" = "." ] || [ "$n" = ".." ] || [ ! -e "$n" -a ! -L "$n" ] || { if [ -d "$n" ]; then t=d; s=0; else t=f; s=$(wc -c < "$n" 2>/dev/null || echo 0); fi; printf '%s\\t%s\\t%s\\n' "$t" "$s" "$n"; }; done`;
-    const out = await sshCapture(sshHost, cmd);
+    const out = await sshCapture(sshTarget, cmd);
     const entries: DirEntry[] = [];
     for (const line of out.split("\n")) {
       if (!line.trim()) continue;
@@ -176,15 +176,15 @@ export async function readFileAt(args: Loc & { file: string }): Promise<ReadResu
     }
 
     // Remote.
-    const sshHost = getSshHost(machine);
-    const size = Number(await sshCapture(sshHost, `wc -c < ${shellQuote(file)}`)) || 0;
+    const sshTarget = await getSshTarget(machine);
+    const size = Number(await sshCapture(sshTarget, `wc -c < ${shellQuote(file)}`)) || 0;
     if (isPreviewableBinary(name)) {
       if (size > MAX_BINARY_BYTES) return { ok: true, encoding: "binary", size, mime: mimeFor(name) };
-      const b64 = (await sshCapture(sshHost, `base64 < ${shellQuote(file)}`)).replace(/\n/g, "");
+      const b64 = (await sshCapture(sshTarget, `base64 < ${shellQuote(file)}`)).replace(/\n/g, "");
       return { ok: true, encoding: "base64", content: b64, size, mime: mimeFor(name) };
     }
     if (size > MAX_TEXT_BYTES) return { ok: true, encoding: "binary", size, mime: mimeFor(name) };
-    const content = await sshCapture(sshHost, `cat ${shellQuote(file)}`);
+    const content = await sshCapture(sshTarget, `cat ${shellQuote(file)}`);
     if (looksBinary(Buffer.from(content.slice(0, 4096), "utf8"))) {
       return { ok: true, encoding: "binary", size, mime: mimeFor(name) };
     }
@@ -204,8 +204,8 @@ export async function writeFileAt(args: Loc & { file: string; content: string })
       await fsp.writeFile(file, content, "utf8");
       return { ok: true };
     }
-    const sshHost = getSshHost(machine);
-    await sshWrite(sshHost, `cat > ${shellQuote(file)}`, content);
+    const sshTarget = await getSshTarget(machine);
+    await sshWrite(sshTarget, `cat > ${shellQuote(file)}`, content);
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
@@ -239,7 +239,7 @@ export async function deletePath(args: Loc & { path: string }): Promise<{ ok: bo
       await fsp.rm(target, { recursive: true, force: true });
       return { ok: true };
     }
-    await sshCapture(getSshHost(machine), `rm -rf ${shellQuote(target)}`);
+    await sshCapture(await getSshTarget(machine), `rm -rf ${shellQuote(target)}`);
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
@@ -258,7 +258,7 @@ export async function makeDir(args: Loc & { parent: string; name: string }): Pro
       await fsp.mkdir(target, { recursive: true });
       return { ok: true, path: target };
     }
-    await sshCapture(getSshHost(machine), `mkdir -p ${shellQuote(target)}`);
+    await sshCapture(await getSshTarget(machine), `mkdir -p ${shellQuote(target)}`);
     return { ok: true, path: target };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
@@ -280,7 +280,7 @@ export async function createFile(args: Loc & { parent: string; name: string }): 
       return { ok: true, path: target };
     }
     // Remote: noclobber so we never truncate an existing file; `: >` makes it empty.
-    await sshCapture(getSshHost(machine), `set -o noclobber; : > ${shellQuote(target)}`);
+    await sshCapture(await getSshTarget(machine), `set -o noclobber; : > ${shellQuote(target)}`);
     return { ok: true, path: target };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -300,7 +300,7 @@ export async function uploadLocalFile(args: Loc & { srcPath: string; destDir: st
       return { ok: true, name };
     }
     const buf = await fsp.readFile(srcPath);
-    await sshWrite(getSshHost(machine), `cat > ${shellQuote(target)}`, buf);
+    await sshWrite(await getSshTarget(machine), `cat > ${shellQuote(target)}`, buf);
     return { ok: true, name };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };

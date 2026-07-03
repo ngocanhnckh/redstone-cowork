@@ -56,8 +56,17 @@ services:
       REDSTONE_ISSUER: ${REDSTONE_ISSUER:-}
       REDSTONE_CLIENT_ID: ${REDSTONE_CLIENT_ID:-}
       REDSTONE_CLIENT_SECRET: ${REDSTONE_CLIENT_SECRET:-}
+      # NAT'd-host SSH relay (reverse tunnel via cowork server).
+      RELAY_HOST: ${RELAY_HOST:-}
+      RELAY_SSH_PORT: ${RELAY_SSH_PORT:-22}
+      RCWTUN_USER: ${RCWTUN_USER:-rcwtun}
+      RCWTUN_AUTHKEYS_PATH: ${RCWTUN_AUTHKEYS_PATH:-/rcwtun-ssh/authorized_keys}
     ports:
       - "${API_PORT:-47101}:3001"
+    volumes:
+      # rcwtun's ~/.ssh, so the API can manage authorized_keys for tunnel brokers.
+      # Only mounted when the relay is set up (deploy/setup-relay.sh creates the dir).
+      - ${RCWTUN_SSH_DIR:-/home/rcwtun/.ssh}:/rcwtun-ssh
     depends_on:
       postgres: { condition: service_healthy }
     healthcheck:

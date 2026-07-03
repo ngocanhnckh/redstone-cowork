@@ -206,8 +206,26 @@ export async function getDocker(): Promise<unknown[]> {
 export async function getCaps(): Promise<unknown[]> {
   return (await req("/telemetry/caps")).json();
 }
-export async function getHosts(): Promise<Array<{ machine: string; user: string | null; address: string | null; sshPort: number | null }>> {
+export async function getHosts(): Promise<Array<{ id: string; machine: string; user: string | null; address: string | null; sshPort: number | null }>> {
   return (await req("/hosts")).json();
+}
+
+// ---- NAT'd-host SSH relay (reverse tunnel via cowork server) ----
+export type TunnelCoordinates = {
+  relayHost: string;
+  relayPort: number;
+  tunnelUser: string;
+  tunnelPort: number;
+};
+
+/** Cockpit: fetch a host's relay coordinates (404 if the host has no tunnel provisioned). */
+export async function getHostTunnel(hostId: string): Promise<TunnelCoordinates> {
+  return (await req(`/hosts/${encodeURIComponent(hostId)}/tunnel`)).json();
+}
+
+/** Cockpit: register this desktop's jump pubkey on the relay (idempotent server-side). */
+export async function registerCockpitKey(pubkey: string, label: string): Promise<void> {
+  await req("/tunnel/cockpit-key", { method: "POST", body: JSON.stringify({ pubkey, label }) });
 }
 
 export async function getInventory(): Promise<unknown> {

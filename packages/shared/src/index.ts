@@ -7,3 +7,4 @@ export * from "./devices/device.js";
 export * from "./llm/llm.js";
 export * from "./inventory/inventory.js";
 export * from "./access-keys/access-key.js";
+export * from "./tunnels/tunnel.js";

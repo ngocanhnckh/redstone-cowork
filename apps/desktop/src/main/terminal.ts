@@ -1,5 +1,5 @@
 import type { IPty } from "node-pty";
-import { getSshHost, isLocalMachine } from "./workspace";
+import { getSshTarget, isLocalMachine } from "./workspace";
 import { sshMuxOpts } from "./ssh-common";
 
 // node-pty is a native module externalized from the main bundle — require it lazily
@@ -51,11 +51,11 @@ function appendRing(term: Term, data: string): void {
  * Ensure a PTY exists for `id`. If one already runs, (re)attach `onData` and return
  * the buffered replay. Otherwise spawn a local shell or an ssh session. Never throws.
  */
-export function ensureTerminal(
+export async function ensureTerminal(
   args: EnsureArgs,
   onData: (data: string) => void,
   onExit: () => void
-): EnsureResult {
+): Promise<EnsureResult> {
   const { id, cwd, machine, cols, rows } = args;
 
   const existing = terminals.get(id);
@@ -83,9 +83,9 @@ export function ensureTerminal(
         env: process.env as Record<string, string>,
       });
     } else {
-      const host = getSshHost(machine);
+      const target = await getSshTarget(machine);
       const remoteCmd = `cd ${shellQuote(cwd)} && exec $SHELL -l`;
-      child = pty.spawn("ssh", ["-tt", ...sshMuxOpts(), host, remoteCmd], {
+      child = pty.spawn("ssh", ["-tt", ...sshMuxOpts(), ...target.opts, target.host, remoteCmd], {
         name: "xterm-256color",
         cols: safeCols,
         rows: safeRows,

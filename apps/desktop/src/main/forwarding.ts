@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { getSshHost, isLocalMachine } from "./workspace";
+import { getSshTarget, isLocalMachine } from "./workspace";
 // Note: forwards intentionally do NOT use ssh ControlMaster — see ControlPath=none below.
 
 export type ForwardStatus = "local" | "starting" | "active" | "failed" | "stopped";
@@ -51,8 +51,14 @@ export function startForward(args: StartArgs, onStatus: StatusCb): void {
     return;
   }
 
+  // Resolving the SSH target (direct-vs-relay probe) is async; do it then spawn.
+  // Errors never escape — resolved as failed status via the try/catch below.
+  void spawnForward(k, machine, port, onStatus);
+}
+
+async function spawnForward(k: string, machine: string, port: number, onStatus: StatusCb): Promise<void> {
   try {
-    const host = getSshHost(machine);
+    const target = await getSshTarget(machine);
     const child = spawn(
       "ssh",
       [
@@ -62,6 +68,7 @@ export function startForward(args: StartArgs, onStatus: StatusCb): void {
         // which we'd misread as "failed" — so disable muxing for forwards (ControlPath=none).
         "-o",
         "ControlPath=none",
+        ...target.opts,
         "-o",
         "BatchMode=yes",
         "-o",
@@ -70,7 +77,7 @@ export function startForward(args: StartArgs, onStatus: StatusCb): void {
         "ConnectTimeout=8",
         "-L",
         `${port}:localhost:${port}`,
-        host,
+        target.host,
       ],
       { stdio: ["ignore", "ignore", "pipe"] }
     );

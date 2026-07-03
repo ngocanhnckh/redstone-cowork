@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { sshMuxOpts } from "./ssh-common";
-import { isLocalMachine, getSshHost } from "./workspace";
+import { isLocalMachine, getSshTarget } from "./workspace";
 
 // Latest commits for a session's repo — runs `git log` either locally or over the
 // same multiplexed SSH connection the file browser uses.
@@ -16,19 +16,21 @@ function shellQuote(v: string): string {
   return `'${v.replace(/'/g, `'\\''`)}'`;
 }
 
-function run(machine: string, argv: string[]): Promise<string> {
-  return new Promise((resolve, reject) => {
-    if (isLocalMachine(machine)) {
+async function run(machine: string, argv: string[]): Promise<string> {
+  if (isLocalMachine(machine)) {
+    return new Promise((resolve, reject) => {
       execFile(argv[0], argv.slice(1), { timeout: TIMEOUT_MS, maxBuffer: 4 * 1024 * 1024 }, (err, stdout) => {
         if (err) reject(err); else resolve(stdout);
       });
-    } else {
-      const remote = argv.map(shellQuote).join(" ");
-      execFile("ssh", [...sshMuxOpts(), "-o", "BatchMode=yes", "-o", "ConnectTimeout=8", getSshHost(machine), remote],
-        { timeout: TIMEOUT_MS, maxBuffer: 4 * 1024 * 1024 }, (err, stdout) => {
-          if (err) reject(err); else resolve(stdout);
-        });
-    }
+    });
+  }
+  const target = await getSshTarget(machine);
+  const remote = argv.map(shellQuote).join(" ");
+  return new Promise((resolve, reject) => {
+    execFile("ssh", [...sshMuxOpts(), ...target.opts, "-o", "BatchMode=yes", "-o", "ConnectTimeout=8", target.host, remote],
+      { timeout: TIMEOUT_MS, maxBuffer: 4 * 1024 * 1024 }, (err, stdout) => {
+        if (err) reject(err); else resolve(stdout);
+      });
   });
 }
 

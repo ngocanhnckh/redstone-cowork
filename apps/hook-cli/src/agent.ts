@@ -1,10 +1,11 @@
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { hostname, userInfo, platform } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { configDir } from "./config";
+import { ensureTunnelKey, buildTunnelArgs, relayKnownHostsPath, type TunnelCoordinates } from "./tunnel";
 import { scanSessions, findTranscriptPath } from "./scanner";
 import { sampleTelemetry } from "./telemetry";
 import { sampleDocker } from "./docker";
@@ -177,5 +178,61 @@ export async function runAgent(opts: { api: ApiClient; sleep?: (ms: number) => P
     }
   };
 
-  await Promise.all([scanLoop(), telemetryLoop(), dockerLoop(), capsLoop(), commandLoop(), reannounce()]);
+  // Tunnel loop: keep a persistent reverse SSH tunnel to the relay so a NAT'd host
+  // (no inbound port) stays reachable from the cockpit. Fully fail-safe: if keygen,
+  // provisioning, or ssh fails, it backs off and retries — never crashes the agent.
+  const tunnelLoop = async () => {
+    let key: Awaited<ReturnType<typeof ensureTunnelKey>> = null;
+    try {
+      key = await ensureTunnelKey(configDir());
+    } catch { /* ensureTunnelKey is already fail-safe, but double-guard */ }
+    if (!key) {
+      // No usable keypair (e.g. ssh-keygen unavailable) — disable the tunnel quietly.
+      console.error("[tunnel] no tunnel keypair available; reverse tunnel disabled");
+      return;
+    }
+    const knownHosts = relayKnownHostsPath(configDir());
+    let coords: TunnelCoordinates | null = null;
+    let provisionFails = 0;
+    let backoff = 5_000;
+
+    for (;;) {
+      try {
+        // (Re)provision if we have no coordinates yet.
+        if (!coords) {
+          coords = await api.provisionTunnel(hostId, key.pubkey);
+          if (!coords) {
+            // Server not ready yet — capped backoff, then retry.
+            provisionFails++;
+            await sleep(Math.min(60_000, 5_000 * Math.min(provisionFails, 12)));
+            continue;
+          }
+          provisionFails = 0;
+        }
+
+        const args = buildTunnelArgs(coords, key.privKeyPath, knownHosts);
+        const exitCode = await new Promise<number>((resolve) => {
+          try {
+            const child = spawn("ssh", args, { stdio: ["ignore", "ignore", "ignore"] });
+            child.on("error", () => resolve(255)); // ssh missing/spawn failure
+            child.on("exit", (code) => resolve(code ?? 255));
+          } catch {
+            resolve(255);
+          }
+        });
+
+        // ExitOnForwardFailure=yes → a taken/changed port surfaces as a non-zero
+        // exit; drop coords so we re-provision (may get a fresh port) next round.
+        if (exitCode !== 0) coords = null;
+        else backoff = 5_000; // tunnel had come up cleanly — reconnect promptly
+      } catch {
+        // Any unexpected error — force a clean re-provision next iteration.
+        coords = null;
+      }
+      await sleep(backoff);
+      backoff = Math.min(30_000, Math.round(backoff * 1.5)); // 5s → 30s cap
+    }
+  };
+
+  await Promise.all([scanLoop(), telemetryLoop(), dockerLoop(), capsLoop(), commandLoop(), reannounce(), tunnelLoop()]);
 }
