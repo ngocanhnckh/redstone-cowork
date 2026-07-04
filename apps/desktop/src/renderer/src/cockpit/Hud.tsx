@@ -19,7 +19,7 @@ import ModeSelect from "./ModeSelect";
 import TokenSpendWidget from "./TokenSpendWidget";
 import SessionInfoWidget from "./SessionInfoWidget";
 import { GitInfo } from "../types";
-import { useDockPos, type DockPos } from "../appearance";
+import { useAppearance, type DockPos } from "../appearance";
 
 // Motion (motion.dev) entrance choreography for the widget column.
 const STAGGER: Variants = { hidden: {}, show: { transition: { staggerChildren: 0.07, delayChildren: 0.05 } } };
@@ -864,7 +864,9 @@ function HudConsole() {
   const openTerminal = useStore((s) => s.openTerminal);
   const openUrlInBrowser = useStore((s) => s.openUrlInBrowser);
   const pendingBrowserOpen = useStore((s) => s.pendingBrowserOpen);
-  const dockPos = useDockPos();
+  const appr = useAppearance();
+  const dockPos = appr.dockPos;
+  const dockScale = appr.dockScale;
   const canvasRef = useRef<HTMLDivElement>(null);
   const none = <div className="mono faint" style={{ padding: 14, fontSize: 11 }}>no session</div>;
   const [dockerMenu, setDockerMenu] = useState(false); // Docker dock icon right-click menu
@@ -1284,7 +1286,7 @@ function HudConsole() {
 
         {/* macOS-style app dock — the single place to restore / focus windows. */}
         {!grid && (
-          <div style={{ ...WIN_GLASS, ...dockContainerStyle(dockPos) }}>
+          <div style={{ ...WIN_GLASS, ...dockContainerStyle(dockPos, dockScale) }}>
             <span className="hud-corner" />
             {dockItems.map((p) => {
               const open = !wins.wins[p.id]?.min;
@@ -1375,13 +1377,16 @@ function HudConsole() {
   );
 }
 
-/** Where the HUD dock sits on the canvas — anchored per the user's Appearance pref. */
-function dockContainerStyle(pos: DockPos): React.CSSProperties {
+/** Where the HUD dock sits on the canvas — anchored per the user's Appearance pref.
+ * `scale` grows/shrinks the whole dock via `zoom` (Chromium scales layout + hit
+ * area, and it composes cleanly with the translate-based centering). */
+function dockContainerStyle(pos: DockPos, scale = 1): React.CSSProperties {
   const vertical = pos === "left" || pos === "right";
   const base: React.CSSProperties = {
     position: "absolute", zIndex: 1000, display: "flex", gap: 6, padding: "8px 10px 6px",
     borderRadius: 18, border: "1px solid var(--border-strong)", boxShadow: "0 12px 40px rgb(0 0 0 / 0.5)",
     flexDirection: vertical ? "column" : "row", alignItems: vertical ? "center" : "flex-end",
+    zoom: scale !== 1 ? scale : undefined,
   };
   switch (pos) {
     case "top": return { ...base, top: 14, left: "50%", transform: "translateX(-50%)" };

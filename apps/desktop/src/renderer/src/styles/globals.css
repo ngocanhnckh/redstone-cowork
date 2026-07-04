@@ -73,6 +73,15 @@ body {
     display: none;
 }
 
+/* "Transparent app in HUD mode": drop the app-shell glass entirely so the
+   desktop shows straight through. Individual widgets keep their own glass. */
+.rcw-hud-clear .glass-surface {
+    background: transparent;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    box-shadow: none;
+}
+
 /* atmosphere — drifting gradient-mesh blobs the glass refracts */
 .atmosphere {
     position: fixed;

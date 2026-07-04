@@ -10,6 +10,7 @@ import Hud from "./Hud";
 import AssistPanel from "./AssistPanel";
 import SettingsPanel from "./SettingsPanel";
 import CapsModal from "./CapsModal";
+import { useAppearance } from "../appearance";
 
 const noDrag = { WebkitAppRegion: "no-drag" } as CSSProperties;
 
@@ -29,10 +30,20 @@ export default function Cockpit() {
   const toggleSettings = useStore((s) => s.toggleSettings);
   const toggleCaps = useStore((s) => s.toggleCaps);
 
+  const appr = useAppearance();
+
   useEffect(() => {
     const unsub = startCockpit();
     return unsub;
   }, []);
+
+  // "Transparent app in HUD mode": strip the app-shell glass only while the HUD is
+  // the active mode, so the desktop shows straight through behind the widgets.
+  useEffect(() => {
+    const on = mode === "hud" && appr.hudClear;
+    document.documentElement.classList.toggle("rcw-hud-clear", on);
+    return () => document.documentElement.classList.remove("rcw-hud-clear");
+  }, [mode, appr.hudClear]);
 
   // Workspace-tab shortcuts: Ctrl+1/2/3/4 jump, Ctrl+Tab / Ctrl+Shift+Tab cycle.
   useEffect(() => {

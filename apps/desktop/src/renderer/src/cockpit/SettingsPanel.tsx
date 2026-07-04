@@ -241,6 +241,23 @@ export default function SettingsPanel() {
           ))}
         </div>
 
+        <SliderRow
+          label="Dock size"
+          hint="Size of the HUD dock (Windows mode)."
+          value={Math.round(appr.dockScale * 100)}
+          min={60}
+          max={160}
+          suffix="%"
+          onChange={(v) => patchAppr({ dockScale: v / 100 })}
+        />
+
+        <SwitchRow
+          label="Transparent app in HUD mode"
+          hint="In HUD mode, make the app shell fully see-through to the desktop. Each widget keeps its own glass so content stays readable."
+          on={appr.hudClear}
+          onToggle={() => patchAppr({ hudClear: !appr.hudClear })}
+        />
+
         <label className="soft" style={labelStyle}>Background image</label>
         <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
           <button onClick={chooseBg} disabled={bgBusy} className="glass-btn--clay" style={{ padding: "9px 16px", fontSize: 13, fontWeight: 600 }}>

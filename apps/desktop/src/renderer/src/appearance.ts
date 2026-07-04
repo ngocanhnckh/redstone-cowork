@@ -18,9 +18,14 @@ export type Appearance = {
   bgAnim: boolean;
   /** Where the HUD dock is anchored. */
   dockPos: DockPos;
+  /** HUD dock size multiplier (1 = default). */
+  dockScale: number;
+  /** In HUD mode, make the app shell fully transparent (see straight through to
+   * the desktop; individual widgets keep their own glass). */
+  hudClear: boolean;
 };
 
-export const DEFAULT_APPEARANCE: Appearance = { veil: 6, blur: 28, bgAnim: true, dockPos: "bottom" };
+export const DEFAULT_APPEARANCE: Appearance = { veil: 6, blur: 28, bgAnim: true, dockPos: "bottom", dockScale: 1, hudClear: false };
 
 const KEY = "rcw.appearance";
 
@@ -32,6 +37,8 @@ export function loadAppearance(): Appearance {
       blur: clampNum(raw.blur, 0, 80, DEFAULT_APPEARANCE.blur),
       bgAnim: typeof raw.bgAnim === "boolean" ? raw.bgAnim : DEFAULT_APPEARANCE.bgAnim,
       dockPos: DOCK_POSITIONS.includes(raw.dockPos) ? raw.dockPos : DEFAULT_APPEARANCE.dockPos,
+      dockScale: clampNum(raw.dockScale, 0.6, 1.6, DEFAULT_APPEARANCE.dockScale),
+      hudClear: typeof raw.hudClear === "boolean" ? raw.hudClear : DEFAULT_APPEARANCE.hudClear,
     };
   } catch {
     return { ...DEFAULT_APPEARANCE };
@@ -53,17 +60,18 @@ export function applyAppearance(a: Appearance): void {
   window.dispatchEvent(new CustomEvent("rcw-appearance", { detail: a }));
 }
 
-/** Live HUD dock position — re-renders when appearance changes. */
-export function useDockPos(): DockPos {
-  const read = (): DockPos =>
-    (document.documentElement.getAttribute("data-dock") as DockPos) || loadAppearance().dockPos;
-  const [pos, setPos] = useState<DockPos>(read);
+/** Live appearance — re-renders whenever prefs change (via applyAppearance). */
+export function useAppearance(): Appearance {
+  const [a, setA] = useState<Appearance>(loadAppearance);
   useEffect(() => {
-    const h = () => setPos(read());
+    const h = (e: Event) => {
+      const d = (e as CustomEvent).detail as Appearance | undefined;
+      setA(d ?? loadAppearance());
+    };
     window.addEventListener("rcw-appearance", h);
     return () => window.removeEventListener("rcw-appearance", h);
   }, []);
-  return pos;
+  return a;
 }
 
 /** Set (or clear) the custom background image data URL on the document root. */
