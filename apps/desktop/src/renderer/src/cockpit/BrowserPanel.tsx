@@ -11,6 +11,9 @@ interface Props {
   /** When true, hide the connection bar + address toolbar (driven from the tab
    * row) so only the webview shows — reclaims vertical space. */
   chromeHidden?: boolean;
+  /** When set, this (ephemeral) tab starts at this URL instead of the session's
+   * saved preview/port — used when opening an external link in the workspace. */
+  initialUrl?: string;
 }
 
 // Minimal typing for Electron's <webview> so JSX type-checks. We only use the
@@ -68,15 +71,16 @@ function portUrl(port: number): string {
   return `http://localhost:${port}`;
 }
 
-export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, chromeHidden }: Props) {
+export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, chromeHidden, initialUrl }: Props) {
   // Saved override URL (a typed address); when empty the preview is port-driven.
   const [browserUrl, setBrowserUrl] = useState("");
   const [forwardPorts, setForwardPorts] = useState<number[]>([]);
   const [previewPort, setPreviewPort] = useState<number | null>(null);
-  // The URL the webview is actually showing.
-  const [loadUrl, setLoadUrl] = useState("");
+  // The URL the webview is actually showing. Seeds from initialUrl (a link opened
+  // in the workspace) so the tab paints its target immediately.
+  const [loadUrl, setLoadUrl] = useState(initialUrl?.trim() ? initialUrl : "");
   // The text shown in the address bar — tracks the live/loaded URL, editable.
-  const [address, setAddress] = useState("");
+  const [address, setAddress] = useState(initialUrl?.trim() ? initialUrl : "");
   const [status, setStatus] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [saving, setSaving] = useState(false);
   const webviewRef = useRef<WebviewEl | null>(null);
@@ -113,6 +117,13 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, chrom
         setBrowserUrl(url);
         setForwardPorts(cfg.forwardPorts ?? []);
         setPreviewPort(preview);
+        // An explicit initialUrl (external link opened in the workspace) wins over
+        // the saved config — load it and don't touch the session's saved preview.
+        if (initialUrl && initialUrl.trim().length > 0) {
+          setLoadUrl(initialUrl);
+          setAddress(initialUrl);
+          return;
+        }
         // Resolve the URL to load: explicit override wins, else the preview port.
         if (url.length > 0) {
           setLoadUrl(url);

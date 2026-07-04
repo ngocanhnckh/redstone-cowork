@@ -149,6 +149,11 @@ function createWindow(): void {
     trafficLightPosition: { x: 19, y: 14 },
     // Native macOS translucency: blur the desktop/windows behind us. Transparent
     // bg lets the vibrant material show through where the page is transparent.
+    // ▓▓ WALLPAPER KNOB ▓▓ — `vibrancy` controls the blurred desktop material.
+    //   • Everyday tint density is the `--app-veil` CSS var (renderer globals.css).
+    //   • For a LIGHTER blur try "sidebar" / "hud"; to remove the app's own tint
+    //     and show the RAW, un-blurred wallpaper, drop `vibrancy`, set
+    //     `transparent: true` here, and lower `--app-veil` toward 0%.
     vibrancy: "under-window",
     visualEffectState: "active",
     backgroundColor: "#00000000",
@@ -454,6 +459,14 @@ function sameSite(a: string, b: string): boolean {
   }
 }
 
+/** Ask the renderer to open a URL in the focused session's in-app workspace
+ * browser (our browser, never the OS default). Used when a custom app tries to
+ * leave its own domain. */
+function openInWorkspaceBrowser(url: string): void {
+  if (!/^https?:\/\//i.test(url)) return;
+  for (const w of BrowserWindow.getAllWindows()) w.webContents.send(IPC.openInWorkspaceBrowser, { url });
+}
+
 ipcMain.handle(IPC.appGuestRegister, (_e, a: { webContentsId: number; homeUrl: string }) => {
   if (typeof a?.webContentsId === "number" && a.homeUrl) appGuestHomes.set(a.webContentsId, a.homeUrl);
   return { ok: true };
@@ -548,18 +561,19 @@ app.on("web-contents-created", (_e, contents) => {
 
   // Custom-app guests stay pinned to their own domain. A top-level navigation or
   // a popup (target=_blank / window.open) that leaves the app's site is cancelled
-  // and handed to the real browser as a separate window. Only guests the renderer
-  // registered (custom apps) are gated — the Browser tab keeps free navigation.
+  // and opened in the session's in-app workspace browser as a new tab (never the
+  // OS browser). Only guests the renderer registered (custom apps) are gated —
+  // the Browser tab keeps free navigation.
   contents.on("will-navigate", (ev, url) => {
     const home = appGuestHomes.get(contents.id);
     if (!home || sameSite(url, home)) return;
     ev.preventDefault();
-    if (/^https?:\/\//i.test(url)) shell.openExternal(url);
+    openInWorkspaceBrowser(url);
   });
   contents.setWindowOpenHandler(({ url }) => {
     const home = appGuestHomes.get(contents.id);
     if (home && !sameSite(url, home)) {
-      if (/^https?:\/\//i.test(url)) shell.openExternal(url);
+      openInWorkspaceBrowser(url);
       return { action: "deny" };
     }
     return { action: "allow" };

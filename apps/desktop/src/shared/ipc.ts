@@ -57,6 +57,7 @@ export const IPC = {
   openExternal: "api:open-external",
   appGuestRegister: "api:appguest:register",
   appGuestUnregister: "api:appguest:unregister",
+  openInWorkspaceBrowser: "api:browser:open-in-workspace",
   filesList: "api:files:list",
   filesSearch: "api:files:search",
   filesRead: "api:files:read",

@@ -51,6 +51,9 @@ type State = {
   pending: Record<string, PendingSend[]>; // sessionId → optimistic sends, shown instantly
   activeTab: Record<string, "chat" | "terminal" | "browser" | "ports" | "files">; // sessionId → active workspace tab
   openBrowsers: string[]; // sessionIds whose browser tab was opened — kept alive (see BrowserStack)
+  // A one-shot request to open a URL in a session's in-app browser (a new tab). The
+  // session's MultiBrowser opens+activates a tab; the HUD reveals the browser window.
+  pendingBrowserOpen: { sessionId: string; url: string; nonce: number } | null;
   openTerminals: string[]; // sessionIds whose terminal was opened — kept alive (see TerminalStack)
   contextCollapsed: boolean; // right context sidebar collapsed (more room for the body)
   assistOpen: boolean; // LLM assistant slide-over
@@ -60,6 +63,7 @@ type State = {
   refresh: () => Promise<void>;
   setActiveTab: (sessionId: string, tab: "chat" | "terminal" | "browser" | "ports" | "files") => void;
   openBrowser: (sessionId: string) => void;
+  openUrlInBrowser: (sessionId: string, url: string) => void;
   openTerminal: (sessionId: string) => void;
   toggleContext: () => void;
   toggleAssist: () => void;
@@ -105,6 +109,7 @@ export const useStore = create<State>((set, get) => ({
   pending: {},
   activeTab: {},
   openBrowsers: [],
+  pendingBrowserOpen: null,
   openTerminals: [],
   contextCollapsed: false,
   assistOpen: false,
@@ -130,6 +135,15 @@ export const useStore = create<State>((set, get) => ({
 
   openBrowser: (sessionId) =>
     set((state) => (state.openBrowsers.includes(sessionId) ? {} : { openBrowsers: [...state.openBrowsers, sessionId] })),
+
+  // Open a URL in the session's own in-app browser (our workspace browser, never
+  // the OS browser): ensure the browser layer is alive for the session, then bump a
+  // one-shot request the MultiBrowser + HUD react to (new tab + reveal the window).
+  openUrlInBrowser: (sessionId, url) =>
+    set((state) => ({
+      openBrowsers: state.openBrowsers.includes(sessionId) ? state.openBrowsers : [...state.openBrowsers, sessionId],
+      pendingBrowserOpen: { sessionId, url, nonce: (state.pendingBrowserOpen?.nonce ?? 0) + 1 },
+    })),
 
   openTerminal: (sessionId) =>
     set((state) => (state.openTerminals.includes(sessionId) ? {} : { openTerminals: [...state.openTerminals, sessionId] })),

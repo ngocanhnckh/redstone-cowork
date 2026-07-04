@@ -307,6 +307,7 @@ function GitPane() {
   const focusId = useStore((s) => s.focusId);
   const sessions = useStore((s) => s.sessions);
   const queue = useStore((s) => s.queue);
+  const openUrlInBrowser = useStore((s) => s.openUrlInBrowser);
   const session = sessions.find((s) => s.id === focusId) ?? queue.find((s) => s.id === focusId);
   const [info, setInfo] = useState<GitInfo | null>(null);
   const [loading, setLoading] = useState(false);
@@ -335,6 +336,15 @@ function GitPane() {
             style={{ fontSize: 9.5, color: "rgb(var(--primary-soft))", minWidth: 0, maxWidth: 170, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {info.branch}
           </span>
+        )}
+        {info?.webUrl && session && (
+          <button
+            onClick={() => openUrlInBrowser(session.id, info.webUrl!)}
+            title={`Open ${info.webUrl} in this session's browser`}
+            style={{ border: "1px solid var(--border)", background: "transparent", color: "var(--text-soft)", borderRadius: 6, padding: "1px 7px", fontSize: 10, cursor: "pointer", flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 4 }}
+          >
+            <span style={{ fontSize: 11, lineHeight: 1 }}>⎇</span>GitHub
+          </button>
         )}
         <button onClick={load} title="Refresh" style={{ border: "1px solid var(--border)", background: "transparent", color: "var(--text-soft)", borderRadius: 6, padding: "1px 7px", fontSize: 10, cursor: "pointer", flexShrink: 0 }}>↻</button>
       </div>
@@ -851,6 +861,8 @@ function HudConsole() {
   const session = sessions.find((s) => s.id === focusId) ?? queue.find((s) => s.id === focusId);
   const openBrowser = useStore((s) => s.openBrowser);
   const openTerminal = useStore((s) => s.openTerminal);
+  const openUrlInBrowser = useStore((s) => s.openUrlInBrowser);
+  const pendingBrowserOpen = useStore((s) => s.pendingBrowserOpen);
   const canvasRef = useRef<HTMLDivElement>(null);
   const none = <div className="mono faint" style={{ padding: 14, fontSize: 11 }}>no session</div>;
   const [dockerMenu, setDockerMenu] = useState(false); // Docker dock icon right-click menu
@@ -996,6 +1008,43 @@ function HudConsole() {
   const raise = (id: string) => setWins((w) => (w.z[w.z.length - 1] === id ? w : { ...w, z: [...w.z.filter((k) => k !== id), id] }));
   const patchWin = (id: string, patch: Partial<WinState>) =>
     setWins((w) => ({ ...w, wins: { ...w.wins, [id]: { ...w.wins[id], ...patch } } }));
+
+  // Bring the in-app browser into view: in grid, switch to a browser-bearing view;
+  // in windows, un-minimize the browser window and raise it to the front.
+  const revealBrowser = () => {
+    if (layout === "grid") {
+      if (!VIEWS[view].areas.browser) setView("cb");
+    } else {
+      setWins((w) => ({ ...w, wins: { ...w.wins, browser: { ...w.wins.browser, min: false } }, z: [...w.z.filter((k) => k !== "browser"), "browser"] }));
+    }
+  };
+
+  // When a URL is opened in the focused session's browser (git widget's GitHub
+  // link, or a custom app's cross-domain link), reveal the browser window/view.
+  // Fires once per request (nonce-guarded); background opens for other sessions
+  // don't steal the current view.
+  const revealNonce = useRef(0);
+  useEffect(() => {
+    const p = pendingBrowserOpen;
+    if (!p || p.nonce === revealNonce.current) return;
+    revealNonce.current = p.nonce;
+    if (p.sessionId === focusKeyRef.current) revealBrowser();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingBrowserOpen]);
+
+  // A custom app tried to navigate to another domain — the main process cancelled
+  // the in-app navigation and asks us to open it in this session's workspace
+  // browser instead (never the OS browser). Fall back to the OS browser only if no
+  // session is focused to receive it.
+  useEffect(() => {
+    const off = window.cowork.onOpenInWorkspaceBrowser((a) => {
+      const sid = focusKeyRef.current;
+      if (a?.url && sid && sid !== NO_SESSION) openUrlInBrowser(sid, a.url);
+      else if (a?.url) window.cowork.openExternal(a.url).catch(() => {});
+    });
+    return off;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openUrlInBrowser]);
 
   // Dock item click: minimized/hidden → restore + raise; visible-but-behind → raise
   // to front; visible-and-frontmost → toggle-minimize (second click hides it).

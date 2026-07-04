@@ -10,7 +10,36 @@ const SEP = "\x1f"; // unit separator between fields
 const REC = "\x1e"; // record separator between commits
 
 export type Commit = { hash: string; author: string; relative: string; date: string; subject: string };
-export type GitInfo = { ok: boolean; repo: boolean; branch: string | null; ahead: number; behind: number; dirty: number; commits: Commit[]; error?: string };
+export type GitInfo = { ok: boolean; repo: boolean; branch: string | null; ahead: number; behind: number; dirty: number; commits: Commit[]; error?: string; remoteUrl?: string | null; webUrl?: string | null };
+
+/**
+ * Normalize a git `origin` remote to a browsable https URL when it's a GitHub
+ * (or GitHub Enterprise) host; otherwise return null. Handles the ssh
+ * (`git@github.com:owner/repo.git`), scp, and https remote forms.
+ */
+export function githubWebUrl(remote: string): string | null {
+  const raw = (remote || "").trim();
+  if (!raw) return null;
+  let host = "";
+  let path = "";
+  const scp = raw.match(/^[^@]+@([^:]+):(.+)$/); // git@host:owner/repo(.git)
+  if (scp) {
+    host = scp[1];
+    path = scp[2];
+  } else {
+    try {
+      const u = new URL(raw);
+      host = u.hostname;
+      path = u.pathname;
+    } catch {
+      return null;
+    }
+  }
+  if (!/(^|\.)github\.com$|github/i.test(host)) return null; // github.com or *.github enterprise
+  const clean = path.replace(/^\/+/, "").replace(/\.git$/i, "").replace(/\/+$/, "");
+  if (!clean) return null;
+  return `https://${host}/${clean}`;
+}
 
 function shellQuote(v: string): string {
   return `'${v.replace(/'/g, `'\\''`)}'`;
@@ -51,19 +80,22 @@ export async function gitInfo(cwd: string, machine: string, limit = 12): Promise
   }
   try {
     const fmt = ["%h", "%an", "%cr", "%cI", "%s"].join(SEP) + REC;
-    const [logOut, branchOut, statusOut, aheadBehind] = await Promise.all([
+    const [logOut, branchOut, statusOut, aheadBehind, remoteOut] = await Promise.all([
       run(machine, ["git", "-C", cwd, "log", `-n${limit}`, `--pretty=format:${fmt}`]),
       run(machine, ["git", "-C", cwd, "rev-parse", "--abbrev-ref", "HEAD"]).catch(() => ""),
       run(machine, ["git", "-C", cwd, "status", "--porcelain"]).catch(() => ""),
       run(machine, ["git", "-C", cwd, "rev-list", "--left-right", "--count", "@{upstream}...HEAD"]).catch(() => ""),
+      run(machine, ["git", "-C", cwd, "config", "--get", "remote.origin.url"]).catch(() => ""),
     ]);
+    const remoteUrl = remoteOut.trim() || null;
+    const webUrl = remoteUrl ? githubWebUrl(remoteUrl) : null;
     const commits: Commit[] = logOut.split(REC).map((r) => r.trim()).filter(Boolean).map((r) => {
       const [hash, author, relative, date, subject] = r.split(SEP);
       return { hash, author, relative, date, subject };
     });
     const dirty = statusOut.split("\n").filter((l) => l.trim()).length;
     const [behind, ahead] = aheadBehind.trim().split(/\s+/).map((n) => Number(n) || 0);
-    return { ok: true, repo: true, branch: branchOut.trim() || null, ahead: ahead || 0, behind: behind || 0, dirty, commits };
+    return { ok: true, repo: true, branch: branchOut.trim() || null, ahead: ahead || 0, behind: behind || 0, dirty, commits, remoteUrl, webUrl };
   } catch (e) {
     return { ...empty, ok: false, repo: true, error: e instanceof Error ? e.message : String(e) };
   }

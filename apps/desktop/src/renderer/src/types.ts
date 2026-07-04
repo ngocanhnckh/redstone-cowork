@@ -47,7 +47,7 @@ export type CapItem = { name: string; description: string | null; source: string
 export type CapsHostView = { hostId: string; machine: string; at: string; skills: CapItem[]; commands: CapItem[] };
 
 export type Commit = { hash: string; author: string; relative: string; date: string; subject: string };
-export type GitInfo = { ok: boolean; repo: boolean; branch: string | null; ahead: number; behind: number; dirty: number; commits: Commit[]; error?: string };
+export type GitInfo = { ok: boolean; repo: boolean; branch: string | null; ahead: number; behind: number; dirty: number; commits: Commit[]; error?: string; remoteUrl?: string | null; webUrl?: string | null };
 
 export type DecisionOption = { label: string; description?: string };
 export type Decision = {
