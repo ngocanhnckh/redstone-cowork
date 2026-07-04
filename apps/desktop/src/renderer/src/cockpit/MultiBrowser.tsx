@@ -11,6 +11,18 @@ export default function MultiBrowser({ sessionId, cwd, machine }: { sessionId: s
   const seq = useRef(0);
   const [tabs, setTabs] = useState<number[]>([0]);
   const [active, setActive] = useState(0);
+  // Collapse the per-page chrome (connection bar + address toolbar) down to just
+  // this tab row, to reclaim vertical space. Persisted, shared across browsers.
+  const [chromeHidden, setChromeHidden] = useState(() => {
+    try { return localStorage.getItem("rcw.browser.chromeHidden") === "1"; } catch { return false; }
+  });
+  const toggleChrome = () => {
+    setChromeHidden((h) => {
+      const next = !h;
+      try { localStorage.setItem("rcw.browser.chromeHidden", next ? "1" : "0"); } catch { /* ignore */ }
+      return next;
+    });
+  };
 
   const addTab = () => { const n = ++seq.current; setTabs((t) => [...t, n]); setActive(n); };
   const closeTab = (n: number) => {
@@ -43,11 +55,19 @@ export default function MultiBrowser({ sessionId, cwd, machine }: { sessionId: s
           );
         })}
         <button onClick={addTab} title="New browser tab" style={{ ...tabBtn, background: "transparent", color: "var(--text-soft)", border: "1px dashed var(--border-strong)" }}>+ new</button>
+        <span style={{ flex: 1 }} />
+        <button
+          onClick={toggleChrome}
+          title={chromeHidden ? "Show address bar & connection" : "Hide address bar & connection (tabs only)"}
+          style={{ ...tabBtn, background: "transparent", color: "var(--text-soft)", border: "1px solid var(--border)", flexShrink: 0 }}
+        >
+          {chromeHidden ? "▾ bar" : "▴ bar"}
+        </button>
       </div>
       <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
         {tabs.map((n) => (
           <div key={n} style={{ position: "absolute", inset: 0, display: n === active ? "flex" : "none", flexDirection: "column" }}>
-            <BrowserPanel sessionId={sessionId} cwd={cwd} machine={machine} ephemeral={n !== 0} />
+            <BrowserPanel sessionId={sessionId} cwd={cwd} machine={machine} ephemeral={n !== 0} chromeHidden={chromeHidden} />
           </div>
         ))}
       </div>

@@ -435,6 +435,89 @@ app.on("web-contents-created", (_e, contents) => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// HTTP Basic/Digest auth for the Browser tab's <webview> guests. Electron does
+// NOT surface the browser's native "sign in" dialog for webview 401s, so pages
+// behind Basic auth silently fail to load. We intercept the `login` event,
+// collect credentials in a small modal, and hand them back to Chromium.
+// ---------------------------------------------------------------------------
+let authSeq = 0;
+const pendingAuth = new Map<string, Promise<{ username: string; password: string } | null>>();
+
+function promptForCredentials(
+  parent: BrowserWindow | undefined,
+  host: string,
+  realm: string,
+): Promise<{ username: string; password: string } | null> {
+  return new Promise((resolve) => {
+    const channel = `browser-auth:${authSeq++}`;
+    const w = new BrowserWindow({
+      width: 400, height: 250, parent, modal: !!parent, resizable: false,
+      minimizable: false, maximizable: false, fullscreenable: false, title: "Sign in",
+      webPreferences: { nodeIntegration: true, contextIsolation: false },
+    });
+    w.setMenuBarVisibility(false);
+    let settled = false;
+    function finish(v: { username: string; password: string } | null): void {
+      if (settled) return;
+      settled = true;
+      ipcMain.removeListener(channel, onMsg);
+      resolve(v);
+      if (!w.isDestroyed()) w.close();
+    }
+    function onMsg(_e: unknown, data: { username: string; password: string } | null): void {
+      finish(data && typeof data.username === "string" ? data : null);
+    }
+    ipcMain.on(channel, onMsg);
+    w.on("closed", () => finish(null));
+    const esc = (s: string) => String(s).replace(/[<>&"']/g, "");
+    const sub = `${esc(host)}${realm ? " — " + esc(realm) : ""}`;
+    const html = `<!doctype html><html><head><meta charset="utf-8"><style>
+      body{font:13px -apple-system,system-ui,sans-serif;margin:0;padding:16px;background:#1b1712;color:#e8e2d8}
+      h3{margin:0 0 4px;font-size:14px} p{margin:0 0 12px;color:#9a9186;font-size:12px;word-break:break-all}
+      input{width:100%;box-sizing:border-box;margin:4px 0;padding:8px 10px;border-radius:8px;border:1px solid #3a332b;background:#241f19;color:#e8e2d8;font-size:13px;outline:none}
+      .row{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
+      button{padding:7px 14px;border-radius:8px;border:1px solid #3a332b;background:#2c2620;color:#e8e2d8;font-size:12px;cursor:pointer}
+      button.ok{background:#c1613a;border-color:#c1613a;color:#fff;font-weight:600}
+    </style></head><body>
+      <h3>Sign in</h3><p>${sub}</p>
+      <input id="u" placeholder="Username" autocomplete="off" />
+      <input id="p" type="password" placeholder="Password" autocomplete="off" />
+      <div class="row"><button id="c">Cancel</button><button id="o" class="ok">Sign in</button></div>
+      <script>
+        const { ipcRenderer } = require('electron');
+        const u = document.getElementById('u'), p = document.getElementById('p');
+        const send = () => ipcRenderer.send('${channel}', { username: u.value, password: p.value });
+        const cancel = () => ipcRenderer.send('${channel}', null);
+        document.getElementById('o').onclick = send;
+        document.getElementById('c').onclick = cancel;
+        document.addEventListener('keydown', (e) => { if (e.key === 'Enter') send(); else if (e.key === 'Escape') cancel(); });
+        u.focus();
+      </script></body></html>`;
+    void w.loadURL("data:text/html;charset=utf-8," + encodeURIComponent(html));
+  });
+}
+
+app.on("login", (event, webContents, details, authInfo, callback) => {
+  // Only handle server auth (401) for our own guests; leave proxy auth (407) alone.
+  if (authInfo.isProxy) return;
+  event.preventDefault();
+  const embedder = (webContents as unknown as { hostWebContents?: Parameters<typeof BrowserWindow.fromWebContents>[0] })
+    .hostWebContents;
+  const parent =
+    (embedder && BrowserWindow.fromWebContents(embedder)) || BrowserWindow.getAllWindows()[0] || undefined;
+  // Coalesce parallel 401s for the same origin+realm (page + subresources) into
+  // one dialog, so the user types credentials once.
+  const key = `${authInfo.host}:${authInfo.port}:${authInfo.realm}`;
+  let p = pendingAuth.get(key);
+  if (!p) {
+    p = promptForCredentials(parent ?? undefined, authInfo.host || details.url, authInfo.realm || "");
+    pendingAuth.set(key, p);
+    void p.finally(() => setTimeout(() => pendingAuth.delete(key), 500));
+  }
+  void p.then((creds) => (creds ? callback(creds.username, creds.password) : callback()));
+});
+
 app.whenReady().then(() => {
   // Create system tray
   try {

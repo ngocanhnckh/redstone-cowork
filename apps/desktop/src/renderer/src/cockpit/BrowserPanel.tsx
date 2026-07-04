@@ -8,6 +8,9 @@ interface Props {
   /** Extra tabs are ephemeral: they read the session's URL to start, but don't
    * overwrite the saved workspace config when navigated. */
   ephemeral?: boolean;
+  /** When true, hide the connection bar + address toolbar (driven from the tab
+   * row) so only the webview shows — reclaims vertical space. */
+  chromeHidden?: boolean;
 }
 
 // Minimal typing for Electron's <webview> so JSX type-checks. We only use the
@@ -65,7 +68,7 @@ function portUrl(port: number): string {
   return `http://localhost:${port}`;
 }
 
-export default function BrowserPanel({ sessionId, cwd, machine, ephemeral }: Props) {
+export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, chromeHidden }: Props) {
   // Saved override URL (a typed address); when empty the preview is port-driven.
   const [browserUrl, setBrowserUrl] = useState("");
   const [forwardPorts, setForwardPorts] = useState<number[]>([]);
@@ -76,16 +79,7 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral }: Pro
   const [address, setAddress] = useState("");
   const [status, setStatus] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [saving, setSaving] = useState(false);
-  // Collapse the address/nav toolbar to reclaim vertical space (persisted).
-  const [barHidden, setBarHidden] = useState(() => {
-    try { return localStorage.getItem("rcw.browser.barHidden") === "1"; } catch { return false; }
-  });
   const webviewRef = useRef<WebviewEl | null>(null);
-
-  function toggleBar(hidden: boolean) {
-    setBarHidden(hidden);
-    try { localStorage.setItem("rcw.browser.barHidden", hidden ? "1" : "0"); } catch { /* ignore */ }
-  }
 
   // Ensure the preview port's tunnel is up before loading (idempotent; no-op when local).
   async function ensureForward(port: number) {
@@ -192,38 +186,19 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral }: Pro
 
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, minWidth: 0 }}>
-      <ConnectionBar
-        sessionId={sessionId}
-        machine={machine}
-        onHostChange={() => {
-          if (previewPort != null) ensureForward(previewPort);
-          webviewRef.current?.reload();
-        }}
-      />
-
-      {/* Collapsed: a slim strip with just a reveal button, to reclaim space. */}
-      {barHidden && (
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "flex-end",
-            alignItems: "center",
-            padding: "2px 8px",
-            borderBottom: "1px solid var(--border)",
+      {!chromeHidden && (
+        <ConnectionBar
+          sessionId={sessionId}
+          machine={machine}
+          onHostChange={() => {
+            if (previewPort != null) ensureForward(previewPort);
+            webviewRef.current?.reload();
           }}
-        >
-          <button
-            style={{ ...navBtn, padding: "1px 10px", fontSize: 11, lineHeight: 1.4 }}
-            title="Show address bar"
-            onClick={() => toggleBar(false)}
-          >
-            ▾ url
-          </button>
-        </div>
+        />
       )}
 
       {/* Single compact toolbar: nav · address · go · open · preview-port */}
-      {!barHidden && (
+      {!chromeHidden && (
       <div
         style={{
           display: "flex",
@@ -302,13 +277,6 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral }: Pro
             {status.kind === "ok" ? "✓" : "⚠"}
           </span>
         )}
-        <button
-          style={{ ...navBtn, padding: "6px 9px", flexShrink: 0 }}
-          title="Hide address bar"
-          onClick={() => toggleBar(true)}
-        >
-          ▴
-        </button>
       </div>
       )}
 
