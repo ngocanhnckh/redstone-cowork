@@ -55,6 +55,8 @@ export const IPC = {
   forwardList: "api:forward:list",
   forwardStatus: "api:forward:status",
   openExternal: "api:open-external",
+  appGuestRegister: "api:appguest:register",
+  appGuestUnregister: "api:appguest:unregister",
   filesList: "api:files:list",
   filesSearch: "api:files:search",
   filesRead: "api:files:read",

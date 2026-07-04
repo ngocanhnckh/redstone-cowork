@@ -10,6 +10,7 @@ type WebviewEl = HTMLElement & {
   reloadIgnoringCache(): void;
   loadURL(url: string): Promise<void>;
   getURL(): string;
+  getWebContentsId(): number;
 };
 
 export type CustomApp = {
@@ -56,6 +57,29 @@ export default function CustomAppPanel({ app, onFavicon }: { app: CustomApp; onF
     wv.addEventListener("page-favicon-updated", onFav as EventListener);
     return () => wv.removeEventListener("page-favicon-updated", onFav as EventListener);
   }, [app.id, onFavicon]);
+
+  // Keep the mini-app pinned to its own domain: register this guest's home URL so
+  // the main process pops cross-domain links out to the real browser. dom-ready
+  // fires once the guest exists (and on every document), so we (re-)assert the
+  // home each time; we unregister on unmount so a closed app frees the entry.
+  useEffect(() => {
+    const wv = ref.current;
+    if (!wv) return;
+    let id: number | null = null;
+    const register = () => {
+      try {
+        id = wv.getWebContentsId();
+        window.cowork.registerAppGuest(id, app.url).catch(() => {});
+      } catch {
+        /* guest not attached yet — dom-ready will fire again */
+      }
+    };
+    wv.addEventListener("dom-ready", register as EventListener);
+    return () => {
+      wv.removeEventListener("dom-ready", register as EventListener);
+      if (id != null) window.cowork.unregisterAppGuest(id).catch(() => {});
+    };
+  }, [app.id, app.url]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, minWidth: 0 }}>

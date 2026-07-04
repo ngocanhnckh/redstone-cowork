@@ -191,6 +191,14 @@ contextBridge.exposeInMainWorld("cowork", {
   openExternal: (url: string): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke(IPC.openExternal, { url }),
 
+  // Custom-app <webview> guests: register a guest's home URL so the main process
+  // pops cross-domain navigations out to the real browser instead of hijacking
+  // the mini-app. Keyed by the guest's webContents id (wv.getWebContentsId()).
+  registerAppGuest: (webContentsId: number, homeUrl: string): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke(IPC.appGuestRegister, { webContentsId, homeUrl }),
+  unregisterAppGuest: (webContentsId: number): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke(IPC.appGuestUnregister, { webContentsId }),
+
   // File browser
   listFiles: (a: {
     cwd: string;

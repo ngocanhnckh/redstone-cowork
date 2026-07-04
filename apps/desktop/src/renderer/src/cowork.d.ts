@@ -125,6 +125,11 @@ declare global {
       // Open a URL in the real browser
       openExternal(url: string): Promise<{ ok: boolean; error?: string }>;
 
+      // Custom-app <webview> guests: register a guest's home URL so cross-domain
+      // navigations pop out to the real browser (keyed by wv.getWebContentsId()).
+      registerAppGuest(webContentsId: number, homeUrl: string): Promise<{ ok: boolean }>;
+      unregisterAppGuest(webContentsId: number): Promise<{ ok: boolean }>;
+
       // File browser
       listFiles(a: {
         cwd: string;

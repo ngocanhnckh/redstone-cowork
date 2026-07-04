@@ -430,6 +430,39 @@ ipcMain.handle(IPC.openExternal, (_e, a: { url: string }) => {
   }
 });
 
+// Custom-app <webview> guests register their home URL here (keyed by the guest's
+// webContents id). The web-contents-created hook consults this map to keep the
+// mini-app pinned to its own domain: a click/popup leaving the app's site pops
+// out to the real browser instead of navigating the app away. Browser-tab guests
+// are never registered, so they keep full free navigation.
+const appGuestHomes = new Map<number, string>();
+
+/** The registrable-ish base domain (last two labels) of a hostname, lowercased. */
+function baseDomain(host: string): string {
+  const labels = host.split(".").filter(Boolean);
+  return (labels.length <= 2 ? labels : labels.slice(-2)).join(".").toLowerCase();
+}
+/** True when two URLs belong to the same site (same base domain), so subdomains
+ * of the app (e.g. an SSO/login host) still navigate in place. */
+function sameSite(a: string, b: string): boolean {
+  try {
+    const ha = new URL(a).hostname;
+    const hb = new URL(b).hostname;
+    return !!ha && !!hb && baseDomain(ha) === baseDomain(hb);
+  } catch {
+    return false;
+  }
+}
+
+ipcMain.handle(IPC.appGuestRegister, (_e, a: { webContentsId: number; homeUrl: string }) => {
+  if (typeof a?.webContentsId === "number" && a.homeUrl) appGuestHomes.set(a.webContentsId, a.homeUrl);
+  return { ok: true };
+});
+ipcMain.handle(IPC.appGuestUnregister, (_e, a: { webContentsId: number }) => {
+  if (typeof a?.webContentsId === "number") appGuestHomes.delete(a.webContentsId);
+  return { ok: true };
+});
+
 // File browser — list / read / write, local or over ssh. Main never throws across IPC.
 ipcMain.handle(IPC.filesList, (_e, a: { cwd: string; machine: string; dir: string }) =>
   listDir(a)
@@ -512,6 +545,26 @@ const NEUTRALIZE_DIALOGS_JS = `(() => {
 // handled from the renderer.
 app.on("web-contents-created", (_e, contents) => {
   if (contents.getType() !== "webview") return;
+
+  // Custom-app guests stay pinned to their own domain. A top-level navigation or
+  // a popup (target=_blank / window.open) that leaves the app's site is cancelled
+  // and handed to the real browser as a separate window. Only guests the renderer
+  // registered (custom apps) are gated — the Browser tab keeps free navigation.
+  contents.on("will-navigate", (ev, url) => {
+    const home = appGuestHomes.get(contents.id);
+    if (!home || sameSite(url, home)) return;
+    ev.preventDefault();
+    if (/^https?:\/\//i.test(url)) shell.openExternal(url);
+  });
+  contents.setWindowOpenHandler(({ url }) => {
+    const home = appGuestHomes.get(contents.id);
+    if (home && !sameSite(url, home)) {
+      if (/^https?:\/\//i.test(url)) shell.openExternal(url);
+      return { action: "deny" };
+    }
+    return { action: "allow" };
+  });
+  contents.once("destroyed", () => appGuestHomes.delete(contents.id));
 
   // Neutralize blocking JS dialogs. A page calling alert()/confirm()/prompt()
   // would otherwise pop a NATIVE MODAL that freezes the preview (and the app).
