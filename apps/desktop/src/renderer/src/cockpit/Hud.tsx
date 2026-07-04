@@ -7,6 +7,9 @@ import TerminalStack from "./TerminalStack";
 import FilesPanel from "./FilesPanel";
 import BrowserStack from "./BrowserStack";
 import DockerDeck from "./DockerDeck";
+import DockerLogPanel from "./DockerLogPanel";
+import NotesPanel from "./NotesPanel";
+import ContextColumn from "./ContextColumn";
 import AnswerDock from "./AnswerDock";
 import Markdown from "./Markdown";
 import ContextGauge from "./ContextGauge";
@@ -447,12 +450,25 @@ function ChatPane() {
   const pendingMap = useStore((s) => s.pending);
   const scrollRef = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
+  // Collapsible "you last said" reminder bubble state (persisted, shared).
+  const [ctxOpen, setCtxOpen] = useState(() => {
+    try { return localStorage.getItem("rcw.chat.ctxBubble") !== "0"; } catch { return true; }
+  });
+  const toggleCtx = () => setCtxOpen((o) => {
+    const next = !o;
+    try { localStorage.setItem("rcw.chat.ctxBubble", next ? "1" : "0"); } catch { /* ignore */ }
+    return next;
+  });
 
   const id = focusId;
   const session = sessions.find((s) => s.id === id) ?? queue.find((s) => s.id === id);
   const transcript = session?.transcript ?? [];
   const pending = id ? pendingMap[id] ?? [] : [];
   const timeline = [...transcript, ...pending.map((p) => ({ role: "user" as const, text: p.text }))];
+  // The most recent thing YOU sent to THIS session — surfaced as a pinned reminder
+  // so switching sessions still shows the context of what you last asked here.
+  let lastSent: string | null = null;
+  for (let i = timeline.length - 1; i >= 0; i--) { if (timeline[i].role === "user") { lastSent = timeline[i].text; break; } }
   const sessionDecisions = decisions.filter((d) => d.sessionId === id);
   const actionable = sessionDecisions.find((d) => ACTIONABLE.includes(d.kind));
   const decision = actionable ?? sessionDecisions[0];
@@ -470,6 +486,21 @@ function ChatPane() {
           <ModeSelect session={session} />
           <span style={{ flex: 1 }} />
           <ContextGauge contextTokens={session.contextTokens} model={session.model} />
+        </div>
+      )}
+      {/* Pinned reminder of the last message you sent to this session. */}
+      {session && lastSent && (
+        <div style={{ flexShrink: 0, margin: "10px 14px 0", borderRadius: 12, border: "1px solid rgb(var(--accent) / 0.3)", background: "rgb(var(--accent) / 0.06)", overflow: "hidden" }}>
+          <div onClick={toggleCtx} title="Your last message to this session" style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 11px", cursor: "pointer", userSelect: "none" }}>
+            <span className="mono" style={{ fontSize: 9, letterSpacing: "0.16em", textTransform: "uppercase", color: "rgb(var(--accent))" }}>↩ you last said</span>
+            <span style={{ flex: 1 }} />
+            <span className="mono faint" style={{ fontSize: 11 }}>{ctxOpen ? "▾" : "▸"}</span>
+          </div>
+          {ctxOpen && (
+            <div className="no-scrollbar" style={{ maxHeight: 120, overflowY: "auto", padding: "0 12px 10px", fontSize: 12, lineHeight: 1.5, color: "var(--text-soft)", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+              {lastSent}
+            </div>
+          )}
         </div>
       )}
       <div ref={scrollRef} onScroll={() => { const el = scrollRef.current; if (el) stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80; }}
@@ -500,24 +531,42 @@ function ChatPane() {
   );
 }
 
-type PanelKey = "chat" | "term" | "files" | "browser";
+// Fixed singleton windows. chat/term/files/browser also participate in the tiled
+// grid; tasks is windows-mode only. Docker Log windows are DYNAMIC (ids "docker:N")
+// and can be spawned more than once, so they live outside this union.
+type FixedKey = "chat" | "term" | "files" | "browser" | "tasks" | "notes";
+type GridKey = "chat" | "term" | "files" | "browser";
 type ConsoleView = "ctf" | "cb" | "ctb" | "fb";
 type HudLayout = "grid" | "windows";
+
+const FIXED: { key: FixedKey; title: string; icon: string }[] = [
+  { key: "chat", title: "Chat", icon: "◇" },
+  { key: "term", title: "Terminal", icon: "❯_" },
+  { key: "files", title: "Files", icon: "▤" },
+  { key: "browser", title: "Browser", icon: "◍" },
+  { key: "tasks", title: "Tasks", icon: "☑" },
+  { key: "notes", title: "Notes", icon: "✎" },
+];
+const GRID_PANELS: GridKey[] = ["chat", "term", "files", "browser"];
+const isDockerId = (id: string): boolean => id.startsWith("docker:");
 
 // ---------------------------------------------------------------------------
 // Windows sub-mode: free-floating window geometry (persisted to localStorage)
 // ---------------------------------------------------------------------------
 type WinState = { x: number; y: number; w: number; h: number; min: boolean };
-type WinMap = Record<PanelKey, WinState> & { z: PanelKey[]; _init: boolean };
-const WIN_KEY = "rcw.hud.windows";
+// Geometry is keyed by window id (fixed keys + dynamic "docker:N" ids). z is the
+// stacking order (last = frontmost); dockerIds tracks the live Docker Log windows;
+// seq mints unique docker ids.
+type WinMap = {
+  wins: Record<string, WinState>;
+  dockerIds: string[];
+  z: string[];
+  seq: number;
+  _init: boolean;
+};
+const WIN_KEY = "rcw.hud.windows.v2"; // v2: id-keyed map with tasks + dynamic docker windows
 const WIN_MIN_W = 280;
 const WIN_MIN_H = 170;
-const PANELS: { key: PanelKey; title: string; icon: string }[] = [
-  { key: "chat", title: "Chat", icon: "◇" },
-  { key: "term", title: "Terminal", icon: "❯_" },
-  { key: "files", title: "Files", icon: "▤" },
-  { key: "browser", title: "Browser", icon: "◍" },
-];
 
 // Near-solid dark glass shared by floating window frames + the app dock, so text
 // behind them stays fully legible (mirrors the slash-command popup treatment).
@@ -536,8 +585,27 @@ function clampWin(win: WinState, cw: number, ch: number): WinState {
   return { ...win, x, y, w, h };
 }
 
-/** Sensible default 2×2 tiling once the console area has a measured size. */
-function tiledWins(rect: { width: number; height: number }): Pick<WinMap, PanelKey> {
+/** Fresh default geometry: the 4 grid panels tiled 2×2, Tasks centered & hidden. */
+function defaultWins(): WinMap {
+  const base: WinState = { x: 20, y: 20, w: 520, h: 320, min: false };
+  return {
+    wins: {
+      chat: { ...base },
+      term: { ...base, x: 560 },
+      files: { ...base, y: 360 },
+      browser: { ...base, x: 560, y: 360 },
+      tasks: { x: 120, y: 80, w: 440, h: 480, min: true },
+      notes: { x: 170, y: 96, w: 760, h: 540, min: true },
+    },
+    dockerIds: [],
+    z: ["chat", "term", "files", "browser", "tasks", "notes"],
+    seq: 0,
+    _init: false,
+  };
+}
+
+/** 2×2 tiling for the four grid panels once the console area has a measured size. */
+function tiledGrid(rect: { width: number; height: number }): Record<string, WinState> {
   const pad = 8, gap = 12;
   const w = Math.max(WIN_MIN_W, (rect.width - pad * 2 - gap) / 2);
   const h = Math.max(WIN_MIN_H, (rect.height - pad * 2 - gap) / 2);
@@ -550,22 +618,24 @@ function tiledWins(rect: { width: number; height: number }): Pick<WinMap, PanelK
   };
 }
 
-/** Load persisted geometry, or a placeholder that gets tiled on first paint. */
+/** Load persisted geometry, or fresh defaults that get tiled on first paint. */
 function loadWins(): WinMap {
-  const fallback: WinState = { x: 20, y: 20, w: 520, h: 320, min: false };
-  const blank: WinMap = {
-    chat: { ...fallback }, term: { ...fallback, x: 560 }, files: { ...fallback, y: 360 }, browser: { ...fallback, x: 560, y: 360 },
-    z: ["chat", "term", "files", "browser"], _init: false,
-  };
+  const base = defaultWins();
   try {
     const raw = localStorage.getItem(WIN_KEY);
-    if (!raw) return blank;
+    if (!raw) return base;
     const p = JSON.parse(raw) as Partial<WinMap>;
-    const pick = (k: PanelKey): WinState => ({ ...blank[k], ...(p[k] ?? {}) });
-    const z = Array.isArray(p.z) && p.z.length === 4 ? (p.z as PanelKey[]) : blank.z;
-    return { chat: pick("chat"), term: pick("term"), files: pick("files"), browser: pick("browser"), z, _init: p._init ?? true };
+    if (!p.wins || typeof p.wins !== "object") return base;
+    const wins: Record<string, WinState> = { ...base.wins, ...p.wins };
+    const dockerIds = Array.isArray(p.dockerIds)
+      ? p.dockerIds.filter((id): id is string => typeof id === "string" && !!wins[id])
+      : [];
+    const allIds = [...FIXED.map((f) => f.key), ...dockerIds];
+    const z = (Array.isArray(p.z) ? p.z.filter((id) => allIds.includes(id)) : []) as string[];
+    for (const id of allIds) if (!z.includes(id)) z.push(id);
+    return { wins, dockerIds, z, seq: typeof p.seq === "number" ? p.seq : 0, _init: p._init ?? true };
   } catch {
-    return blank;
+    return base;
   }
 }
 
@@ -576,7 +646,7 @@ function loadWins(): WinMap {
  * pages and editors keep their state. `areas` maps a panel → its grid-area name
  * (absent = hidden in that view).
  */
-const VIEWS: Record<ConsoleView, { label: string; cols: string; rows: string; template: string; areas: Partial<Record<PanelKey, string>> }> = {
+const VIEWS: Record<ConsoleView, { label: string; cols: string; rows: string; template: string; areas: Partial<Record<GridKey, string>> }> = {
   ctf: { label: "Chat · Term · Files", cols: "1.1fr 1fr", rows: "1.5fr 1fr", template: `"files chat" "files term"`, areas: { chat: "chat", term: "term", files: "files" } },
   cb: { label: "Chat · Browser", cols: "1fr 1.3fr", rows: "1fr", template: `"chat browser"`, areas: { chat: "chat", browser: "browser" } },
   ctb: { label: "Chat · Term · Browser", cols: "1fr 1.2fr", rows: "1.2fr 1fr", template: `"chat browser" "term browser"`, areas: { chat: "chat", term: "term", browser: "browser" } },
@@ -594,7 +664,7 @@ const VIEW_ORDER: ConsoleView[] = ["ctf", "cb", "ctb", "fb"];
  * toggles Grid ↔ Windows, switches views, or raises a window.
  */
 function PanelShell({
-  layout, title, area, win, zIndex, canvasRef, onFocus, onChange, onMinimize, children,
+  layout, title, area, win, zIndex, canvasRef, onFocus, onChange, onMinimize, onClose, children,
 }: {
   layout: HudLayout;
   title: string;
@@ -605,16 +675,23 @@ function PanelShell({
   onFocus: () => void;
   onChange: (patch: Partial<WinState>) => void;
   onMinimize: () => void;
+  onClose?: () => void;
   children: React.ReactNode;
 }) {
   const grid = layout === "grid";
   const shown = grid ? !!area : !win.min;
 
-  // Pointer-driven drag of the whole window (title-bar handle).
+  // Pointer-driven drag of the whole window (title-bar handle). We CAPTURE the
+  // pointer on the handle so pointermove/pointerup are always delivered even while
+  // the cursor passes over a <webview> (terminal/browser) — otherwise the guest
+  // page swallows pointerup, the drag state leaks, and the UI appears frozen (can't
+  // scroll/type until you click around). This mirrors the right-column resizer.
   const startDrag = (e: React.PointerEvent) => {
     if (grid) return;
     e.preventDefault();
     onFocus();
+    const handle = e.currentTarget as HTMLElement;
+    try { handle.setPointerCapture(e.pointerId); } catch { /* ignore */ }
     const rect = canvasRef.current?.getBoundingClientRect();
     const sx = e.clientX, sy = e.clientY, ox = win.x, oy = win.y;
     const move = (ev: PointerEvent) => {
@@ -622,17 +699,25 @@ function PanelShell({
       if (rect) { nx = Math.max(0, Math.min(nx, rect.width - win.w)); ny = Math.max(0, Math.min(ny, rect.height - win.h)); }
       onChange({ x: nx, y: ny });
     };
-    const up = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); };
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", up);
+    const up = (ev: PointerEvent) => {
+      try { handle.releasePointerCapture(ev.pointerId); } catch { /* ignore */ }
+      handle.removeEventListener("pointermove", move);
+      handle.removeEventListener("pointerup", up);
+      handle.removeEventListener("pointercancel", up);
+    };
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", up);
+    handle.addEventListener("pointercancel", up);
   };
 
-  // Pointer-driven resize from the bottom-right corner.
+  // Pointer-driven resize from the bottom-right corner (same pointer-capture fix).
   const startResize = (e: React.PointerEvent) => {
     if (grid) return;
     e.preventDefault();
     e.stopPropagation();
     onFocus();
+    const handle = e.currentTarget as HTMLElement;
+    try { handle.setPointerCapture(e.pointerId); } catch { /* ignore */ }
     const rect = canvasRef.current?.getBoundingClientRect();
     const sx = e.clientX, sy = e.clientY, ow = win.w, oh = win.h;
     const move = (ev: PointerEvent) => {
@@ -641,9 +726,15 @@ function PanelShell({
       if (rect) { nw = Math.min(nw, rect.width - win.x); nh = Math.min(nh, rect.height - win.y); }
       onChange({ w: nw, h: nh });
     };
-    const up = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); };
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", up);
+    const up = (ev: PointerEvent) => {
+      try { handle.releasePointerCapture(ev.pointerId); } catch { /* ignore */ }
+      handle.removeEventListener("pointermove", move);
+      handle.removeEventListener("pointerup", up);
+      handle.removeEventListener("pointercancel", up);
+    };
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", up);
+    handle.addEventListener("pointercancel", up);
   };
 
   const wrapperStyle: React.CSSProperties = grid
@@ -672,6 +763,10 @@ function PanelShell({
               style={{ border: "1px solid var(--border)", background: "transparent", color: "var(--text-soft)", borderRadius: 6, padding: "0 7px", fontSize: 11, lineHeight: "18px", cursor: "pointer" }}>⤒</button>
             <button onPointerDown={(e) => e.stopPropagation()} onClick={onMinimize} title="Minimize"
               style={{ border: "1px solid var(--border)", background: "transparent", color: "var(--text-soft)", borderRadius: 6, padding: "0 7px", fontSize: 11, lineHeight: "18px", cursor: "pointer" }}>—</button>
+            {onClose && (
+              <button onPointerDown={(e) => e.stopPropagation()} onClick={onClose} title="Close window"
+                style={{ border: "1px solid var(--border)", background: "transparent", color: "var(--text-soft)", borderRadius: 6, padding: "0 7px", fontSize: 11, lineHeight: "18px", cursor: "pointer" }}>✕</button>
+            )}
           </>
         )}
       </div>
@@ -712,7 +807,9 @@ function HudConsole() {
   useEffect(() => {
     if (layout === "windows" && !wins._init && canvasRef.current) {
       const rect = canvasRef.current.getBoundingClientRect();
-      if (rect.width > 0 && rect.height > 0) setWins((w) => ({ ...w, ...tiledWins(rect), _init: true }));
+      if (rect.width > 0 && rect.height > 0) {
+        setWins((w) => ({ ...w, wins: { ...w.wins, ...tiledGrid(rect), tasks: clampWin(w.wins.tasks, rect.width, rect.height) }, _init: true }));
+      }
     }
   }, [layout, wins._init]);
 
@@ -727,13 +824,13 @@ function HudConsole() {
       if (rect.width <= 0 || rect.height <= 0) return;
       setWins((w) => {
         let changed = false;
-        const next = { ...w };
-        for (const p of PANELS) {
-          const c = clampWin(w[p.key], rect.width, rect.height);
-          const cur = w[p.key];
-          if (c.x !== cur.x || c.y !== cur.y || c.w !== cur.w || c.h !== cur.h) { next[p.key] = c; changed = true; }
+        const nextWins = { ...w.wins };
+        for (const id of Object.keys(w.wins)) {
+          const c = clampWin(w.wins[id], rect.width, rect.height);
+          const cur = w.wins[id];
+          if (c.x !== cur.x || c.y !== cur.y || c.w !== cur.w || c.h !== cur.h) { nextWins[id] = c; changed = true; }
         }
-        return changed ? next : w;
+        return changed ? { ...w, wins: nextWins } : w;
       });
     };
     const ro = new ResizeObserver(reflow);
@@ -744,36 +841,80 @@ function HudConsole() {
 
   // A panel is "active" (kept alive / streaming) when visible in the current mode.
   const grid = layout === "grid";
-  const termActive = grid ? !!cfg.areas.term : !wins.term.min;
-  const browserActive = grid ? !!cfg.areas.browser : !wins.browser.min;
+  const termActive = grid ? !!cfg.areas.term : !wins.wins.term.min;
+  const browserActive = grid ? !!cfg.areas.browser : !wins.wins.browser.min;
 
   // Keep this session's browser/terminal alive in their persistent stacks the
   // first time they become visible, so switching sessions never reloads them.
   useEffect(() => { if (browserActive && session) openBrowser(session.id); }, [browserActive, session?.id, openBrowser]);
   useEffect(() => { if (termActive && session) openTerminal(session.id); }, [termActive, session?.id, openTerminal]);
 
-  const raise = (key: PanelKey) => setWins((w) => (w.z[w.z.length - 1] === key ? w : { ...w, z: [...w.z.filter((k) => k !== key), key] }));
-  const patchWin = (key: PanelKey, patch: Partial<WinState>) => setWins((w) => ({ ...w, [key]: { ...w[key], ...patch } }));
+  const raise = (id: string) => setWins((w) => (w.z[w.z.length - 1] === id ? w : { ...w, z: [...w.z.filter((k) => k !== id), id] }));
+  const patchWin = (id: string, patch: Partial<WinState>) =>
+    setWins((w) => ({ ...w, wins: { ...w.wins, [id]: { ...w.wins[id], ...patch } } }));
 
   // Dock item click: minimized/hidden → restore + raise; visible-but-behind → raise
   // to front; visible-and-frontmost → toggle-minimize (second click hides it).
-  const dockClick = (key: PanelKey) => setWins((w) => {
+  const dockClick = (id: string) => setWins((w) => {
+    const cur = w.wins[id];
+    if (!cur) return w;
     const front = w.z[w.z.length - 1];
-    if (w[key].min) {
-      return { ...w, [key]: { ...w[key], min: false }, z: [...w.z.filter((k) => k !== key), key] };
-    }
-    if (front === key) return { ...w, [key]: { ...w[key], min: true } };
-    return { ...w, z: [...w.z.filter((k) => k !== key), key] };
+    if (cur.min) return { ...w, wins: { ...w.wins, [id]: { ...cur, min: false } }, z: [...w.z.filter((k) => k !== id), id] };
+    if (front === id) return { ...w, wins: { ...w.wins, [id]: { ...cur, min: true } } };
+    return { ...w, z: [...w.z.filter((k) => k !== id), id] };
   });
 
-  const childFor = (key: PanelKey): React.ReactNode => {
-    switch (key) {
+  // Spawn a new Docker Log window (dock right-click or the "＋ docker" launcher).
+  // Each gets a unique id so several can tail different containers at once.
+  const createDocker = (e?: React.MouseEvent) => {
+    e?.preventDefault();
+    setLayout("windows");
+    setWins((w) => {
+      const n = w.seq + 1;
+      const id = `docker:${n}`;
+      const rect = canvasRef.current?.getBoundingClientRect();
+      const off = (w.dockerIds.length * 30) % 150;
+      let ws: WinState = { x: 70 + off, y: 56 + off, w: 560, h: 360, min: false };
+      if (rect && rect.width > 0 && rect.height > 0) ws = clampWin(ws, rect.width, rect.height);
+      return { ...w, seq: n, dockerIds: [...w.dockerIds, id], wins: { ...w.wins, [id]: ws }, z: [...w.z.filter((k) => k !== id), id] };
+    });
+  };
+  const closeDocker = (id: string) => setWins((w) => {
+    const nextWins = { ...w.wins };
+    delete nextWins[id];
+    return { ...w, dockerIds: w.dockerIds.filter((d) => d !== id), wins: nextWins, z: w.z.filter((k) => k !== id) };
+  });
+
+  const childFor = (id: string): React.ReactNode => {
+    switch (id) {
       case "chat": return <ChatPane />;
       case "term": return <TerminalStack activeId={session?.id} active={termActive} />;
       case "files": return session ? <FilesPanel key={`${session.id}-hud-files`} sessionId={session.id} cwd={session.cwd} machine={session.machine} /> : none;
       case "browser": return <BrowserStack activeId={session?.id} active={browserActive} />;
+      case "tasks": return <ContextColumn sessionId={session?.id} />;
+      case "notes": return <NotesPanel active={!grid && !wins.wins.notes?.min} />;
+      default:
+        return isDockerId(id) ? <DockerLogPanel streamId={id} active={!grid && !wins.wins[id]?.min} /> : null;
     }
   };
+
+  // All windows to render: fixed singletons (chat/term/files/browser/tasks) + the
+  // dynamic Docker Log windows. Grid areas apply only to the four grid panels;
+  // tasks & docker have no area, so they are display:none in grid mode.
+  const windowList: { id: string; title: string; area?: string; closable?: boolean }[] = [
+    ...FIXED.map((f) => ({
+      id: f.key,
+      title: f.title,
+      area: (GRID_PANELS as string[]).includes(f.key) ? cfg.areas[f.key as GridKey] : undefined,
+    })),
+    ...wins.dockerIds.map((id, i) => ({ id, title: `Docker ${i + 1}`, closable: true })),
+  ];
+  // Dock entries: fixed panels, then one launcher per open Docker Log window, then
+  // a "＋ docker" button. Right-clicking any docker entry also spawns a new one.
+  const dockItems: { id: string; title: string; icon: string }[] = [
+    ...FIXED.map((f) => ({ id: f.key, title: f.title, icon: f.icon })),
+    ...wins.dockerIds.map((id, i) => ({ id, title: `Docker ${i + 1}`, icon: "🐳" })),
+  ];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10, minHeight: 0, padding: "12px 14px" }}>
@@ -814,20 +955,21 @@ function HudConsole() {
       <div ref={canvasRef} style={grid
         ? { flex: 1, minHeight: 0, display: "grid", gap: 10, gridTemplateColumns: cfg.cols, gridTemplateRows: cfg.rows, gridTemplateAreas: cfg.template }
         : { flex: 1, minHeight: 0, position: "relative", overflow: "hidden" }}>
-        {PANELS.map((p) => (
+        {windowList.map((p) => (
           <PanelShell
-            key={p.key}
+            key={p.id}
             layout={layout}
             title={p.title}
-            area={cfg.areas[p.key]}
-            win={wins[p.key]}
-            zIndex={wins.z.indexOf(p.key) + 1}
+            area={p.area}
+            win={wins.wins[p.id]}
+            zIndex={wins.z.indexOf(p.id) + 1}
             canvasRef={canvasRef}
-            onFocus={() => raise(p.key)}
-            onChange={(patch) => patchWin(p.key, patch)}
-            onMinimize={() => patchWin(p.key, { min: true })}
+            onFocus={() => raise(p.id)}
+            onChange={(patch) => patchWin(p.id, patch)}
+            onMinimize={() => patchWin(p.id, { min: true })}
+            onClose={p.closable ? () => closeDocker(p.id) : undefined}
           >
-            {childFor(p.key)}
+            {childFor(p.id)}
           </PanelShell>
         ))}
 
@@ -839,12 +981,18 @@ function HudConsole() {
             border: "1px solid var(--border-strong)", boxShadow: "0 12px 40px rgb(0 0 0 / 0.5)", ...WIN_GLASS,
           }}>
             <span className="hud-corner" />
-            {PANELS.map((p) => {
-              const open = !wins[p.key].min;
-              const front = open && wins.z[wins.z.length - 1] === p.key;
+            {dockItems.map((p) => {
+              const open = !wins.wins[p.id]?.min;
+              const front = open && wins.z[wins.z.length - 1] === p.id;
+              const docker = isDockerId(p.id);
               return (
-                <button key={p.key} onClick={() => dockClick(p.key)}
-                  title={open ? (front ? `${p.title} (click to minimize)` : `Focus ${p.title}`) : `Restore ${p.title}`}
+                <button key={p.id} onClick={() => dockClick(p.id)}
+                  onContextMenu={docker ? createDocker : undefined}
+                  title={
+                    docker
+                      ? `${p.title} — click to focus/minimize · right-click for a new Docker window`
+                      : open ? (front ? `${p.title} (click to minimize)` : `Focus ${p.title}`) : `Restore ${p.title}`
+                  }
                   style={{
                     display: "flex", flexDirection: "column", alignItems: "center", gap: 4, width: 46, padding: "6px 0 3px",
                     borderRadius: 12, cursor: "pointer", fontFamily: "var(--font-mono)",
@@ -862,6 +1010,17 @@ function HudConsole() {
                 </button>
               );
             })}
+            {/* Launcher: open another Docker Log window. */}
+            <button onClick={createDocker} onContextMenu={createDocker} title="New Docker log window"
+              style={{
+                display: "flex", flexDirection: "column", alignItems: "center", gap: 4, width: 46, padding: "6px 0 3px",
+                borderRadius: 12, cursor: "pointer", fontFamily: "var(--font-mono)",
+                border: "1px dashed var(--border-strong)", background: "transparent", color: "var(--text-soft)",
+              }}>
+              <span style={{ fontSize: 15, lineHeight: 1 }}>🐳</span>
+              <span style={{ fontSize: 8, letterSpacing: "0.08em", textTransform: "uppercase" }}>＋ log</span>
+              <span style={{ width: 4, height: 4, marginTop: 1 }} />
+            </button>
           </div>
         )}
       </div>

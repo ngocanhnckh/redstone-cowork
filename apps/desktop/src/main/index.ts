@@ -13,6 +13,12 @@ import {
   type EnsureArgs,
 } from "./terminal";
 import {
+  ensureDockerLog,
+  stopDockerLog,
+  killAllDockerLogs,
+  type DockerLogArgs,
+} from "./docker-logs";
+import {
   startForward,
   stopForward,
   listForwards,
@@ -32,6 +38,9 @@ const here = dirname(fileURLToPath(import.meta.url));
 let tray: Tray | null = null;
 let waitingIds = new Set<string>();
 let trayRefreshRunning = false;
+// Per-session last seen final answer, so we notify once when a NEW answer lands.
+const lastAnswers = new Map<string, string>();
+let answersInit = false;
 
 async function refreshTrayAndNotify(): Promise<void> {
   if (!tray) return;
@@ -83,6 +92,43 @@ async function refreshTrayAndNotify(): Promise<void> {
     }
 
     waitingIds = new Set(queue.map((q) => q.id));
+
+    // Notify when ANY session produces a NEW final answer. This is independent of
+    // the waiting queue — it fires for sessions that just finished a turn with an
+    // answer. We notify even when the app is focused, because the whole point is to
+    // catch another session finishing while you're looking at a different one. The
+    // first poll seeds silently so there's no burst on launch.
+    try {
+      const sessions = (await api.getSessions()) as Array<{
+        id: string; cwd: string; latestAnswer: string | null;
+      }>;
+      const firstRun = !answersInit;
+      for (const s of sessions) {
+        const ans = (s.latestAnswer ?? "").trim();
+        if (!ans || lastAnswers.get(s.id) === ans) continue;
+        lastAnswers.set(s.id, ans);
+        if (firstRun || !Notification.isSupported()) continue;
+        const repoName = basename(s.cwd || "session");
+        const body = `${repoName} — ${ans.replace(/\s+/g, " ").slice(0, 140)}`;
+        try {
+          const n = new Notification({ title: "Claude answered", body });
+          n.on("click", () => {
+            const w = BrowserWindow.getAllWindows()[0];
+            w?.show();
+            w?.focus();
+          });
+          n.show();
+        } catch {
+          // Notifications not available — ignore
+        }
+      }
+      // Drop answers for sessions that no longer exist so the map can't grow forever.
+      const live = new Set(sessions.map((s) => s.id));
+      for (const id of [...lastAnswers.keys()]) if (!live.has(id)) lastAnswers.delete(id);
+      answersInit = true;
+    } catch {
+      // best-effort
+    }
   } catch {
     // API not reachable — ignore
   } finally {
@@ -323,6 +369,24 @@ ipcMain.on(IPC.terminalResize, (_e, a: { id: string; cols: number; rows: number 
 );
 ipcMain.handle(IPC.terminalKill, (_e, a: { id: string }) => {
   killTerminal(a.id);
+  return { ok: true };
+});
+
+// Docker log streaming IPC — main never throws across these channels.
+ipcMain.handle(IPC.dockerLogStart, (e, a: DockerLogArgs) => {
+  const wc = e.sender;
+  return ensureDockerLog(
+    a,
+    (data) => {
+      if (!wc.isDestroyed()) wc.send(IPC.dockerLogData, { id: a.id, data });
+    },
+    () => {
+      if (!wc.isDestroyed()) wc.send(IPC.dockerLogExit, { id: a.id });
+    }
+  );
+});
+ipcMain.handle(IPC.dockerLogStop, (_e, a: { id: string }) => {
+  stopDockerLog(a.id);
   return { ok: true };
 });
 
@@ -603,5 +667,6 @@ app.on("before-quit", () => {
   stopStream?.();
   stopStream = null;
   killAllTerminals();
+  killAllDockerLogs();
   stopAllForwards();
 });

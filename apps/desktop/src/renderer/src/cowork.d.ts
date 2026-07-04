@@ -92,6 +92,16 @@ declare global {
       onTerminalData(cb: (a: { id: string; data: string }) => void): () => void;
       onTerminalExit(cb: (a: { id: string }) => void): () => void;
 
+      // Docker log streaming
+      startDockerLog(a: {
+        id: string;
+        machine: string;
+        container: string;
+      }): Promise<{ ok: true; replay: string } | { ok: false; error: string }>;
+      stopDockerLog(id: string): Promise<{ ok: boolean }>;
+      onDockerLogData(cb: (a: { id: string; data: string }) => void): () => void;
+      onDockerLogExit(cb: (a: { id: string }) => void): () => void;
+
       // Port forwarding (ssh -N -L)
       startForward(a: {
         sessionId: string;

@@ -141,6 +141,26 @@ contextBridge.exposeInMainWorld("cowork", {
     return () => ipcRenderer.removeListener(IPC.terminalExit, handler);
   },
 
+  // Docker log streaming
+  startDockerLog: (a: {
+    id: string;
+    machine: string;
+    container: string;
+  }): Promise<{ ok: true; replay: string } | { ok: false; error: string }> =>
+    ipcRenderer.invoke(IPC.dockerLogStart, a),
+  stopDockerLog: (id: string): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke(IPC.dockerLogStop, { id }),
+  onDockerLogData: (cb: (a: { id: string; data: string }) => void): (() => void) => {
+    const handler = (_e: unknown, a: { id: string; data: string }) => cb(a);
+    ipcRenderer.on(IPC.dockerLogData, handler);
+    return () => ipcRenderer.removeListener(IPC.dockerLogData, handler);
+  },
+  onDockerLogExit: (cb: (a: { id: string }) => void): (() => void) => {
+    const handler = (_e: unknown, a: { id: string }) => cb(a);
+    ipcRenderer.on(IPC.dockerLogExit, handler);
+    return () => ipcRenderer.removeListener(IPC.dockerLogExit, handler);
+  },
+
   // Port forwarding (ssh -N -L)
   startForward: (a: {
     sessionId: string;

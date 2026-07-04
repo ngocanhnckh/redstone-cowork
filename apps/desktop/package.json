@@ -17,6 +17,7 @@
     "@rcw/shared": "workspace:*",
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/xterm": "^5.5.0",
+    "mermaid": "^11.16.0",
     "monaco-editor": "^0.52.2",
     "motion": "^12.42.2",
     "node-pty": "^1.0.0",
