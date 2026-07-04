@@ -216,6 +216,19 @@ contextBridge.exposeInMainWorld("cowork", {
   getFullscreenState: (): Promise<{ fullscreen: boolean }> => ipcRenderer.invoke(IPC.fullscreenState),
   setVibrancy: (on: boolean): Promise<{ ok: boolean }> => ipcRenderer.invoke(IPC.setVibrancy, { on }),
 
+  // Browser inspector (console + network devtools).
+  registerSessionBrowser: (sessionId: string, webContentsId: number): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke(IPC.sessionBrowserRegister, { sessionId, webContentsId }),
+  unregisterSessionBrowser: (sessionId: string): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke(IPC.sessionBrowserUnregister, { sessionId }),
+  startDevtools: (sessionId: string): Promise<{ ok: boolean }> => ipcRenderer.invoke(IPC.devtoolsStart, { sessionId }),
+  stopDevtools: (sessionId: string): Promise<{ ok: boolean }> => ipcRenderer.invoke(IPC.devtoolsStop, { sessionId }),
+  onDevtoolsEvent: (cb: (a: { sessionId: string; ev: Record<string, unknown> }) => void): (() => void) => {
+    const handler = (_e: unknown, a: { sessionId: string; ev: Record<string, unknown> }) => cb(a);
+    ipcRenderer.on(IPC.devtoolsEvent, handler);
+    return () => ipcRenderer.removeListener(IPC.devtoolsEvent, handler);
+  },
+
   // File browser
   listFiles: (a: {
     cwd: string;

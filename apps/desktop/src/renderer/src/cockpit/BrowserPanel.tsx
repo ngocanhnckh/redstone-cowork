@@ -26,6 +26,7 @@ type WebviewEl = HTMLElement & {
   reloadIgnoringCache(): void;
   loadURL(url: string): Promise<void>;
   getURL(): string;
+  getWebContentsId(): number;
 };
 
 declare global {
@@ -142,6 +143,24 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, chrom
       cancelled = true;
     };
   }, [sessionId, cwd, machine]);
+
+  // Report the primary browser guest's webContents id so the Inspector (DevTools)
+  // panel can attach console/network capture to it. Only the primary tab (not
+  // ephemeral extra tabs) is the session's canonical browser.
+  useEffect(() => {
+    if (ephemeral) return;
+    const wv = webviewRef.current;
+    if (!wv) return;
+    const register = () => {
+      try { window.cowork.registerSessionBrowser(sessionId, wv.getWebContentsId()).catch(() => {}); }
+      catch { /* guest not attached yet — dom-ready fires again */ }
+    };
+    wv.addEventListener("dom-ready", register as EventListener);
+    return () => {
+      wv.removeEventListener("dom-ready", register as EventListener);
+      window.cowork.unregisterSessionBrowser(sessionId).catch(() => {});
+    };
+  }, [ephemeral, sessionId]);
 
   // Keep the address bar synced from live webview navigation.
   useEffect(() => {

@@ -9,6 +9,7 @@ import BrowserStack from "./BrowserStack";
 import DockerLogPanel from "./DockerLogPanel";
 import NotesPanel from "./NotesPanel";
 import PortsPanel from "./PortsPanel";
+import DevToolsPanel from "./DevToolsPanel";
 import CustomAppPanel, { type CustomApp } from "./CustomAppPanel";
 import AppsModal, { AppIcon } from "./AppsModal";
 import ContextColumn from "./ContextColumn";
@@ -551,7 +552,7 @@ function ChatPane() {
 // Fixed singleton windows. chat/term/files/browser also participate in the tiled
 // grid; tasks is windows-mode only. Docker Log windows are DYNAMIC (ids "docker:N")
 // and can be spawned more than once, so they live outside this union.
-type FixedKey = "chat" | "term" | "files" | "browser" | "tasks" | "notes" | "ports";
+type FixedKey = "chat" | "term" | "files" | "browser" | "tasks" | "notes" | "ports" | "devtools";
 type GridKey = "chat" | "term" | "files" | "browser";
 type ConsoleView = "ctf" | "cb" | "ctb" | "fb";
 type HudLayout = "grid" | "windows";
@@ -564,6 +565,7 @@ const FIXED: { key: FixedKey; title: string; icon: string }[] = [
   { key: "tasks", title: "Tasks", icon: "☑" },
   { key: "notes", title: "Notes", icon: "✎" },
   { key: "ports", title: "Ports", icon: "⇄" },
+  { key: "devtools", title: "Inspector", icon: "◫" },
 ];
 const GRID_PANELS: GridKey[] = ["chat", "term", "files", "browser"];
 const isDockerId = (id: string): boolean => id.startsWith("docker:");
@@ -631,9 +633,10 @@ function defaultWins(): WinMap {
       tasks: { x: 120, y: 80, w: 440, h: 480, min: true },
       notes: { x: 170, y: 96, w: 760, h: 540, min: true },
       ports: { x: 150, y: 90, w: 560, h: 460, min: true },
+      devtools: { x: 160, y: 110, w: 760, h: 480, min: true },
     },
     dockerIds: [],
-    z: ["chat", "term", "files", "browser", "tasks", "notes", "ports"],
+    z: ["chat", "term", "files", "browser", "tasks", "notes", "ports", "devtools"],
     seq: 0,
     _init: false,
   };
@@ -1155,6 +1158,7 @@ function HudConsole() {
       case "tasks": return <ContextColumn sessionId={session?.id} hideSummary />;
       case "notes": return <NotesPanel active={!grid && !wins.wins.notes?.min} />;
       case "ports": return session ? <PortsPanel key={`${session.id}-hud-ports`} sessionId={session.id} cwd={session.cwd} machine={session.machine} /> : none;
+      case "devtools": return <DevToolsPanel sessionId={session?.id} active={!grid && !wins.wins.devtools?.min} />;
       default:
         if (isDockerId(id)) return <DockerLogPanel streamId={id} active={!grid && !wins.wins[id]?.min} />;
         if (isAppId(id)) { const app = apps.find((a) => appWinId(a.id) === id); return app ? <CustomAppPanel app={app} onFavicon={setAppFavicon} /> : null; }

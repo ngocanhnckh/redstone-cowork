@@ -141,6 +141,13 @@ declare global {
       getFullscreenState(): Promise<{ fullscreen: boolean }>;
       setVibrancy(on: boolean): Promise<{ ok: boolean }>;
 
+      // Browser inspector (console + network devtools).
+      registerSessionBrowser(sessionId: string, webContentsId: number): Promise<{ ok: boolean }>;
+      unregisterSessionBrowser(sessionId: string): Promise<{ ok: boolean }>;
+      startDevtools(sessionId: string): Promise<{ ok: boolean }>;
+      stopDevtools(sessionId: string): Promise<{ ok: boolean }>;
+      onDevtoolsEvent(cb: (a: { sessionId: string; ev: Record<string, unknown> }) => void): () => void;
+
       // File browser
       listFiles(a: {
         cwd: string;

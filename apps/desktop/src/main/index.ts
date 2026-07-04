@@ -30,6 +30,7 @@ import { sshSetup, type SshSetupArgs } from "./ssh-setup";
 import { listDir, readFileAt, writeFileAt, deletePath, makeDir, createFile, uploadLocalFile, searchFiles } from "./files";
 import { gitInfo } from "./git";
 import { chooseBgImage, getBgImage, clearBgImage, setSimpleFullscreen, isFullscreen, setVibrancy } from "./appearance";
+import { registerSessionBrowser, unregisterSessionBrowser, startInspect, stopInspect, stopAllInspectors } from "./devtools";
 import { IPC } from "../shared/ipc";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -491,6 +492,18 @@ ipcMain.handle(IPC.simpleFullscreen, (e, a: { on: boolean }) => ({ fullscreen: s
 ipcMain.handle(IPC.fullscreenState, (e) => ({ fullscreen: isFullscreen(senderWindow(e)) }));
 ipcMain.handle(IPC.setVibrancy, (e, a: { on: boolean }) => { setVibrancy(senderWindow(e), !!a?.on); return { ok: true }; });
 
+// Browser inspector (console + network) wiring.
+ipcMain.handle(IPC.sessionBrowserRegister, (_e, a: { sessionId: string; webContentsId: number }) => {
+  if (a?.sessionId && typeof a.webContentsId === "number") registerSessionBrowser(a.sessionId, a.webContentsId);
+  return { ok: true };
+});
+ipcMain.handle(IPC.sessionBrowserUnregister, (_e, a: { sessionId: string }) => {
+  if (a?.sessionId) unregisterSessionBrowser(a.sessionId);
+  return { ok: true };
+});
+ipcMain.handle(IPC.devtoolsStart, (_e, a: { sessionId: string }) => (a?.sessionId ? startInspect(a.sessionId) : { ok: false }));
+ipcMain.handle(IPC.devtoolsStop, (_e, a: { sessionId: string }) => { if (a?.sessionId) stopInspect(a.sessionId); return { ok: true }; });
+
 // File browser — list / read / write, local or over ssh. Main never throws across IPC.
 ipcMain.handle(IPC.filesList, (_e, a: { cwd: string; machine: string; dir: string }) =>
   listDir(a)
@@ -774,4 +787,5 @@ app.on("before-quit", () => {
   killAllTerminals();
   killAllDockerLogs();
   stopAllForwards();
+  stopAllInspectors();
 });
