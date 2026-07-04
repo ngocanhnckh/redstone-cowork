@@ -152,13 +152,21 @@ async function resolveSshTarget(machine: string): Promise<SshTarget> {
   const rec = serverHosts[machine];
   const port = rec?.sshPort ?? DEFAULT_SSH_PORT;
 
-  // 1. Try the direct TCP path (manual override, server address, or bare name).
-  try {
-    if (await probeReachable(hostAddress(host), port, PROBE_TIMEOUT_MS)) {
-      return { host, opts: [] };
+  // 1. Direct-reachability probe. Probe REAL addresses, not the ssh string: the
+  //    ssh string is often a ~/.ssh/config alias (e.g. "contabo2") that ssh can
+  //    resolve but net.connect() CANNOT (net.connect ignores ssh_config). Probing
+  //    the alias always fails and would wrongly trigger the relay. So we probe the
+  //    agent-reported address (authoritative) first, then the bare ssh address.
+  //    Reachable via EITHER → direct (ssh itself still connects via `host`).
+  const candidates = [...new Set([rec?.address, hostAddress(host)].filter((a): a is string => !!a))];
+  for (const addr of candidates) {
+    try {
+      if (await probeReachable(addr, port, PROBE_TIMEOUT_MS)) {
+        return { host, opts: [] };
+      }
+    } catch {
+      // probe threw → try the next candidate, else fall through to relay
     }
-  } catch {
-    // probe threw → treat as unreachable, fall through to relay
   }
 
   // 2. Unreachable directly. Relay needs the server-known hostId; without it we
