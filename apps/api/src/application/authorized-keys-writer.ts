@@ -1,5 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { promises as fs } from "node:fs";
+import { dirname } from "node:path";
 import type { CockpitKeyEntry, HostTunnelEntry } from "../domain/tunnels/host-tunnel.port";
 
 /**
@@ -38,6 +39,17 @@ export class AuthorizedKeysWriter {
       const tmp = `${path}.tmp-${process.pid}-${Date.now()}`;
       await fs.writeFile(tmp, text, { mode: 0o600 });
       await fs.rename(tmp, path);
+      // CRITICAL: sshd's StrictModes silently IGNORES an authorized_keys owned by
+      // root (this container runs as root), so every relay key would be rejected.
+      // The file must be owned by the broker user. We can't know rcwtun's uid from
+      // inside the container, so match the owner of the mounted .ssh dir (which
+      // setup-relay.sh created as rcwtun). Best-effort — never fail the request.
+      try {
+        const st = await fs.stat(dirname(path));
+        await fs.chown(path, st.uid, st.gid);
+      } catch (e) {
+        this.logger.warn(`authorized_keys chown to broker user failed: ${(e as Error).message}`);
+      }
     } catch (e) {
       this.logger.error(`authorized_keys write failed: ${(e as Error).message}`);
     }
