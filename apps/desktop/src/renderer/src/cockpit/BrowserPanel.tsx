@@ -286,6 +286,10 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, chrom
           <webview
             ref={webviewRef as unknown as React.Ref<HTMLElement>}
             src={loadUrl}
+            // Shared on-disk profile so cookies / localStorage / logins persist
+            // across tabs, custom apps, and app restarts — like a normal browser.
+            partition="persist:rcw-web"
+            allowpopups
             style={{ width: "100%", height: "100%", border: 0 }}
           />
         ) : (

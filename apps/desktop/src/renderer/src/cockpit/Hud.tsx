@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence, type Variants } from "motion/react";
 import { useStore } from "../store";
 import { HostTelemetryView } from "../types";
@@ -9,6 +9,8 @@ import BrowserStack from "./BrowserStack";
 import DockerDeck from "./DockerDeck";
 import DockerLogPanel from "./DockerLogPanel";
 import NotesPanel from "./NotesPanel";
+import CustomAppPanel, { type CustomApp } from "./CustomAppPanel";
+import AppsModal, { AppIcon } from "./AppsModal";
 import ContextColumn from "./ContextColumn";
 import AnswerDock from "./AnswerDock";
 import Markdown from "./Markdown";
@@ -549,6 +551,23 @@ const FIXED: { key: FixedKey; title: string; icon: string }[] = [
 ];
 const GRID_PANELS: GridKey[] = ["chat", "term", "files", "browser"];
 const isDockerId = (id: string): boolean => id.startsWith("docker:");
+const isAppId = (id: string): boolean => id.startsWith("app:");
+const appWinId = (appId: string): string => `app:${appId}`;
+
+// Custom apps are a user-global list (persisted); their WINDOW geometry is stored
+// per-session like every other window. A newly-opened app window gets this size.
+const DEFAULT_APP_WIN: WinState = { x: 90, y: 66, w: 940, h: 640, min: false };
+const APPS_KEY = "rcw.customApps";
+function loadApps(): CustomApp[] {
+  try {
+    const raw = localStorage.getItem(APPS_KEY);
+    if (!raw) return [];
+    const p = JSON.parse(raw);
+    return Array.isArray(p) ? p.filter((a) => a && typeof a.id === "string" && typeof a.url === "string") : [];
+  } catch {
+    return [];
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Windows sub-mode: free-floating window geometry (persisted to localStorage)
@@ -816,6 +835,10 @@ function HudConsole() {
   const canvasRef = useRef<HTMLDivElement>(null);
   const none = <div className="mono faint" style={{ padding: 14, fontSize: 11 }}>no session</div>;
   const [dockerMenu, setDockerMenu] = useState(false); // Docker dock icon right-click menu
+  // Custom apps: a user-global list (persisted); window geometry is per session.
+  const [apps, setApps] = useState<CustomApp[]>(loadApps);
+  useEffect(() => { try { localStorage.setItem(APPS_KEY, JSON.stringify(apps)); } catch { /* ignore */ } }, [apps]);
+  const [appsModal, setAppsModal] = useState(false);
 
   // Per-session console state: each session keeps its own view / grid-vs-windows /
   // floating-window layout. Setters target the CURRENT session via a ref, so they
@@ -961,6 +984,49 @@ function HudConsole() {
     });
   };
 
+  // Custom apps: open/focus/minimize a window (create its geometry on first open),
+  // remove an app entirely (dropping its window from every session), and adopt a
+  // captured favicon when the user didn't pick an icon.
+  const openApp = (appId: string) => {
+    const wid = appWinId(appId);
+    setLayout("windows");
+    setWins((w) => {
+      const cur = w.wins[wid];
+      const front = w.z[w.z.length - 1];
+      if (!cur) {
+        const rect = canvasRef.current?.getBoundingClientRect();
+        let ws = { ...DEFAULT_APP_WIN };
+        if (rect && rect.width > 0 && rect.height > 0) ws = clampWin(ws, rect.width, rect.height);
+        return { ...w, wins: { ...w.wins, [wid]: ws }, z: [...w.z.filter((k) => k !== wid), wid] };
+      }
+      if (cur.min) return { ...w, wins: { ...w.wins, [wid]: { ...cur, min: false } }, z: [...w.z.filter((k) => k !== wid), wid] };
+      if (front === wid) return { ...w, wins: { ...w.wins, [wid]: { ...cur, min: true } } };
+      return { ...w, z: [...w.z.filter((k) => k !== wid), wid] };
+    });
+  };
+  const closeAppWindow = (wid: string) => setWins((w) => {
+    const nextWins = { ...w.wins };
+    delete nextWins[wid];
+    return { ...w, wins: nextWins, z: w.z.filter((k) => k !== wid) };
+  });
+  const addApp = (app: CustomApp) => setApps((a) => [...a, app]);
+  const removeApp = (appId: string) => {
+    setApps((a) => a.filter((x) => x.id !== appId));
+    const wid = appWinId(appId);
+    setConsoles((all) => {
+      const out: Record<string, SessionConsole> = {};
+      for (const [k, c] of Object.entries(all)) {
+        if (!c.win.wins[wid] && !c.win.z.includes(wid)) { out[k] = c; continue; }
+        const nw = { ...c.win.wins };
+        delete nw[wid];
+        out[k] = { ...c, win: { ...c.win, wins: nw, z: c.win.z.filter((z) => z !== wid) } };
+      }
+      return out;
+    });
+  };
+  const setAppFavicon = useCallback((appId: string, url: string) =>
+    setApps((a) => a.map((x) => (x.id === appId && !x.icon ? { ...x, icon: url } : x))), []);
+
   const childFor = (id: string): React.ReactNode => {
     switch (id) {
       case "chat": return <ChatPane />;
@@ -970,20 +1036,25 @@ function HudConsole() {
       case "tasks": return <ContextColumn sessionId={session?.id} />;
       case "notes": return <NotesPanel active={!grid && !wins.wins.notes?.min} />;
       default:
-        return isDockerId(id) ? <DockerLogPanel streamId={id} active={!grid && !wins.wins[id]?.min} /> : null;
+        if (isDockerId(id)) return <DockerLogPanel streamId={id} active={!grid && !wins.wins[id]?.min} />;
+        if (isAppId(id)) { const app = apps.find((a) => appWinId(a.id) === id); return app ? <CustomAppPanel app={app} onFavicon={setAppFavicon} /> : null; }
+        return null;
     }
   };
 
-  // All windows to render: fixed singletons (chat/term/files/browser/tasks) + the
-  // dynamic Docker Log windows. Grid areas apply only to the four grid panels;
-  // tasks & docker have no area, so they are display:none in grid mode.
-  const windowList: { id: string; title: string; area?: string; closable?: boolean }[] = [
+  // All windows to render: fixed singletons + dynamic Docker Log windows + open
+  // custom-app windows (only those with geometry for this session). Grid areas
+  // apply only to the four grid panels; everything else is windows-mode only.
+  const windowList: { id: string; title: string; area?: string; onClose?: () => void }[] = [
     ...FIXED.map((f) => ({
       id: f.key,
       title: f.title,
       area: (GRID_PANELS as string[]).includes(f.key) ? cfg.areas[f.key as GridKey] : undefined,
     })),
-    ...wins.dockerIds.map((id, i) => ({ id, title: `Docker ${i + 1}`, closable: true })),
+    ...wins.dockerIds.map((id, i) => ({ id, title: `Docker ${i + 1}`, onClose: () => closeDocker(id) })),
+    ...apps
+      .filter((a) => !!wins.wins[appWinId(a.id)])
+      .map((a) => ({ id: appWinId(a.id), title: a.name, onClose: () => closeAppWindow(appWinId(a.id)) })),
   ];
   // Dock entries: just the fixed apps. Docker gets ONE dedicated icon (below) with
   // a right-click menu to manage its (possibly several) windows.
@@ -1042,7 +1113,7 @@ function HudConsole() {
             onFocus={() => raise(p.id)}
             onChange={(patch) => patchWin(p.id, patch)}
             onMinimize={() => patchWin(p.id, { min: true })}
-            onClose={p.closable ? () => closeDocker(p.id) : undefined}
+            onClose={p.onClose}
           >
             {childFor(p.id)}
           </PanelShell>
@@ -1111,9 +1182,36 @@ function HudConsole() {
                 </>
               )}
             </div>
+
+            {/* Custom app icons + an "＋ App" launcher (add / manage). */}
+            {apps.map((a) => {
+              const wid = appWinId(a.id);
+              const open = !!wins.wins[wid] && !wins.wins[wid].min;
+              const front = open && wins.z[wins.z.length - 1] === wid;
+              return (
+                <button key={a.id} onClick={() => openApp(a.id)}
+                  onContextMenu={(e) => { e.preventDefault(); setAppsModal(true); }}
+                  title={`${a.name} — click to open · right-click to manage`}
+                  style={dockBtnStyle(open, front)}>
+                  <span style={{ height: 15, display: "grid", placeItems: "center" }}><AppIcon icon={a.icon} size={16} /></span>
+                  <span style={{ fontSize: 8, letterSpacing: "0.06em", textTransform: "uppercase", maxWidth: 44, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.name}</span>
+                  <span style={{ width: 4, height: 4, borderRadius: 999, marginTop: 1, background: open ? "rgb(var(--accent))" : "transparent" }} className={front ? "hud-pulse" : undefined} />
+                </button>
+              );
+            })}
+            <button onClick={() => setAppsModal(true)} title="Add or manage custom apps"
+              style={{ ...dockBtnStyle(false, false), border: "1px dashed var(--border-strong)" }}>
+              <span style={{ fontSize: 15, lineHeight: 1 }}>➕</span>
+              <span style={{ fontSize: 8, letterSpacing: "0.08em", textTransform: "uppercase" }}>App</span>
+              <span style={{ width: 4, height: 4, marginTop: 1 }} />
+            </button>
           </div>
         )}
       </div>
+
+      {appsModal && (
+        <AppsModal apps={apps} onAdd={addApp} onRemove={removeApp} onClose={() => setAppsModal(false)} />
+      )}
     </div>
   );
 }
