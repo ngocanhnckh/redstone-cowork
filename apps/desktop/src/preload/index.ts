@@ -248,6 +248,10 @@ contextBridge.exposeInMainWorld("cowork", {
     modelId?: string;
     input?: string;
   }): Promise<string> => ipcRenderer.invoke(IPC.llmAssist, a),
+  llmChat: (a: {
+    modelId: string;
+    messages: Array<{ role: "system" | "user" | "assistant"; content: string }>;
+  }): Promise<string> => ipcRenderer.invoke(IPC.llmChat, a),
   addLlmEndpoint: (a: {
     label: string;
     baseUrl: string;

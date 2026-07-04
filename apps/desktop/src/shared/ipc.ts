@@ -64,6 +64,7 @@ export const IPC = {
   clipboardWrite: "api:clipboard:write",
   llmModels: "api:llm:models",
   llmAssist: "api:llm:assist",
+  llmChat: "api:llm:chat",
   llmAddEndpoint: "api:llm:endpoint:add",
   llmDeleteEndpoint: "api:llm:endpoint:delete",
   llmAgent: "api:llm:agent",

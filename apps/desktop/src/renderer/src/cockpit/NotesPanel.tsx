@@ -162,7 +162,7 @@ export default function NotesPanel({ active }: { active: boolean }) {
                 {status === "saving" ? "saving…" : status === "saved" ? "✓ saved" : status === "error" ? "save failed" : ""}
               </span>
             </div>
-            <NotesEditor key={activePath} cwd={cwd} machine={machine} path={activePath} sessionId={session.id} onSaved={onSaved} />
+            <NotesEditor key={activePath} cwd={cwd} machine={machine} path={activePath} onSaved={onSaved} />
           </>
         ) : (
           <div className="mono faint" style={{ padding: 18, fontSize: 12, lineHeight: 1.6 }}>

@@ -6,7 +6,6 @@ import QueueRail from "./QueueRail";
 import TerminalStack from "./TerminalStack";
 import FilesPanel from "./FilesPanel";
 import BrowserStack from "./BrowserStack";
-import DockerDeck from "./DockerDeck";
 import DockerLogPanel from "./DockerLogPanel";
 import NotesPanel from "./NotesPanel";
 import CustomAppPanel, { type CustomApp } from "./CustomAppPanel";
@@ -330,9 +329,12 @@ function GitPane() {
         <Decode text="Git Activity" className="mono" style={{ fontSize: 10, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--text-soft)" }} />
         <span style={{ flex: 1 }} />
         {info?.repo && info.branch && (
-          <span className="mono" style={{ fontSize: 9.5, padding: "1px 8px", borderRadius: 999, background: "rgb(var(--primary) / 0.16)" }}>{info.branch}</span>
+          <span className="mono faint" title={info.branch}
+            style={{ fontSize: 9.5, color: "rgb(var(--primary-soft))", minWidth: 0, maxWidth: 170, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {info.branch}
+          </span>
         )}
-        <button onClick={load} title="Refresh" style={{ border: "1px solid var(--border)", background: "transparent", color: "var(--text-soft)", borderRadius: 6, padding: "1px 7px", fontSize: 10, cursor: "pointer" }}>↻</button>
+        <button onClick={load} title="Refresh" style={{ border: "1px solid var(--border)", background: "transparent", color: "var(--text-soft)", borderRadius: 6, padding: "1px 7px", fontSize: 10, cursor: "pointer", flexShrink: 0 }}>↻</button>
       </div>
 
       {!session ? (
@@ -431,9 +433,6 @@ function TelemetryColumn({ tele }: { tele: HostTelemetryView[] }) {
 
       {/* Token spend for the selected session */}
       <motion.div variants={RISE}><TokenSpendWidget /></motion.div>
-
-      {/* Git activity for the selected session's repo — below system status */}
-      <motion.div variants={RISE}><GitPane /></motion.div>
     </motion.div>
   );
 }
@@ -1312,10 +1311,10 @@ export default function Hud() {
       <HudStyles />
       <span className="hud-grid" />
       <div style={{ position: "relative", zIndex: 1, height: "100%", display: "grid", gridTemplateColumns: cols, minHeight: 0 }}>
-        {/* Left column: sessions queue (top half) + Docker status deck (bottom half) */}
+        {/* Left column: sessions queue (top half) + git history (bottom half) */}
         <div style={{ display: "flex", flexDirection: "column", minHeight: 0, borderRight: "1px solid var(--border)" }}>
           <div style={{ flex: "1 1 50%", minHeight: 0, display: "flex", flexDirection: "column" }}><QueueRail /></div>
-          <div style={{ flex: "1 1 50%", minHeight: 0, display: "flex", flexDirection: "column", padding: "0 10px 10px" }}><DockerDeck /></div>
+          <div className="no-scrollbar" style={{ flex: "1 1 50%", minHeight: 0, overflowY: "auto", padding: "0 10px 10px" }}><GitPane /></div>
         </div>
         <HudConsole />
         <div style={{ borderLeft: "1px solid var(--border)", padding: "14px 16px", minHeight: 0, display: "flex", flexDirection: "column", position: "relative" }}>

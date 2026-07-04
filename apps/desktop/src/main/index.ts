@@ -412,6 +412,7 @@ ipcMain.handle(IPC.forwardList, (_e, a: { sessionId: string }) => listForwards(a
 // LLM assistant — proxied through the cowork server (keys live server-side).
 ipcMain.handle(IPC.llmModels, () => api.llmModels());
 ipcMain.handle(IPC.llmAssist, (_e, a: Parameters<typeof api.llmAssist>[0]) => api.llmAssist(a));
+ipcMain.handle(IPC.llmChat, (_e, a: Parameters<typeof api.llmChat>[0]) => api.llmChat(a));
 ipcMain.handle(IPC.llmAddEndpoint, (_e, a: Parameters<typeof api.addLlmEndpoint>[0]) => api.addLlmEndpoint(a));
 ipcMain.handle(IPC.llmDeleteEndpoint, (_e, a: { id: string }) => api.deleteLlmEndpoint(a.id));
 ipcMain.handle(IPC.llmAgent, (_e, a: Parameters<typeof api.llmAgent>[0]) => api.llmAgent(a));

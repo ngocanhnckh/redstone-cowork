@@ -176,6 +176,10 @@ declare global {
         modelId?: string;
         input?: string;
       }): Promise<string>;
+      llmChat(a: {
+        modelId: string;
+        messages: Array<{ role: "system" | "user" | "assistant"; content: string }>;
+      }): Promise<string>;
       addLlmEndpoint(a: {
         label: string;
         baseUrl: string;

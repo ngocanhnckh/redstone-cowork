@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { Component, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { BlockNoteSchema, defaultBlockSpecs, filterSuggestionItems } from "@blocknote/core";
 import {
   createReactBlockSpec,
@@ -13,16 +13,55 @@ import MermaidView from "./Mermaid";
 
 const SAVE_DEBOUNCE_MS = 700;
 
-// The focused session id (for the AI mermaid generator) is passed to the custom
-// block via context, since block render functions don't take external props.
-const NotesAIContext = createContext<{ sessionId: string | null }>({ sessionId: null });
+/** Contains any render error from the editor / a custom block so it can never take
+ * down the whole cockpit — shows a small inline notice instead. */
+class EditorBoundary extends Component<{ children: ReactNode }, { error: string | null }> {
+  state = { error: null as string | null };
+  static getDerivedStateFromError(e: unknown) { return { error: e instanceof Error ? e.message : String(e) }; }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="mono" style={{ padding: 14, fontSize: 12, color: "#e0736a", lineHeight: 1.6 }}>
+          The note editor hit an error and was paused to protect the app.
+          <div className="faint" style={{ fontSize: 10.5, marginTop: 6 }}>{this.state.error}</div>
+          <button onClick={() => this.setState({ error: null })} style={{ marginTop: 10, border: "1px solid var(--border)", background: "transparent", color: "var(--text-soft)", borderRadius: 8, padding: "4px 10px", cursor: "pointer", fontSize: 11 }}>Retry</button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
-/** Ask the assistant model for mermaid source describing `prompt`; strips fences. */
-async function generateMermaid(sessionId: string, prompt: string): Promise<string> {
-  const input =
-    `Generate a Mermaid diagram for the following request. Output ONLY valid Mermaid ` +
-    `code — no markdown fences, no prose, no explanation.\n\nRequest: ${prompt}`;
-  const out = await window.cowork.llmAssist({ sessionId, kind: "chat", input });
+// Make BlockNote's editor surface blend into the cockpit: transparent editor
+// background (the panel glass shows through) and our theme's text colour.
+const NOTES_CSS = `
+  .notes-editor .bn-container, .notes-editor .bn-editor { background: transparent; }
+  .notes-editor .bn-container { --bn-colors-editor-background: transparent; --bn-colors-editor-text: var(--text); }
+  .notes-editor .ProseMirror { background: transparent; }
+`;
+
+
+/**
+ * Ask the model for mermaid source describing `prompt`. Uses the RAW chat endpoint
+ * (not the session-grounded "assist", whose system prompt constrains the model to
+ * answering questions about the session and returns an empty completion here) with
+ * a clean system prompt. Strips any code fences the model adds.
+ */
+async function generateMermaid(prompt: string): Promise<string> {
+  const models = await window.cowork.getLlmModels();
+  const modelId = models[0]?.id;
+  if (!modelId) throw new Error("no LLM model is configured on the server");
+  const system =
+    "You are a Mermaid diagram generator. Given a description, output ONLY valid " +
+    "Mermaid diagram code — no markdown fences, no prose, no explanation. Choose the " +
+    "most fitting diagram type (flowchart, sequenceDiagram, classDiagram, etc.).";
+  const out = await window.cowork.llmChat({
+    modelId,
+    messages: [
+      { role: "system", content: system },
+      { role: "user", content: prompt },
+    ],
+  });
   return out
     .replace(/^```(?:mermaid)?\s*/i, "")
     .replace(/```\s*$/i, "")
@@ -32,7 +71,6 @@ async function generateMermaid(sessionId: string, prompt: string): Promise<strin
 /** Interactive mermaid block: render the diagram, edit the code, or AI-generate it. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function MermaidBlockView({ block, editor }: { block: { props: { code: string } }; editor: any }) {
-  const { sessionId } = useContext(NotesAIContext);
   const code: string = block.props.code ?? "";
   const [editing, setEditing] = useState(!code.trim());
   const [prompt, setPrompt] = useState("");
@@ -43,11 +81,10 @@ function MermaidBlockView({ block, editor }: { block: { props: { code: string } 
 
   const runAi = async () => {
     if (!prompt.trim() || busy) return;
-    if (!sessionId) { setErr("no session selected for the AI model"); return; }
     setBusy(true);
     setErr(null);
     try {
-      const generated = await generateMermaid(sessionId, prompt.trim());
+      const generated = await generateMermaid(prompt.trim());
       if (generated) { setCode(generated); setEditing(true); }
       else setErr("the model returned nothing");
     } catch (e) {
@@ -171,12 +208,11 @@ async function markdownToBlocks(editor: any, md: string): Promise<any[]> {
  * remounts with fresh content.
  */
 export default function NotesEditor({
-  cwd, machine, path, sessionId, onSaved,
+  cwd, machine, path, onSaved,
 }: {
   cwd: string;
   machine: string;
   path: string;
-  sessionId: string | null;
   onSaved: (path: string, markdown: string, status: "saving" | "saved" | "error") => void;
 }) {
   const editor = useCreateBlockNote({ schema });
@@ -231,8 +267,10 @@ export default function NotesEditor({
     [path]);
 
   return (
-    <NotesAIContext.Provider value={{ sessionId }}>
-      <div className="notes-editor" style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
+    <>
+      <style>{NOTES_CSS}</style>
+      <EditorBoundary>
+      <div className="notes-editor" style={{ flex: 1, minHeight: 0, overflowY: "auto", background: "transparent" }}>
         {loadErr && <div className="mono" style={{ color: "#e0736a", fontSize: 11, padding: "8px 12px" }}>could not read note: {loadErr}</div>}
         <BlockNoteView editor={editor} theme="dark" onChange={scheduleSave} slashMenu={false}>
           <SuggestionMenuController
@@ -258,6 +296,7 @@ export default function NotesEditor({
           />
         </BlockNoteView>
       </div>
-    </NotesAIContext.Provider>
+      </EditorBoundary>
+    </>
   );
 }

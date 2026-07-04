@@ -2,10 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import mermaid from "mermaid";
 
 // Initialize mermaid once, lazily, with a dark theme that fits the HUD.
+// suppressErrorRendering keeps mermaid from injecting its "bomb" error graphic
+// into the DOM on a parse failure — we render our own inline error instead.
 let mermaidReady = false;
 function initMermaid(): void {
   if (mermaidReady) return;
-  mermaid.initialize({ startOnLoad: false, theme: "dark", securityLevel: "loose", fontFamily: "ui-monospace, monospace" });
+  mermaid.initialize({ startOnLoad: false, theme: "dark", securityLevel: "loose", fontFamily: "ui-monospace, monospace", suppressErrorRendering: true });
   mermaidReady = true;
 }
 
@@ -20,11 +22,19 @@ export default function MermaidView({ code }: { code: string }) {
     const src = code.trim();
     if (!src) { setSvg(""); setErr(null); return; }
     let alive = true;
-    initMermaid();
-    mermaid
-      .render(idRef.current, src)
-      .then((r) => { if (alive) { setSvg(r.svg); setErr(null); } })
-      .catch((e) => { if (alive) setErr(e instanceof Error ? e.message : String(e)); });
+    (async () => {
+      try {
+        initMermaid();
+        // Validate first — with suppressErrors it returns false instead of throwing
+        // (and never touches the DOM), so a bad diagram can't crash anything.
+        const ok = await mermaid.parse(src, { suppressErrors: true });
+        if (ok === false) { if (alive) { setErr("invalid mermaid syntax"); setSvg(""); } return; }
+        const out = await mermaid.render(idRef.current, src);
+        if (alive) { setSvg(out.svg); setErr(null); }
+      } catch (e) {
+        if (alive) { setErr(e instanceof Error ? e.message : String(e)); setSvg(""); }
+      }
+    })();
     return () => { alive = false; };
   }, [code]);
 

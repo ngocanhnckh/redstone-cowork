@@ -317,6 +317,16 @@ export async function llmAssist(a: {
   return json.text;
 }
 
+export async function llmChat(a: {
+  modelId: string;
+  messages: Array<{ role: "system" | "user" | "assistant"; content: string }>;
+}): Promise<string> {
+  const json = (await (
+    await req("/llm/chat", { method: "POST", body: JSON.stringify(a) })
+  ).json()) as { text: string };
+  return json.text;
+}
+
 export async function addLlmEndpoint(a: {
   label: string;
   baseUrl: string;
