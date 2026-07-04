@@ -200,6 +200,17 @@ contextBridge.exposeInMainWorld("cowork", {
     | { ok: true; entries: Array<{ name: string; path: string; kind: "dir" | "file"; size: number }> }
     | { ok: false; error: string }
   > => ipcRenderer.invoke(IPC.filesList, a),
+  searchFiles: (a: {
+    cwd: string;
+    machine: string;
+    query: string;
+    caseSensitive?: boolean;
+    regex?: boolean;
+    maxResults?: number;
+  }): Promise<
+    | { ok: true; matches: Array<{ path: string; line: number; text: string }>; truncated: boolean }
+    | { ok: false; error: string }
+  > => ipcRenderer.invoke(IPC.filesSearch, a),
   readFile: (a: {
     cwd: string;
     machine: string;

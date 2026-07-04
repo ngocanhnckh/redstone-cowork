@@ -27,7 +27,7 @@ import {
   type StartArgs as ForwardStartArgs,
 } from "./forwarding";
 import { sshSetup, type SshSetupArgs } from "./ssh-setup";
-import { listDir, readFileAt, writeFileAt, deletePath, makeDir, createFile, uploadLocalFile } from "./files";
+import { listDir, readFileAt, writeFileAt, deletePath, makeDir, createFile, uploadLocalFile, searchFiles } from "./files";
 import { gitInfo } from "./git";
 import { IPC } from "../shared/ipc";
 
@@ -434,6 +434,7 @@ ipcMain.handle(IPC.openExternal, (_e, a: { url: string }) => {
 ipcMain.handle(IPC.filesList, (_e, a: { cwd: string; machine: string; dir: string }) =>
   listDir(a)
 );
+ipcMain.handle(IPC.filesSearch, (_e, a: Parameters<typeof searchFiles>[0]) => searchFiles(a));
 ipcMain.handle(IPC.filesRead, (_e, a: { cwd: string; machine: string; file: string }) =>
   readFileAt(a)
 );

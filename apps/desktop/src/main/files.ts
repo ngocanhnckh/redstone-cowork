@@ -61,6 +61,50 @@ function sshWrite(target: SshTarget, remoteCommand: string, stdin: string | Buff
   });
 }
 
+export type SearchMatch = { path: string; line: number; text: string };
+
+/** Run a shell pipeline locally, resolving with stdout (tolerating SIGPIPE from `head`). */
+function localCapture(cmd: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    execFile("/bin/sh", ["-c", cmd], { timeout: SSH_TIMEOUT_MS, maxBuffer: 64 * 1024 * 1024 }, (err, stdout) => {
+      if (err && !stdout) return reject(err);
+      resolve(stdout as string);
+    });
+  });
+}
+
+/**
+ * Project-wide text search (grep) under the session's cwd, local or over SSH. Skips
+ * VCS/build dirs and binary files. `regex` toggles ERE vs. fixed-string; case-
+ * insensitive by default. Capped to `maxResults` (default 500). Never throws.
+ */
+export async function searchFiles(
+  args: Loc & { query: string; caseSensitive?: boolean; regex?: boolean; maxResults?: number }
+): Promise<{ ok: true; matches: SearchMatch[]; truncated: boolean } | { ok: false; error: string }> {
+  const { cwd, machine, query } = args;
+  if (!query || !query.trim()) return { ok: true, matches: [], truncated: false };
+  const max = Math.max(1, Math.min(2000, args.maxResults ?? 500));
+  const flags = ["-rnI", args.caseSensitive ? "" : "-i", args.regex ? "-E" : "-F"].filter(Boolean).join(" ");
+  const excludes = [".git", "node_modules", "dist", "build", ".next", "out", ".turbo", ".cache", "vendor"]
+    .map((d) => `--exclude-dir=${d}`)
+    .join(" ");
+  // grep exits 1 on no matches; the `| head` pipeline makes the shell exit 0 regardless.
+  const cmd = `grep ${flags} ${excludes} -e ${shellQuote(query)} ${shellQuote(cwd)} 2>/dev/null | head -n ${max + 1}`;
+  try {
+    const raw = isLocalMachine(machine) ? await localCapture(cmd) : await sshCapture(await getSshTarget(machine), cmd);
+    const lines = raw.split("\n").filter(Boolean);
+    const truncated = lines.length > max;
+    const matches: SearchMatch[] = [];
+    for (const l of lines.slice(0, max)) {
+      const m = l.match(/^(.+?):(\d+):(.*)$/);
+      if (m) matches.push({ path: m[1], line: Number(m[2]), text: m[3].slice(0, 400) });
+    }
+    return { ok: true, matches, truncated };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 /** Guess a MIME type from extension for inline preview (img/pdf) decisions. */
 export function mimeFor(name: string): string {
   const ext = name.slice(name.lastIndexOf(".")).toLowerCase();

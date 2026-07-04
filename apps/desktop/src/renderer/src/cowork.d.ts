@@ -134,6 +134,17 @@ declare global {
         | { ok: true; entries: DirEntry[] }
         | { ok: false; error: string }
       >;
+      searchFiles(a: {
+        cwd: string;
+        machine: string;
+        query: string;
+        caseSensitive?: boolean;
+        regex?: boolean;
+        maxResults?: number;
+      }): Promise<
+        | { ok: true; matches: Array<{ path: string; line: number; text: string }>; truncated: boolean }
+        | { ok: false; error: string }
+      >;
       readFile(a: {
         cwd: string;
         machine: string;

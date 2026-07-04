@@ -1,4 +1,5 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
+import FileSearch from "./FileSearch";
 import { createPortal } from "react-dom";
 import Editor from "@monaco-editor/react";
 import ConnectionBar from "./ConnectionBar";
@@ -108,6 +109,11 @@ export default function FilesPanel({ sessionId, cwd, machine }: Props) {
   const [deleteTarget, setDeleteTarget] = useState<{ path: string; name: string; isDir: boolean } | null>(null);
   const [opError, setOpError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
+  // Monaco editor instance (for in-file find + reveal-on-open from search results).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const editorRef = useRef<any>(null);
+  const pendingReveal = useRef<number | null>(null);
 
   const loadDir = useCallback(
     async (dir: string) => {
@@ -215,6 +221,58 @@ export default function FilesPanel({ sessionId, cwd, machine }: Props) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [openPath, read, save]);
+
+  // ⌘F = find in the open file (Monaco); ⌘⇧F = find/replace across all files.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || (e.key !== "f" && e.key !== "F")) return;
+      if (e.shiftKey) {
+        e.preventDefault();
+        setSearchOpen(true);
+        return;
+      }
+      // In-file find: if the editor isn't already focused (where Monaco handles ⌘F
+      // itself), focus it and open its find widget.
+      const ed = editorRef.current;
+      if (ed && !ed.hasTextFocus?.()) {
+        e.preventDefault();
+        ed.focus();
+        ed.getAction?.("actions.find")?.run();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // After a search result opens a file, reveal the matched line once its content
+  // has loaded (Monaco needs a tick to swap models).
+  useEffect(() => {
+    if (pendingReveal.current == null) return;
+    if (!(read?.ok && read.encoding === "text") || !editorRef.current) return;
+    const line = pendingReveal.current;
+    pendingReveal.current = null;
+    const ed = editorRef.current;
+    const t = setTimeout(() => {
+      try { ed.revealLineInCenter(line); ed.setPosition({ lineNumber: line, column: 1 }); ed.focus(); } catch { /* editor gone */ }
+    }, 60);
+    return () => clearTimeout(t);
+  }, [read, openPath]);
+
+  const openFileAtLine = useCallback((path: string, line: number) => {
+    pendingReveal.current = line;
+    openFile(path);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Reload the open file from disk after a cross-file replace touched it.
+  const onReplaced = useCallback((paths: string[]) => {
+    if (openPath && paths.includes(openPath)) {
+      setDrafts((d) => { const next = { ...d }; delete next[openPath]; return next; });
+      openFile(openPath);
+    }
+    if (paths.length) setToast(`Replaced in ${paths.length} file${paths.length === 1 ? "" : "s"}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openPath]);
 
   // Auto-save: debounce a write ~700ms after the last edit while enabled. Each
   // keystroke re-runs this effect, clearing the prior timer (so we save once the
@@ -341,47 +399,63 @@ export default function FilesPanel({ sessionId, cwd, machine }: Props) {
     <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
       <ConnectionBar sessionId={sessionId} machine={machine} onHostChange={() => loadDir(cwd)} />
       <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
-        {/* File tree */}
+        {/* File tree — or project-wide search when toggled (⌘⇧F) */}
         <div
           className="no-scrollbar"
-          onContextMenu={(e) => openMenu(e, { kind: "root", path: cwd, parent: cwd })}
+          onContextMenu={searchOpen ? undefined : (e) => openMenu(e, { kind: "root", path: cwd, parent: cwd })}
           style={{
             width: 256,
             flexShrink: 0,
-            overflowY: "auto",
+            overflowY: searchOpen ? "hidden" : "auto",
             borderRight: "1px solid var(--border)",
-            padding: "10px 6px 16px",
+            padding: searchOpen ? 0 : "10px 6px 16px",
           }}
         >
-          {/* Root actions */}
-          <div style={{ display: "flex", gap: 4, padding: "0 6px 8px" }}>
-            <button onClick={() => beginCreate(cwd, "file")} title="New file in project root" style={treeActionBtn}>
-              ＋ File
-            </button>
-            <button onClick={() => beginCreate(cwd, "folder")} title="New folder in project root" style={treeActionBtn}>
-              ＋ Folder
-            </button>
-            <button onClick={() => uploadInto(cwd)} title="Upload file(s) to project root" style={treeActionBtn}>
-              ⤓ Upload
-            </button>
-          </div>
-          {treeError && (
-            <div className="mono" style={{ fontSize: 11, color: "#e0736a", padding: "6px 10px" }}>
-              {treeError}
-            </div>
+          {searchOpen ? (
+            <FileSearch
+              cwd={cwd}
+              machine={machine}
+              autoFocus
+              onOpen={openFileAtLine}
+              onReplaced={onReplaced}
+              onClose={() => setSearchOpen(false)}
+            />
+          ) : (
+            <>
+              {/* Root actions */}
+              <div style={{ display: "flex", gap: 4, padding: "0 6px 8px" }}>
+                <button onClick={() => beginCreate(cwd, "file")} title="New file in project root" style={treeActionBtn}>
+                  ＋ File
+                </button>
+                <button onClick={() => beginCreate(cwd, "folder")} title="New folder in project root" style={treeActionBtn}>
+                  ＋ Folder
+                </button>
+                <button onClick={() => uploadInto(cwd)} title="Upload file(s) to project root" style={treeActionBtn}>
+                  ⤓ Upload
+                </button>
+                <button onClick={() => setSearchOpen(true)} title="Find in all files (⌘⇧F)" style={treeActionBtn}>
+                  ⌕ Search
+                </button>
+              </div>
+              {treeError && (
+                <div className="mono" style={{ fontSize: 11, color: "#e0736a", padding: "6px 10px" }}>
+                  {treeError}
+                </div>
+              )}
+              <Tree
+                dir={cwd}
+                depth={0}
+                tree={tree}
+                expanded={expanded}
+                loadingDirs={loadingDirs}
+                openPath={openPath}
+                drafts={drafts}
+                onToggleDir={toggleDir}
+                onOpenFile={openFile}
+                onContextMenu={openMenu}
+              />
+            </>
           )}
-          <Tree
-            dir={cwd}
-            depth={0}
-            tree={tree}
-            expanded={expanded}
-            loadingDirs={loadingDirs}
-            openPath={openPath}
-            drafts={drafts}
-            onToggleDir={toggleDir}
-            onOpenFile={openFile}
-            onContextMenu={openMenu}
-          />
         </div>
 
         {/* Editor / preview */}
@@ -525,6 +599,7 @@ export default function FilesPanel({ sessionId, cwd, machine }: Props) {
                     path={openPath}
                     value={value}
                     onChange={onEdit}
+                    onMount={(ed) => { editorRef.current = ed; }}
                     options={{
                       fontSize: 12.5,
                       minimap: { enabled: true },
