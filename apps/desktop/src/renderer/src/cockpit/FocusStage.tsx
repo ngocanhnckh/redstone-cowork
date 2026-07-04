@@ -1,4 +1,4 @@
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useState } from "react";
 import { useStore } from "../store";
 import AnswerDock from "./AnswerDock";
 import ContextGauge from "./ContextGauge";
@@ -54,6 +54,18 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
     ...transcript,
     ...pending.map((p) => ({ role: "user" as const, text: p.text })),
   ];
+  // The most recent thing YOU sent to this session — surfaced as a pinned reminder
+  // above the transcript (shares its collapsed state with the HUD chat bubble).
+  let lastSent: string | null = null;
+  for (let i = timeline.length - 1; i >= 0; i--) { if (timeline[i].role === "user") { lastSent = timeline[i].text; break; } }
+  const [ctxOpen, setCtxOpen] = useState(() => {
+    try { return localStorage.getItem("rcw.chat.ctxBubble") !== "0"; } catch { return true; }
+  });
+  const toggleCtx = () => setCtxOpen((o) => {
+    const next = !o;
+    try { localStorage.setItem("rcw.chat.ctxBubble", next ? "1" : "0"); } catch { /* ignore */ }
+    return next;
+  });
   // Show the "thinking" indicator from the moment the user sends until Claude's
   // final answer. Driven by the server `working` flag (true from prompt-submit
   // through tool runs, false at Stop); the optimistic `pending` check covers the
@@ -267,6 +279,21 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
         />
       ) : (
       <>
+      {/* Pinned reminder of the last message you sent to this session */}
+      {lastSent && (
+        <div style={{ flexShrink: 0, margin: "12px 32px 0", borderRadius: 12, border: "1px solid rgb(var(--accent) / 0.3)", background: "rgb(var(--accent) / 0.06)", overflow: "hidden" }}>
+          <div onClick={toggleCtx} title="Your last message to this session" style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 12px", cursor: "pointer", userSelect: "none" }}>
+            <span className="mono" style={{ fontSize: 9, letterSpacing: "0.16em", textTransform: "uppercase", color: "rgb(var(--accent))" }}>↩ you last said</span>
+            <span style={{ flex: 1 }} />
+            <span className="mono faint" style={{ fontSize: 11 }}>{ctxOpen ? "▾" : "▸"}</span>
+          </div>
+          {ctxOpen && (
+            <div className="no-scrollbar" style={{ maxHeight: 120, overflowY: "auto", padding: "0 12px 10px", fontSize: 12, lineHeight: 1.5, color: "var(--text-soft)", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+              {lastSent}
+            </div>
+          )}
+        </div>
+      )}
       {/* Body — transcript scrollback */}
       <div
         ref={scrollRef}

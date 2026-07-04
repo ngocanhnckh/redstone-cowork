@@ -246,12 +246,15 @@ export const useStore = create<State>((set, get) => ({
         custom: null,
         ...resolution,
       });
-      // Refresh first, then advance to the next session actually waiting for input
-      // (fresh data + actionable-only, so we don't land on a thinking / passive one).
+      // Refresh first, then (in Flow mode only) advance to the next session actually
+      // waiting for input. Other modes — HUD / grid / history — stay put so the user
+      // isn't yanked to another session after answering.
       await get().refresh();
-      const { queue, decisions } = get();
-      const next = sessionId ? nextWaiting(queue, decisions, sessionId) : null;
-      if (next) set({ focusId: next });
+      if (get().mode === "flow") {
+        const { queue, decisions } = get();
+        const next = sessionId ? nextWaiting(queue, decisions, sessionId) : null;
+        if (next) set({ focusId: next });
+      }
     } catch (e) {
       set({ error: e instanceof Error ? e.message : String(e) });
     }
