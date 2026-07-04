@@ -50,6 +50,7 @@ export default function DevToolsPanel({ sessionId, active }: { sessionId?: strin
   const [rows, setRows] = useState<ConsoleRow[]>([]);
   const [net, setNet] = useState<NetRow[]>([]);
   const [filter, setFilter] = useState("");
+  const [attached, setAttached] = useState(false);
   const rowSeq = useRef(0);
   const consoleEndRef = useRef<HTMLDivElement>(null);
   const openBrowsers = useStore((s) => s.openBrowsers);
@@ -58,10 +59,13 @@ export default function DevToolsPanel({ sessionId, active }: { sessionId?: strin
   // Stream console + network events for this session while the panel is live.
   useEffect(() => {
     if (!active || !sessionId) return;
+    setAttached(false);
     const off = window.cowork.onDevtoolsEvent(({ sessionId: sid, ev }) => {
       if (sid !== sessionId) return;
       const kind = ev.kind as string;
-      if (kind === "console") {
+      if (kind === "attached") {
+        setAttached(true);
+      } else if (kind === "console") {
         setRows((cur) => {
           const next = [...cur, { rowId: ++rowSeq.current, level: String(ev.level ?? "log"), text: String(ev.text ?? ""), source: ev.source as string | undefined, ts: Number(ev.ts) || 0 }];
           return next.length > MAX_CONSOLE ? next.slice(-MAX_CONSOLE) : next;
@@ -79,7 +83,7 @@ export default function DevToolsPanel({ sessionId, active }: { sessionId?: strin
         setNet((cur) => cur.map((r) => (r.id === ev.id ? { ...r, failed: true, error: String(ev.error ?? "failed"), canceled: !!ev.canceled } : r)));
       }
     });
-    window.cowork.startDevtools(sessionId).catch(() => {});
+    window.cowork.startDevtools(sessionId).then((r) => { if (r?.ok) setAttached(true); }).catch(() => {});
     return () => { off(); window.cowork.stopDevtools(sessionId).catch(() => {}); };
   }, [active, sessionId, browserOpen]);
 
@@ -122,6 +126,11 @@ export default function DevToolsPanel({ sessionId, active }: { sessionId?: strin
             color: "var(--text)", borderRadius: 8, padding: "5px 10px", fontSize: 11.5, outline: "none",
           }}
         />
+        <span title={attached ? "Inspector attached to the browser" : "Waiting for the browser…"}
+          className="mono faint" style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 10, flexShrink: 0 }}>
+          <span style={{ width: 6, height: 6, borderRadius: 999, background: attached ? "#6bbf82" : "var(--text-faint)" }} className={attached ? "hud-pulse" : undefined} />
+          {attached ? "live" : "idle"}
+        </span>
         <button onClick={clear} title="Clear" style={{ border: "1px solid var(--border)", background: "transparent", color: "var(--text-soft)", borderRadius: 8, padding: "5px 9px", fontSize: 11, cursor: "pointer" }}>⌫ clear</button>
       </div>
 
@@ -133,7 +142,7 @@ export default function DevToolsPanel({ sessionId, active }: { sessionId?: strin
           </div>
         ) : tab === "console" ? (
           <div style={{ padding: "6px 0", fontFamily: "var(--font-mono)", fontSize: 11.5, lineHeight: 1.55 }}>
-            {visRows.length === 0 && <div className="faint" style={{ padding: "6px 14px" }}>No console output yet.</div>}
+            {visRows.length === 0 && <div className="faint" style={{ padding: "6px 14px" }}>No console output yet — interact with the page or reload it.</div>}
             {visRows.map((r) => (
               <div key={r.rowId} style={{ display: "flex", gap: 8, padding: "2px 14px", borderBottom: "1px solid rgb(255 255 255 / 0.02)", color: levelColor(r.level) }}>
                 <span style={{ flexShrink: 0, width: 12, textAlign: "center", opacity: 0.8 }} title={r.level}>
@@ -158,7 +167,7 @@ export default function DevToolsPanel({ sessionId, active }: { sessionId?: strin
             </thead>
             <tbody>
               {visNet.length === 0 && (
-                <tr><td colSpan={5} className="faint" style={{ padding: "8px 12px" }}>No requests yet.</td></tr>
+                <tr><td colSpan={5} className="faint" style={{ padding: "8px 12px" }}>No requests yet — reload the page to capture its traffic.</td></tr>
               )}
               {visNet.map((r) => (
                 <tr key={r.id} style={{ borderBottom: "1px solid rgb(255 255 255 / 0.03)" }} title={r.url}>

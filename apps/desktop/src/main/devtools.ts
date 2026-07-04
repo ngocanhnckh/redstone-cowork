@@ -55,31 +55,30 @@ function attach(sessionId: string): void {
   if (!wc) return;
   const insp: Inspector = { wc };
 
-  let cdp = false;
+  // Console — always via the reliable console-message event (fires for the guest
+  // regardless of the debugger). Electron 33: level 0..3 = verbose/info/warn/error.
+  const onConsole = (_e: unknown, level: number, message: string, line: number, source: string) =>
+    emit(sessionId, { kind: "console", level: CONSOLE_LEVELS[level] ?? "log", text: message, source: source ? `${basename(source)}:${line}` : undefined, ts: Date.now() });
+  wc.on("console-message", onConsole as (...a: unknown[]) => void);
+  insp.onConsole = onConsole as (...a: unknown[]) => void;
+
+  // Network — via the Chrome DevTools Protocol (best-effort; console still works
+  // if the debugger can't attach, e.g. real DevTools already open on the guest).
   try {
     if (!wc.debugger.isAttached()) wc.debugger.attach("1.3");
-    cdp = true;
-    void wc.debugger.sendCommand("Network.enable").catch(() => {});
-    void wc.debugger.sendCommand("Runtime.enable").catch(() => {});
     const onMessage = (_e: unknown, method: string, params: Record<string, unknown>) => handleCdp(sessionId, method, params);
     wc.debugger.on("message", onMessage as (...a: unknown[]) => void);
     insp.onMessage = onMessage as (...a: unknown[]) => void;
+    void wc.debugger.sendCommand("Network.enable").catch(() => {});
   } catch {
-    cdp = false;
-  }
-
-  if (!cdp) {
-    // Fallback: console text only (Electron's console-message event).
-    const onConsole = (_e: unknown, level: number, message: string, line: number, source: string) =>
-      emit(sessionId, { kind: "console", level: CONSOLE_LEVELS[level] ?? "log", text: message, source: `${basename(source)}:${line}`, ts: Date.now() });
-    wc.on("console-message", onConsole as (...a: unknown[]) => void);
-    insp.onConsole = onConsole as (...a: unknown[]) => void;
+    /* network capture unavailable — console still streams */
   }
 
   const onDestroyed = () => detach(sessionId);
   wc.once("destroyed", onDestroyed);
   insp.onDestroyed = onDestroyed;
   inspectors.set(sessionId, insp);
+  emit(sessionId, { kind: "attached" });
 }
 
 function detach(sessionId: string): void {
@@ -137,7 +136,8 @@ function argToText(a: any): string {
   return String(a.type ?? "");
 }
 
-const CONSOLE_LEVELS = ["log", "warning", "error", "info", "debug"];
+// Electron 33 console-message levels: 0 verbose, 1 info, 2 warning, 3 error.
+const CONSOLE_LEVELS = ["log", "info", "warning", "error"];
 function basename(p: string): string {
   try { return p.split(/[\\/]/).pop() || p; } catch { return p; }
 }

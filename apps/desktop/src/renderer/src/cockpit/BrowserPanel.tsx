@@ -147,6 +147,10 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, chrom
   // Report the primary browser guest's webContents id so the Inspector (DevTools)
   // panel can attach console/network capture to it. Only the primary tab (not
   // ephemeral extra tabs) is the session's canonical browser.
+  // Depends on loadUrl because the <webview> is only mounted once there's a URL;
+  // re-running when it mounts (and on each navigation) ensures we capture the ref
+  // and (re)register. register() runs immediately AND on dom-ready to cover both
+  // "guest already created" and "not attached yet" timing.
   useEffect(() => {
     if (ephemeral) return;
     const wv = webviewRef.current;
@@ -155,12 +159,13 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, chrom
       try { window.cowork.registerSessionBrowser(sessionId, wv.getWebContentsId()).catch(() => {}); }
       catch { /* guest not attached yet — dom-ready fires again */ }
     };
+    register();
     wv.addEventListener("dom-ready", register as EventListener);
     return () => {
       wv.removeEventListener("dom-ready", register as EventListener);
       window.cowork.unregisterSessionBrowser(sessionId).catch(() => {});
     };
-  }, [ephemeral, sessionId]);
+  }, [ephemeral, sessionId, loadUrl]);
 
   // Keep the address bar synced from live webview navigation.
   useEffect(() => {
