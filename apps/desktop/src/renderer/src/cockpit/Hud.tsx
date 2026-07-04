@@ -1064,7 +1064,7 @@ function HudConsole() {
       case "term": return <TerminalStack activeId={session?.id} active={termActive} />;
       case "files": return session ? <FilesPanel key={`${session.id}-hud-files`} sessionId={session.id} cwd={session.cwd} machine={session.machine} /> : none;
       case "browser": return <BrowserStack activeId={session?.id} active={browserActive} />;
-      case "tasks": return <ContextColumn sessionId={session?.id} />;
+      case "tasks": return <ContextColumn sessionId={session?.id} hideSummary />;
       case "notes": return <NotesPanel active={!grid && !wins.wins.notes?.min} />;
       case "ports": return session ? <PortsPanel key={`${session.id}-hud-ports`} sessionId={session.id} cwd={session.cwd} machine={session.machine} /> : none;
       default:

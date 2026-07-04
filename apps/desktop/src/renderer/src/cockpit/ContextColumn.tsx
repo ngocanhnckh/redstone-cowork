@@ -107,7 +107,7 @@ function UserRow({
   );
 }
 
-export default function ContextColumn({ sessionId }: { sessionId?: string } = {}) {
+export default function ContextColumn({ sessionId, hideSummary }: { sessionId?: string; hideSummary?: boolean } = {}) {
   const focusId = useStore((s) => s.focusId);
   const sessions = useStore((s) => s.sessions);
   const queue = useStore((s) => s.queue);
@@ -117,6 +117,8 @@ export default function ContextColumn({ sessionId }: { sessionId?: string } = {}
   const deleteUserTodo = useStore((s) => s.deleteUserTodo);
   const [summarizing, setSummarizing] = useState(false);
   const [draft, setDraft] = useState("");
+  const todosScrollRef = useRef<HTMLDivElement>(null);
+  const wantScroll = useRef(false);
 
   const id = sessionId ?? focusId;
   const session =
@@ -129,9 +131,18 @@ export default function ContextColumn({ sessionId }: { sessionId?: string } = {}
 
   function submitTodo() {
     if (!id || !draft.trim()) return;
+    wantScroll.current = true; // scroll the list to the new item once it renders
     addUserTodo(id, draft);
     setDraft("");
   }
+
+  // After adding a task, scroll the todo list to the bottom so the new item shows.
+  useEffect(() => {
+    if (wantScroll.current && todosScrollRef.current) {
+      todosScrollRef.current.scrollTop = todosScrollRef.current.scrollHeight;
+      wantScroll.current = false;
+    }
+  }, [userTodos.length]);
 
   async function summarize() {
     if (!id || summarizing) return;
@@ -151,6 +162,7 @@ export default function ContextColumn({ sessionId }: { sessionId?: string } = {}
   // this guard) prevent re-spending tokens on every glance.
   const autoTried = useRef<Set<string>>(new Set());
   useEffect(() => {
+    if (hideSummary) return; // summary hidden here — don't spend tokens generating one
     if (!id || !session) return;
     if (session.summary) return;
     if ((session.transcript?.length ?? 0) < 2) return;
@@ -174,52 +186,57 @@ export default function ContextColumn({ sessionId }: { sessionId?: string } = {}
       }}
     >
       {/* Summary — fixed height so a long todo list can't squeeze it; scrolls internally. */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-        <div className="kicker">Summary</div>
-        <span style={{ flex: 1 }} />
-        <button
-          onClick={summarize}
-          disabled={summarizing || !session}
-          title="Summarize this session with the LLM"
-          style={{
-            border: "1px solid var(--border)",
-            background: summarizing ? "rgb(var(--primary) / 0.2)" : "transparent",
-            color: "var(--text-soft)",
-            borderRadius: 7,
-            padding: "3px 9px",
-            fontSize: 10,
-            fontFamily: "var(--font-mono)",
-            cursor: summarizing ? "default" : "pointer",
-          }}
-        >
-          {summarizing ? "…" : session?.summary ? "↻ refresh" : "✦ summarize"}
-        </button>
-      </div>
-      <div
-        className="glass-inset no-scrollbar"
-        style={{
-          padding: "13px 14px",
-          borderRadius: 13,
-          fontSize: 12.5,
-          lineHeight: 1.6,
-          color: "var(--text-soft)",
-          height: 168,
-          flexShrink: 0,
-          overflowY: "auto",
-        }}
-      >
-        {session?.summary ? (
-          <Markdown>{session.summary}</Markdown>
-        ) : (
-          <span className="faint" style={{ fontStyle: "italic" }}>
-            No summary yet.
-          </span>
-        )}
-      </div>
+      {!hideSummary && (
+        <>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+            <div className="kicker">Summary</div>
+            <span style={{ flex: 1 }} />
+            <button
+              onClick={summarize}
+              disabled={summarizing || !session}
+              title="Summarize this session with the LLM"
+              style={{
+                border: "1px solid var(--border)",
+                background: summarizing ? "rgb(var(--primary) / 0.2)" : "transparent",
+                color: "var(--text-soft)",
+                borderRadius: 7,
+                padding: "3px 9px",
+                fontSize: 10,
+                fontFamily: "var(--font-mono)",
+                cursor: summarizing ? "default" : "pointer",
+              }}
+            >
+              {summarizing ? "…" : session?.summary ? "↻ refresh" : "✦ summarize"}
+            </button>
+          </div>
+          <div
+            className="glass-inset no-scrollbar"
+            style={{
+              padding: "13px 14px",
+              borderRadius: 13,
+              fontSize: 12.5,
+              lineHeight: 1.6,
+              color: "var(--text-soft)",
+              height: 168,
+              flexShrink: 0,
+              overflowY: "auto",
+            }}
+          >
+            {session?.summary ? (
+              <Markdown>{session.summary}</Markdown>
+            ) : (
+              <span className="faint" style={{ fontStyle: "italic" }}>
+                No summary yet.
+              </span>
+            )}
+          </div>
+        </>
+      )}
 
       {/* Todos — scrollable middle region: Claude's read-only plan + your checklist. */}
       <div className="kicker" style={{ flexShrink: 0 }}>Session todos</div>
       <div
+        ref={todosScrollRef}
         className="no-scrollbar"
         style={{ flex: 1, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 }}
       >
