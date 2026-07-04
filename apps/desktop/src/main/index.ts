@@ -4,6 +4,7 @@ import { dirname, join, basename } from "node:path";
 import { saveConfig, loadConfig, clearConfig } from "./config";
 import * as api from "./api";
 import { getWorkspaceConfig, saveWorkspaceConfig, getSshHost, setSshHost, isLocalMachine, setServerHosts } from "./workspace";
+import { getHostIps } from "./host-info";
 import {
   ensureTerminal,
   writeTerminal,
@@ -334,6 +335,7 @@ ipcMain.handle(IPC.workspaceIsLocal, (_e, a: { machine: string }) => {
     return false;
   }
 });
+ipcMain.handle(IPC.hostIps, (_e, a: { machine: string }) => getHostIps(a.machine));
 
 // Passwordless SSH onboarding — main never throws; sshSetup returns a result object.
 ipcMain.handle(IPC.sshSetup, (_e, a: SshSetupArgs) => sshSetup(a));

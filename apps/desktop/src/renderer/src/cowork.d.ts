@@ -62,6 +62,7 @@ declare global {
       getSshHost(machine: string): Promise<string>;
       setSshHost(machine: string, host: string): Promise<{ ok: boolean; error?: string }>;
       isLocalMachine(machine: string): Promise<boolean>;
+      hostIps(machine: string): Promise<{ local: string | null; public: string | null }>;
 
       // Passwordless SSH onboarding
       sshSetup(a: {

@@ -7,6 +7,21 @@ const HIST = 48; // samples kept for the status sparklines (~4 min at the 5s pol
 
 const shortName = (n: string): string => n.replace(/^\//, "");
 
+// Persisted per-(session, window) container selection, so a Docker Log window
+// reopens showing the same container across session switches and app restarts.
+const SEL_KEY = "rcw.dockerlog.selection";
+function loadSelection(key: string): string {
+  try { return (JSON.parse(localStorage.getItem(SEL_KEY) || "{}") as Record<string, string>)[key] ?? ""; }
+  catch { return ""; }
+}
+function saveSelection(key: string, value: string): void {
+  try {
+    const all = JSON.parse(localStorage.getItem(SEL_KEY) || "{}") as Record<string, string>;
+    all[key] = value;
+    localStorage.setItem(SEL_KEY, JSON.stringify(all));
+  } catch { /* ignore */ }
+}
+
 const fmtBytes = (b: number | null): string => {
   if (!b || b <= 0) return "—";
   const u = ["B", "KB", "MB", "GB", "TB"];
@@ -14,12 +29,17 @@ const fmtBytes = (b: number | null): string => {
   return `${(b / 1024 ** i).toFixed(i <= 1 ? 0 : 1)}${u[i]}`;
 };
 
-/** A small glowing 0–100% sparkline for the container status readout. */
+const pct = (n: number | null): string => (n == null ? "—" : `${n < 10 ? n.toFixed(1) : n.toFixed(0)}%`);
+
+/** A small glowing sparkline, auto-scaled to its own peak so small-but-nonzero
+ * usage (e.g. a container idling at ~2% CPU) is still visible and moves, rather
+ * than looking pinned to 0 on a fixed 0–100 axis. */
 function MiniSpark({ data, color }: { data: number[]; color: string }) {
   const W = 100, H = 30;
+  const peak = Math.max(1, ...data);
   const pts = data.length < 2 ? [] : data.map((v, i) => {
     const x = (i / (data.length - 1)) * W;
-    const y = H - (Math.max(0, Math.min(100, v)) / 100) * (H - 3) - 1.5;
+    const y = H - (Math.max(0, Math.min(peak, v)) / peak) * (H - 3) - 1.5;
     return `${x.toFixed(1)},${y.toFixed(1)}`;
   });
   return (
@@ -48,8 +68,11 @@ export default function DockerLogPanel({ streamId, active }: { streamId: string;
   const session = sessions.find((s) => s.id === focusId) ?? queue.find((s) => s.id === focusId);
   const machine = session?.machine ?? null;
 
+  // Remember the picked container per (session, window) so it survives switching
+  // sessions, closing/reopening the window, and app restarts.
+  const selKey = `${focusId ?? "none"}:${streamId}`;
   const [containers, setContainers] = useState<DockerContainer[]>([]);
-  const [container, setContainer] = useState("");
+  const [container, setContainer] = useState(() => loadSelection(selKey));
   const [text, setText] = useState("");
   const [history, setHistory] = useState<{ cpu: number[]; mem: number[] }>({ cpu: [], mem: [] });
   const bufRef = useRef("");
@@ -76,12 +99,17 @@ export default function DockerLogPanel({ streamId, active }: { streamId: string;
     return () => { alive = false; clearInterval(t); };
   }, [machine]);
 
-  // Reset the selection when the host changes; the effect below re-picks a default.
-  useEffect(() => { setContainer(""); }, [machine]);
+  // Load this (session, window)'s remembered container when the key changes.
+  useEffect(() => { setContainer(loadSelection(selKey)); }, [selKey]);
 
-  // Auto-pick the first running container (else the first) when nothing valid is chosen.
+  // Persist the picked container so it's restored on reopen / restart.
+  useEffect(() => { if (container) saveSelection(selKey, container); }, [selKey, container]);
+
+  // Auto-pick the first running container (else the first) only when the current
+  // selection is empty or no longer present (a remembered one that still exists wins).
   useEffect(() => {
     if (container && containers.some((c) => shortName(c.name) === container)) return;
+    if (containers.length === 0) return; // keep the remembered name until the list loads
     const first = containers.find((c) => c.state === "running") ?? containers[0];
     setContainer(first ? shortName(first.name) : "");
   }, [containers, container]);
@@ -194,7 +222,7 @@ export default function DockerLogPanel({ streamId, active }: { streamId: string;
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
               <span className="mono faint" style={{ fontSize: 8.5, letterSpacing: "0.14em", textTransform: "uppercase" }}>CPU</span>
-              <span className="mono" style={{ fontSize: 10.5, color: "rgb(var(--primary-soft))" }}>{sel.cpuPct != null ? `${sel.cpuPct.toFixed(0)}%` : "—"}</span>
+              <span className="mono" style={{ fontSize: 10.5, color: "rgb(var(--primary-soft))" }}>{pct(sel.cpuPct)}</span>
             </div>
             <MiniSpark data={history.cpu} color="rgb(var(--primary-soft))" />
           </div>
@@ -202,7 +230,7 @@ export default function DockerLogPanel({ streamId, active }: { streamId: string;
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
               <span className="mono faint" style={{ fontSize: 8.5, letterSpacing: "0.14em", textTransform: "uppercase" }}>MEM</span>
               <span className="mono" style={{ fontSize: 10.5, color: "rgb(var(--accent))" }}>
-                {fmtBytes(sel.memUsed)}{sel.memPct != null ? ` · ${sel.memPct.toFixed(0)}%` : ""}
+                {fmtBytes(sel.memUsed)}{sel.memPct != null ? ` · ${pct(sel.memPct)}` : ""}
               </span>
             </div>
             <MiniSpark data={history.mem} color="rgb(var(--accent))" />

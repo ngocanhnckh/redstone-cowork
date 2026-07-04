@@ -96,6 +96,8 @@ contextBridge.exposeInMainWorld("cowork", {
     ipcRenderer.invoke(IPC.workspaceSetSshHost, { machine, host }),
   isLocalMachine: (machine: string): Promise<boolean> =>
     ipcRenderer.invoke(IPC.workspaceIsLocal, { machine }),
+  hostIps: (machine: string): Promise<{ local: string | null; public: string | null }> =>
+    ipcRenderer.invoke(IPC.hostIps, { machine }),
 
   // Passwordless SSH onboarding
   sshSetup: (a: {

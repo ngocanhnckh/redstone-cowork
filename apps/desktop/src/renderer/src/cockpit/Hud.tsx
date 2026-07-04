@@ -8,6 +8,7 @@ import FilesPanel from "./FilesPanel";
 import BrowserStack from "./BrowserStack";
 import DockerLogPanel from "./DockerLogPanel";
 import NotesPanel from "./NotesPanel";
+import PortsPanel from "./PortsPanel";
 import CustomAppPanel, { type CustomApp } from "./CustomAppPanel";
 import AppsModal, { AppIcon } from "./AppsModal";
 import ContextColumn from "./ContextColumn";
@@ -16,6 +17,7 @@ import Markdown from "./Markdown";
 import ContextGauge from "./ContextGauge";
 import ModeSelect from "./ModeSelect";
 import TokenSpendWidget from "./TokenSpendWidget";
+import SessionInfoWidget from "./SessionInfoWidget";
 import { GitInfo } from "../types";
 
 // Motion (motion.dev) entrance choreography for the widget column.
@@ -393,9 +395,9 @@ function TelemetryColumn({ tele }: { tele: HostTelemetryView[] }) {
   const fleet = useMemo(() => {
     const active = sessions.filter((s) => s.status === "active" || s.working).length;
     const waiting = sessions.filter((s) => s.status === "waiting").length;
-    const prompts = sessions.reduce((n, s) => n + (s.transcript ?? []).filter((m) => m.role === "user").length, 0);
+    const total = sessions.length;
     const spent = sessions.reduce((n, s) => n + (s.attachedAt ? Date.now() - new Date(s.attachedAt).getTime() : 0), 0);
-    return { active, waiting, prompts, spent };
+    return { active, waiting, total, spent };
   }, [sessions]);
   // Only the host that runs the SELECTED session (matched by machine name).
   const hostTele = session ? tele.find((t) => t.machine === session.machine) ?? null : null;
@@ -410,12 +412,15 @@ function TelemetryColumn({ tele }: { tele: HostTelemetryView[] }) {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(64px, 1fr))", gap: 12, marginBottom: 10 }}>
             {metric("Active", String(fleet.active))}
             {metric("Waiting", String(fleet.waiting))}
-            {metric("Prompts", String(fleet.prompts))}
+            {metric("Sessions", String(fleet.total))}
             {metric("Uptime", fmtDur(fleet.spent))}
           </div>
           <WaveLine height={30} color="rgb(var(--accent))" />
         </motion.div>
       </div>
+
+      {/* Session-scoped uplink: host IPs + time-on-session + prompt count */}
+      <motion.div variants={RISE}><SessionInfoWidget /></motion.div>
 
       {/* System status — only the host machine of the selected session */}
       <motion.div variants={RISE}>
@@ -535,7 +540,7 @@ function ChatPane() {
 // Fixed singleton windows. chat/term/files/browser also participate in the tiled
 // grid; tasks is windows-mode only. Docker Log windows are DYNAMIC (ids "docker:N")
 // and can be spawned more than once, so they live outside this union.
-type FixedKey = "chat" | "term" | "files" | "browser" | "tasks" | "notes";
+type FixedKey = "chat" | "term" | "files" | "browser" | "tasks" | "notes" | "ports";
 type GridKey = "chat" | "term" | "files" | "browser";
 type ConsoleView = "ctf" | "cb" | "ctb" | "fb";
 type HudLayout = "grid" | "windows";
@@ -547,6 +552,7 @@ const FIXED: { key: FixedKey; title: string; icon: string }[] = [
   { key: "browser", title: "Browser", icon: "◍" },
   { key: "tasks", title: "Tasks", icon: "☑" },
   { key: "notes", title: "Notes", icon: "✎" },
+  { key: "ports", title: "Ports", icon: "⇄" },
 ];
 const GRID_PANELS: GridKey[] = ["chat", "term", "files", "browser"];
 const isDockerId = (id: string): boolean => id.startsWith("docker:");
@@ -613,9 +619,10 @@ function defaultWins(): WinMap {
       browser: { ...base, x: 560, y: 360 },
       tasks: { x: 120, y: 80, w: 440, h: 480, min: true },
       notes: { x: 170, y: 96, w: 760, h: 540, min: true },
+      ports: { x: 150, y: 90, w: 560, h: 460, min: true },
     },
     dockerIds: [],
-    z: ["chat", "term", "files", "browser", "tasks", "notes"],
+    z: ["chat", "term", "files", "browser", "tasks", "notes", "ports"],
     seq: 0,
     _init: false,
   };
@@ -932,6 +939,25 @@ function HudConsole() {
   useEffect(() => { if (browserActive && session) openBrowser(session.id); }, [browserActive, session?.id, openBrowser]);
   useEffect(() => { if (termActive && session) openTerminal(session.id); }, [termActive, session?.id, openTerminal]);
 
+  // Auto-start the focused session's configured port forwards in HUD mode — the
+  // Ports panel does this on mount, but in HUD it may never be opened, so do it
+  // here whenever a (remote) session is focused. startForward is idempotent.
+  useEffect(() => {
+    if (!session) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        if (await window.cowork.isLocalMachine(session.machine)) return;
+        const cfg = await window.cowork.getWorkspaceConfig({ sessionId: session.id, cwd: session.cwd, machine: session.machine });
+        if (cancelled || !cfg) return;
+        for (const p of cfg.forwardPorts ?? []) {
+          window.cowork.startForward({ sessionId: session.id, machine: session.machine, port: p }).catch(() => { /* ignore */ });
+        }
+      } catch { /* best-effort */ }
+    })();
+    return () => { cancelled = true; };
+  }, [session?.id, session?.cwd, session?.machine]);
+
   const raise = (id: string) => setWins((w) => (w.z[w.z.length - 1] === id ? w : { ...w, z: [...w.z.filter((k) => k !== id), id] }));
   const patchWin = (id: string, patch: Partial<WinState>) =>
     setWins((w) => ({ ...w, wins: { ...w.wins, [id]: { ...w.wins[id], ...patch } } }));
@@ -1040,6 +1066,7 @@ function HudConsole() {
       case "browser": return <BrowserStack activeId={session?.id} active={browserActive} />;
       case "tasks": return <ContextColumn sessionId={session?.id} />;
       case "notes": return <NotesPanel active={!grid && !wins.wins.notes?.min} />;
+      case "ports": return session ? <PortsPanel key={`${session.id}-hud-ports`} sessionId={session.id} cwd={session.cwd} machine={session.machine} /> : none;
       default:
         if (isDockerId(id)) return <DockerLogPanel streamId={id} active={!grid && !wins.wins[id]?.min} />;
         if (isAppId(id)) { const app = apps.find((a) => appWinId(a.id) === id); return app ? <CustomAppPanel app={app} onFavicon={setAppFavicon} /> : null; }

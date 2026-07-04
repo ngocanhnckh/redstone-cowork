@@ -37,6 +37,7 @@ export const IPC = {
   workspaceGetSshHost: "api:workspace:sshhost:get",
   workspaceSetSshHost: "api:workspace:sshhost:set",
   workspaceIsLocal: "api:workspace:islocal",
+  hostIps: "api:host:ips",
   sshSetup: "api:ssh:setup",
   sshResultGet: "api:ssh:result:get",
   terminalStart: "api:terminal:start",
