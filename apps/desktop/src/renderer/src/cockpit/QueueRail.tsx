@@ -49,6 +49,7 @@ export default function QueueRail() {
   const focusId = useStore((s) => s.focusId);
   const setFocus = useStore((s) => s.setFocus);
   const dismissSession = useStore((s) => s.dismissSession);
+  const pendingMap = useStore((s) => s.pending);
 
   const needsInput = new Set(decisions.filter((d) => ACTIONABLE.has(d.kind)).map((d) => d.sessionId));
   const waitingSince = new Map(queue.map((q) => [q.id, q.waitingSince] as const));
@@ -56,7 +57,9 @@ export default function QueueRail() {
   const kindOf = (s: SessionView): Kind => {
     if (s.status === "lost") return "lost";
     if (needsInput.has(s.id)) return "waiting";
-    if (s.working) return "working";
+    // Busy if the server says so, OR we have an optimistic send not yet echoed —
+    // so the "working" animation appears the instant you send, with no gap.
+    if (s.working || (pendingMap[s.id]?.length ?? 0) > 0) return "working";
     if (s.status === "stale") return "idle";
     return "active";
   };
@@ -137,8 +140,10 @@ export default function QueueRail() {
                 {detail}
               </div>
             </div>
-            {kind === "working" && hoverId !== session.id && (
-              <span className="eq" style={{ flexShrink: 0 }}>
+            {/* Persistent "working" loader so you always know which session is busy
+                (previously hidden on hover, which read as it disappearing). */}
+            {kind === "working" && (
+              <span className="eq" style={{ flexShrink: 0 }} title="working…">
                 {[0, 1, 2].map((i) => <span key={i} className="eq-bar" style={{ animationDelay: `${i * 0.13}s` }} />)}
               </span>
             )}
