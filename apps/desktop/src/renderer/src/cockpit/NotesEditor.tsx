@@ -142,17 +142,25 @@ async function docToMarkdown(editor: any): Promise<string> {
   return parts.filter(Boolean).join("\n\n") + "\n";
 }
 
+// Extract ```mermaid fences ourselves (BlockNote only tags languages it knows, so
+// relying on its parser to preserve "mermaid" is fragile). Everything between the
+// fences is parsed normally; each fence becomes our interactive mermaid block.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function markdownToBlocks(editor: any, md: string): Promise<any[]> {
-  const blocks = await editor.tryParseMarkdownToBlocks(md);
+  const re = /```mermaid[^\n]*\n([\s\S]*?)```/g;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (blocks as any[]).map((b) => {
-    if (b.type === "codeBlock" && b.props?.language === "mermaid") {
-      const code = (b.content ?? []).map((c: { type: string; text?: string }) => (c.type === "text" ? c.text ?? "" : "")).join("");
-      return { type: "mermaid", props: { code } };
-    }
-    return b;
-  });
+  const out: any[] = [];
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(md)) !== null) {
+    const before = md.slice(last, m.index);
+    if (before.trim()) out.push(...(await editor.tryParseMarkdownToBlocks(before)));
+    out.push({ type: "mermaid", props: { code: m[1].replace(/\n+$/, "") } });
+    last = re.lastIndex;
+  }
+  const rest = md.slice(last);
+  if (rest.trim() || out.length === 0) out.push(...(await editor.tryParseMarkdownToBlocks(rest)));
+  return out;
 }
 
 /**
