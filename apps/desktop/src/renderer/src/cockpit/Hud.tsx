@@ -1027,6 +1027,12 @@ function HudConsole() {
   const setAppFavicon = useCallback((appId: string, url: string) =>
     setApps((a) => a.map((x) => (x.id === appId && !x.icon ? { ...x, icon: url } : x))), []);
 
+  // A "workspace" is the focused session's project (machine + cwd). Apps flagged
+  // "this workspace only" are shown only when that workspace is focused.
+  const workspaceKey = session ? `${session.machine}:${session.cwd}` : null;
+  const workspaceName = session ? projectName(session.cwd) : null;
+  const appVisible = (a: CustomApp): boolean => !a.workspace || a.workspace === workspaceKey;
+
   const childFor = (id: string): React.ReactNode => {
     switch (id) {
       case "chat": return <ChatPane />;
@@ -1053,7 +1059,7 @@ function HudConsole() {
     })),
     ...wins.dockerIds.map((id, i) => ({ id, title: `Docker ${i + 1}`, onClose: () => closeDocker(id) })),
     ...apps
-      .filter((a) => !!wins.wins[appWinId(a.id)])
+      .filter((a) => appVisible(a) && !!wins.wins[appWinId(a.id)])
       .map((a) => ({ id: appWinId(a.id), title: a.name, onClose: () => closeAppWindow(appWinId(a.id)) })),
   ];
   // Dock entries: just the fixed apps. Docker gets ONE dedicated icon (below) with
@@ -1184,7 +1190,7 @@ function HudConsole() {
             </div>
 
             {/* Custom app icons + an "＋ App" launcher (add / manage). */}
-            {apps.map((a) => {
+            {apps.filter(appVisible).map((a) => {
               const wid = appWinId(a.id);
               const open = !!wins.wins[wid] && !wins.wins[wid].min;
               const front = open && wins.z[wins.z.length - 1] === wid;
@@ -1210,7 +1216,7 @@ function HudConsole() {
       </div>
 
       {appsModal && (
-        <AppsModal apps={apps} onAdd={addApp} onRemove={removeApp} onClose={() => setAppsModal(false)} />
+        <AppsModal apps={apps} workspaceKey={workspaceKey} workspaceName={workspaceName} onAdd={addApp} onRemove={removeApp} onClose={() => setAppsModal(false)} />
       )}
     </div>
   );

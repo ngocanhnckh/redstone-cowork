@@ -12,7 +12,15 @@ type WebviewEl = HTMLElement & {
   getURL(): string;
 };
 
-export type CustomApp = { id: string; name: string; url: string; icon: string | null };
+export type CustomApp = {
+  id: string;
+  name: string;
+  url: string;
+  icon: string | null;
+  /** When set, the app only shows in this workspace's dock (a `machine:cwd` key).
+   * Null/absent = global (shows in every workspace). */
+  workspace?: string | null;
+};
 
 const navBtn: React.CSSProperties = {
   border: "1px solid var(--border)", background: "transparent", color: "var(--text-soft)",

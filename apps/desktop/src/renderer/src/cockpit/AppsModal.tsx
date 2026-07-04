@@ -27,9 +27,13 @@ export function AppIcon({ icon, size = 18 }: { icon: string | null; size?: numbe
  * is chosen the site's favicon is used automatically once the app first loads.
  */
 export default function AppsModal({
-  apps, onAdd, onRemove, onClose,
+  apps, workspaceKey, workspaceName, onAdd, onRemove, onClose,
 }: {
   apps: CustomApp[];
+  /** Current workspace key (`machine:cwd`) or null when no session is focused. */
+  workspaceKey: string | null;
+  /** Human-readable current workspace name (project) for the checkbox label. */
+  workspaceName: string | null;
   onAdd: (app: CustomApp) => void;
   onRemove: (id: string) => void;
   onClose: () => void;
@@ -37,6 +41,7 @@ export default function AppsModal({
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
   const [icon, setIcon] = useState<string | null>(null);
+  const [wsOnly, setWsOnly] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const seq = useRef(0);
@@ -55,8 +60,8 @@ export default function AppsModal({
     try { new URL(finalUrl); } catch { setErr("that doesn't look like a valid URL"); return; }
     // Unique-ish id without Date.now(): time-ish counter + name slug.
     const id = `${name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 24)}-${++seq.current}${apps.length}`;
-    onAdd({ id, name: name.trim(), url: finalUrl, icon });
-    setName(""); setUrl(""); setIcon(null); setErr(null);
+    onAdd({ id, name: name.trim(), url: finalUrl, icon, workspace: wsOnly ? workspaceKey : null });
+    setName(""); setUrl(""); setIcon(null); setWsOnly(false); setErr(null);
   };
 
   return (
@@ -79,7 +84,14 @@ export default function AppsModal({
               <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 10px", borderRadius: 9, border: "1px solid var(--border)" }}>
                 <AppIcon icon={a.icon} size={20} />
                 <div style={{ minWidth: 0, flex: 1 }}>
-                  <div style={{ fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.name}</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.name}</span>
+                    {a.workspace && (
+                      <span className="mono" title={`Only in workspace: ${a.workspace}`} style={{ flexShrink: 0, fontSize: 8.5, letterSpacing: "0.06em", textTransform: "uppercase", padding: "1px 6px", borderRadius: 999, background: "rgb(var(--primary) / 0.18)", color: "var(--text-soft)" }}>
+                        workspace
+                      </span>
+                    )}
+                  </div>
                   <div className="mono faint" style={{ fontSize: 10, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.url}</div>
                 </div>
                 <button onClick={() => onRemove(a.id)} title="Remove app" style={{ border: "1px solid var(--border)", background: "transparent", color: "#e0736a", borderRadius: 8, padding: "3px 9px", cursor: "pointer", fontSize: 12 }}>remove</button>
@@ -102,6 +114,13 @@ export default function AppsModal({
             <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => { const f = e.target.files?.[0]; if (f) pickImage(f); e.target.value = ""; }} />
           </div>
           <div className="mono faint" style={{ fontSize: 10.5 }}>No icon? The site's favicon is used automatically once it loads.</div>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: workspaceKey ? "pointer" : "not-allowed", opacity: workspaceKey ? 1 : 0.5 }}>
+            <input type="checkbox" checked={wsOnly} disabled={!workspaceKey} onChange={(e) => setWsOnly(e.target.checked)} style={{ cursor: "inherit" }} />
+            <span style={{ fontSize: 12 }}>
+              This workspace only
+              {workspaceName ? <span className="mono faint" style={{ fontSize: 10.5 }}> — {workspaceName}</span> : <span className="mono faint" style={{ fontSize: 10.5 }}> (focus a session to enable)</span>}
+            </span>
+          </label>
           {err && <div className="mono" style={{ color: "#e0736a", fontSize: 11 }}>{err}</div>}
           <button className="glass-btn--clay" onClick={submit} style={{ padding: "9px 16px", fontSize: 13, fontWeight: 600, alignSelf: "flex-start" }}>＋ Add app</button>
         </div>
