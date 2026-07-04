@@ -564,7 +564,6 @@ type WinMap = {
   seq: number;
   _init: boolean;
 };
-const WIN_KEY = "rcw.hud.windows.v2"; // v2: id-keyed map with tasks + dynamic docker windows
 const WIN_MIN_W = 280;
 const WIN_MIN_H = 170;
 
@@ -618,24 +617,45 @@ function tiledGrid(rect: { width: number; height: number }): Record<string, WinS
   };
 }
 
-/** Load persisted geometry, or fresh defaults that get tiled on first paint. */
-function loadWins(): WinMap {
+/** Validate one persisted WinMap, backfilling any missing fixed windows. */
+function sanitizeWinMap(p: Partial<WinMap> | undefined): WinMap {
   const base = defaultWins();
+  if (!p || !p.wins || typeof p.wins !== "object") return base;
+  const wins: Record<string, WinState> = { ...base.wins, ...p.wins };
+  const dockerIds = Array.isArray(p.dockerIds)
+    ? p.dockerIds.filter((id): id is string => typeof id === "string" && !!wins[id])
+    : [];
+  const allIds = [...FIXED.map((f) => f.key), ...dockerIds];
+  const z = (Array.isArray(p.z) ? p.z.filter((id) => allIds.includes(id)) : []) as string[];
+  for (const id of allIds) if (!z.includes(id)) z.push(id);
+  return { wins, dockerIds, z, seq: typeof p.seq === "number" ? p.seq : 0, _init: p._init ?? false };
+}
+
+// The console arrangement is stored PER SESSION so each session remembers its own
+// grid view, grid/windows mode, and floating-window layout. Keyed by session id
+// (or "__none__" when nothing is focused) and persisted as a whole map.
+type SessionConsole = { view: ConsoleView; layout: HudLayout; win: WinMap };
+const CONSOLE_KEY = "rcw.hud.console.v1";
+const NO_SESSION = "__none__";
+function defaultConsole(): SessionConsole {
+  return { view: "ctf", layout: "grid", win: defaultWins() };
+}
+function loadConsoles(): Record<string, SessionConsole> {
   try {
-    const raw = localStorage.getItem(WIN_KEY);
-    if (!raw) return base;
-    const p = JSON.parse(raw) as Partial<WinMap>;
-    if (!p.wins || typeof p.wins !== "object") return base;
-    const wins: Record<string, WinState> = { ...base.wins, ...p.wins };
-    const dockerIds = Array.isArray(p.dockerIds)
-      ? p.dockerIds.filter((id): id is string => typeof id === "string" && !!wins[id])
-      : [];
-    const allIds = [...FIXED.map((f) => f.key), ...dockerIds];
-    const z = (Array.isArray(p.z) ? p.z.filter((id) => allIds.includes(id)) : []) as string[];
-    for (const id of allIds) if (!z.includes(id)) z.push(id);
-    return { wins, dockerIds, z, seq: typeof p.seq === "number" ? p.seq : 0, _init: p._init ?? true };
+    const raw = localStorage.getItem(CONSOLE_KEY);
+    if (!raw) return {};
+    const p = JSON.parse(raw) as Record<string, Partial<SessionConsole>>;
+    const out: Record<string, SessionConsole> = {};
+    for (const [k, v] of Object.entries(p)) {
+      out[k] = {
+        view: (v.view as ConsoleView) ?? "ctf",
+        layout: (v.layout as HudLayout) ?? "grid",
+        win: sanitizeWinMap(v.win as Partial<WinMap> | undefined),
+      };
+    }
+    return out;
   } catch {
-    return base;
+    return {};
   }
 }
 
@@ -793,15 +813,56 @@ function HudConsole() {
   const session = sessions.find((s) => s.id === focusId) ?? queue.find((s) => s.id === focusId);
   const openBrowser = useStore((s) => s.openBrowser);
   const openTerminal = useStore((s) => s.openTerminal);
-  const [view, setView] = useState<ConsoleView>("ctf");
-  const [layout, setLayout] = useState<HudLayout>("grid");
-  const [wins, setWins] = useState<WinMap>(loadWins);
   const canvasRef = useRef<HTMLDivElement>(null);
-  const cfg = VIEWS[view];
   const none = <div className="mono faint" style={{ padding: 14, fontSize: 11 }}>no session</div>;
+  const [dockerMenu, setDockerMenu] = useState(false); // Docker dock icon right-click menu
 
-  // Persist window geometry / z-order / minimized flags.
-  useEffect(() => { try { localStorage.setItem(WIN_KEY, JSON.stringify(wins)); } catch { /* ignore */ } }, [wins]);
+  // Per-session console state: each session keeps its own view / grid-vs-windows /
+  // floating-window layout. Setters target the CURRENT session via a ref, so they
+  // stay correct inside long-lived effects even after the focus changes.
+  const focusKey = focusId ?? NO_SESSION;
+  const focusKeyRef = useRef(focusKey);
+  focusKeyRef.current = focusKey;
+  const [consoles, setConsoles] = useState<Record<string, SessionConsole>>(loadConsoles);
+  useEffect(() => { try { localStorage.setItem(CONSOLE_KEY, JSON.stringify(consoles)); } catch { /* ignore */ } }, [consoles]);
+
+  const cur = consoles[focusKey] ?? defaultConsole();
+  const view = cur.view;
+  const layout = cur.layout;
+  const wins = cur.win;
+  const cfg = VIEWS[view];
+
+  const setView = (v: ConsoleView) =>
+    setConsoles((all) => { const k = focusKeyRef.current; const c = all[k] ?? defaultConsole(); return { ...all, [k]: { ...c, view: v } }; });
+  const setLayout = (l: HudLayout) =>
+    setConsoles((all) => { const k = focusKeyRef.current; const c = all[k] ?? defaultConsole(); return { ...all, [k]: { ...c, layout: l } }; });
+  const setWins = (updater: WinMap | ((w: WinMap) => WinMap)) =>
+    setConsoles((all) => {
+      const k = focusKeyRef.current;
+      const c = all[k] ?? defaultConsole();
+      const next = typeof updater === "function" ? (updater as (w: WinMap) => WinMap)(c.win) : updater;
+      return next === c.win ? all : { ...all, [k]: { ...c, win: next } };
+    });
+
+  // On session switch, clamp the newly-focused session's windows to the canvas so a
+  // layout saved at a different size can't leave a window off-screen.
+  useEffect(() => {
+    const el = canvasRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+    setWins((w) => {
+      let changed = false;
+      const nextWins = { ...w.wins };
+      for (const id of Object.keys(w.wins)) {
+        const c = clampWin(w.wins[id], rect.width, rect.height);
+        const p = w.wins[id];
+        if (c.x !== p.x || c.y !== p.y || c.w !== p.w || c.h !== p.h) { nextWins[id] = c; changed = true; }
+      }
+      return changed ? { ...w, wins: nextWins } : w;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusKey]);
 
   // First time Windows mode is shown with no saved layout, tile from the console size.
   useEffect(() => {
@@ -864,10 +925,10 @@ function HudConsole() {
     return { ...w, z: [...w.z.filter((k) => k !== id), id] };
   });
 
-  // Spawn a new Docker Log window (dock right-click or the "＋ docker" launcher).
-  // Each gets a unique id so several can tail different containers at once.
-  const createDocker = (e?: React.MouseEvent) => {
-    e?.preventDefault();
+  // Spawn a new Docker Log window. Each gets a unique id so several can tail
+  // different containers at once. Reached only via the Docker dock icon's
+  // right-click menu ("New window").
+  const createDocker = () => {
     setLayout("windows");
     setWins((w) => {
       const n = w.seq + 1;
@@ -884,6 +945,21 @@ function HudConsole() {
     delete nextWins[id];
     return { ...w, dockerIds: w.dockerIds.filter((d) => d !== id), wins: nextWins, z: w.z.filter((k) => k !== id) };
   });
+  // The single Docker dock icon behaves like a normal app: left-click focuses /
+  // minimizes / restores the frontmost Docker window (creating one if none exist).
+  // A NEW window is only made via the right-click menu.
+  const dockClickDocker = () => {
+    if (wins.dockerIds.length === 0) { createDocker(); return; }
+    setWins((w) => {
+      const primary = [...w.z].reverse().find((id) => w.dockerIds.includes(id));
+      if (!primary) return w;
+      const c = w.wins[primary];
+      const front = w.z[w.z.length - 1];
+      if (c.min) return { ...w, wins: { ...w.wins, [primary]: { ...c, min: false } }, z: [...w.z.filter((k) => k !== primary), primary] };
+      if (front === primary) return { ...w, wins: { ...w.wins, [primary]: { ...c, min: true } } };
+      return { ...w, z: [...w.z.filter((k) => k !== primary), primary] };
+    });
+  };
 
   const childFor = (id: string): React.ReactNode => {
     switch (id) {
@@ -909,12 +985,11 @@ function HudConsole() {
     })),
     ...wins.dockerIds.map((id, i) => ({ id, title: `Docker ${i + 1}`, closable: true })),
   ];
-  // Dock entries: fixed panels, then one launcher per open Docker Log window, then
-  // a "＋ docker" button. Right-clicking any docker entry also spawns a new one.
-  const dockItems: { id: string; title: string; icon: string }[] = [
-    ...FIXED.map((f) => ({ id: f.key, title: f.title, icon: f.icon })),
-    ...wins.dockerIds.map((id, i) => ({ id, title: `Docker ${i + 1}`, icon: "🐳" })),
-  ];
+  // Dock entries: just the fixed apps. Docker gets ONE dedicated icon (below) with
+  // a right-click menu to manage its (possibly several) windows.
+  const dockItems = FIXED.map((f) => ({ id: f.key, title: f.title, icon: f.icon }));
+  const anyDockerOpen = wins.dockerIds.some((id) => !wins.wins[id]?.min);
+  const dockerFront = wins.dockerIds.length > 0 && wins.dockerIds.includes(wins.z[wins.z.length - 1]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10, minHeight: 0, padding: "12px 14px" }}>
@@ -984,48 +1059,75 @@ function HudConsole() {
             {dockItems.map((p) => {
               const open = !wins.wins[p.id]?.min;
               const front = open && wins.z[wins.z.length - 1] === p.id;
-              const docker = isDockerId(p.id);
               return (
                 <button key={p.id} onClick={() => dockClick(p.id)}
-                  onContextMenu={docker ? createDocker : undefined}
-                  title={
-                    docker
-                      ? `${p.title} — click to focus/minimize · right-click for a new Docker window`
-                      : open ? (front ? `${p.title} (click to minimize)` : `Focus ${p.title}`) : `Restore ${p.title}`
-                  }
-                  style={{
-                    display: "flex", flexDirection: "column", alignItems: "center", gap: 4, width: 46, padding: "6px 0 3px",
-                    borderRadius: 12, cursor: "pointer", fontFamily: "var(--font-mono)",
-                    border: front ? "1px solid rgb(var(--accent) / 0.55)" : "1px solid transparent",
-                    background: front ? "rgb(var(--primary) / 0.22)" : open ? "rgb(var(--primary) / 0.10)" : "transparent",
-                    color: open ? "var(--text)" : "var(--text-soft)", opacity: open ? 1 : 0.6,
-                    transition: "background .18s, opacity .18s, border-color .18s",
-                  }}>
+                  title={open ? (front ? `${p.title} (click to minimize)` : `Focus ${p.title}`) : `Restore ${p.title}`}
+                  style={dockBtnStyle(open, front)}>
                   <span style={{ fontSize: 15, lineHeight: 1 }}>{p.icon}</span>
                   <span style={{ fontSize: 8, letterSpacing: "0.08em", textTransform: "uppercase" }}>{p.title}</span>
-                  <span style={{
-                    width: 4, height: 4, borderRadius: 999, marginTop: 1,
-                    background: open ? "rgb(var(--accent))" : "transparent",
-                  }} className={front ? "hud-pulse" : undefined} />
+                  <span style={{ width: 4, height: 4, borderRadius: 999, marginTop: 1, background: open ? "rgb(var(--accent))" : "transparent" }} className={front ? "hud-pulse" : undefined} />
                 </button>
               );
             })}
-            {/* Launcher: open another Docker Log window. */}
-            <button onClick={createDocker} onContextMenu={createDocker} title="New Docker log window"
-              style={{
-                display: "flex", flexDirection: "column", alignItems: "center", gap: 4, width: 46, padding: "6px 0 3px",
-                borderRadius: 12, cursor: "pointer", fontFamily: "var(--font-mono)",
-                border: "1px dashed var(--border-strong)", background: "transparent", color: "var(--text-soft)",
-              }}>
-              <span style={{ fontSize: 15, lineHeight: 1 }}>🐳</span>
-              <span style={{ fontSize: 8, letterSpacing: "0.08em", textTransform: "uppercase" }}>＋ log</span>
-              <span style={{ width: 4, height: 4, marginTop: 1 }} />
-            </button>
+            {/* Single Docker app icon: left-click focuses/minimizes; right-click opens
+                a menu to create a new window or jump to an existing one. */}
+            <div style={{ position: "relative" }}>
+              <button
+                onClick={() => { setDockerMenu(false); dockClickDocker(); }}
+                onContextMenu={(e) => { e.preventDefault(); setDockerMenu((m) => !m); }}
+                title="Docker logs — click to focus/minimize · right-click for options"
+                style={dockBtnStyle(anyDockerOpen, dockerFront)}>
+                <span style={{ fontSize: 15, lineHeight: 1 }}>🐳</span>
+                <span style={{ fontSize: 8, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                  Docker{wins.dockerIds.length > 1 ? ` ·${wins.dockerIds.length}` : ""}
+                </span>
+                <span style={{ width: 4, height: 4, borderRadius: 999, marginTop: 1, background: anyDockerOpen ? "rgb(var(--accent))" : "transparent" }} className={dockerFront ? "hud-pulse" : undefined} />
+              </button>
+              {dockerMenu && (
+                <>
+                  {/* click-away backdrop */}
+                  <div onClick={() => setDockerMenu(false)} style={{ position: "fixed", inset: 0, zIndex: 1500 }} />
+                  <div style={{
+                    position: "absolute", bottom: "calc(100% + 8px)", left: "50%", transform: "translateX(-50%)", zIndex: 1600,
+                    minWidth: 190, padding: 5, borderRadius: 12, border: "1px solid var(--border-strong)",
+                    boxShadow: "0 12px 40px rgb(0 0 0 / 0.5)", ...WIN_GLASS,
+                  }}>
+                    <button onClick={() => { createDocker(); setDockerMenu(false); }}
+                      style={{ display: "flex", width: "100%", alignItems: "center", gap: 8, padding: "7px 10px", borderRadius: 8, border: 0, background: "transparent", color: "var(--text)", cursor: "pointer", fontFamily: "var(--font-mono)", fontSize: 11.5 }}>
+                      <span style={{ color: "rgb(var(--accent))" }}>＋</span> New Docker window
+                    </button>
+                    {wins.dockerIds.length > 0 && <div style={{ height: 1, background: "var(--border)", margin: "4px 2px" }} />}
+                    {wins.dockerIds.map((id, i) => (
+                      <div key={id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 8px", borderRadius: 8 }} className="hud-rail-row">
+                        <span onClick={() => { dockClick(id); setDockerMenu(false); }}
+                          style={{ flex: 1, minWidth: 0, cursor: "pointer", fontFamily: "var(--font-mono)", fontSize: 11, color: wins.wins[id]?.min ? "var(--text-soft)" : "var(--text)" }}>
+                          🐳 Docker {i + 1}{wins.wins[id]?.min ? " (minimized)" : ""}
+                        </span>
+                        <span onClick={() => closeDocker(id)} title="Close window"
+                          style={{ cursor: "pointer", color: "var(--text-faint)", fontSize: 12 }}>✕</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         )}
       </div>
     </div>
   );
+}
+
+/** Shared dock-button style: highlighted when frontmost, dimmed when minimized. */
+function dockBtnStyle(open: boolean, front: boolean): React.CSSProperties {
+  return {
+    display: "flex", flexDirection: "column", alignItems: "center", gap: 4, width: 46, padding: "6px 0 3px",
+    borderRadius: 12, cursor: "pointer", fontFamily: "var(--font-mono)",
+    border: front ? "1px solid rgb(var(--accent) / 0.55)" : "1px solid transparent",
+    background: front ? "rgb(var(--primary) / 0.22)" : open ? "rgb(var(--primary) / 0.10)" : "transparent",
+    color: open ? "var(--text)" : "var(--text-soft)", opacity: open ? 1 : 0.6,
+    transition: "background .18s, opacity .18s, border-color .18s",
+  };
 }
 
 // ---------------------------------------------------------------------------

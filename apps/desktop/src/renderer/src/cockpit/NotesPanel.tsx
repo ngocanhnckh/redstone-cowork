@@ -1,29 +1,28 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useStore } from "../store";
-import NotesMarkdown from "./NotesMarkdown";
+import NotesEditor from "./NotesEditor";
 
 type NoteFile = { name: string; path: string };
-type ViewMode = "edit" | "split" | "preview";
 
-const SAVE_DEBOUNCE_MS = 800;
 const trimSlash = (s: string): string => s.replace(/\/+$/, "");
 
 /** First markdown heading (or first non-empty line) → a Notion-ish page title. */
-function deriveTitle(name: string, content: string): string {
-  for (const raw of content.split("\n")) {
+function deriveTitle(name: string, markdown: string): string {
+  for (const raw of markdown.split("\n")) {
     const line = raw.trim();
     if (!line) continue;
     const h = line.match(/^#{1,6}\s+(.*)$/);
-    return (h ? h[1] : line).slice(0, 60);
+    const title = (h ? h[1] : line).replace(/[*_`#>-]/g, "").trim();
+    if (title) return title.slice(0, 60);
   }
   return name.replace(/\.md$/i, "");
 }
 
 /**
- * Notes — a live markdown editor (mermaid diagrams supported) with a Notion-style
- * page list. Every note is a `.md` file under the focused project's `docs/note`
- * folder on its host (created on first save). Edits autosave over the existing
- * remote file IPC; switching sessions switches to that project's notes.
+ * Notes — a Notion-style page list backed by `.md` files under the focused
+ * project's `docs/note` folder on its host (created on first note). Each page opens
+ * in a BlockNote WYSIWYG editor (lists, checklists, tables, code, AI-mermaid) that
+ * autosaves markdown back to the file. Switching sessions switches note folders.
  */
 export default function NotesPanel({ active }: { active: boolean }) {
   const focusId = useStore((s) => s.focusId);
@@ -37,22 +36,11 @@ export default function NotesPanel({ active }: { active: boolean }) {
 
   const [notes, setNotes] = useState<NoteFile[]>([]);
   const [activePath, setActivePath] = useState<string | null>(null);
-  const [content, setContent] = useState("");
   const [titles, setTitles] = useState<Record<string, string>>({});
-  const [view, setView] = useState<ViewMode>("split");
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [listErr, setListErr] = useState<string | null>(null);
   const [confirmDel, setConfirmDel] = useState<string | null>(null);
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const dirty = useRef(false);
-  // Latest values mirrored into refs so the unmount flush / note-switch flush read
-  // current state without re-subscribing effects on every keystroke.
-  const activePathRef = useRef<string | null>(null);
-  const contentRef = useRef("");
-  activePathRef.current = activePath;
-  contentRef.current = content;
 
-  // Ensure docs/note exists (mkdir -p is idempotent). Best-effort; returns ok flag.
   const ensureDir = useCallback(async (): Promise<boolean> => {
     if (!cwd || !machine || !docsDir) return false;
     const r = await window.cowork.makeDir({ cwd, machine, parent: docsDir, name: "note" });
@@ -62,80 +50,22 @@ export default function NotesPanel({ active }: { active: boolean }) {
   const loadNotes = useCallback(async () => {
     if (!cwd || !machine || !notesDir) { setNotes([]); return; }
     const r = await window.cowork.listFiles({ cwd, machine, dir: notesDir });
-    if (!r.ok) {
-      // Folder likely doesn't exist yet — that's fine, it appears on first note.
-      setNotes([]);
-      setListErr(null);
-      return;
-    }
+    if (!r.ok) { setNotes([]); setListErr(null); return; } // folder not created yet
     setListErr(null);
-    const md = r.entries.filter((e) => e.kind === "file" && /\.md$/i.test(e.name)).map((e) => ({ name: e.name, path: e.path }));
-    md.sort((a, b) => a.name.localeCompare(b.name));
+    const md = r.entries
+      .filter((e) => e.kind === "file" && /\.md$/i.test(e.name))
+      .map((e) => ({ name: e.name, path: e.path }))
+      .sort((a, b) => a.name.localeCompare(b.name));
     setNotes(md);
   }, [cwd, machine, notesDir]);
 
-  // Reload the note list whenever the focused project changes or the window opens.
+  // Reload the list whenever the focused project changes or the window opens.
   useEffect(() => {
     setActivePath(null);
-    setContent("");
     setTitles({});
+    setStatus("idle");
     if (active) loadNotes();
   }, [active, cwd, machine, loadNotes]);
-
-  // Open a note (read its content). Flush any pending edits on the current note first
-  // so switching pages never loses unsaved changes.
-  const openNote = useCallback(
-    async (path: string) => {
-      if (!cwd || !machine) return;
-      if (saveTimer.current) { clearTimeout(saveTimer.current); saveTimer.current = null; }
-      if (activePathRef.current && dirty.current) await doSaveRef.current(activePathRef.current, contentRef.current);
-      setActivePath(path);
-      setStatus("idle");
-      dirty.current = false;
-      const r = await window.cowork.readFile({ cwd, machine, file: path });
-      if (r.ok && r.encoding === "text") {
-        setContent(r.content);
-        const name = path.split("/").pop() ?? path;
-        setTitles((t) => ({ ...t, [path]: deriveTitle(name, r.content) }));
-      } else {
-        setContent("");
-      }
-    },
-    [cwd, machine]
-  );
-
-  const doSave = useCallback(
-    async (path: string, text: string) => {
-      if (!cwd || !machine) return;
-      setStatus("saving");
-      await ensureDir();
-      const r = await window.cowork.writeFile({ cwd, machine, file: path, content: text });
-      setStatus(r.ok ? "saved" : "error");
-      if (r.ok) {
-        const name = path.split("/").pop() ?? path;
-        setTitles((t) => ({ ...t, [path]: deriveTitle(name, text) }));
-      }
-    },
-    [cwd, machine, ensureDir]
-  );
-  const doSaveRef = useRef(doSave);
-  doSaveRef.current = doSave;
-
-  // Debounced autosave whenever the content of the open note changes.
-  const onChange = (text: string) => {
-    setContent(text);
-    dirty.current = true;
-    if (!activePath) return;
-    if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => { doSave(activePath, text); dirty.current = false; }, SAVE_DEBOUNCE_MS);
-  };
-
-  // Flush a pending save on unmount ONLY (empty deps) so no edits are lost; reads
-  // the latest note/content via refs to avoid re-running this on every keystroke.
-  useEffect(() => () => {
-    if (saveTimer.current) clearTimeout(saveTimer.current);
-    if (activePathRef.current && dirty.current) doSaveRef.current(activePathRef.current, contentRef.current);
-  }, []);
 
   const newNote = async () => {
     if (!cwd || !machine || !notesDir) return;
@@ -145,41 +75,46 @@ export default function NotesPanel({ active }: { active: boolean }) {
     for (let i = 2; existing.has(name); i++) name = `untitled-${i}.md`;
     const r = await window.cowork.createFile({ cwd, machine, parent: notesDir, name });
     if (!r.ok || !r.path) { setListErr(r.error ?? "could not create note"); return; }
-    const seed = "# Untitled\n\n";
-    await window.cowork.writeFile({ cwd, machine, file: r.path, content: seed });
+    await window.cowork.writeFile({ cwd, machine, file: r.path, content: "# Untitled\n\n" });
+    setTitles((t) => ({ ...t, [r.path as string]: "Untitled" }));
     await loadNotes();
     setActivePath(r.path);
-    setContent(seed);
-    setTitles((t) => ({ ...t, [r.path as string]: "Untitled" }));
-    setStatus("saved");
   };
 
   const deleteNote = async (path: string) => {
     if (!cwd || !machine) return;
     await window.cowork.deletePath({ cwd, machine, path });
     setConfirmDel(null);
-    if (activePath === path) { setActivePath(null); setContent(""); }
+    if (activePath === path) setActivePath(null);
     await loadNotes();
   };
+
+  const onSaved = useCallback((path: string, markdown: string, s: "saving" | "saved" | "error") => {
+    setStatus(s);
+    if (s === "saved" && markdown) {
+      const name = path.split("/").pop() ?? path;
+      setTitles((t) => ({ ...t, [path]: deriveTitle(name, markdown) }));
+    }
+  }, []);
 
   const titleFor = (n: NoteFile): string => titles[n.path] ?? n.name.replace(/\.md$/i, "");
 
   const railBtn: React.CSSProperties = {
     border: "1px solid var(--border)", background: "transparent", color: "var(--text-soft)",
-    borderRadius: 8, padding: "4px 9px", fontSize: 11, fontFamily: "var(--font-mono)", cursor: "pointer",
+    borderRadius: 8, padding: "3px 8px", fontSize: 11, fontFamily: "var(--font-mono)", cursor: "pointer",
   };
 
-  if (!session) {
+  if (!session || !cwd || !machine) {
     return <div className="mono faint" style={{ padding: 16, fontSize: 12 }}>Select a session to open its notes.</div>;
   }
 
   return (
     <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
       {/* Page list rail */}
-      <div style={{ width: 168, flexShrink: 0, borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column", minHeight: 0 }}>
+      <div style={{ width: 172, flexShrink: 0, borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column", minHeight: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 10px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
           <span className="mono" style={{ fontSize: 9, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--text-soft)", flex: 1 }}>Notes</span>
-          <button onClick={newNote} title="New note" style={{ ...railBtn, padding: "3px 8px" }}>＋</button>
+          <button onClick={newNote} title="New note" style={railBtn}>＋</button>
         </div>
         <div className="no-scrollbar" style={{ flex: 1, overflowY: "auto", padding: 6, display: "flex", flexDirection: "column", gap: 2 }}>
           {notes.length === 0 && (
@@ -191,7 +126,7 @@ export default function NotesPanel({ active }: { active: boolean }) {
             const on = n.path === activePath;
             return (
               <div key={n.path}
-                onClick={() => openNote(n.path)}
+                onClick={() => setActivePath(n.path)}
                 style={{
                   display: "flex", alignItems: "center", gap: 6, padding: "6px 8px", borderRadius: 7, cursor: "pointer",
                   background: on ? "rgb(var(--primary) / 0.20)" : "transparent",
@@ -214,49 +149,20 @@ export default function NotesPanel({ active }: { active: boolean }) {
         </div>
       </div>
 
-      {/* Editor + preview */}
+      {/* Editor */}
       <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", minHeight: 0 }}>
         {activePath ? (
           <>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 12px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
-              <span className="mono" style={{ fontSize: 11.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }} title={activePath}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 12px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
+              <span className="mono" style={{ fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }} title={activePath}>
                 {activePath.split("/").pop()}
               </span>
-              <span className="mono faint" style={{ fontSize: 9.5, flexShrink: 0 }}>
+              <span style={{ flex: 1 }} />
+              <span className="mono faint" style={{ fontSize: 9.5 }}>
                 {status === "saving" ? "saving…" : status === "saved" ? "✓ saved" : status === "error" ? "save failed" : ""}
               </span>
-              <span style={{ flex: 1 }} />
-              <div style={{ display: "flex", gap: 2, padding: 2, borderRadius: 999, border: "1px solid var(--border)", flexShrink: 0 }}>
-                {(["edit", "split", "preview"] as ViewMode[]).map((v) => (
-                  <button key={v} onClick={() => setView(v)} style={{
-                    padding: "3px 9px", borderRadius: 7, fontFamily: "var(--font-mono)", fontSize: 10, cursor: "pointer", border: 0,
-                    background: view === v ? "rgb(var(--primary) / 0.28)" : "transparent", color: view === v ? "#fff" : "var(--text-soft)",
-                  }}>{v}</button>
-                ))}
-              </div>
             </div>
-            <div style={{ flex: 1, minHeight: 0, display: "flex" }}>
-              {view !== "preview" && (
-                <textarea
-                  value={content}
-                  onChange={(e) => onChange(e.target.value)}
-                  spellCheck={false}
-                  placeholder="# Title&#10;&#10;Write markdown… ```mermaid blocks render on the right."
-                  className="no-scrollbar"
-                  style={{
-                    flex: 1, minWidth: 0, resize: "none", border: "none", outline: "none",
-                    background: "transparent", color: "var(--text)", padding: "12px 14px",
-                    fontFamily: "var(--font-mono)", fontSize: 12.5, lineHeight: 1.6,
-                    borderRight: view === "split" ? "1px solid var(--border)" : undefined,
-                  }}
-                />
-              )}
-              {view !== "edit" && (
-                <div className="no-scrollbar" style={{ flex: 1, minWidth: 0, overflowY: "auto", padding: "10px 16px" }}>
-                  {content.trim() ? <NotesMarkdown>{content}</NotesMarkdown> : <span className="mono faint" style={{ fontSize: 11 }}>nothing to preview</span>}
-                </div>
-              )}
-            </div>
+            <NotesEditor key={activePath} cwd={cwd} machine={machine} path={activePath} sessionId={session.id} onSaved={onSaved} />
           </>
         ) : (
           <div className="mono faint" style={{ padding: 18, fontSize: 12, lineHeight: 1.6 }}>

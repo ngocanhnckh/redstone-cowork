@@ -13,6 +13,9 @@
     "rebuild": "electron-rebuild -f -w node-pty"
   },
   "dependencies": {
+    "@blocknote/core": "^0.51.4",
+    "@blocknote/mantine": "^0.51.4",
+    "@blocknote/react": "^0.51.4",
     "@monaco-editor/react": "^4.7.0",
     "@rcw/shared": "workspace:*",
     "@xterm/addon-fit": "^0.10.0",
