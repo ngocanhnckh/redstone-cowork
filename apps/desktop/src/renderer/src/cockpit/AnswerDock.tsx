@@ -29,6 +29,7 @@ export default function AnswerDock({ decision, working, sessionId: sessionIdProp
   const interrupt = useStore((s) => s.interrupt);
   const sessions = useStore((s) => s.sessions);
   const caps = useStore((s) => s.caps);
+  const mode = useStore((s) => s.mode);
   const idleSessionId = sessionIdProp ?? focusId;
   // Slash-command suggestions for the focused session's host.
   const machine = (sessions.find((s) => s.id === (decision?.sessionId ?? idleSessionId)) ?? queue.find((s) => s.id === (decision?.sessionId ?? idleSessionId)))?.machine;
@@ -296,7 +297,7 @@ export default function AnswerDock({ decision, working, sessionId: sessionIdProp
           </span>
         )}
         <span className="mono faint" style={{ marginLeft: "auto", fontSize: 10.5 }}>
-          {working ? "send → queue · Stop → interrupt" : "answer → auto-advance to next"}
+          {working ? "send → queue · Stop → interrupt" : mode === "flow" ? "answer → auto-advance to next" : "answer → resolves this session"}
         </span>
       </div>
     </div>

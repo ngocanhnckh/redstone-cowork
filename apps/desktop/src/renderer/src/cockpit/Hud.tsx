@@ -665,6 +665,19 @@ const NO_SESSION = "__none__";
 function defaultConsole(): SessionConsole {
   return { view: "ctf", layout: "grid", win: defaultWins() };
 }
+
+// Named, reusable window-layout templates (a saved SessionConsole snapshot), shared
+// across sessions and persisted so they survive restarts.
+const TEMPLATES_KEY = "rcw.hud.templates.v1";
+function loadTemplates(): Record<string, SessionConsole> {
+  try {
+    const p = JSON.parse(localStorage.getItem(TEMPLATES_KEY) || "{}");
+    return p && typeof p === "object" ? p : {};
+  } catch {
+    return {};
+  }
+}
+const cloneConsole = (c: SessionConsole): SessionConsole => JSON.parse(JSON.stringify(c));
 function loadConsoles(): Record<string, SessionConsole> {
   try {
     const raw = localStorage.getItem(CONSOLE_KEY);
@@ -841,6 +854,11 @@ function HudConsole() {
   const canvasRef = useRef<HTMLDivElement>(null);
   const none = <div className="mono faint" style={{ padding: 14, fontSize: 11 }}>no session</div>;
   const [dockerMenu, setDockerMenu] = useState(false); // Docker dock icon right-click menu
+  // Saved window-layout templates + the save/load menu.
+  const [templates, setTemplates] = useState<Record<string, SessionConsole>>(loadTemplates);
+  useEffect(() => { try { localStorage.setItem(TEMPLATES_KEY, JSON.stringify(templates)); } catch { /* ignore */ } }, [templates]);
+  const [tplMenu, setTplMenu] = useState(false);
+  const [tplName, setTplName] = useState("");
   // Custom apps: a user-global list (persisted); window geometry is per session.
   const [apps, setApps] = useState<CustomApp[]>(loadApps);
   useEffect(() => { try { localStorage.setItem(APPS_KEY, JSON.stringify(apps)); } catch { /* ignore */ } }, [apps]);
@@ -892,6 +910,23 @@ function HudConsole() {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusKey]);
+
+  // Layout templates: snapshot the current session's console, or apply a saved one
+  // to it. Applying switches to Windows mode if the template is a windows layout.
+  const saveTemplate = () => {
+    const name = tplName.trim();
+    if (!name) return;
+    setTemplates((t) => ({ ...t, [name]: cloneConsole(cur) }));
+    setTplName("");
+  };
+  const applyTemplate = (name: string) => {
+    const tpl = templates[name];
+    if (!tpl) return;
+    const k = focusKeyRef.current;
+    setConsoles((all) => ({ ...all, [k]: cloneConsole(tpl) }));
+    setTplMenu(false);
+  };
+  const deleteTemplate = (name: string) => setTemplates((t) => { const n = { ...t }; delete n[name]; return n; });
 
   // First time Windows mode is shown with no saved layout, tile from the console size.
   useEffect(() => {
@@ -1124,6 +1159,51 @@ function HudConsole() {
               background: layout === l ? "rgb(var(--primary) / 0.28)" : "transparent", color: layout === l ? "#fff" : "var(--text-soft)",
             }}>{l === "grid" ? "Grid" : "Windows"}</button>
           ))}
+        </div>
+
+        {/* Layout templates: save the current arrangement / apply a saved one. */}
+        <div style={{ position: "relative" }}>
+          <button onClick={() => setTplMenu((m) => !m)} title="Save / load a window layout"
+            style={{
+              padding: "5px 11px", borderRadius: 999, fontFamily: "var(--font-mono)", fontSize: 10.5, cursor: "pointer", whiteSpace: "nowrap",
+              border: "1px solid var(--border)", background: tplMenu ? "rgb(var(--primary) / 0.22)" : "transparent", color: "var(--text-soft)",
+            }}>▤ Layouts</button>
+          {tplMenu && (
+            <>
+              <div onClick={() => setTplMenu(false)} style={{ position: "fixed", inset: 0, zIndex: 1500 }} />
+              <div style={{
+                position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 1600, width: 230, padding: 8, borderRadius: 12,
+                border: "1px solid var(--border-strong)", boxShadow: "0 12px 40px rgb(0 0 0 / 0.5)", ...WIN_GLASS,
+              }}>
+                <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+                  <input
+                    value={tplName}
+                    onChange={(e) => setTplName(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") saveTemplate(); }}
+                    placeholder="Template name…"
+                    style={{ flex: 1, minWidth: 0, border: "1px solid var(--border)", background: "rgba(255,255,255,0.03)", color: "var(--text)", borderRadius: 7, padding: "5px 8px", fontSize: 11.5, outline: "none", fontFamily: "var(--font-mono)" }}
+                  />
+                  <button onClick={saveTemplate} disabled={!tplName.trim()} title="Save current layout"
+                    className="glass-btn--clay" style={{ padding: "4px 10px", fontSize: 11, fontWeight: 600, opacity: tplName.trim() ? 1 : 0.5 }}>Save</button>
+                </div>
+                <div style={{ height: 1, background: "var(--border)", margin: "2px 0 6px" }} />
+                {Object.keys(templates).length === 0 ? (
+                  <div className="mono faint" style={{ fontSize: 10.5, padding: "4px 4px" }}>No saved layouts yet.</div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 2, maxHeight: 240, overflowY: "auto" }} className="no-scrollbar">
+                    {Object.keys(templates).sort().map((name) => (
+                      <div key={name} className="hud-rail-row" style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 8px", borderRadius: 7 }}>
+                        <span onClick={() => applyTemplate(name)} title="Apply this layout"
+                          style={{ flex: 1, minWidth: 0, cursor: "pointer", fontFamily: "var(--font-mono)", fontSize: 11.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
+                        <span className="mono faint" style={{ fontSize: 9 }}>{templates[name].layout === "windows" ? "win" : "grid"}</span>
+                        <span onClick={() => deleteTemplate(name)} title="Delete" style={{ cursor: "pointer", color: "var(--text-faint)", fontSize: 12 }}>✕</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </div>
       </div>
 
