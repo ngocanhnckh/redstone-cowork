@@ -412,11 +412,52 @@ ipcMain.handle(IPC.clipboardWrite, (_e, a: { text: string }) => {
   }
 });
 
+// Runs inside each preview guest: swap blocking window dialogs for a non-blocking
+// toast. Idempotent per document via the __rcwDialogsPatched guard.
+const NEUTRALIZE_DIALOGS_JS = `(() => {
+  if (window.__rcwDialogsPatched) return; window.__rcwDialogsPatched = true;
+  const toast = (label, msg) => {
+    try {
+      let host = document.getElementById('__rcw_dialog_toast');
+      if (!host) {
+        host = document.createElement('div'); host.id = '__rcw_dialog_toast';
+        host.style.cssText = 'position:fixed;top:12px;right:12px;z-index:2147483647;display:flex;flex-direction:column;gap:8px;pointer-events:none;font:13px/1.45 -apple-system,BlinkMacSystemFont,system-ui,sans-serif';
+        (document.body || document.documentElement).appendChild(host);
+      }
+      const el = document.createElement('div');
+      el.style.cssText = 'max-width:340px;padding:10px 12px;border-radius:8px;background:#1b1712;color:#f0e9dd;box-shadow:0 6px 24px rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.14);white-space:pre-wrap;word-break:break-word';
+      if (label) { const b = document.createElement('div'); b.textContent = label; b.style.cssText='font-size:10px;letter-spacing:.08em;text-transform:uppercase;opacity:.6;margin-bottom:3px'; el.appendChild(b); }
+      el.appendChild(document.createTextNode(String(msg == null ? '' : msg)));
+      host.appendChild(el);
+      setTimeout(() => { el.style.transition = 'opacity .4s'; el.style.opacity = '0'; setTimeout(() => el.remove(), 400); }, 4000);
+    } catch (e) {}
+  };
+  try {
+    window.alert = (msg) => { toast('alert', msg); };
+    window.confirm = (msg) => { toast('confirm \\u2014 auto OK', msg); return true; };
+    window.prompt = (msg, def) => { toast('prompt \\u2014 auto cancel', msg); return def == null ? null : def; };
+  } catch (e) {}
+})();`;
+
 // Right-click context menu (incl. Inspect Element) for the Browser tab's <webview>
 // guests. Wired in the main process because the guest's context-menu can't be
 // handled from the renderer.
 app.on("web-contents-created", (_e, contents) => {
   if (contents.getType() !== "webview") return;
+
+  // Neutralize blocking JS dialogs. A page calling alert()/confirm()/prompt()
+  // would otherwise pop a NATIVE MODAL that freezes the preview (and the app).
+  // Replace them with non-blocking equivalents that surface the text as a brief
+  // in-page toast: alert → toast, confirm → auto-OK (true), prompt → default/null.
+  // Injected at dom-ready and re-applied on navigation (each new document resets
+  // the override). Self-contained — no renderer wiring needed.
+  const patchDialogs = () => {
+    contents.executeJavaScript(NEUTRALIZE_DIALOGS_JS, true).catch(() => {/* page gone / not ready */});
+  };
+  contents.on("dom-ready", patchDialogs);
+  contents.on("did-navigate", patchDialogs);
+  contents.on("did-navigate-in-page", patchDialogs);
+
   contents.on("context-menu", (_ev, params) => {
     const nav = contents.navigationHistory;
     const menu = Menu.buildFromTemplate([
