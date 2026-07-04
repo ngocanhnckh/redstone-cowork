@@ -26,6 +26,18 @@ function ago(since: string | null | undefined): string {
 // do NOT make a session waiting — that was the bug that showed everything waiting).
 const ACTIONABLE = new Set(["question", "permission"]);
 
+// Manual drag order (session ids). When set, it takes precedence over the status
+// sort; sessions not in the list fall back to status order after the ordered ones.
+const ORDER_KEY = "rcw.hud.sessionOrder";
+function loadOrder(): string[] {
+  try {
+    const r = JSON.parse(localStorage.getItem(ORDER_KEY) || "[]");
+    return Array.isArray(r) ? r.filter((x) => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
 type Kind = "waiting" | "working" | "active" | "idle" | "lost";
 const META: Record<Kind, { label: string; color: string; pulse: boolean }> = {
   waiting: { label: "waiting for you", color: "rgb(var(--accent))", pulse: true },
@@ -38,10 +50,22 @@ const META: Record<Kind, { label: string; color: string; pulse: boolean }> = {
 export default function QueueRail() {
   const [, tick] = useState(0);
   const [hoverId, setHoverId] = useState<string | null>(null);
+  const [order, setOrder] = useState<string[]>(loadOrder);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [overId, setOverId] = useState<string | null>(null);
   useEffect(() => {
     const id = setInterval(() => tick((n) => n + 1), 1000);
     return () => clearInterval(id);
   }, []);
+
+  const saveOrder = (o: string[]) => {
+    setOrder(o);
+    try { localStorage.setItem(ORDER_KEY, JSON.stringify(o)); } catch { /* ignore */ }
+  };
+  const orderPos = (id: string): number => {
+    const i = order.indexOf(id);
+    return i === -1 ? Infinity : i;
+  };
 
   const sessions = useStore((s) => s.sessions);
   const queue = useStore((s) => s.queue);
@@ -69,6 +93,9 @@ export default function QueueRail() {
     .map((s) => ({ s, kind: kindOf(s) }))
     .filter((r) => r.kind !== "lost") // hide offline sessions from the rail
     .sort((a, b) => {
+      // Manual drag order wins; sessions not yet ordered fall back to status order.
+      const pa = orderPos(a.s.id), pb = orderPos(b.s.id);
+      if (pa !== pb) return pa - pb;
       if (rank[a.kind] !== rank[b.kind]) return rank[a.kind] - rank[b.kind];
       // Within "waiting", longest-waiting first.
       const aw = waitingSince.get(a.s.id) ? new Date(waitingSince.get(a.s.id)!).getTime() : Infinity;
@@ -77,6 +104,28 @@ export default function QueueRail() {
     });
 
   const waitingCount = rows.filter((r) => r.kind === "waiting").length;
+
+  // Drag to reorder. On drag start, snapshot the full visible order (preserving any
+  // existing manual order, dropping gone sessions, appending new ones) so dragging
+  // can reposition everything; on hover over another row, splice the dragged id in.
+  const onRowDragStart = (id: string) => {
+    const visible = rows.map((r) => r.s.id);
+    const merged = [...order.filter((x) => visible.includes(x)), ...visible.filter((x) => !order.includes(x))];
+    if (merged.join("|") !== order.join("|")) saveOrder(merged);
+    setDragId(id);
+  };
+  const onRowDragOver = (e: React.DragEvent, targetId: string) => {
+    e.preventDefault();
+    setOverId(targetId);
+    if (!dragId || dragId === targetId) return;
+    const list = (order.length ? order : rows.map((r) => r.s.id)).slice();
+    const from = list.indexOf(dragId), to = list.indexOf(targetId);
+    if (from === -1 || to === -1 || from === to) return;
+    list.splice(from, 1);
+    list.splice(to, 0, dragId);
+    saveOrder(list);
+  };
+  const onRowDragEnd = () => { setDragId(null); setOverId(null); };
 
   return (
     <div style={{ padding: "18px 14px", borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column", gap: 7, overflowY: "auto" }}>
@@ -97,15 +146,21 @@ export default function QueueRail() {
           <div
             key={session.id}
             className={focused ? "glass-inset" : "glass-inset glass-inset-hover"}
+            draggable
             onClick={() => setFocus(session.id)}
             onMouseEnter={() => setHoverId(session.id)}
             onMouseLeave={() => setHoverId((h) => (h === session.id ? null : h))}
+            onDragStart={() => onRowDragStart(session.id)}
+            onDragOver={(e) => onRowDragOver(e, session.id)}
+            onDrop={(e) => { e.preventDefault(); onRowDragEnd(); }}
+            onDragEnd={onRowDragEnd}
             style={{
               display: "flex", gap: 11, alignItems: "center", padding: "11px 12px", borderRadius: 13,
               cursor: "pointer", position: "relative", width: "100%",
-              opacity: kind === "lost" ? 0.55 : 1,
+              opacity: dragId === session.id ? 0.4 : kind === "lost" ? 0.55 : 1,
               background: focused ? `rgba(var(--primary), 0.12)` : undefined,
               borderLeft: focused ? `3px solid rgb(var(--primary-soft))` : undefined,
+              boxShadow: overId === session.id && dragId && dragId !== session.id ? "inset 0 2px 0 rgb(var(--accent))" : undefined,
             }}
           >
             {focused && (
@@ -147,6 +202,16 @@ export default function QueueRail() {
                 {[0, 1, 2].map((i) => <span key={i} className="eq-bar" style={{ animationDelay: `${i * 0.13}s` }} />)}
               </span>
             )}
+            {/* Drag-to-reorder hint — reserves its slot so nothing shifts on hover. */}
+            <span
+              title="Drag to reorder"
+              style={{
+                flexShrink: 0, width: 11, textAlign: "center", cursor: "grab", fontSize: 13, lineHeight: 1,
+                color: "var(--border-strong)", opacity: hoverId === session.id ? 0.7 : 0, transition: "opacity 120ms",
+              }}
+            >
+              ⠿
+            </span>
             {/* Dismiss (soft-close) — revealed on hover; small + stopPropagation so it
                 never selects the card. Muted, red-ish on hover to match the HUD. */}
             <button

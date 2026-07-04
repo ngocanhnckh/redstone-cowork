@@ -3,12 +3,13 @@ import { useStore } from "../store";
 
 // Browser Inspector: a Chrome-devtools-style Console + Network view for the
 // focused session's in-app browser, streamed from the main process over CDP.
-// Styled in the app's warm-ink glass theme (not Chrome grey).
+// Styled in the app's warm-ink glass theme — a lively, futuristic HUD console.
 
 type ConsoleRow = { rowId: number; level: string; text: string; source?: string; ts: number };
 type NetRow = {
   id: string; method: string; url: string; resType: string; ts: number;
   status?: number; mime?: string; size?: number; failed?: boolean; error?: string; canceled?: boolean;
+  endedAt?: number; // wall-clock completion (for the waterfall bar)
 };
 
 const MAX_CONSOLE = 600;
@@ -29,11 +30,26 @@ function fmtBytes(n?: number): string {
   const i = Math.min(u.length - 1, Math.floor(Math.log(n) / Math.log(1024)));
   return `${(n / 1024 ** i).toFixed(i ? 1 : 0)} ${u[i]}`;
 }
-function levelColor(level: string): string {
-  if (level === "error") return "#e0736a";
-  if (level === "warning" || level === "warn") return "rgb(var(--accent))";
-  if (level === "info") return "rgb(var(--primary-soft))";
-  return "var(--text-soft)";
+function fmtDur(ms: number): string {
+  if (ms < 0) return "";
+  return ms < 1000 ? `${Math.round(ms)}ms` : `${(ms / 1000).toFixed(2)}s`;
+}
+function fmtTime(ts: number): string {
+  if (!ts) return "";
+  const d = new Date(ts);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
+type LevelMeta = { label: string; color: string; text: string; bg: string };
+function levelMeta(level: string): LevelMeta {
+  if (level === "error")
+    return { label: "ERR", color: "#e0736a", text: "#f0a59d", bg: "rgba(224,115,106,0.09)" };
+  if (level === "warning" || level === "warn")
+    return { label: "WRN", color: "rgb(var(--accent))", text: "rgb(var(--accent))", bg: "rgb(var(--accent) / 0.07)" };
+  if (level === "info")
+    return { label: "INF", color: "rgb(var(--primary-soft))", text: "var(--text)", bg: "transparent" };
+  return { label: "LOG", color: "var(--text-faint)", text: "var(--text-soft)", bg: "transparent" };
 }
 function statusColor(r: NetRow): string {
   if (r.failed) return "#e0736a";
@@ -45,14 +61,52 @@ function statusColor(r: NetRow): string {
   return "#6bbf82";
 }
 
+const DT_CSS = `
+.dt-body { position: relative; }
+.dt-scan { position:absolute; inset:0; pointer-events:none; z-index:3; opacity:.22;
+  background: repeating-linear-gradient(to bottom, transparent 0 2px, rgb(var(--primary-soft) / 0.05) 3px, transparent 4px);
+  animation: dt-scan 7s linear infinite; }
+@keyframes dt-scan { from { background-position:0 0; } to { background-position:0 240px; } }
+.dt-row { animation: dt-in .2s ease both; }
+@keyframes dt-in { from { opacity:0; transform: translateX(-9px); } to { opacity:1; transform:none; } }
+.dt-nrow { animation: dt-fade .22s ease both; }
+@keyframes dt-fade { from { opacity:0; } to { opacity:1; } }
+.dt-crow { position:relative; transition: background .15s; }
+.dt-crow:hover { filter: brightness(1.18); }
+.dt-nrow:hover td { background: rgb(var(--primary) / 0.08); }
+.dt-badge { font-size:8.5px; font-weight:700; letter-spacing:.1em; padding:1px 5px; border-radius:5px;
+  border:1px solid currentColor; line-height:1.3; box-shadow: 0 0 8px -3px currentColor; }
+.dt-chip { font-size:9px; font-weight:600; letter-spacing:.04em; padding:1px 6px; border-radius:5px;
+  border:1px solid var(--border-strong); color:var(--text-soft); }
+.dt-pill { font-size:10px; font-weight:700; padding:1px 8px; border-radius:999px;
+  border:1px solid currentColor; box-shadow: inset 0 0 10px -6px currentColor, 0 0 8px -4px currentColor; }
+.dt-tab { position:relative; border:1px solid var(--border); border-radius:8px; padding:4px 12px; font-size:11.5px;
+  cursor:pointer; font-family:var(--font-mono); text-transform:uppercase; letter-spacing:.06em; transition: color .15s, background .15s; }
+.dt-tab-on { color:#fff; background:rgb(var(--primary) / 0.26); border-color:rgb(var(--primary-soft) / 0.5);
+  box-shadow: 0 0 14px -6px rgb(var(--primary-soft) / 0.9), inset 0 0 12px -8px rgb(var(--accent)); }
+.dt-tab-off { color:var(--text-soft); background:transparent; }
+.dt-count { margin-left:7px; font-size:9px; opacity:.7; padding:0 5px; border-radius:999px; background:rgb(255 255 255 / 0.06); }
+.dt-wf { position:relative; height:9px; border-radius:999px; background:rgb(255 255 255 / 0.05);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.04); overflow:hidden; }
+.dt-wf-bar { position:absolute; top:0; height:100%; min-width:2px; border-radius:999px; background:currentColor;
+  box-shadow: 0 0 9px -2px currentColor; opacity:.9;
+  background-image: linear-gradient(90deg, rgb(255 255 255 / 0.28), transparent 55%); }
+.dt-wf-live { animation: dt-wf-pulse 1s ease-in-out infinite; }
+@keyframes dt-wf-pulse { 0%,100% { opacity:.5; } 50% { opacity:1; } }
+`;
+
 export default function DevToolsPanel({ sessionId, active }: { sessionId?: string; active: boolean }) {
   const [tab, setTab] = useState<"console" | "network">("console");
   const [rows, setRows] = useState<ConsoleRow[]>([]);
   const [net, setNet] = useState<NetRow[]>([]);
   const [filter, setFilter] = useState("");
   const [attached, setAttached] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
   const rowSeq = useRef(0);
   const consoleEndRef = useRef<HTMLDivElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const netTailing = useRef(true); // network tab tails the newest request
+  const netIdleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const openBrowsers = useStore((s) => s.openBrowsers);
   const browserOpen = !!sessionId && openBrowsers.includes(sessionId);
 
@@ -78,9 +132,9 @@ export default function DevToolsPanel({ sessionId, active }: { sessionId?: strin
       } else if (kind === "net-response") {
         setNet((cur) => cur.map((r) => (r.id === ev.id ? { ...r, status: Number(ev.status) || 0, mime: String(ev.mime ?? ""), resType: (ev.resType as string) || r.resType } : r)));
       } else if (kind === "net-done") {
-        setNet((cur) => cur.map((r) => (r.id === ev.id ? { ...r, size: Number(ev.size) || 0 } : r)));
+        setNet((cur) => cur.map((r) => (r.id === ev.id ? { ...r, size: Number(ev.size) || 0, endedAt: Date.now() } : r)));
       } else if (kind === "net-failed") {
-        setNet((cur) => cur.map((r) => (r.id === ev.id ? { ...r, failed: true, error: String(ev.error ?? "failed"), canceled: !!ev.canceled } : r)));
+        setNet((cur) => cur.map((r) => (r.id === ev.id ? { ...r, failed: true, error: String(ev.error ?? "failed"), canceled: !!ev.canceled, endedAt: Date.now() } : r)));
       }
     });
     window.cowork.startDevtools(sessionId).then((r) => { if (r?.ok) setAttached(true); }).catch(() => {});
@@ -92,92 +146,149 @@ export default function DevToolsPanel({ sessionId, active }: { sessionId?: strin
     if (tab === "console") consoleEndRef.current?.scrollIntoView({ block: "end" });
   }, [rows.length, tab]);
 
+  // Tick a clock while the Network tab is live so the waterfall domain advances
+  // and in-flight bars keep growing until their request completes.
+  useEffect(() => {
+    if (tab !== "network" || !active) return;
+    const id = setInterval(() => setNow(Date.now()), 250);
+    return () => clearInterval(id);
+  }, [tab, active]);
+
+  // Network tab tails the newest request. If you scroll up it stops tailing, then
+  // resumes after 1 minute of no scrolling (same behaviour as the Docker log).
+  useEffect(() => {
+    if (tab === "network" && netTailing.current && bodyRef.current) {
+      bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
+    }
+  }, [net.length, tab]);
+  useEffect(() => () => { if (netIdleTimer.current) clearTimeout(netIdleTimer.current); }, []);
+  const onBodyScroll = () => {
+    if (tab !== "network") return;
+    const el = bodyRef.current;
+    if (!el) return;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
+    if (netIdleTimer.current) { clearTimeout(netIdleTimer.current); netIdleTimer.current = null; }
+    if (nearBottom) {
+      netTailing.current = true;
+    } else {
+      netTailing.current = false;
+      netIdleTimer.current = setTimeout(() => {
+        netTailing.current = true;
+        if (bodyRef.current) bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
+      }, 60_000);
+    }
+  };
+
   const clear = () => { setRows([]); setNet([]); };
   const q = filter.trim().toLowerCase();
   const visRows = q ? rows.filter((r) => r.text.toLowerCase().includes(q) || r.source?.toLowerCase().includes(q)) : rows;
   const visNet = q ? net.filter((r) => r.url.toLowerCase().includes(q) || String(r.status ?? "").includes(q)) : net;
+  const errCount = rows.reduce((n, r) => n + (r.level === "error" ? 1 : 0), 0);
+
+  // Waterfall domain: earliest request start → latest completion (or `now` for
+  // anything still in flight), so every bar is positioned on a shared timeline.
+  const t0 = visNet.length ? Math.min(...visNet.map((r) => r.ts)) : now;
+  const t1 = visNet.length ? Math.max(now, ...visNet.map((r) => r.endedAt ?? now)) : now + 1;
+  const span = Math.max(1, t1 - t0);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, minWidth: 0 }}>
+      <style>{DT_CSS}</style>
       {/* Toolbar */}
-      <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "7px 12px", borderBottom: "1px solid var(--border)", flexShrink: 0, background: "linear-gradient(180deg, rgb(var(--primary) / 0.05), transparent)" }}>
         {(["console", "network"] as const).map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            style={{
-              border: "1px solid var(--border)", borderRadius: 8, padding: "4px 11px", fontSize: 11.5, cursor: "pointer",
-              fontFamily: "var(--font-mono)", textTransform: "capitalize",
-              background: tab === t ? "rgb(var(--primary) / 0.26)" : "transparent",
-              color: tab === t ? "#fff" : "var(--text-soft)",
-            }}
-          >
+          <button key={t} onClick={() => setTab(t)} className={`dt-tab ${tab === t ? "dt-tab-on" : "dt-tab-off"}`}>
             {t}
-            <span className="mono" style={{ marginLeft: 6, opacity: 0.6, fontSize: 10 }}>{t === "console" ? rows.length : net.length}</span>
+            <span className="dt-count mono">{t === "console" ? rows.length : net.length}</span>
           </button>
         ))}
+        {errCount > 0 && (
+          <span className="dt-pill mono" style={{ color: "#e0736a", flexShrink: 0 }} title={`${errCount} console errors`}>✖ {errCount}</span>
+        )}
         <input
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
-          placeholder="Filter…"
+          placeholder="⌕ filter…"
           className="mono"
           style={{
-            flex: 1, minWidth: 0, marginLeft: 4, border: "1px solid var(--border)", background: "rgba(255,255,255,0.03)",
+            flex: 1, minWidth: 40, marginLeft: 2, border: "1px solid var(--border)", background: "rgba(255,255,255,0.03)",
             color: "var(--text)", borderRadius: 8, padding: "5px 10px", fontSize: 11.5, outline: "none",
           }}
         />
         <span title={attached ? "Inspector attached to the browser" : "Waiting for the browser…"}
-          className="mono faint" style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 10, flexShrink: 0 }}>
-          <span style={{ width: 6, height: 6, borderRadius: 999, background: attached ? "#6bbf82" : "var(--text-faint)" }} className={attached ? "hud-pulse" : undefined} />
+          className="mono" style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 9.5, letterSpacing: "0.1em", textTransform: "uppercase", flexShrink: 0, color: attached ? "#6bbf82" : "var(--text-faint)" }}>
+          <span style={{ width: 6, height: 6, borderRadius: 999, background: "currentColor", boxShadow: attached ? "0 0 8px 1px currentColor" : "none" }} className={attached ? "hud-pulse" : undefined} />
           {attached ? "live" : "idle"}
         </span>
-        <button onClick={clear} title="Clear" style={{ border: "1px solid var(--border)", background: "transparent", color: "var(--text-soft)", borderRadius: 8, padding: "5px 9px", fontSize: 11, cursor: "pointer" }}>⌫ clear</button>
+        <button onClick={clear} title="Clear" style={{ border: "1px solid var(--border)", background: "transparent", color: "var(--text-soft)", borderRadius: 8, padding: "5px 9px", fontSize: 11, cursor: "pointer", flexShrink: 0 }}>⌫</button>
       </div>
 
       {/* Body */}
-      <div className="no-scrollbar hud-term" style={{ flex: 1, minHeight: 0, overflow: "auto", position: "relative", background: "rgba(0,0,0,0.22)" }}>
+      <div ref={bodyRef} onScroll={onBodyScroll} className="no-scrollbar dt-body" style={{ flex: 1, minHeight: 0, overflow: "auto", background: "radial-gradient(120% 100% at 0% 0%, rgb(var(--primary) / 0.05), rgba(0,0,0,0.28) 70%)" }}>
+        <div className="dt-scan" />
         {!browserOpen ? (
-          <div className="mono faint" style={{ padding: 16, fontSize: 12, lineHeight: 1.6 }}>
+          <div className="mono faint" style={{ padding: 16, fontSize: 12, lineHeight: 1.6, position: "relative", zIndex: 1 }}>
             Open the <b style={{ color: "var(--text-soft)" }}>Browser</b> window for this session — the Inspector attaches to its console &amp; network traffic.
           </div>
         ) : tab === "console" ? (
-          <div style={{ padding: "6px 0", fontFamily: "var(--font-mono)", fontSize: 11.5, lineHeight: 1.55 }}>
+          <div style={{ padding: "6px 0", fontFamily: "var(--font-mono)", fontSize: 11.5, lineHeight: 1.55, position: "relative", zIndex: 1 }}>
             {visRows.length === 0 && <div className="faint" style={{ padding: "6px 14px" }}>No console output yet — interact with the page or reload it.</div>}
-            {visRows.map((r) => (
-              <div key={r.rowId} style={{ display: "flex", gap: 8, padding: "2px 14px", borderBottom: "1px solid rgb(255 255 255 / 0.02)", color: levelColor(r.level) }}>
-                <span style={{ flexShrink: 0, width: 12, textAlign: "center", opacity: 0.8 }} title={r.level}>
-                  {r.level === "error" ? "✖" : r.level === "warning" || r.level === "warn" ? "▲" : "›"}
-                </span>
-                <span style={{ flex: 1, minWidth: 0, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{r.text}</span>
-                {r.source && <span className="faint" style={{ flexShrink: 0, fontSize: 10, opacity: 0.6 }}>{r.source}</span>}
-              </div>
-            ))}
+            {visRows.map((r) => {
+              const m = levelMeta(r.level);
+              return (
+                <div key={r.rowId} className="dt-row dt-crow" style={{ display: "flex", gap: 9, alignItems: "flex-start", padding: "3px 12px 3px 9px", borderLeft: `2px solid ${m.color}`, background: m.bg }}>
+                  <span className="dt-badge" style={{ color: m.color, flexShrink: 0, marginTop: 1 }}>{m.label}</span>
+                  <span style={{ flex: 1, minWidth: 0, whiteSpace: "pre-wrap", overflowWrap: "anywhere", color: m.text }}>{r.text}</span>
+                  {r.source && <span className="faint" style={{ flexShrink: 0, fontSize: 9.5, opacity: 0.55 }}>{r.source}</span>}
+                  <span style={{ flexShrink: 0, fontSize: 9, opacity: 0.4, color: "var(--text-faint)", marginTop: 1 }}>{fmtTime(r.ts)}</span>
+                </div>
+              );
+            })}
             <div ref={consoleEndRef} />
           </div>
         ) : (
-          <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "var(--font-mono)", fontSize: 11 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "var(--font-mono)", fontSize: 11, position: "relative", zIndex: 1 }}>
             <thead>
-              <tr style={{ position: "sticky", top: 0, background: "color-mix(in srgb, var(--app-panel) 92%, transparent)", color: "var(--text-faint)", textAlign: "left" }}>
+              <tr style={{ position: "sticky", top: 0, background: "color-mix(in srgb, var(--app-panel) 92%, transparent)", color: "var(--text-faint)", textAlign: "left", zIndex: 2 }}>
                 <th style={thStyle}>Name</th>
-                <th style={{ ...thStyle, width: 58 }}>Method</th>
-                <th style={{ ...thStyle, width: 56 }}>Status</th>
-                <th style={{ ...thStyle, width: 84 }}>Type</th>
-                <th style={{ ...thStyle, width: 66, textAlign: "right" }}>Size</th>
+                <th style={{ ...thStyle, width: 62 }}>Method</th>
+                <th style={{ ...thStyle, width: 60 }}>Status</th>
+                <th style={{ ...thStyle, width: 78 }}>Type</th>
+                <th style={{ ...thStyle, width: 60, textAlign: "right" }}>Size</th>
+                <th style={{ ...thStyle, minWidth: 150 }}>Waterfall</th>
               </tr>
             </thead>
             <tbody>
               {visNet.length === 0 && (
-                <tr><td colSpan={5} className="faint" style={{ padding: "8px 12px" }}>No requests yet — reload the page to capture its traffic.</td></tr>
+                <tr><td colSpan={6} className="faint" style={{ padding: "8px 12px" }}>No requests yet — reload the page to capture its traffic.</td></tr>
               )}
-              {visNet.map((r) => (
-                <tr key={r.id} style={{ borderBottom: "1px solid rgb(255 255 255 / 0.03)" }} title={r.url}>
-                  <td style={{ ...tdStyle, color: "var(--text)", maxWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{basename(r.url)}</td>
-                  <td style={{ ...tdStyle, color: "var(--text-soft)" }}>{r.method}</td>
-                  <td style={{ ...tdStyle, color: statusColor(r) }}>{r.failed ? (r.canceled ? "canc" : "fail") : r.status || "—"}</td>
-                  <td style={{ ...tdStyle, color: "var(--text-faint)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.resType || (r.mime ? r.mime.split(";")[0] : "—")}</td>
-                  <td style={{ ...tdStyle, color: "var(--text-faint)", textAlign: "right" }}>{fmtBytes(r.size)}</td>
-                </tr>
-              ))}
+              {visNet.map((r) => {
+                const sc = statusColor(r);
+                const inflight = !r.endedAt && !r.failed;
+                const end = r.endedAt ?? now;
+                const left = ((r.ts - t0) / span) * 100;
+                const width = Math.max(1.5, ((end - r.ts) / span) * 100);
+                const barColor = inflight ? "rgb(var(--primary-soft))" : sc;
+                return (
+                  <tr key={r.id} className="dt-nrow" style={{ borderBottom: "1px solid rgb(255 255 255 / 0.03)" }} title={r.url}>
+                    <td style={{ ...tdStyle, color: "var(--text)", maxWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{basename(r.url)}</td>
+                    <td style={tdStyle}><span className="dt-chip">{r.method}</span></td>
+                    <td style={tdStyle}><span className="dt-pill" style={{ color: sc }}>{r.failed ? (r.canceled ? "CANC" : "FAIL") : r.status || "···"}</span></td>
+                    <td style={{ ...tdStyle, color: "var(--text-faint)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.resType || (r.mime ? r.mime.split(";")[0] : "—")}</td>
+                    <td style={{ ...tdStyle, color: "var(--text-soft)", textAlign: "right" }}>{fmtBytes(r.size)}</td>
+                    <td style={{ ...tdStyle, minWidth: 150 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <div className="dt-wf" style={{ flex: 1 }}>
+                          <div className={`dt-wf-bar ${inflight ? "dt-wf-live" : ""}`} style={{ left: `${left}%`, width: `${width}%`, color: barColor }} />
+                        </div>
+                        <span style={{ flexShrink: 0, width: 46, textAlign: "right", fontSize: 9.5, color: inflight ? "rgb(var(--primary-soft))" : "var(--text-faint)" }}>
+                          {inflight ? "···" : fmtDur(end - r.ts)}
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}
@@ -186,5 +297,5 @@ export default function DevToolsPanel({ sessionId, active }: { sessionId?: strin
   );
 }
 
-const thStyle: React.CSSProperties = { padding: "6px 10px", fontWeight: 500, fontSize: 10, letterSpacing: "0.05em", textTransform: "uppercase", borderBottom: "1px solid var(--border)" };
+const thStyle: React.CSSProperties = { padding: "6px 10px", fontWeight: 500, fontSize: 9.5, letterSpacing: "0.1em", textTransform: "uppercase", borderBottom: "1px solid var(--border)" };
 const tdStyle: React.CSSProperties = { padding: "4px 10px" };
