@@ -466,8 +466,10 @@ function ChatPane() {
   const queue = useStore((s) => s.queue);
   const decisions = useStore((s) => s.decisions);
   const pendingMap = useStore((s) => s.pending);
+  const instruct = useStore((s) => s.instruct);
   const scrollRef = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
+  const [compacted, setCompacted] = useState(false);
   // Collapsible "you last said" reminder bubble state (persisted, shared).
   const [ctxOpen, setCtxOpen] = useState(() => {
     try { return localStorage.getItem("rcw.chat.ctxBubble") !== "0"; } catch { return true; }
@@ -504,6 +506,22 @@ function ChatPane() {
           <ModeSelect session={session} />
           <span style={{ flex: 1 }} />
           <ContextGauge contextTokens={session.contextTokens} model={session.model} />
+          <button
+            onClick={() => {
+              instruct(session.id, "/compact");
+              setCompacted(true);
+              setTimeout(() => setCompacted(false), 1800);
+            }}
+            title="Compact this session's conversation (/compact) to free up context"
+            style={{
+              border: "1px solid var(--border)", background: compacted ? "rgb(var(--accent) / 0.2)" : "transparent",
+              color: compacted ? "rgb(var(--accent))" : "var(--text-soft)", borderRadius: 8, padding: "3px 9px",
+              fontSize: 10.5, fontFamily: "var(--font-mono)", cursor: "pointer", flexShrink: 0,
+              display: "inline-flex", alignItems: "center", gap: 5, whiteSpace: "nowrap",
+            }}
+          >
+            <span style={{ fontSize: 11, lineHeight: 1 }}>⇥⇤</span>{compacted ? "sent" : "compact"}
+          </button>
         </div>
       )}
       {/* Pinned reminder of the last message you sent to this session. */}
