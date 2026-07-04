@@ -74,7 +74,14 @@ body {
 }
 
 /* "Transparent app in HUD mode": drop the app-shell glass entirely so the
-   desktop shows straight through. Individual widgets keep their own glass. */
+   desktop shows straight through. Individual widgets keep their own glass.
+   Also neutralize the framing borders (title bar, rails, cards, dock, windows) —
+   nearly all use --border / --border-strong, so blanking those vars hides every
+   framing line at once for a clean, frameless look over the desktop. */
+.rcw-hud-clear {
+    --border: transparent;
+    --border-strong: transparent;
+}
 .rcw-hud-clear .glass-surface {
     background: transparent;
     -webkit-backdrop-filter: none;
@@ -93,6 +100,15 @@ body {
 .rcw-hud-clear .hud-window,
 .rcw-hud-clear .hud-dock {
     box-shadow: none !important;
+}
+.rcw-hud-clear .hud-corner {
+    display: none;
+}
+/* The aurora blobs (blurred, screen-blended color glows) read as a distorting
+   light haze over the raw desktop — hide them in clear mode regardless of the
+   background-animation setting. */
+.rcw-hud-clear .atmosphere {
+    display: none;
 }
 
 /* atmosphere — drifting gradient-mesh blobs the glass refracts */
