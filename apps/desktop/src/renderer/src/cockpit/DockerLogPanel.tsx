@@ -1,6 +1,30 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "../store";
 import { DockerContainer, DockerHostView } from "../types";
+
+const IDLE_RETURN_MS = 60_000; // after scrolling up, resume tailing after 1 min idle
+const escapeRegExp = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** Split `text` into React nodes, wrapping case-insensitive matches of `query` in
+ * <mark> (the active match tinted differently). Returns the node list + match count. */
+function highlight(text: string, query: string, current: number): { nodes: React.ReactNode[]; count: number } {
+  const nodes: React.ReactNode[] = [];
+  let re: RegExp;
+  try { re = new RegExp(escapeRegExp(query), "gi"); } catch { return { nodes: [text], count: 0 }; }
+  let last = 0, i = 0, m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) nodes.push(text.slice(last, m.index));
+    const idx = i++;
+    const active = idx === current;
+    nodes.push(
+      <mark key={idx} data-mi={idx} style={{ background: active ? "rgb(var(--accent))" : "rgb(var(--primary-soft) / 0.4)", color: active ? "#000" : "inherit", borderRadius: 2 }}>{m[0]}</mark>,
+    );
+    last = m.index + m[0].length;
+    if (m.index === re.lastIndex) re.lastIndex++; // guard against zero-length matches
+  }
+  if (last < text.length) nodes.push(text.slice(last));
+  return { nodes, count: i };
+}
 
 const MAX_CHARS = 200_000; // trim the rendered buffer so a chatty container can't grow unbounded
 const HIST = 48; // samples kept for the status sparklines (~4 min at the 5s poll)
@@ -78,8 +102,15 @@ export default function DockerLogPanel({ streamId, active }: { streamId: string;
   const bufRef = useRef("");
   const preRef = useRef<HTMLPreElement>(null);
   const stick = useRef(true);
+  const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef(container);
   containerRef.current = container;
+
+  // In-log find.
+  const [findOpen, setFindOpen] = useState(false);
+  const [find, setFind] = useState("");
+  const [matchIdx, setMatchIdx] = useState(0);
+  const finding = findOpen && find.length > 0;
 
   // Container list for the focused host — mirrors DockerDeck's per-host filter.
   useEffect(() => {
@@ -167,11 +198,45 @@ export default function DockerLogPanel({ streamId, active }: { streamId: string;
     };
   }, [active, machine, container]);
 
-  // Keep pinned to the bottom unless the user scrolled up.
+  // Tail: keep pinned to the bottom unless the user scrolled up (or is searching).
   useEffect(() => {
     const el = preRef.current;
-    if (el && stick.current) el.scrollTop = el.scrollHeight;
-  }, [text]);
+    if (el && stick.current && !finding) el.scrollTop = el.scrollHeight;
+  }, [text, finding]);
+
+  // Scroll handler: track whether we're at the bottom, and if the user scrolled up,
+  // arm a 1-minute idle timer that resumes tailing (reset on every scroll).
+  const onLogScroll = () => {
+    const el = preRef.current;
+    if (!el) return;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+    stick.current = atBottom;
+    if (idleTimer.current) { clearTimeout(idleTimer.current); idleTimer.current = null; }
+    if (!atBottom && !finding) {
+      idleTimer.current = setTimeout(() => {
+        stick.current = true;
+        const e2 = preRef.current;
+        if (e2) e2.scrollTop = e2.scrollHeight;
+      }, IDLE_RETURN_MS);
+    }
+  };
+  useEffect(() => () => { if (idleTimer.current) clearTimeout(idleTimer.current); }, []);
+
+  // Find: rendered nodes + match count, reset to first match as the query changes,
+  // and scroll the active match into view when navigating (not while streaming).
+  const highlighted = useMemo(() => (finding ? highlight(text, find, matchIdx) : null), [finding, text, find, matchIdx]);
+  const matchCount = highlighted?.count ?? 0;
+  useEffect(() => { setMatchIdx(0); }, [find]);
+  useEffect(() => { if (matchIdx >= matchCount) setMatchIdx(matchCount > 0 ? matchCount - 1 : 0); }, [matchCount, matchIdx]);
+  useEffect(() => {
+    if (!finding) return;
+    const t = setTimeout(() => {
+      (preRef.current?.querySelector(`[data-mi="${matchIdx}"]`) as HTMLElement | null)?.scrollIntoView({ block: "center" });
+    }, 0);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matchIdx, find, findOpen]);
+  const gotoMatch = (dir: 1 | -1) => { if (matchCount > 0) setMatchIdx((i) => (i + dir + matchCount) % matchCount); };
 
   const sel = containers.find((c) => shortName(c.name) === container) ?? null;
   const running = sel?.state === "running";
@@ -213,7 +278,33 @@ export default function DockerLogPanel({ streamId, active }: { streamId: string;
             <span className="mono faint" style={{ fontSize: 9.5 }}>-f</span>
           </span>
         )}
+        <button onClick={() => setFindOpen((v) => !v)} title="Find in log"
+          style={{ ...findBtn, flexShrink: 0, background: findOpen ? "rgb(var(--primary) / 0.22)" : "transparent", color: findOpen ? "var(--text)" : "var(--text-soft)" }}>⌕</button>
       </div>
+
+      {/* find bar */}
+      {findOpen && (
+        <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 10px", borderBottom: "1px solid var(--border)", background: "rgb(var(--primary) / 0.04)", flexShrink: 0 }}>
+          <input
+            autoFocus
+            value={find}
+            onChange={(e) => setFind(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") { e.preventDefault(); gotoMatch(e.shiftKey ? -1 : 1); }
+              if (e.key === "Escape") { setFindOpen(false); setFind(""); }
+            }}
+            placeholder="Find in log…"
+            className="mono"
+            style={{ flex: 1, minWidth: 0, background: "rgba(255,255,255,0.03)", border: "1px solid var(--border)", borderRadius: 7, padding: "4px 8px", fontSize: 11.5, color: "var(--text)", outline: "none" }}
+          />
+          <span className="mono faint" style={{ fontSize: 10, minWidth: 42, textAlign: "right" }}>
+            {matchCount ? `${matchIdx + 1}/${matchCount}` : find ? "0/0" : ""}
+          </span>
+          <button onClick={() => gotoMatch(-1)} disabled={!matchCount} title="Previous (⇧⏎)" style={findBtn}>▲</button>
+          <button onClick={() => gotoMatch(1)} disabled={!matchCount} title="Next (⏎)" style={findBtn}>▼</button>
+          <button onClick={() => { setFindOpen(false); setFind(""); }} title="Close (Esc)" style={findBtn}>✕</button>
+        </div>
+      )}
 
       {/* futuristic status graph for the selected container */}
       {sel && (
@@ -242,14 +333,14 @@ export default function DockerLogPanel({ streamId, active }: { streamId: string;
       <pre
         ref={preRef}
         className="no-scrollbar"
-        onScroll={() => { const el = preRef.current; if (el) stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40; }}
+        onScroll={onLogScroll}
         style={{
           flex: 1, minHeight: 0, overflowY: "auto", margin: 0, padding: "10px 12px",
           fontFamily: "var(--font-mono)", fontSize: 10.5, lineHeight: 1.5, color: "var(--text-soft)",
           whiteSpace: "pre-wrap", wordBreak: "break-word",
         }}
       >
-        {text || (
+        {finding ? highlighted?.nodes : text || (
           <span className="mono faint hud-blink">
             {machine && container ? "attaching to log stream…" : "no container selected"}
           </span>
@@ -258,3 +349,8 @@ export default function DockerLogPanel({ streamId, active }: { streamId: string;
     </div>
   );
 }
+
+const findBtn: React.CSSProperties = {
+  border: "1px solid var(--border)", background: "transparent", color: "var(--text-soft)",
+  borderRadius: 6, padding: "2px 7px", fontSize: 11, fontFamily: "var(--font-mono)", cursor: "pointer", lineHeight: 1.4,
+};
