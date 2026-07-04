@@ -815,7 +815,7 @@ function PanelShell({
       };
 
   return (
-    <div style={wrapperStyle} onPointerDown={grid ? undefined : onFocus}>
+    <div className="hud-window" style={wrapperStyle} onPointerDown={grid ? undefined : onFocus}>
       <div
         onPointerDown={startDrag}
         style={{
@@ -1286,7 +1286,7 @@ function HudConsole() {
 
         {/* macOS-style app dock — the single place to restore / focus windows. */}
         {!grid && (
-          <div style={{ ...WIN_GLASS, ...dockContainerStyle(dockPos, dockScale) }}>
+          <div className="hud-dock" style={{ ...WIN_GLASS, ...dockContainerStyle(dockPos, dockScale) }}>
             <span className="hud-corner" />
             {dockItems.map((p) => {
               const open = !wins.wins[p.id]?.min;

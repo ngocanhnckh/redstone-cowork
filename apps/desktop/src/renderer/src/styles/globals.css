@@ -81,6 +81,19 @@ body {
     backdrop-filter: none;
     box-shadow: none;
 }
+/* …and remove the full-bleed decoration that only reads as noise over the raw
+   desktop: the drifting HUD grid, the film-grain overlay, and the heavy window /
+   dock drop-shadows (box-shadow is inline, so !important is required). */
+.rcw-hud-clear .hud-grid {
+    display: none;
+}
+.rcw-hud-clear .grain::after {
+    display: none;
+}
+.rcw-hud-clear .hud-window,
+.rcw-hud-clear .hud-dock {
+    box-shadow: none !important;
+}
 
 /* atmosphere — drifting gradient-mesh blobs the glass refracts */
 .atmosphere {
