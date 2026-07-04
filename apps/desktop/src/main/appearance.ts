@@ -87,3 +87,14 @@ export function isFullscreen(win: BrowserWindow | undefined): boolean {
   if (!win) return false;
   return win.isFullScreen() || win.isSimpleFullScreen();
 }
+
+/**
+ * Toggle the macOS window vibrancy (the frosted "under-window" desktop material).
+ * With vibrancy OFF, transparent CSS regions show the RAW desktop instead of the
+ * frost — used for the "fully transparent HUD" look. No-op off macOS. Restoring
+ * re-applies "under-window" to match how the window was created.
+ */
+export function setVibrancy(win: BrowserWindow | undefined, on: boolean): void {
+  if (!win || process.platform !== "darwin") return;
+  win.setVibrancy(on ? "under-window" : null);
+}

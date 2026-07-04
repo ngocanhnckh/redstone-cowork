@@ -63,6 +63,7 @@ export const IPC = {
   bgImageClear: "api:appearance:bg:clear",
   simpleFullscreen: "api:appearance:fullscreen:simple",
   fullscreenState: "api:appearance:fullscreen:state",
+  setVibrancy: "api:appearance:vibrancy",
   filesList: "api:files:list",
   filesSearch: "api:files:search",
   filesRead: "api:files:read",

@@ -139,6 +139,7 @@ declare global {
       clearBgImage(): Promise<{ ok: boolean }>;
       setSimpleFullscreen(on: boolean): Promise<{ fullscreen: boolean }>;
       getFullscreenState(): Promise<{ fullscreen: boolean }>;
+      setVibrancy(on: boolean): Promise<{ ok: boolean }>;
 
       // File browser
       listFiles(a: {

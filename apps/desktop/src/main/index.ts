@@ -29,7 +29,7 @@ import {
 import { sshSetup, type SshSetupArgs } from "./ssh-setup";
 import { listDir, readFileAt, writeFileAt, deletePath, makeDir, createFile, uploadLocalFile, searchFiles } from "./files";
 import { gitInfo } from "./git";
-import { chooseBgImage, getBgImage, clearBgImage, setSimpleFullscreen, isFullscreen } from "./appearance";
+import { chooseBgImage, getBgImage, clearBgImage, setSimpleFullscreen, isFullscreen, setVibrancy } from "./appearance";
 import { IPC } from "../shared/ipc";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -157,6 +157,10 @@ function createWindow(): void {
     //     `transparent: true` here, and lower `--app-veil` toward 0%.
     vibrancy: "under-window",
     visualEffectState: "active",
+    // Transparent-capable so that when vibrancy is dropped (Appearance › "Transparent
+    // app in HUD mode") the RAW desktop shows through instead of an opaque backing.
+    // Vibrancy still provides the frosted look in every normal mode.
+    transparent: true,
     backgroundColor: "#00000000",
     webPreferences: {
       preload: join(here, "../preload/index.mjs"),
@@ -485,6 +489,7 @@ ipcMain.handle(IPC.bgImageGet, () => getBgImage());
 ipcMain.handle(IPC.bgImageClear, async () => { await clearBgImage(); return { ok: true }; });
 ipcMain.handle(IPC.simpleFullscreen, (e, a: { on: boolean }) => ({ fullscreen: setSimpleFullscreen(senderWindow(e), !!a?.on) }));
 ipcMain.handle(IPC.fullscreenState, (e) => ({ fullscreen: isFullscreen(senderWindow(e)) }));
+ipcMain.handle(IPC.setVibrancy, (e, a: { on: boolean }) => { setVibrancy(senderWindow(e), !!a?.on); return { ok: true }; });
 
 // File browser — list / read / write, local or over ssh. Main never throws across IPC.
 ipcMain.handle(IPC.filesList, (_e, a: { cwd: string; machine: string; dir: string }) =>

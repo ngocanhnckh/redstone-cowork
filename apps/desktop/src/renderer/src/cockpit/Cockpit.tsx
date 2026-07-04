@@ -37,11 +37,14 @@ export default function Cockpit() {
     return unsub;
   }, []);
 
-  // "Transparent app in HUD mode": strip the app-shell glass only while the HUD is
-  // the active mode, so the desktop shows straight through behind the widgets.
+  // "Transparent app in HUD mode": strip the app-shell glass AND drop the macOS
+  // window vibrancy (the frosted desktop material) while the HUD is active, so the
+  // RAW desktop shows straight through behind the widgets. Restore vibrancy in any
+  // other state so the normal frosted look returns.
   useEffect(() => {
-    const on = mode === "hud" && appr.hudClear;
-    document.documentElement.classList.toggle("rcw-hud-clear", on);
+    const clear = mode === "hud" && appr.hudClear;
+    document.documentElement.classList.toggle("rcw-hud-clear", clear);
+    window.cowork.setVibrancy(!clear).catch(() => {});
     return () => document.documentElement.classList.remove("rcw-hud-clear");
   }, [mode, appr.hudClear]);
 

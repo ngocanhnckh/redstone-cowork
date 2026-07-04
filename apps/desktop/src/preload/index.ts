@@ -214,6 +214,7 @@ contextBridge.exposeInMainWorld("cowork", {
   setSimpleFullscreen: (on: boolean): Promise<{ fullscreen: boolean }> =>
     ipcRenderer.invoke(IPC.simpleFullscreen, { on }),
   getFullscreenState: (): Promise<{ fullscreen: boolean }> => ipcRenderer.invoke(IPC.fullscreenState),
+  setVibrancy: (on: boolean): Promise<{ ok: boolean }> => ipcRenderer.invoke(IPC.setVibrancy, { on }),
 
   // File browser
   listFiles: (a: {
