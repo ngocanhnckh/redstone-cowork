@@ -29,6 +29,7 @@ import {
 import { sshSetup, type SshSetupArgs } from "./ssh-setup";
 import { listDir, readFileAt, writeFileAt, deletePath, makeDir, createFile, uploadLocalFile, searchFiles } from "./files";
 import { gitInfo } from "./git";
+import { chooseBgImage, getBgImage, clearBgImage, setSimpleFullscreen, isFullscreen } from "./appearance";
 import { IPC } from "../shared/ipc";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -476,6 +477,15 @@ ipcMain.handle(IPC.appGuestUnregister, (_e, a: { webContentsId: number }) => {
   return { ok: true };
 });
 
+// Appearance: custom background image + macOS "keep wallpaper in fullscreen".
+const senderWindow = (e: Electron.IpcMainInvokeEvent): BrowserWindow | undefined =>
+  BrowserWindow.fromWebContents(e.sender) ?? BrowserWindow.getAllWindows()[0] ?? undefined;
+ipcMain.handle(IPC.bgImageChoose, (e) => chooseBgImage(senderWindow(e)));
+ipcMain.handle(IPC.bgImageGet, () => getBgImage());
+ipcMain.handle(IPC.bgImageClear, async () => { await clearBgImage(); return { ok: true }; });
+ipcMain.handle(IPC.simpleFullscreen, (e, a: { on: boolean }) => ({ fullscreen: setSimpleFullscreen(senderWindow(e), !!a?.on) }));
+ipcMain.handle(IPC.fullscreenState, (e) => ({ fullscreen: isFullscreen(senderWindow(e)) }));
+
 // File browser — list / read / write, local or over ssh. Main never throws across IPC.
 ipcMain.handle(IPC.filesList, (_e, a: { cwd: string; machine: string; dir: string }) =>
   listDir(a)
@@ -553,6 +563,24 @@ const NEUTRALIZE_DIALOGS_JS = `(() => {
   } catch (e) {}
 })();`;
 
+// Cmd/Ctrl + Left/Right = browser Back/Forward inside <webview> guests. Injected
+// into the guest (keydown in a guest doesn't reach the host renderer). Skips
+// editable fields so it never steals the caret-to-line-start/end shortcut while
+// typing. Idempotent per document via __rcwNavKeys.
+const NAV_KEYS_JS = `(() => {
+  if (window.__rcwNavKeys) return; window.__rcwNavKeys = true;
+  document.addEventListener('keydown', (e) => {
+    const mod = e.metaKey || e.ctrlKey;
+    if (!mod || e.altKey || e.shiftKey) return;
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    const el = document.activeElement;
+    const tag = el && el.tagName;
+    if (el && (el.isContentEditable || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT')) return;
+    e.preventDefault();
+    if (e.key === 'ArrowLeft') history.back(); else history.forward();
+  }, true);
+})();`;
+
 // Right-click context menu (incl. Inspect Element) for the Browser tab's <webview>
 // guests. Wired in the main process because the guest's context-menu can't be
 // handled from the renderer.
@@ -588,6 +616,7 @@ app.on("web-contents-created", (_e, contents) => {
   // the override). Self-contained — no renderer wiring needed.
   const patchDialogs = () => {
     contents.executeJavaScript(NEUTRALIZE_DIALOGS_JS, true).catch(() => {/* page gone / not ready */});
+    contents.executeJavaScript(NAV_KEYS_JS, true).catch(() => {/* page gone / not ready */});
   };
   contents.on("dom-ready", patchDialogs);
   contents.on("did-navigate", patchDialogs);

@@ -206,6 +206,15 @@ contextBridge.exposeInMainWorld("cowork", {
     return () => ipcRenderer.removeListener(IPC.openInWorkspaceBrowser, handler);
   },
 
+  // Appearance — custom background image + macOS fullscreen-keeps-wallpaper.
+  chooseBgImage: (): Promise<{ ok: boolean; dataUrl?: string; error?: string }> =>
+    ipcRenderer.invoke(IPC.bgImageChoose),
+  getBgImage: (): Promise<string | null> => ipcRenderer.invoke(IPC.bgImageGet),
+  clearBgImage: (): Promise<{ ok: boolean }> => ipcRenderer.invoke(IPC.bgImageClear),
+  setSimpleFullscreen: (on: boolean): Promise<{ fullscreen: boolean }> =>
+    ipcRenderer.invoke(IPC.simpleFullscreen, { on }),
+  getFullscreenState: (): Promise<{ fullscreen: boolean }> => ipcRenderer.invoke(IPC.fullscreenState),
+
   // File browser
   listFiles: (a: {
     cwd: string;

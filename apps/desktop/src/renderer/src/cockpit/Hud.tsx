@@ -19,6 +19,7 @@ import ModeSelect from "./ModeSelect";
 import TokenSpendWidget from "./TokenSpendWidget";
 import SessionInfoWidget from "./SessionInfoWidget";
 import { GitInfo } from "../types";
+import { useDockPos, type DockPos } from "../appearance";
 
 // Motion (motion.dev) entrance choreography for the widget column.
 const STAGGER: Variants = { hidden: {}, show: { transition: { staggerChildren: 0.07, delayChildren: 0.05 } } };
@@ -863,6 +864,7 @@ function HudConsole() {
   const openTerminal = useStore((s) => s.openTerminal);
   const openUrlInBrowser = useStore((s) => s.openUrlInBrowser);
   const pendingBrowserOpen = useStore((s) => s.pendingBrowserOpen);
+  const dockPos = useDockPos();
   const canvasRef = useRef<HTMLDivElement>(null);
   const none = <div className="mono faint" style={{ padding: 14, fontSize: 11 }}>no session</div>;
   const [dockerMenu, setDockerMenu] = useState(false); // Docker dock icon right-click menu
@@ -1282,11 +1284,7 @@ function HudConsole() {
 
         {/* macOS-style app dock — the single place to restore / focus windows. */}
         {!grid && (
-          <div style={{
-            position: "absolute", left: "50%", bottom: 14, transform: "translateX(-50%)", zIndex: 1000,
-            display: "flex", alignItems: "flex-end", gap: 6, padding: "8px 10px 6px", borderRadius: 18,
-            border: "1px solid var(--border-strong)", boxShadow: "0 12px 40px rgb(0 0 0 / 0.5)", ...WIN_GLASS,
-          }}>
+          <div style={{ ...WIN_GLASS, ...dockContainerStyle(dockPos) }}>
             <span className="hud-corner" />
             {dockItems.map((p) => {
               const open = !wins.wins[p.id]?.min;
@@ -1320,7 +1318,7 @@ function HudConsole() {
                   {/* click-away backdrop */}
                   <div onClick={() => setDockerMenu(false)} style={{ position: "fixed", inset: 0, zIndex: 1500 }} />
                   <div style={{
-                    position: "absolute", bottom: "calc(100% + 8px)", left: "50%", transform: "translateX(-50%)", zIndex: 1600,
+                    ...dockMenuAnchor(dockPos), zIndex: 1600,
                     minWidth: 190, padding: 5, borderRadius: 12, border: "1px solid var(--border-strong)",
                     boxShadow: "0 12px 40px rgb(0 0 0 / 0.5)", ...WIN_GLASS,
                   }}>
@@ -1375,6 +1373,33 @@ function HudConsole() {
       )}
     </div>
   );
+}
+
+/** Where the HUD dock sits on the canvas — anchored per the user's Appearance pref. */
+function dockContainerStyle(pos: DockPos): React.CSSProperties {
+  const vertical = pos === "left" || pos === "right";
+  const base: React.CSSProperties = {
+    position: "absolute", zIndex: 1000, display: "flex", gap: 6, padding: "8px 10px 6px",
+    borderRadius: 18, border: "1px solid var(--border-strong)", boxShadow: "0 12px 40px rgb(0 0 0 / 0.5)",
+    flexDirection: vertical ? "column" : "row", alignItems: vertical ? "center" : "flex-end",
+  };
+  switch (pos) {
+    case "top": return { ...base, top: 14, left: "50%", transform: "translateX(-50%)" };
+    case "bottom-left": return { ...base, bottom: 14, left: 14 };
+    case "bottom-right": return { ...base, bottom: 14, right: 14 };
+    case "left": return { ...base, left: 14, top: "50%", transform: "translateY(-50%)" };
+    case "right": return { ...base, right: 14, top: "50%", transform: "translateY(-50%)" };
+    case "bottom":
+    default: return { ...base, bottom: 14, left: "50%", transform: "translateX(-50%)" };
+  }
+}
+
+/** Anchor a dock icon's popover so it opens toward the canvas interior. */
+function dockMenuAnchor(pos: DockPos): React.CSSProperties {
+  if (pos === "top") return { position: "absolute", top: "calc(100% + 8px)", left: "50%", transform: "translateX(-50%)" };
+  if (pos === "left") return { position: "absolute", left: "calc(100% + 8px)", top: "50%", transform: "translateY(-50%)" };
+  if (pos === "right") return { position: "absolute", right: "calc(100% + 8px)", top: "50%", transform: "translateY(-50%)" };
+  return { position: "absolute", bottom: "calc(100% + 8px)", left: "50%", transform: "translateX(-50%)" };
 }
 
 /** Shared dock-button style: highlighted when frontmost, dimmed when minimized. */

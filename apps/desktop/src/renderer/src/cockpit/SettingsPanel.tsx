@@ -1,6 +1,15 @@
 import { useEffect, useState } from "react";
 import { useStore } from "../store";
 import AccessKeysManager from "./AccessKeysManager";
+import {
+  type Appearance,
+  loadAppearance,
+  saveAppearance,
+  applyAppearance,
+  applyBgImage,
+  DOCK_POSITIONS,
+  DOCK_LABEL,
+} from "../appearance";
 
 /**
  * Connection settings — reachable any time from the title bar. Lets the user see
@@ -20,6 +29,32 @@ export default function SettingsPanel() {
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState<{ kind: "idle" | "saving" | "ok" | "err"; text?: string }>({ kind: "idle" });
 
+  // Appearance prefs (client-side, applied live). Background image + fullscreen
+  // state live in the main process; we mirror their presence here.
+  const [appr, setAppr] = useState<Appearance>(loadAppearance);
+  const [hasBg, setHasBg] = useState(false);
+  const [bgBusy, setBgBusy] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
+  const patchAppr = (p: Partial<Appearance>) => {
+    setAppr((cur) => { const next = { ...cur, ...p }; saveAppearance(next); applyAppearance(next); return next; });
+  };
+  const chooseBg = async () => {
+    setBgBusy(true);
+    try {
+      const r = await window.cowork.chooseBgImage();
+      if (r.ok && r.dataUrl) { applyBgImage(r.dataUrl); setHasBg(true); }
+      else if (r.error) setStatus({ kind: "err", text: r.error });
+    } finally { setBgBusy(false); }
+  };
+  const removeBg = async () => {
+    await window.cowork.clearBgImage().catch(() => {});
+    applyBgImage(null);
+    setHasBg(false);
+  };
+  const toggleFullscreen = async () => {
+    try { const r = await window.cowork.setSimpleFullscreen(!fullscreen); setFullscreen(r.fullscreen); } catch { /* ignore */ }
+  };
+
   // Load the current server URL each time the panel opens (tokens are never read
   // back). Remember whether the current session is org (Redstone) and ask the
   // server whether it offers Redstone sign-in, so we can show the right controls.
@@ -33,6 +68,9 @@ export default function SettingsPanel() {
       setMode(cfg?.isOrg ? "redstone" : "token");
       window.cowork.authConfig(url).then((c) => setRedstoneOn(!!c.redstone)).catch(() => {});
     });
+    setAppr(loadAppearance());
+    window.cowork.getBgImage().then((u) => setHasBg(!!u)).catch(() => {});
+    window.cowork.getFullscreenState().then((s) => setFullscreen(s.fullscreen)).catch(() => {});
   }, [open]);
 
   if (!open) return null;
@@ -152,8 +190,134 @@ export default function SettingsPanel() {
           </button>
         </div>
 
+        <div style={{ height: 1, background: "var(--border)", margin: "24px 0 18px" }} />
+
+        {/* ---- Appearance ---- */}
+        <span className="kicker">Appearance</span>
+        <h2 className="display" style={{ fontSize: 22, margin: "2px 0 16px" }}>Look &amp; feel</h2>
+
+        <SwitchRow
+          label="Background animation"
+          hint="The drifting aurora glow behind the app."
+          on={appr.bgAnim}
+          onToggle={() => patchAppr({ bgAnim: !appr.bgAnim })}
+        />
+
+        <SliderRow
+          label="App tint"
+          hint="Opacity of the app over the wallpaper — lower = more transparent / more wallpaper shows through."
+          value={appr.veil}
+          min={0}
+          max={20}
+          suffix="%"
+          onChange={(v) => patchAppr({ veil: v })}
+        />
+
+        <SliderRow
+          label="Blur"
+          hint="Frosted-glass blur of the app surface (and any background image)."
+          value={appr.blur}
+          min={0}
+          max={60}
+          suffix="px"
+          onChange={(v) => patchAppr({ blur: v })}
+        />
+
+        <label className="soft" style={{ ...labelStyle, marginTop: 18 }}>Dock position</label>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6, marginBottom: 16 }}>
+          {DOCK_POSITIONS.map((pos) => (
+            <button
+              key={pos}
+              onClick={() => patchAppr({ dockPos: pos })}
+              style={{
+                padding: "8px 4px", fontSize: 11, fontWeight: 600, cursor: "pointer", borderRadius: 9,
+                border: appr.dockPos === pos ? "1px solid rgb(var(--accent) / 0.6)" : "1px solid var(--border)",
+                background: appr.dockPos === pos ? "rgb(var(--primary) / 0.28)" : "transparent",
+                color: appr.dockPos === pos ? "#fff" : "var(--text-soft)",
+              }}
+            >
+              {DOCK_LABEL[pos]}
+            </button>
+          ))}
+        </div>
+
+        <label className="soft" style={labelStyle}>Background image</label>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
+          <button onClick={chooseBg} disabled={bgBusy} className="glass-btn--clay" style={{ padding: "9px 16px", fontSize: 13, fontWeight: 600 }}>
+            {bgBusy ? "…" : hasBg ? "Replace image…" : "Choose image…"}
+          </button>
+          {hasBg && (
+            <button onClick={removeBg} style={{ ...iconBtn, width: "auto", padding: "8px 14px", borderRadius: 999, fontSize: 12.5 }}>
+              Remove
+            </button>
+          )}
+          <span className="faint mono" style={{ fontSize: 11 }}>{hasBg ? "✓ image set" : "using desktop wallpaper"}</span>
+        </div>
+        <p className="faint" style={{ fontSize: 11, margin: "0 2px 18px", lineHeight: 1.5 }}>
+          Shown blurred &amp; tinted behind the app (max 12&nbsp;MB). Leave empty for the transparent, see-through desktop look.
+        </p>
+
+        <SwitchRow
+          label="Keep wallpaper in fullscreen"
+          hint="macOS native fullscreen hides the desktop behind a transparent window. This uses “simple” fullscreen so your wallpaper stays visible."
+          on={fullscreen}
+          onToggle={toggleFullscreen}
+        />
+
         <AccessKeysManager />
       </div>
+    </div>
+  );
+}
+
+/** A labelled on/off pill switch. */
+function SwitchRow({ label, hint, on, onToggle }: { label: string; hint?: string; on: boolean; onToggle: () => void }) {
+  return (
+    <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 16 }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13 }}>{label}</div>
+        {hint && <div className="faint" style={{ fontSize: 11, marginTop: 3, lineHeight: 1.5 }}>{hint}</div>}
+      </div>
+      <button
+        onClick={onToggle}
+        role="switch"
+        aria-checked={on}
+        style={{
+          flexShrink: 0, width: 42, height: 24, borderRadius: 999, border: "1px solid var(--border-strong)",
+          background: on ? "rgb(var(--primary) / 0.55)" : "rgba(255,255,255,0.05)", cursor: "pointer",
+          position: "relative", transition: "background .18s", marginTop: 1,
+        }}
+      >
+        <span style={{
+          position: "absolute", top: 2, left: on ? 20 : 2, width: 18, height: 18, borderRadius: 999,
+          background: "#fff", transition: "left .18s",
+        }} />
+      </button>
+    </div>
+  );
+}
+
+/** A labelled range slider that live-reports its value. */
+function SliderRow({
+  label, hint, value, min, max, suffix, onChange,
+}: {
+  label: string; hint?: string; value: number; min: number; max: number; suffix?: string; onChange: (v: number) => void;
+}) {
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+        <span style={{ fontSize: 13, flex: 1 }}>{label}</span>
+        <span className="mono faint" style={{ fontSize: 11 }}>{value}{suffix}</span>
+      </div>
+      {hint && <div className="faint" style={{ fontSize: 11, margin: "3px 0 6px", lineHeight: 1.5 }}>{hint}</div>}
+      <input
+        type="range"
+        min={min}
+        max={max}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        style={{ width: "100%", accentColor: "rgb(var(--primary-soft))", cursor: "pointer" }}
+      />
     </div>
   );
 }

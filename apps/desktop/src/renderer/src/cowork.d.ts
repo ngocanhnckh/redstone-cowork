@@ -133,6 +133,13 @@ declare global {
       // browser (a custom app left its domain). Returns an unsubscribe fn.
       onOpenInWorkspaceBrowser(cb: (a: { url: string }) => void): () => void;
 
+      // Appearance — custom background image + macOS fullscreen-keeps-wallpaper.
+      chooseBgImage(): Promise<{ ok: boolean; dataUrl?: string; error?: string }>;
+      getBgImage(): Promise<string | null>;
+      clearBgImage(): Promise<{ ok: boolean }>;
+      setSimpleFullscreen(on: boolean): Promise<{ fullscreen: boolean }>;
+      getFullscreenState(): Promise<{ fullscreen: boolean }>;
+
       // File browser
       listFiles(a: {
         cwd: string;
