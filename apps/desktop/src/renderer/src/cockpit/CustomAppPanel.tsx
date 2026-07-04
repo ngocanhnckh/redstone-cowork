@@ -20,7 +20,15 @@ export type CustomApp = {
   /** When set, the app only shows in this workspace's dock (a `machine:cwd` key).
    * Null/absent = global (shows in every workspace). */
   workspace?: string | null;
+  /** When true, the app uses its OWN persistent browser profile (isolated cookies,
+   * storage, logins, cache) instead of the shared global one. */
+  sessionProfile?: boolean;
 };
+
+/** The webview partition for an app: its own persistent profile, or the shared one. */
+export function appPartition(app: CustomApp): string {
+  return app.sessionProfile ? `persist:app-${app.id}` : "persist:rcw-web";
+}
 
 const navBtn: React.CSSProperties = {
   border: "1px solid var(--border)", background: "transparent", color: "var(--text-soft)",
@@ -65,7 +73,7 @@ export default function CustomAppPanel({ app, onFavicon }: { app: CustomApp; onF
         <webview
           ref={ref as unknown as React.Ref<HTMLElement>}
           src={app.url}
-          partition="persist:rcw-web"
+          partition={appPartition(app)}
           allowpopups
           style={{ width: "100%", height: "100%", border: 0 }}
         />
