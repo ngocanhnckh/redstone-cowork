@@ -30,6 +30,18 @@ export default function BgVideo() {
     if (p) p.catch(() => { /* autoplay may still be gated on some setups */ });
   }, [url, videoMuted]);
 
+  // Safety net: if the video ever pauses (e.g. an occlusion/fullscreen throttle
+  // slips through), resume it — the background video should never sit frozen.
+  useEffect(() => {
+    const v = ref.current;
+    if (!v || !url) return;
+    const resume = () => { const p = v.play(); if (p) p.catch(() => {}); };
+    v.addEventListener("pause", resume);
+    const onVis = () => { if (document.visibilityState === "visible") resume(); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => { v.removeEventListener("pause", resume); document.removeEventListener("visibilitychange", onVis); };
+  }, [url]);
+
   if (!url) return null;
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: -1, overflow: "hidden", pointerEvents: "none", background: "#000" }}>

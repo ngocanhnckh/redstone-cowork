@@ -177,6 +177,9 @@ function createWindow(): void {
       webviewTag: true,
       // Allow the looping background video to autoplay WITH sound (no gesture).
       autoplayPolicy: "no-user-gesture-required",
+      // Don't throttle the renderer when the window looks occluded — otherwise the
+      // background video freezes on a frame in (transparent) fullscreen.
+      backgroundThrottling: false,
     },
   });
 
