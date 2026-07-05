@@ -56,15 +56,14 @@ export default function Cockpit() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fullscreen]);
 
-  // "Transparent app in HUD mode": strip the shell glass + decoration so the
-  // frosted desktop (vibrancy) shows through the center/gaps, with the widgets
-  // keeping their own glass background (via CSS .rcw-hud-clear) so text stays
-  // readable. NOTE: we keep vibrancy ON here — the window is not `transparent:true`
-  // (so native fullscreen doesn't blank), meaning dropping vibrancy would show an
-  // opaque black backing rather than the raw desktop. Frosted desktop it is.
+  // "Transparent app in HUD mode": drop the window vibrancy so the RAW desktop
+  // shows through the center/gaps, and strip the shell glass + decoration. The
+  // widgets keep their own frosted glass background (via CSS .rcw-hud-clear) so
+  // widget text stays readable.
   useEffect(() => {
     const clear = mode === "hud" && appr.hudClear;
     document.documentElement.classList.toggle("rcw-hud-clear", clear);
+    window.cowork.setVibrancy(!clear).catch(() => {});
     return () => document.documentElement.classList.remove("rcw-hud-clear");
   }, [mode, appr.hudClear]);
 

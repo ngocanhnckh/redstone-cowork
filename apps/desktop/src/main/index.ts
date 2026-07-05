@@ -164,11 +164,11 @@ function createWindow(): void {
     //     `transparent: true` here, and lower `--app-veil` toward 0%.
     vibrancy: "under-window",
     visualEffectState: "active",
-    // NOTE: deliberately NOT `transparent: true`. A transparent macOS window paints
-    // BLANK under setSimpleFullScreen (the content view detaches during the style-mask
-    // change), which broke "keep wallpaper in fullscreen". The vibrancy material still
-    // provides the frosted-desktop look, incl. in Transparent-HUD mode. Trade-off: HUD
-    // "clear" mode shows the frosted (not raw) desktop, so native fullscreen keeps working.
+    // Transparent-capable so that when vibrancy is dropped (Appearance › "Transparent
+    // app in HUD mode") the RAW desktop shows through instead of an opaque backing.
+    // (This is INNOCENT of the fullscreen-blank bug — it predates it; the real cause
+    // was backgroundThrottling, see webPreferences below.)
+    transparent: true,
     backgroundColor: "#00000000",
     webPreferences: {
       preload: join(here, "../preload/index.mjs"),
@@ -178,9 +178,11 @@ function createWindow(): void {
       webviewTag: true,
       // Allow the looping background video to autoplay WITH sound (no gesture).
       autoplayPolicy: "no-user-gesture-required",
-      // Don't throttle the renderer when the window looks occluded — otherwise the
-      // background video freezes on a frame in (transparent) fullscreen.
-      backgroundThrottling: false,
+      // NOTE: do NOT set `backgroundThrottling: false`. macOS marks the fullscreen
+      // window "occluded"; forcing the renderer to keep painting into that occluded
+      // surface produced a BLANK UI in fullscreen. Default throttling keeps the last
+      // frame instead. The background video's own pause/visibility auto-resume
+      // (BgVideo.tsx) keeps it playing without needing to disable throttling.
     },
   });
 

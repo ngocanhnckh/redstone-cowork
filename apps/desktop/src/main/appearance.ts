@@ -70,9 +70,7 @@ export async function clearBgImage(): Promise<void> {
  * Toggle macOS "simple" fullscreen. Native fullscreen moves the window to its own
  * Space with a black backing, so the vibrancy/desktop wallpaper disappears behind
  * it. Simple fullscreen just resizes the window to fill the current screen — the
- * wallpaper (and vibrancy) stays visible, the menu bar/dock hide. This only works
- * because the window is NOT `transparent: true` (a transparent window blanks under
- * simple fullscreen — see the window-creation note). No-op off macOS.
+ * wallpaper (and vibrancy) stays visible, the menu bar/dock hide. No-op off macOS.
  */
 export function setSimpleFullscreen(win: BrowserWindow | undefined, on: boolean): boolean {
   if (!win) return false;
@@ -82,16 +80,6 @@ export function setSimpleFullscreen(win: BrowserWindow | undefined, on: boolean)
   }
   if (on && win.isFullScreen()) win.setFullScreen(false); // leave native first
   win.setSimpleFullScreen(on);
-  // Some macOS/Electron combos leave the content blank right after the simple-
-  // fullscreen style-mask change until the view is nudged to re-lay-out. Reassert
-  // vibrancy and force a repaint once the transition settles.
-  const kick = () => {
-    if (win.isDestroyed()) return;
-    win.setVibrancy("under-window");
-    if (!win.webContents.isDestroyed()) win.webContents.invalidate();
-  };
-  kick();
-  setTimeout(kick, 60);
   return win.isSimpleFullScreen();
 }
 
