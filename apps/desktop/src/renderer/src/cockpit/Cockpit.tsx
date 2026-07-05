@@ -1,4 +1,4 @@
-import { useEffect, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { useStore } from "../store";
 import { startCockpit } from "../store";
 import QueueRail from "./QueueRail";
@@ -32,10 +32,29 @@ export default function Cockpit() {
 
   const appr = useAppearance();
 
+  // Quick "keep-wallpaper" fullscreen toggle (mirrors Settings › Appearance).
+  const [fullscreen, setFullscreen] = useState(false);
+  useEffect(() => { window.cowork.getFullscreenState().then((s) => setFullscreen(s.fullscreen)).catch(() => {}); }, []);
+  const toggleFullscreen = async () => {
+    try { const r = await window.cowork.setSimpleFullscreen(!fullscreen); setFullscreen(r.fullscreen); }
+    catch { /* ignore */ }
+  };
+
   useEffect(() => {
     const unsub = startCockpit();
     return unsub;
   }, []);
+
+  // ⌃⌘F (F11 elsewhere) toggles keep-wallpaper fullscreen.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const combo = (e.ctrlKey && e.metaKey && (e.key === "f" || e.key === "F")) || e.key === "F11";
+      if (combo) { e.preventDefault(); toggleFullscreen(); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fullscreen]);
 
   // "Transparent app in HUD mode": drop the window vibrancy so the RAW desktop
   // shows through the center/gaps, and strip the shell glass + decoration. The
@@ -232,6 +251,24 @@ export default function Cockpit() {
             }}
           >
             {contextCollapsed ? "◧ details" : "▦ details"}
+          </button>
+          {/* Fullscreen quick toggle (keeps wallpaper visible) */}
+          <button
+            onClick={toggleFullscreen}
+            title={fullscreen ? "Exit fullscreen (⌃⌘F)" : "Fullscreen — keeps wallpaper (⌃⌘F)"}
+            style={{
+              ...noDrag,
+              border: "1px solid var(--border)",
+              background: fullscreen ? "rgb(var(--primary) / 0.18)" : "transparent",
+              color: "var(--text-soft)",
+              borderRadius: 8,
+              padding: "4px 10px",
+              fontSize: 13,
+              lineHeight: 1,
+              cursor: "pointer",
+            }}
+          >
+            {fullscreen ? "🡼" : "⛶"}
           </button>
           {/* Flow / Grid toggle */}
           <div

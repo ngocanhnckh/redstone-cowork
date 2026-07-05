@@ -1,4 +1,4 @@
-import { app, dialog, BrowserWindow } from "electron";
+import { app, dialog, BrowserWindow, screen } from "electron";
 import { promises as fs } from "node:fs";
 import { statSync, readFileSync } from "node:fs";
 import path from "node:path";
@@ -66,11 +66,24 @@ export async function clearBgImage(): Promise<void> {
   }
 }
 
+// The window bounds before we filled the screen, so exiting fullscreen restores
+// the previous size/position.
+let savedBounds: Electron.Rectangle | null = null;
+let manualFull = false;
+
 /**
- * Toggle macOS "simple" fullscreen. Native fullscreen moves the window to its own
- * Space with a black backing, so the vibrancy/desktop wallpaper disappears behind
- * a transparent window. Simple fullscreen just resizes the window to fill the
- * current screen — the wallpaper (and vibrancy) stays visible. No-op off macOS.
+ * Toggle a "keep the wallpaper visible" fullscreen on macOS.
+ *
+ * Neither of Electron's built-ins works for our transparent window:
+ *  - Native fullscreen (`setFullScreen`) moves the window to its own Space with a
+ *    black backing, so the desktop wallpaper vanishes behind the transparent window.
+ *  - Simple fullscreen (`setSimpleFullScreen`) changes the NSWindow style mask,
+ *    which detaches the transparent web content view — it renders BLANK.
+ *
+ * Instead we do a plain borderless RESIZE: remember the current bounds, then grow
+ * the window to fill the whole display. It's still an ordinary (transparent) window
+ * on the current Space, so the wallpaper shows through and the content never blanks.
+ * Off macOS we fall back to Electron's native fullscreen.
  */
 export function setSimpleFullscreen(win: BrowserWindow | undefined, on: boolean): boolean {
   if (!win) return false;
@@ -78,29 +91,25 @@ export function setSimpleFullscreen(win: BrowserWindow | undefined, on: boolean)
     win.setFullScreen(on);
     return win.isFullScreen();
   }
-  if (on && win.isFullScreen()) win.setFullScreen(false); // leave native first
-  win.setSimpleFullScreen(on);
-  // A transparent window can paint BLANK after the simple-fullscreen style-mask
-  // change: the web content view detaches from its vibrancy backing and stops
-  // compositing. Reassert vibrancy and nudge a repaint (1px resize round-trip)
-  // once the transition settles so the UI comes back. Harmless when turning off.
-  const repaint = () => {
-    if (win.isDestroyed()) return;
-    win.setVibrancy(vibrancyOn ? "under-window" : null); // reassert current state, don't force HUD-clear back on
-    const b = win.getBounds();
-    win.setBounds({ ...b, height: b.height + 1 });
-    win.setBounds(b);
-    if (!win.webContents.isDestroyed()) win.webContents.invalidate();
-  };
-  repaint();
-  setTimeout(repaint, 80); // again after the fullscreen transition completes
-  return win.isSimpleFullScreen();
+  if (win.isFullScreen()) win.setFullScreen(false); // never use the black-Space path
+  if (win.isSimpleFullScreen()) win.setSimpleFullScreen(false); // nor the blanking one
+  if (on) {
+    if (!manualFull) savedBounds = win.getBounds();
+    const disp = screen.getDisplayMatching(win.getBounds());
+    win.setBounds(disp.bounds); // edge-to-edge over the current display, wallpaper intact
+    manualFull = true;
+  } else {
+    if (savedBounds) win.setBounds(savedBounds);
+    savedBounds = null;
+    manualFull = false;
+  }
+  return manualFull;
 }
 
-/** Whether the window is in either native or simple fullscreen right now. */
+/** Whether the window is in either native or our manual keep-wallpaper fullscreen. */
 export function isFullscreen(win: BrowserWindow | undefined): boolean {
   if (!win) return false;
-  return win.isFullScreen() || win.isSimpleFullScreen();
+  return win.isFullScreen() || manualFull;
 }
 
 // ---------------------------------------------------------------------------
@@ -161,9 +170,7 @@ export async function clearBgVideo(): Promise<void> {
  * frost — used for the "fully transparent HUD" look. No-op off macOS. Restoring
  * re-applies "under-window" to match how the window was created.
  */
-let vibrancyOn = true; // last requested vibrancy state (transparent HUD mode turns it off)
 export function setVibrancy(win: BrowserWindow | undefined, on: boolean): void {
   if (!win || process.platform !== "darwin") return;
-  vibrancyOn = on;
   win.setVibrancy(on ? "under-window" : null);
 }
