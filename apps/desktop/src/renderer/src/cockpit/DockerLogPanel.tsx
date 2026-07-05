@@ -3,6 +3,7 @@ import { useStore } from "../store";
 import { DockerContainer, DockerHostView } from "../types";
 
 const IDLE_RETURN_MS = 60_000; // after scrolling up, resume tailing after 1 min idle
+const RETRY_MS = 30_000; // auto-reconnect this long after a log stream ends (e.g. container restarted)
 const escapeRegExp = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /** Split `text` into React nodes, wrapping case-insensitive matches of `query` in
@@ -103,6 +104,8 @@ export default function DockerLogPanel({ streamId, active }: { streamId: string;
   const preRef = useRef<HTMLPreElement>(null);
   const stick = useRef(true);
   const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [retryNonce, setRetryNonce] = useState(0); // bumped to re-attach after the stream ends
   const containerRef = useRef(container);
   containerRef.current = container;
 
@@ -173,30 +176,46 @@ export default function DockerLogPanel({ streamId, active }: { streamId: string;
   }, []);
 
   // Stream lifecycle — (re)start whenever the window becomes active or the target
-  // container/host changes. Tearing down stops the underlying ssh process.
+  // container/host changes. Tearing down stops the underlying ssh process. When the
+  // stream ends on its own (e.g. the container is restarted mid-dev), auto-retry
+  // after 30s by bumping `retryNonce`; a container/host switch resets the log while
+  // a retry keeps the accumulated output so the reconnect reads as continuous.
+  const isRetry = retryNonce > 0;
   useEffect(() => {
     if (!active || !machine || !container) return;
-    setText("");
-    bufRef.current = "";
+    if (!isRetry) { setText(""); bufRef.current = ""; }
     stick.current = true;
+    const armRetry = () => {
+      if (retryTimer.current) clearTimeout(retryTimer.current);
+      retryTimer.current = setTimeout(() => setRetryNonce((n) => n + 1), RETRY_MS);
+    };
     const offData = window.cowork.onDockerLogData((a) => { if (a.id === streamId) bufRef.current += a.data; });
-    const offExit = window.cowork.onDockerLogExit((a) => { if (a.id === streamId) bufRef.current += "\n[stream ended]\n"; });
+    const offExit = window.cowork.onDockerLogExit((a) => {
+      if (a.id !== streamId) return;
+      bufRef.current += `\n[stream ended — reconnecting in ${RETRY_MS / 1000}s]\n`;
+      armRetry();
+    });
     let cancelled = false;
     window.cowork
       .startDockerLog({ id: streamId, machine, container })
       .then((r) => {
         if (cancelled) return;
         if (r.ok) { if (r.replay) bufRef.current += r.replay; }
-        else bufRef.current += `\n[error] ${r.error}\n`;
+        else { bufRef.current += `\n[error] ${r.error} — reconnecting in ${RETRY_MS / 1000}s\n`; armRetry(); }
       })
-      .catch((e) => { if (!cancelled) bufRef.current += `\n[error] ${String(e)}\n`; });
+      .catch((e) => { if (!cancelled) { bufRef.current += `\n[error] ${String(e)} — reconnecting in ${RETRY_MS / 1000}s\n`; armRetry(); } });
     return () => {
       cancelled = true;
       offData();
       offExit();
+      if (retryTimer.current) { clearTimeout(retryTimer.current); retryTimer.current = null; }
       window.cowork.stopDockerLog(streamId);
     };
-  }, [active, machine, container]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active, machine, container, retryNonce]);
+
+  // Cancel any pending retry when the target changes (a fresh stream is starting).
+  useEffect(() => { setRetryNonce(0); }, [active, machine, container]);
 
   // Tail: keep pinned to the bottom unless the user scrolled up (or is searching).
   useEffect(() => {
