@@ -37,14 +37,15 @@ export default function Cockpit() {
     return unsub;
   }, []);
 
-  // "Transparent app in HUD mode": strip the app-shell glass AND drop the macOS
-  // window vibrancy (the frosted desktop material) while the HUD is active, so the
-  // RAW desktop shows straight through behind the widgets. Restore vibrancy in any
-  // other state so the normal frosted look returns.
+  // "Transparent app in HUD mode": strip the app-shell glass + decoration so the
+  // desktop shows through, but KEEP the macOS window vibrancy on — that frosted
+  // material is the only thing that can blur the desktop behind the side panels /
+  // widgets (CSS backdrop-filter can't blur the OS desktop through a transparent
+  // window). So gaps show a softly-blurred desktop and the widgets stay glassy.
   useEffect(() => {
     const clear = mode === "hud" && appr.hudClear;
     document.documentElement.classList.toggle("rcw-hud-clear", clear);
-    window.cowork.setVibrancy(!clear).catch(() => {});
+    window.cowork.setVibrancy(true).catch(() => {});
     return () => document.documentElement.classList.remove("rcw-hud-clear");
   }, [mode, appr.hudClear]);
 

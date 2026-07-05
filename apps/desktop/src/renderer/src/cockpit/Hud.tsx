@@ -625,9 +625,10 @@ const WIN_MIN_H = 170;
 // Near-solid dark glass shared by floating window frames + the app dock, so text
 // behind them stays fully legible (mirrors the slash-command popup treatment).
 const WIN_GLASS: React.CSSProperties = {
-  background: "color-mix(in srgb, var(--app-panel, #1b1712) 94%, transparent)",
-  backdropFilter: "blur(30px) saturate(1.4)",
-  WebkitBackdropFilter: "blur(30px) saturate(1.4)",
+  // --glass-pct (Settings › Appearance › Glass) controls panel/window opacity.
+  background: "color-mix(in srgb, var(--app-panel, #1b1712) var(--glass-pct, 94%), transparent)",
+  backdropFilter: "blur(var(--app-blur, 30px)) saturate(1.4)",
+  WebkitBackdropFilter: "blur(var(--app-blur, 30px)) saturate(1.4)",
 };
 
 /** Clamp a window so it is never larger than the canvas and stays fully in view. */

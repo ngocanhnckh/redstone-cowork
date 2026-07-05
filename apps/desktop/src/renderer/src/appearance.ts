@@ -23,9 +23,12 @@ export type Appearance = {
   /** In HUD mode, make the app shell fully transparent (see straight through to
    * the desktop; individual widgets keep their own glass). */
   hudClear: boolean;
+  /** Panel/window glass solidity as a percentage (higher = more opaque/brighter
+   * frosted glass, lower = more see-through). Drives --glass-pct. */
+  glass: number;
 };
 
-export const DEFAULT_APPEARANCE: Appearance = { veil: 6, blur: 28, bgAnim: true, dockPos: "bottom", dockScale: 1, hudClear: false };
+export const DEFAULT_APPEARANCE: Appearance = { veil: 6, blur: 28, bgAnim: true, dockPos: "bottom", dockScale: 1, hudClear: false, glass: 94 };
 
 const KEY = "rcw.appearance";
 
@@ -39,6 +42,7 @@ export function loadAppearance(): Appearance {
       dockPos: DOCK_POSITIONS.includes(raw.dockPos) ? raw.dockPos : DEFAULT_APPEARANCE.dockPos,
       dockScale: clampNum(raw.dockScale, 0.6, 1.6, DEFAULT_APPEARANCE.dockScale),
       hudClear: typeof raw.hudClear === "boolean" ? raw.hudClear : DEFAULT_APPEARANCE.hudClear,
+      glass: clampNum(raw.glass, 40, 100, DEFAULT_APPEARANCE.glass),
     };
   } catch {
     return { ...DEFAULT_APPEARANCE };
@@ -54,6 +58,7 @@ export function applyAppearance(a: Appearance): void {
   const r = document.documentElement;
   r.style.setProperty("--app-veil", `${a.veil}%`);
   r.style.setProperty("--app-blur", `${a.blur}px`);
+  r.style.setProperty("--glass-pct", `${a.glass}%`);
   r.classList.toggle("rcw-no-anim", !a.bgAnim);
   r.setAttribute("data-dock", a.dockPos);
   // Let live consumers (e.g. the HUD dock) react without prop-threading.

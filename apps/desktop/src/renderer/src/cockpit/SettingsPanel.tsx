@@ -223,6 +223,16 @@ export default function SettingsPanel() {
           onChange={(v) => patchAppr({ blur: v })}
         />
 
+        <SliderRow
+          label="Glass"
+          hint="How solid the HUD window & panel glass is — lower = more see-through / brighter, higher = more opaque."
+          value={appr.glass}
+          min={55}
+          max={100}
+          suffix="%"
+          onChange={(v) => patchAppr({ glass: v })}
+        />
+
         <label className="soft" style={{ ...labelStyle, marginTop: 18 }}>Dock position</label>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6, marginBottom: 16 }}>
           {DOCK_POSITIONS.map((pos) => (
