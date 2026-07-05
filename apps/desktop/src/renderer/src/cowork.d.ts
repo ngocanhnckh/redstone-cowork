@@ -132,6 +132,7 @@ declare global {
       // Main asks the renderer to open a URL in the focused session's workspace
       // browser (a custom app left its domain). Returns an unsubscribe fn.
       onOpenInWorkspaceBrowser(cb: (a: { url: string }) => void): () => void;
+      onBrowserFind(cb: (a: { guestId: number; action: "open" | "close" }) => void): () => void;
 
       // Appearance — custom background image + macOS fullscreen-keeps-wallpaper.
       chooseBgImage(): Promise<{ ok: boolean; dataUrl?: string; error?: string }>;

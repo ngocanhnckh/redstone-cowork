@@ -205,6 +205,14 @@ contextBridge.exposeInMainWorld("cowork", {
     ipcRenderer.on(IPC.openInWorkspaceBrowser, handler);
     return () => ipcRenderer.removeListener(IPC.openInWorkspaceBrowser, handler);
   },
+  // Main forwards Cmd/Ctrl+F (and Esc) from a focused browser <webview> guest so
+  // the owning panel can open/close its in-page find bar. `guestId` is the guest's
+  // webContents id, matched against the webview's getWebContentsId().
+  onBrowserFind: (cb: (a: { guestId: number; action: "open" | "close" }) => void): (() => void) => {
+    const handler = (_e: unknown, a: { guestId: number; action: "open" | "close" }) => cb(a);
+    ipcRenderer.on(IPC.browserFind, handler);
+    return () => ipcRenderer.removeListener(IPC.browserFind, handler);
+  },
 
   // Appearance — custom background image + macOS fullscreen-keeps-wallpaper.
   chooseBgImage: (): Promise<{ ok: boolean; dataUrl?: string; error?: string }> =>

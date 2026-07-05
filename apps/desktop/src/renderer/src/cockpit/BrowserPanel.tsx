@@ -27,6 +27,8 @@ type WebviewEl = HTMLElement & {
   loadURL(url: string): Promise<void>;
   getURL(): string;
   getWebContentsId(): number;
+  findInPage(text: string, options?: { forward?: boolean; findNext?: boolean }): number;
+  stopFindInPage(action: "clearSelection" | "keepSelection" | "activateSelection"): void;
 };
 
 declare global {
@@ -68,6 +70,18 @@ const navBtn: React.CSSProperties = {
   lineHeight: 1,
 };
 
+const findNavBtn: React.CSSProperties = {
+  border: "1px solid var(--border)",
+  background: "transparent",
+  color: "var(--text-soft)",
+  borderRadius: 6,
+  padding: "3px 7px",
+  fontSize: 11,
+  fontFamily: "var(--font-mono)",
+  cursor: "pointer",
+  lineHeight: 1.3,
+};
+
 function portUrl(port: number): string {
   return `http://localhost:${port}`;
 }
@@ -85,6 +99,30 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, chrom
   const [status, setStatus] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [saving, setSaving] = useState(false);
   const webviewRef = useRef<WebviewEl | null>(null);
+
+  // In-page find (Cmd/Ctrl+F). `find` is the query; matches tracks active/total
+  // from the webview's found-in-page event. The input is focused when opened.
+  const [findOpen, setFindOpen] = useState(false);
+  const [find, setFind] = useState("");
+  const [matches, setMatches] = useState<{ active: number; total: number }>({ active: 0, total: 0 });
+  const findInputRef = useRef<HTMLInputElement | null>(null);
+
+  const openFind = () => {
+    setFindOpen(true);
+    setTimeout(() => { findInputRef.current?.focus(); findInputRef.current?.select(); }, 0);
+  };
+  const closeFind = () => {
+    setFindOpen(false);
+    setMatches({ active: 0, total: 0 });
+    webviewRef.current?.stopFindInPage("clearSelection");
+  };
+  // Search: findInPage is a no-op on empty text, so clear the highlight instead.
+  const runFind = (text: string, forward = true, findNext = false) => {
+    const wv = webviewRef.current;
+    if (!wv) return;
+    if (!text) { wv.stopFindInPage("clearSelection"); setMatches({ active: 0, total: 0 }); return; }
+    try { wv.findInPage(text, { forward, findNext }); } catch { /* guest not ready */ }
+  };
 
   // Ensure the preview port's tunnel is up before loading (idempotent; no-op when local).
   async function ensureForward(port: number) {
@@ -183,6 +221,40 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, chrom
     };
   }, [loadUrl]);
 
+  // Update the match counter from the webview's found-in-page results.
+  useEffect(() => {
+    const wv = webviewRef.current;
+    if (!wv) return;
+    const onFound = (e: Event) => {
+      const r = (e as unknown as { result?: { activeMatchOrdinal?: number; matches?: number } }).result;
+      if (r) setMatches({ active: r.activeMatchOrdinal ?? 0, total: r.matches ?? 0 });
+    };
+    wv.addEventListener("found-in-page", onFound as EventListener);
+    return () => wv.removeEventListener("found-in-page", onFound as EventListener);
+  }, [loadUrl]);
+
+  // Cmd/Ctrl+F from a focused guest is intercepted in main and forwarded here;
+  // only the panel whose webview matches the guest id reacts. Esc closes.
+  useEffect(() => {
+    const off = window.cowork.onBrowserFind((a) => {
+      const wv = webviewRef.current;
+      if (!wv) return;
+      let id = -1;
+      try { id = wv.getWebContentsId(); } catch { return; }
+      if (a.guestId !== id) return;
+      if (a.action === "open") openFind();
+      else closeFind();
+    });
+    return off;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadUrl]);
+
+  // Re-run the search as the query changes while the bar is open.
+  useEffect(() => {
+    if (findOpen) runFind(find, true, false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [find]);
+
   async function saveConfig(next: { browserUrl: string; previewPort: number | null }) {
     if (ephemeral) return; // extra tabs navigate freely but don't touch saved config
     try {
@@ -219,8 +291,20 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, chrom
 
   const hasUrl = loadUrl.trim().length > 0;
 
+  const gotoMatch = (forward: boolean) => { if (find) runFind(find, forward, true); };
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, minWidth: 0 }}>
+    <div
+      style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, minWidth: 0 }}
+      // Cmd/Ctrl+F when focus is on host chrome (address bar etc.); the guest-focus
+      // case is handled in main via before-input-event → onBrowserFind.
+      onKeyDown={(e) => {
+        if ((e.metaKey || e.ctrlKey) && !e.altKey && (e.key === "f" || e.key === "F")) {
+          e.preventDefault();
+          openFind();
+        }
+      }}
+    >
       {!chromeHidden && (
         <ConnectionBar
           sessionId={sessionId}
@@ -317,6 +401,41 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, chrom
 
       {/* Preview */}
       <div style={{ flex: 1, minHeight: 0, position: "relative", background: "rgba(0,0,0,0.18)" }}>
+        {/* In-page find bar (Cmd/Ctrl+F) — floats over the top-right of the preview */}
+        {findOpen && (
+          <div
+            className="glass-surface"
+            style={{
+              position: "absolute", top: 10, right: 12, zIndex: 5,
+              display: "flex", alignItems: "center", gap: 6,
+              padding: "6px 8px", borderRadius: 12, border: "1px solid var(--border)",
+              boxShadow: "0 8px 28px rgba(0,0,0,0.4)",
+            }}
+          >
+            <input
+              ref={findInputRef}
+              value={find}
+              onChange={(e) => setFind(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") { e.preventDefault(); gotoMatch(!e.shiftKey); }
+                else if (e.key === "Escape") { e.preventDefault(); closeFind(); }
+              }}
+              placeholder="Find in page…"
+              className="mono"
+              style={{
+                width: 190, minWidth: 0, background: "rgba(255,255,255,0.04)",
+                border: "1px solid var(--border)", borderRadius: 8, padding: "5px 9px",
+                fontSize: 12, color: "var(--text)", outline: "none",
+              }}
+            />
+            <span className="mono faint" style={{ fontSize: 10.5, minWidth: 44, textAlign: "right" }}>
+              {matches.total ? `${matches.active}/${matches.total}` : find ? "0/0" : ""}
+            </span>
+            <button onClick={() => gotoMatch(false)} disabled={!matches.total} title="Previous (⇧⏎)" style={findNavBtn}>▲</button>
+            <button onClick={() => gotoMatch(true)} disabled={!matches.total} title="Next (⏎)" style={findNavBtn}>▼</button>
+            <button onClick={closeFind} title="Close (Esc)" style={findNavBtn}>✕</button>
+          </div>
+        )}
         {hasUrl ? (
           <webview
             ref={webviewRef as unknown as React.Ref<HTMLElement>}

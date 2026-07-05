@@ -58,6 +58,7 @@ export const IPC = {
   appGuestRegister: "api:appguest:register",
   appGuestUnregister: "api:appguest:unregister",
   openInWorkspaceBrowser: "api:browser:open-in-workspace",
+  browserFind: "api:browser:find",
   bgImageChoose: "api:appearance:bg:choose",
   bgImageGet: "api:appearance:bg:get",
   bgImageClear: "api:appearance:bg:clear",

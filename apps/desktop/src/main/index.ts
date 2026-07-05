@@ -654,6 +654,21 @@ app.on("web-contents-created", (_e, contents) => {
   contents.on("did-navigate", patchDialogs);
   contents.on("did-navigate-in-page", patchDialogs);
 
+  // Cmd/Ctrl+F opens the workspace browser's in-page find bar. A keystroke while
+  // the guest has focus never reaches the host renderer, so we intercept it here
+  // and tell the embedder which guest to search (the panel matches by webContents
+  // id). Esc while finding is likewise forwarded so the guest can close the bar.
+  contents.on("before-input-event", (ev, input) => {
+    if (input.type !== "keyDown") return;
+    const mod = process.platform === "darwin" ? input.meta : input.control;
+    if (mod && !input.alt && (input.key === "f" || input.key === "F")) {
+      ev.preventDefault();
+      for (const w of BrowserWindow.getAllWindows()) w.webContents.send(IPC.browserFind, { guestId: contents.id, action: "open" });
+    } else if (input.key === "Escape") {
+      for (const w of BrowserWindow.getAllWindows()) w.webContents.send(IPC.browserFind, { guestId: contents.id, action: "close" });
+    }
+  });
+
   contents.on("context-menu", (_ev, params) => {
     const nav = contents.navigationHistory;
     const menu = Menu.buildFromTemplate([
