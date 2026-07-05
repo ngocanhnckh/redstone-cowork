@@ -864,7 +864,7 @@ function PanelShell({
       <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>{children}</div>
       {!grid && (
         <div onPointerDown={startResize} title="Resize"
-          style={{ position: "absolute", right: 0, bottom: 0, width: 18, height: 18, cursor: "nwse-resize",
+          style={{ position: "absolute", right: 0, bottom: 0, width: 18, height: 18, cursor: "nwse-resize", zIndex: 10,
             background: "linear-gradient(135deg, transparent 0 50%, rgb(var(--primary-soft) / 0.55) 50% 60%, transparent 60% 72%, rgb(var(--primary-soft) / 0.55) 72% 82%, transparent 82%)" }} />
       )}
     </div>

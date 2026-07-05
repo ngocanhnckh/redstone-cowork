@@ -1,4 +1,4 @@
-import { app, dialog, BrowserWindow, screen } from "electron";
+import { app, dialog, BrowserWindow } from "electron";
 import { promises as fs } from "node:fs";
 import { statSync, readFileSync } from "node:fs";
 import path from "node:path";
@@ -66,24 +66,13 @@ export async function clearBgImage(): Promise<void> {
   }
 }
 
-// The window bounds before we filled the screen, so exiting fullscreen restores
-// the previous size/position.
-let savedBounds: Electron.Rectangle | null = null;
-let manualFull = false;
-
 /**
- * Toggle a "keep the wallpaper visible" fullscreen on macOS.
- *
- * Neither of Electron's built-ins works for our transparent window:
- *  - Native fullscreen (`setFullScreen`) moves the window to its own Space with a
- *    black backing, so the desktop wallpaper vanishes behind the transparent window.
- *  - Simple fullscreen (`setSimpleFullScreen`) changes the NSWindow style mask,
- *    which detaches the transparent web content view — it renders BLANK.
- *
- * Instead we do a plain borderless RESIZE: remember the current bounds, then grow
- * the window to fill the whole display. It's still an ordinary (transparent) window
- * on the current Space, so the wallpaper shows through and the content never blanks.
- * Off macOS we fall back to Electron's native fullscreen.
+ * Toggle macOS "simple" fullscreen. Native fullscreen moves the window to its own
+ * Space with a black backing, so the vibrancy/desktop wallpaper disappears behind
+ * it. Simple fullscreen just resizes the window to fill the current screen — the
+ * wallpaper (and vibrancy) stays visible, the menu bar/dock hide. This only works
+ * because the window is NOT `transparent: true` (a transparent window blanks under
+ * simple fullscreen — see the window-creation note). No-op off macOS.
  */
 export function setSimpleFullscreen(win: BrowserWindow | undefined, on: boolean): boolean {
   if (!win) return false;
@@ -91,25 +80,15 @@ export function setSimpleFullscreen(win: BrowserWindow | undefined, on: boolean)
     win.setFullScreen(on);
     return win.isFullScreen();
   }
-  if (win.isFullScreen()) win.setFullScreen(false); // never use the black-Space path
-  if (win.isSimpleFullScreen()) win.setSimpleFullScreen(false); // nor the blanking one
-  if (on) {
-    if (!manualFull) savedBounds = win.getBounds();
-    const disp = screen.getDisplayMatching(win.getBounds());
-    win.setBounds(disp.bounds); // edge-to-edge over the current display, wallpaper intact
-    manualFull = true;
-  } else {
-    if (savedBounds) win.setBounds(savedBounds);
-    savedBounds = null;
-    manualFull = false;
-  }
-  return manualFull;
+  if (on && win.isFullScreen()) win.setFullScreen(false); // leave native first
+  win.setSimpleFullScreen(on);
+  return win.isSimpleFullScreen();
 }
 
-/** Whether the window is in either native or our manual keep-wallpaper fullscreen. */
+/** Whether the window is in either native or simple fullscreen right now. */
 export function isFullscreen(win: BrowserWindow | undefined): boolean {
   if (!win) return false;
-  return win.isFullScreen() || manualFull;
+  return win.isFullScreen() || win.isSimpleFullScreen();
 }
 
 // ---------------------------------------------------------------------------

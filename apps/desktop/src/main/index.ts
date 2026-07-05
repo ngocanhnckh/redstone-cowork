@@ -164,10 +164,11 @@ function createWindow(): void {
     //     `transparent: true` here, and lower `--app-veil` toward 0%.
     vibrancy: "under-window",
     visualEffectState: "active",
-    // Transparent-capable so that when vibrancy is dropped (Appearance › "Transparent
-    // app in HUD mode") the RAW desktop shows through instead of an opaque backing.
-    // Vibrancy still provides the frosted look in every normal mode.
-    transparent: true,
+    // NOTE: deliberately NOT `transparent: true`. A transparent macOS window paints
+    // BLANK under setSimpleFullScreen (the content view detaches during the style-mask
+    // change), which broke "keep wallpaper in fullscreen". The vibrancy material still
+    // provides the frosted-desktop look, incl. in Transparent-HUD mode. Trade-off: HUD
+    // "clear" mode shows the frosted (not raw) desktop, so native fullscreen keeps working.
     backgroundColor: "#00000000",
     webPreferences: {
       preload: join(here, "../preload/index.mjs"),
