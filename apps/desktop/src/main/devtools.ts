@@ -97,6 +97,21 @@ function detach(sessionId: string): void {
   }
 }
 
+/** Fetch a captured response body on demand (for the Network detail view). CDP
+ * evicts bodies after a while / navigation, so this may return null for old rows. */
+export async function getResponseBody(sessionId: string, requestId: string): Promise<{ body: string; base64Encoded: boolean } | null> {
+  const insp = inspectors.get(sessionId);
+  if (!insp) return null;
+  const { wc } = insp;
+  try {
+    if (wc.isDestroyed() || !wc.debugger.isAttached()) return null;
+    const r = (await wc.debugger.sendCommand("Network.getResponseBody", { requestId })) as { body?: string; base64Encoded?: boolean };
+    return { body: r.body ?? "", base64Encoded: !!r.base64Encoded };
+  } catch {
+    return null;
+  }
+}
+
 function handleCdp(sessionId: string, method: string, params: Record<string, unknown>): void {
   const p = params as Record<string, any>;
   switch (method) {
@@ -114,10 +129,17 @@ function handleCdp(sessionId: string, method: string, params: Record<string, unk
       break;
     }
     case "Network.requestWillBeSent":
-      emit(sessionId, { kind: "net-request", id: String(p.requestId), method: p.request?.method ?? "GET", url: p.request?.url ?? "", resType: p.type ?? "", ts: Date.now() });
+      emit(sessionId, {
+        kind: "net-request", id: String(p.requestId), method: p.request?.method ?? "GET", url: p.request?.url ?? "",
+        resType: p.type ?? "", reqHeaders: p.request?.headers ?? {}, postData: p.request?.postData ?? undefined, ts: Date.now(),
+      });
       break;
     case "Network.responseReceived":
-      emit(sessionId, { kind: "net-response", id: String(p.requestId), status: p.response?.status ?? 0, mime: p.response?.mimeType ?? "", resType: p.type ?? "" });
+      emit(sessionId, {
+        kind: "net-response", id: String(p.requestId), status: p.response?.status ?? 0, statusText: p.response?.statusText ?? "",
+        mime: p.response?.mimeType ?? "", resType: p.type ?? "", resHeaders: p.response?.headers ?? {},
+        remoteIP: p.response?.remoteIPAddress ?? "", protocol: p.response?.protocol ?? "",
+      });
       break;
     case "Network.loadingFinished":
       emit(sessionId, { kind: "net-done", id: String(p.requestId), size: p.encodedDataLength ?? 0 });

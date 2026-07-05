@@ -77,6 +77,7 @@ export const IPC = {
   devtoolsStart: "api:devtools:start",
   devtoolsStop: "api:devtools:stop",
   devtoolsEvent: "api:devtools:event",
+  devtoolsBody: "api:devtools:body",
   filesList: "api:files:list",
   filesSearch: "api:files:search",
   filesRead: "api:files:read",

@@ -30,7 +30,7 @@ import { sshSetup, type SshSetupArgs } from "./ssh-setup";
 import { listDir, readFileAt, writeFileAt, deletePath, makeDir, createFile, uploadLocalFile, searchFiles } from "./files";
 import { gitInfo } from "./git";
 import { chooseBgImage, getBgImage, clearBgImage, setSimpleFullscreen, isFullscreen, setVibrancy, chooseBgVideo, getBgVideoUrl, clearBgVideo, currentBgVideoPath } from "./appearance";
-import { registerSessionBrowser, unregisterSessionBrowser, startInspect, stopInspect, stopAllInspectors } from "./devtools";
+import { registerSessionBrowser, unregisterSessionBrowser, startInspect, stopInspect, stopAllInspectors, getResponseBody } from "./devtools";
 import { IPC } from "../shared/ipc";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -524,6 +524,7 @@ ipcMain.handle(IPC.sessionBrowserUnregister, (_e, a: { sessionId: string }) => {
 });
 ipcMain.handle(IPC.devtoolsStart, (_e, a: { sessionId: string }) => (a?.sessionId ? startInspect(a.sessionId) : { ok: false }));
 ipcMain.handle(IPC.devtoolsStop, (_e, a: { sessionId: string }) => { if (a?.sessionId) stopInspect(a.sessionId); return { ok: true }; });
+ipcMain.handle(IPC.devtoolsBody, (_e, a: { sessionId: string; requestId: string }) => (a?.sessionId && a?.requestId ? getResponseBody(a.sessionId, a.requestId) : null));
 
 // File browser — list / read / write, local or over ssh. Main never throws across IPC.
 ipcMain.handle(IPC.filesList, (_e, a: { cwd: string; machine: string; dir: string }) =>

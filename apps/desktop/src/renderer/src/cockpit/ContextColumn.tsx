@@ -24,8 +24,10 @@ function CheckBox({
         placeItems: "center",
         flexShrink: 0,
         cursor: onClick ? "pointer" : undefined,
-        background: done ? `rgb(var(--accent))` : active ? `rgb(var(--primary) / 0.25)` : "transparent",
-        border: done ? "none" : active ? `1.5px solid rgb(var(--primary-soft))` : `1.5px solid var(--border-strong)`,
+        background: done ? `rgb(var(--accent))` : active ? `rgb(var(--primary) / 0.25)` : "rgb(var(--primary) / 0.06)",
+        // Open-state border uses an accent color (not --border-strong, which the
+        // transparent-HUD theme blanks — that made the unchecked box invisible).
+        border: done ? "none" : active ? `1.5px solid rgb(var(--primary-soft))` : `1.5px solid rgb(var(--primary-soft) / 0.55)`,
         color: done ? "#2a1d09" : undefined,
         fontWeight: done ? 700 : undefined,
         fontSize: done ? 11 : undefined,

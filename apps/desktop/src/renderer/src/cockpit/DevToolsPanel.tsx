@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { useStore } from "../store";
 
 // Browser Inspector: a Chrome-devtools-style Console + Network view for the
@@ -6,10 +6,12 @@ import { useStore } from "../store";
 // Styled in the app's warm-ink glass theme — a lively, futuristic HUD console.
 
 type ConsoleRow = { rowId: number; level: string; text: string; source?: string; ts: number };
+type Headers = Record<string, string>;
 type NetRow = {
   id: string; method: string; url: string; resType: string; ts: number;
-  status?: number; mime?: string; size?: number; failed?: boolean; error?: string; canceled?: boolean;
+  status?: number; statusText?: string; mime?: string; size?: number; failed?: boolean; error?: string; canceled?: boolean;
   endedAt?: number; // wall-clock completion (for the waterfall bar)
+  reqHeaders?: Headers; resHeaders?: Headers; postData?: string; remoteIP?: string; protocol?: string;
 };
 
 const MAX_CONSOLE = 600;
@@ -93,6 +95,19 @@ const DT_CSS = `
   background-image: linear-gradient(90deg, rgb(255 255 255 / 0.28), transparent 55%); }
 .dt-wf-live { animation: dt-wf-pulse 1s ease-in-out infinite; }
 @keyframes dt-wf-pulse { 0%,100% { opacity:.5; } 50% { opacity:1; } }
+.dt-nrow.dt-sel td { background: rgb(var(--primary) / 0.14) !important; }
+.dt-modal { position:absolute; inset:0; z-index:20; display:flex; flex-direction:column;
+  background: color-mix(in srgb, var(--app-panel) 80%, transparent); backdrop-filter: blur(16px) saturate(1.35);
+  animation: dt-modal-in .16s cubic-bezier(.2,.8,.2,1) both; }
+@keyframes dt-modal-in { from { opacity:0; transform: scale(.985) translateY(6px); } to { opacity:1; transform:none; } }
+.dt-kv { display:grid; grid-template-columns: minmax(110px, 32%) 1fr; gap:3px 12px; font-size:11px; font-family:var(--font-mono); }
+.dt-kv dt { color: var(--text-faint); overflow-wrap:anywhere; }
+.dt-kv dd { margin:0; color: var(--text); overflow-wrap:anywhere; white-space:pre-wrap; }
+.dt-sec { font-size:9px; letter-spacing:.16em; text-transform:uppercase; color: rgb(var(--primary-soft)); margin: 14px 0 7px;
+  display:flex; align-items:center; gap:8px; }
+.dt-sec::after { content:""; flex:1; height:1px; background: linear-gradient(90deg, rgb(var(--primary-soft) / 0.4), transparent); }
+.dt-pre { margin:0; padding:10px 12px; border:1px solid var(--border); border-radius:9px; background: rgba(0,0,0,0.28);
+  font-family:var(--font-mono); font-size:11px; line-height:1.5; color:var(--text-soft); white-space:pre-wrap; overflow-wrap:anywhere; }
 `;
 
 export default function DevToolsPanel({ sessionId, active }: { sessionId?: string; active: boolean }) {
@@ -100,6 +115,7 @@ export default function DevToolsPanel({ sessionId, active }: { sessionId?: strin
   const [rows, setRows] = useState<ConsoleRow[]>([]);
   const [net, setNet] = useState<NetRow[]>([]);
   const [filter, setFilter] = useState("");
+  const [selId, setSelId] = useState<string | null>(null); // network row shown in the detail modal
   const [attached, setAttached] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const rowSeq = useRef(0);
@@ -126,11 +142,11 @@ export default function DevToolsPanel({ sessionId, active }: { sessionId?: strin
         });
       } else if (kind === "net-request") {
         setNet((cur) => {
-          const next = [...cur, { id: String(ev.id), method: String(ev.method ?? "GET"), url: String(ev.url ?? ""), resType: String(ev.resType ?? ""), ts: Number(ev.ts) || 0 }];
+          const next = [...cur, { id: String(ev.id), method: String(ev.method ?? "GET"), url: String(ev.url ?? ""), resType: String(ev.resType ?? ""), reqHeaders: (ev.reqHeaders as Headers) ?? {}, postData: ev.postData as string | undefined, ts: Number(ev.ts) || 0 }];
           return next.length > MAX_NET ? next.slice(-MAX_NET) : next;
         });
       } else if (kind === "net-response") {
-        setNet((cur) => cur.map((r) => (r.id === ev.id ? { ...r, status: Number(ev.status) || 0, mime: String(ev.mime ?? ""), resType: (ev.resType as string) || r.resType } : r)));
+        setNet((cur) => cur.map((r) => (r.id === ev.id ? { ...r, status: Number(ev.status) || 0, statusText: String(ev.statusText ?? ""), mime: String(ev.mime ?? ""), resType: (ev.resType as string) || r.resType, resHeaders: (ev.resHeaders as Headers) ?? {}, remoteIP: String(ev.remoteIP ?? ""), protocol: String(ev.protocol ?? "") } : r)));
       } else if (kind === "net-done") {
         setNet((cur) => cur.map((r) => (r.id === ev.id ? { ...r, size: Number(ev.size) || 0, endedAt: Date.now() } : r)));
       } else if (kind === "net-failed") {
@@ -191,8 +207,10 @@ export default function DevToolsPanel({ sessionId, active }: { sessionId?: strin
   const t1 = visNet.length ? Math.max(now, ...visNet.map((r) => r.endedAt ?? now)) : now + 1;
   const span = Math.max(1, t1 - t0);
 
+  const selected = net.find((r) => r.id === selId) ?? null;
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, minWidth: 0 }}>
+    <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, minWidth: 0, position: "relative" }}>
       <style>{DT_CSS}</style>
       {/* Toolbar */}
       <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "7px 12px", borderBottom: "1px solid var(--border)", flexShrink: 0, background: "linear-gradient(180deg, rgb(var(--primary) / 0.05), transparent)" }}>
@@ -270,7 +288,7 @@ export default function DevToolsPanel({ sessionId, active }: { sessionId?: strin
                 const width = Math.max(1.5, ((end - r.ts) / span) * 100);
                 const barColor = inflight ? "rgb(var(--primary-soft))" : sc;
                 return (
-                  <tr key={r.id} className="dt-nrow" style={{ borderBottom: "1px solid rgb(255 255 255 / 0.03)" }} title={r.url}>
+                  <tr key={r.id} onClick={() => setSelId(r.id)} className={`dt-nrow ${selId === r.id ? "dt-sel" : ""}`} style={{ borderBottom: "1px solid rgb(255 255 255 / 0.03)", cursor: "pointer" }} title={r.url}>
                     <td style={{ ...tdStyle, color: "var(--text)", maxWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{basename(r.url)}</td>
                     <td style={tdStyle}><span className="dt-chip">{r.method}</span></td>
                     <td style={tdStyle}><span className="dt-pill" style={{ color: sc }}>{r.failed ? (r.canceled ? "CANC" : "FAIL") : r.status || "···"}</span></td>
@@ -293,9 +311,136 @@ export default function DevToolsPanel({ sessionId, active }: { sessionId?: strin
           </table>
         )}
       </div>
+
+      {/* Detail modal for the selected request */}
+      {selected && <NetDetail row={selected} sessionId={sessionId} onClose={() => setSelId(null)} />}
     </div>
   );
 }
 
 const thStyle: React.CSSProperties = { padding: "6px 10px", fontWeight: 500, fontSize: 9.5, letterSpacing: "0.1em", textTransform: "uppercase", borderBottom: "1px solid var(--border)" };
 const tdStyle: React.CSSProperties = { padding: "4px 10px" };
+
+/** Rows of a header map as a definition list (empty state when absent). */
+function HeaderList({ h }: { h?: Headers }) {
+  const entries = Object.entries(h ?? {});
+  if (entries.length === 0) return <div className="faint" style={{ fontSize: 11 }}>— none —</div>;
+  return (
+    <dl className="dt-kv">
+      {entries.map(([k, v]) => (
+        <Fragment key={k}>
+          <dt>{k}</dt>
+          <dd>{v}</dd>
+        </Fragment>
+      ))}
+    </dl>
+  );
+}
+
+/** Pretty-print a string as JSON when possible, else return it unchanged. */
+function prettyMaybe(s: string): string {
+  const t = s.trim();
+  if (!t || (t[0] !== "{" && t[0] !== "[")) return s;
+  try { return JSON.stringify(JSON.parse(t), null, 2); } catch { return s; }
+}
+
+/**
+ * A futuristic detail overlay for one network request — General / Headers /
+ * Payload / Response, with the response body fetched on demand over CDP. Rendered
+ * inside the Inspector window (absolute overlay), Esc or ✕ to close.
+ */
+function NetDetail({ row, sessionId, onClose }: { row: NetRow; sessionId?: string; onClose: () => void }) {
+  const [sub, setSub] = useState<"general" | "headers" | "payload" | "response">("general");
+  const [body, setBody] = useState<string | null>(null);
+  const [bodyState, setBodyState] = useState<"idle" | "loading" | "empty" | "err">("idle");
+  const [copied, setCopied] = useState(false);
+
+  // Fetch the response body the first time the Response tab is opened.
+  useEffect(() => {
+    if (sub !== "response" || body !== null || bodyState !== "idle" || !sessionId) return;
+    setBodyState("loading");
+    window.cowork.getDevtoolsBody(sessionId, row.id).then((r) => {
+      if (!r) { setBodyState("empty"); return; }
+      let text = r.body;
+      if (r.base64Encoded) { try { text = atob(r.body); } catch { /* keep raw */ } }
+      setBody(text); setBodyState("idle");
+    }).catch(() => setBodyState("err"));
+  }, [sub, body, bodyState, sessionId, row.id]);
+
+  // Esc closes.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") { e.stopPropagation(); onClose(); } };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [onClose]);
+
+  const sc = statusColor(row);
+  const dur = row.endedAt ? fmtDur(row.endedAt - row.ts) : row.failed ? "—" : "pending";
+  const copy = (text: string) => { navigator.clipboard?.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1200); }).catch(() => {}); };
+  const SUBS: { k: typeof sub; label: string }[] = [
+    { k: "general", label: "General" },
+    { k: "headers", label: "Headers" },
+    { k: "payload", label: "Payload" },
+    { k: "response", label: "Response" },
+  ];
+
+  return (
+    <div className="dt-modal">
+      {/* header */}
+      <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "9px 12px", borderBottom: "1px solid var(--border)", flexShrink: 0, background: "linear-gradient(180deg, rgb(var(--primary) / 0.08), transparent)" }}>
+        <span className="dt-chip" style={{ flexShrink: 0 }}>{row.method}</span>
+        <span className="dt-pill mono" style={{ color: sc, flexShrink: 0 }}>{row.failed ? (row.canceled ? "CANC" : "FAIL") : row.status || "···"}</span>
+        <span className="mono" style={{ flex: 1, minWidth: 0, fontSize: 11, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={row.url}>{basename(row.url)}</span>
+        <button onClick={onClose} title="Close (Esc)" style={{ border: "1px solid var(--border)", background: "transparent", color: "var(--text-soft)", borderRadius: 7, padding: "3px 10px", fontSize: 12, cursor: "pointer", flexShrink: 0 }}>✕</button>
+      </div>
+      {/* sub-tabs */}
+      <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 12px", flexShrink: 0 }}>
+        {SUBS.map((s) => (
+          <button key={s.k} onClick={() => setSub(s.k)} className={`dt-tab ${sub === s.k ? "dt-tab-on" : "dt-tab-off"}`} style={{ fontSize: 10.5, padding: "3px 11px" }}>{s.label}</button>
+        ))}
+      </div>
+      {/* content */}
+      <div className="no-scrollbar" style={{ flex: 1, minHeight: 0, overflow: "auto", padding: "4px 14px 16px" }}>
+        {sub === "general" && (
+          <dl className="dt-kv">
+            <dt>Request URL</dt><dd>{row.url}</dd>
+            <dt>Method</dt><dd>{row.method}</dd>
+            <dt>Status</dt><dd style={{ color: sc }}>{row.failed ? (row.error ?? "failed") : `${row.status ?? "—"} ${row.statusText ?? ""}`}</dd>
+            <dt>Type</dt><dd>{row.resType || row.mime || "—"}</dd>
+            <dt>MIME</dt><dd>{row.mime || "—"}</dd>
+            <dt>Remote address</dt><dd>{row.remoteIP || "—"}</dd>
+            <dt>Protocol</dt><dd>{row.protocol || "—"}</dd>
+            <dt>Size</dt><dd>{fmtBytes(row.size)}</dd>
+            <dt>Duration</dt><dd>{dur}</dd>
+            <dt>Started</dt><dd>{fmtTime(row.ts)}</dd>
+          </dl>
+        )}
+        {sub === "headers" && (
+          <>
+            <div className="dt-sec">Response headers</div>
+            <HeaderList h={row.resHeaders} />
+            <div className="dt-sec">Request headers</div>
+            <HeaderList h={row.reqHeaders} />
+          </>
+        )}
+        {sub === "payload" && (
+          row.postData ? <pre className="dt-pre">{prettyMaybe(row.postData)}</pre>
+            : <div className="faint" style={{ fontSize: 11.5, paddingTop: 6 }}>No request payload{row.method === "GET" ? " (GET request)" : ""}.</div>
+        )}
+        {sub === "response" && (
+          bodyState === "loading" ? <div className="faint mono hud-blink" style={{ fontSize: 11.5, paddingTop: 6 }}>fetching response body…</div>
+            : bodyState === "empty" ? <div className="faint" style={{ fontSize: 11.5, paddingTop: 6 }}>Body not available (it may have been evicted, or the request is still in flight — reload to re-capture).</div>
+            : bodyState === "err" ? <div style={{ fontSize: 11.5, paddingTop: 6, color: "#e0736a" }}>Could not read the response body.</div>
+            : body !== null ? (
+              <>
+                <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 6 }}>
+                  <button onClick={() => copy(body)} className="mono" style={{ border: "1px solid var(--border)", background: "transparent", color: "var(--text-soft)", borderRadius: 6, padding: "3px 9px", fontSize: 10.5, cursor: "pointer" }}>{copied ? "copied" : "copy"}</button>
+                </div>
+                <pre className="dt-pre">{prettyMaybe(body).slice(0, 200_000)}</pre>
+              </>
+            ) : <div className="faint" style={{ fontSize: 11.5, paddingTop: 6 }}>Open to load the response body.</div>
+        )}
+      </div>
+    </div>
+  );
+}

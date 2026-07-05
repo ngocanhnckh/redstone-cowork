@@ -243,6 +243,8 @@ contextBridge.exposeInMainWorld("cowork", {
     ipcRenderer.invoke(IPC.sessionBrowserUnregister, { sessionId }),
   startDevtools: (sessionId: string): Promise<{ ok: boolean }> => ipcRenderer.invoke(IPC.devtoolsStart, { sessionId }),
   stopDevtools: (sessionId: string): Promise<{ ok: boolean }> => ipcRenderer.invoke(IPC.devtoolsStop, { sessionId }),
+  getDevtoolsBody: (sessionId: string, requestId: string): Promise<{ body: string; base64Encoded: boolean } | null> =>
+    ipcRenderer.invoke(IPC.devtoolsBody, { sessionId, requestId }),
   onDevtoolsEvent: (cb: (a: { sessionId: string; ev: Record<string, unknown> }) => void): (() => void) => {
     const handler = (_e: unknown, a: { sessionId: string; ev: Record<string, unknown> }) => cb(a);
     ipcRenderer.on(IPC.devtoolsEvent, handler);

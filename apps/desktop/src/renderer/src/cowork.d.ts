@@ -156,6 +156,7 @@ declare global {
       unregisterSessionBrowser(sessionId: string): Promise<{ ok: boolean }>;
       startDevtools(sessionId: string): Promise<{ ok: boolean }>;
       stopDevtools(sessionId: string): Promise<{ ok: boolean }>;
+      getDevtoolsBody(sessionId: string, requestId: string): Promise<{ body: string; base64Encoded: boolean } | null>;
       onDevtoolsEvent(cb: (a: { sessionId: string; ev: Record<string, unknown> }) => void): () => void;
 
       // File browser
