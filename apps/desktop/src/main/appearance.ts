@@ -80,6 +80,20 @@ export function setSimpleFullscreen(win: BrowserWindow | undefined, on: boolean)
   }
   if (on && win.isFullScreen()) win.setFullScreen(false); // leave native first
   win.setSimpleFullScreen(on);
+  // A transparent window can paint BLANK after the simple-fullscreen style-mask
+  // change: the web content view detaches from its vibrancy backing and stops
+  // compositing. Reassert vibrancy and nudge a repaint (1px resize round-trip)
+  // once the transition settles so the UI comes back. Harmless when turning off.
+  const repaint = () => {
+    if (win.isDestroyed()) return;
+    win.setVibrancy(vibrancyOn ? "under-window" : null); // reassert current state, don't force HUD-clear back on
+    const b = win.getBounds();
+    win.setBounds({ ...b, height: b.height + 1 });
+    win.setBounds(b);
+    if (!win.webContents.isDestroyed()) win.webContents.invalidate();
+  };
+  repaint();
+  setTimeout(repaint, 80); // again after the fullscreen transition completes
   return win.isSimpleFullScreen();
 }
 
@@ -147,7 +161,9 @@ export async function clearBgVideo(): Promise<void> {
  * frost — used for the "fully transparent HUD" look. No-op off macOS. Restoring
  * re-applies "under-window" to match how the window was created.
  */
+let vibrancyOn = true; // last requested vibrancy state (transparent HUD mode turns it off)
 export function setVibrancy(win: BrowserWindow | undefined, on: boolean): void {
   if (!win || process.platform !== "darwin") return;
+  vibrancyOn = on;
   win.setVibrancy(on ? "under-window" : null);
 }
