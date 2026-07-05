@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 // Reuse the same imperative <webview> surface as BrowserPanel (its `declare global`
 // augments JSX for the whole app, so the intrinsic + partition/allowpopups exist).
@@ -11,6 +11,8 @@ type WebviewEl = HTMLElement & {
   loadURL(url: string): Promise<void>;
   getURL(): string;
   getWebContentsId(): number;
+  findInPage(text: string, options?: { forward?: boolean; findNext?: boolean }): number;
+  stopFindInPage(action: "clearSelection" | "keepSelection" | "activateSelection"): void;
 };
 
 export type CustomApp = {
@@ -36,6 +38,11 @@ const navBtn: React.CSSProperties = {
   borderRadius: 8, padding: "4px 9px", fontSize: 13, fontFamily: "var(--font-mono)", cursor: "pointer", lineHeight: 1,
 };
 
+const findNavBtn: React.CSSProperties = {
+  border: "1px solid var(--border)", background: "transparent", color: "var(--text-soft)",
+  borderRadius: 6, padding: "3px 7px", fontSize: 11, fontFamily: "var(--font-mono)", cursor: "pointer", lineHeight: 1.3,
+};
+
 /**
  * A custom "app": a chrome-less Chromium view of a fixed URL. No address bar — just
  * a slim nav strip (back / forward / reload / home / open-in-real-browser) so it
@@ -46,6 +53,64 @@ const navBtn: React.CSSProperties = {
  */
 export default function CustomAppPanel({ app, onFavicon }: { app: CustomApp; onFavicon: (id: string, url: string) => void }) {
   const ref = useRef<WebviewEl | null>(null);
+
+  // In-page find (Cmd/Ctrl+F) — mirrors BrowserPanel. Cmd+F while the guest has
+  // focus is intercepted in main and forwarded via onBrowserFind; when host chrome
+  // has focus the root onKeyDown handles it.
+  const [findOpen, setFindOpen] = useState(false);
+  const [find, setFind] = useState("");
+  const [matches, setMatches] = useState<{ active: number; total: number }>({ active: 0, total: 0 });
+  const findInputRef = useRef<HTMLInputElement | null>(null);
+
+  const openFind = () => {
+    setFindOpen(true);
+    setTimeout(() => { findInputRef.current?.focus(); findInputRef.current?.select(); }, 0);
+  };
+  const closeFind = () => {
+    setFindOpen(false);
+    setMatches({ active: 0, total: 0 });
+    ref.current?.stopFindInPage("clearSelection");
+  };
+  const runFind = (text: string, forward = true, findNext = false) => {
+    const wv = ref.current;
+    if (!wv) return;
+    if (!text) { wv.stopFindInPage("clearSelection"); setMatches({ active: 0, total: 0 }); return; }
+    try { wv.findInPage(text, { forward, findNext }); } catch { /* guest not ready */ }
+  };
+  const gotoMatch = (forward: boolean) => { if (find) runFind(find, forward, true); };
+
+  // Match counter from the webview's found-in-page results.
+  useEffect(() => {
+    const wv = ref.current;
+    if (!wv) return;
+    const onFound = (e: Event) => {
+      const r = (e as unknown as { result?: { activeMatchOrdinal?: number; matches?: number } }).result;
+      if (r) setMatches({ active: r.activeMatchOrdinal ?? 0, total: r.matches ?? 0 });
+    };
+    wv.addEventListener("found-in-page", onFound as EventListener);
+    return () => wv.removeEventListener("found-in-page", onFound as EventListener);
+  }, [app.id]);
+
+  // Cmd/Ctrl+F forwarded from main for this guest; Esc closes.
+  useEffect(() => {
+    const off = window.cowork.onBrowserFind((a) => {
+      const wv = ref.current;
+      if (!wv) return;
+      let id = -1;
+      try { id = wv.getWebContentsId(); } catch { return; }
+      if (a.guestId !== id) return;
+      if (a.action === "open") openFind();
+      else closeFind();
+    });
+    return off;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [app.id]);
+
+  // Re-run the search as the query changes while the bar is open.
+  useEffect(() => {
+    if (findOpen) runFind(find, true, false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [find]);
 
   useEffect(() => {
     const wv = ref.current;
@@ -82,7 +147,15 @@ export default function CustomAppPanel({ app, onFavicon }: { app: CustomApp; onF
   }, [app.id, app.url]);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, minWidth: 0 }}>
+    <div
+      style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, minWidth: 0 }}
+      onKeyDown={(e) => {
+        if ((e.metaKey || e.ctrlKey) && !e.altKey && (e.key === "f" || e.key === "F")) {
+          e.preventDefault();
+          openFind();
+        }
+      }}
+    >
       <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 12px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
         <button style={navBtn} title="Back" onClick={() => ref.current?.goBack()}>◀</button>
         <button style={navBtn} title="Forward" onClick={() => ref.current?.goForward()}>▶</button>
@@ -94,6 +167,41 @@ export default function CustomAppPanel({ app, onFavicon }: { app: CustomApp; onF
         <button style={navBtn} title="Open in real browser" onClick={() => window.cowork.openExternal(app.url).catch(() => {})}>⧉</button>
       </div>
       <div style={{ flex: 1, minHeight: 0, position: "relative", background: "rgba(0,0,0,0.18)" }}>
+        {/* In-page find bar (Cmd/Ctrl+F) — floats over the top-right of the app */}
+        {findOpen && (
+          <div
+            className="glass-surface"
+            style={{
+              position: "absolute", top: 10, right: 12, zIndex: 5,
+              display: "flex", alignItems: "center", gap: 6,
+              padding: "6px 8px", borderRadius: 12, border: "1px solid var(--border)",
+              boxShadow: "0 8px 28px rgba(0,0,0,0.4)",
+            }}
+          >
+            <input
+              ref={findInputRef}
+              value={find}
+              onChange={(e) => setFind(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") { e.preventDefault(); gotoMatch(!e.shiftKey); }
+                else if (e.key === "Escape") { e.preventDefault(); closeFind(); }
+              }}
+              placeholder="Find in page…"
+              className="mono"
+              style={{
+                width: 190, minWidth: 0, background: "rgba(255,255,255,0.04)",
+                border: "1px solid var(--border)", borderRadius: 8, padding: "5px 9px",
+                fontSize: 12, color: "var(--text)", outline: "none",
+              }}
+            />
+            <span className="mono faint" style={{ fontSize: 10.5, minWidth: 44, textAlign: "right" }}>
+              {matches.total ? `${matches.active}/${matches.total}` : find ? "0/0" : ""}
+            </span>
+            <button onClick={() => gotoMatch(false)} disabled={!matches.total} title="Previous (⇧⏎)" style={findNavBtn}>▲</button>
+            <button onClick={() => gotoMatch(true)} disabled={!matches.total} title="Next (⏎)" style={findNavBtn}>▼</button>
+            <button onClick={closeFind} title="Close (Esc)" style={findNavBtn}>✕</button>
+          </div>
+        )}
         <webview
           ref={ref as unknown as React.Ref<HTMLElement>}
           src={app.url}
