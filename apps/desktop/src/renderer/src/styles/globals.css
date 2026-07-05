@@ -100,6 +100,17 @@ body {
     -webkit-backdrop-filter: blur(var(--app-blur, 28px)) saturate(1.3);
     backdrop-filter: blur(var(--app-blur, 28px)) saturate(1.3);
 }
+/* Bare labels floating over the transparent region (panel titles, the focused
+   session's name/host) render with weak font-smoothing on a transparent macOS
+   window — give them a small frosted chip so they read crisply. Padding applies
+   only in clear mode, so nothing shifts in the normal look. */
+.rcw-hud-clear .hud-chip {
+    background: color-mix(in srgb, var(--app-panel) var(--glass-pct, 94%), transparent);
+    -webkit-backdrop-filter: blur(var(--app-blur, 28px)) saturate(1.3);
+    backdrop-filter: blur(var(--app-blur, 28px)) saturate(1.3);
+    border-radius: 9px;
+    padding: 3px 9px;
+}
 /* …and remove the full-bleed decoration that only reads as noise over the raw
    desktop: the drifting HUD grid, the film-grain overlay, and the heavy window /
    dock drop-shadows (box-shadow is inline, so !important is required). */

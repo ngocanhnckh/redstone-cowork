@@ -129,7 +129,7 @@ export default function QueueRail() {
 
   return (
     <div style={{ padding: "18px 14px", borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column", gap: 7, overflowY: "auto" }}>
-      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 6 }}>
+      <div className="hud-chip" style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 6 }}>
         <span className="kicker">Sessions</span>
         <span className="mono faint" style={{ fontSize: 11 }}>
           {waitingCount > 0 ? `${waitingCount} waiting` : `${rows.length}`}

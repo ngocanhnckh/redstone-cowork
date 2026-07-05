@@ -1210,10 +1210,10 @@ function HudConsole() {
       {/* header: identity + (grid) view switcher + Grid/Windows sub-mode toggle */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0, flexWrap: "wrap" }}>
         {session && (
-          <>
+          <span className="hud-chip" style={{ display: "inline-flex", alignItems: "baseline", gap: 8, minWidth: 0 }}>
             <span className="display" style={{ fontSize: 16 }}>{projectName(session.cwd)}</span>
             <span className="mono faint" style={{ fontSize: 10 }}>{session.machine} · {session.gitBranch ?? "no-branch"}</span>
-          </>
+          </span>
         )}
         <span style={{ flex: 1 }} />
         {grid && (
