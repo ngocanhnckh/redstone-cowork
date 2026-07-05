@@ -20,6 +20,15 @@ export default function MultiBrowser({ sessionId, cwd, machine }: { sessionId: s
   const [tabs, setTabs] = useState<{ id: number; url?: string }[]>([{ id: 0 }]);
   const [active, setActive] = useState(0);
 
+  // Per-tab page zoom + responsive device mode (applied to that tab's <webview>).
+  const [zoomByTab, setZoomByTab] = useState<Record<number, number>>({});
+  const [deviceByTab, setDeviceByTab] = useState<Record<number, "laptop" | "mobile">>({});
+  const zoom = zoomByTab[active] ?? 1;
+  const device = deviceByTab[active] ?? "laptop";
+  const setZoom = (z: number) => setZoomByTab((m) => ({ ...m, [active]: Math.min(3, Math.max(0.25, +z.toFixed(2))) }));
+  const bumpZoom = (dir: 1 | -1) => setZoom(zoom * (dir > 0 ? 1.1 : 1 / 1.1));
+  const toggleDevice = () => setDeviceByTab((m) => ({ ...m, [active]: (m[active] ?? "laptop") === "mobile" ? "laptop" : "mobile" }));
+
   // React to "open this URL in the session's browser" requests (from the git
   // widget's GitHub link, or a custom app's cross-domain link): add a tab at that
   // URL and focus it. Guarded by the request nonce so each fires exactly once.
@@ -59,6 +68,10 @@ export default function MultiBrowser({ sessionId, cwd, machine }: { sessionId: s
     display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 10px", borderRadius: 7,
     fontFamily: "var(--font-mono)", fontSize: 11, cursor: "pointer", border: "1px solid transparent",
   };
+  const ctrlBtn: React.CSSProperties = {
+    border: "1px solid var(--border)", background: "transparent", color: "var(--text-soft)",
+    borderRadius: 6, padding: "3px 7px", fontSize: 11, fontFamily: "var(--font-mono)", cursor: "pointer", lineHeight: 1.3, flexShrink: 0,
+  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
@@ -79,6 +92,20 @@ export default function MultiBrowser({ sessionId, cwd, machine }: { sessionId: s
         })}
         <button onClick={addTab} title="New browser tab" style={{ ...tabBtn, background: "transparent", color: "var(--text-soft)", border: "1px dashed var(--border-strong)" }}>+ new</button>
         <span style={{ flex: 1 }} />
+        {/* Zoom controls for the active tab */}
+        <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
+          <button onClick={() => bumpZoom(-1)} title="Zoom out" style={ctrlBtn}>−</button>
+          <button onClick={() => setZoom(1)} title="Reset zoom to 100%" style={{ ...ctrlBtn, minWidth: 42, textAlign: "center" }}>{Math.round(zoom * 100)}%</button>
+          <button onClick={() => bumpZoom(1)} title="Zoom in" style={ctrlBtn}>+</button>
+        </div>
+        {/* Responsive device switch (laptop ⇄ mobile) */}
+        <button
+          onClick={toggleDevice}
+          title={device === "mobile" ? "Mobile view — click for laptop" : "Laptop view — click for mobile"}
+          style={{ ...ctrlBtn, background: device === "mobile" ? "rgb(var(--primary) / 0.22)" : "transparent", color: device === "mobile" ? "var(--text)" : "var(--text-soft)" }}
+        >
+          {device === "mobile" ? "📱 mobile" : "🖥 laptop"}
+        </button>
         <button
           onClick={toggleChrome}
           title={chromeHidden ? "Show address bar & connection" : "Hide address bar & connection (tabs only)"}
@@ -90,7 +117,7 @@ export default function MultiBrowser({ sessionId, cwd, machine }: { sessionId: s
       <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
         {tabs.map((tab) => (
           <div key={tab.id} style={{ position: "absolute", inset: 0, display: tab.id === active ? "flex" : "none", flexDirection: "column" }}>
-            <BrowserPanel sessionId={sessionId} cwd={cwd} machine={machine} ephemeral={tab.id !== 0} chromeHidden={chromeHidden} initialUrl={tab.url} />
+            <BrowserPanel sessionId={sessionId} cwd={cwd} machine={machine} ephemeral={tab.id !== 0} chromeHidden={chromeHidden} initialUrl={tab.url} zoom={zoomByTab[tab.id] ?? 1} device={deviceByTab[tab.id] ?? "laptop"} />
           </div>
         ))}
       </div>

@@ -14,6 +14,11 @@ interface Props {
   /** When set, this (ephemeral) tab starts at this URL instead of the session's
    * saved preview/port — used when opening an external link in the workspace. */
   initialUrl?: string;
+  /** Page zoom factor for the webview (1 = 100%). Driven from the tab row. */
+  zoom?: number;
+  /** Responsive preview mode — "mobile" constrains the view to a phone width so
+   * responsive sites render their mobile layout. */
+  device?: "laptop" | "mobile";
 }
 
 // Minimal typing for Electron's <webview> so JSX type-checks. We only use the
@@ -29,6 +34,7 @@ type WebviewEl = HTMLElement & {
   getWebContentsId(): number;
   findInPage(text: string, options?: { forward?: boolean; findNext?: boolean }): number;
   stopFindInPage(action: "clearSelection" | "keepSelection" | "activateSelection"): void;
+  setZoomFactor(factor: number): void;
 };
 
 declare global {
@@ -86,7 +92,7 @@ function portUrl(port: number): string {
   return `http://localhost:${port}`;
 }
 
-export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, chromeHidden, initialUrl }: Props) {
+export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, chromeHidden, initialUrl, zoom = 1, device = "laptop" }: Props) {
   // Saved override URL (a typed address); when empty the preview is port-driven.
   const [browserUrl, setBrowserUrl] = useState("");
   const [forwardPorts, setForwardPorts] = useState<number[]>([]);
@@ -255,6 +261,17 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, chrom
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [find]);
 
+  // Apply the page zoom factor — on change and on each navigation (a fresh document
+  // resets the webContents zoom back to 1).
+  useEffect(() => {
+    const wv = webviewRef.current;
+    if (!wv) return;
+    const apply = () => { try { wv.setZoomFactor(zoom); } catch { /* guest not ready */ } };
+    apply();
+    wv.addEventListener("dom-ready", apply as EventListener);
+    return () => wv.removeEventListener("dom-ready", apply as EventListener);
+  }, [zoom, loadUrl]);
+
   async function saveConfig(next: { browserUrl: string; previewPort: number | null }) {
     if (ephemeral) return; // extra tabs navigate freely but don't touch saved config
     try {
@@ -399,8 +416,12 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, chrom
       </div>
       )}
 
-      {/* Preview */}
-      <div style={{ flex: 1, minHeight: 0, position: "relative", background: "rgba(0,0,0,0.18)" }}>
+      {/* Preview — in "mobile" mode the webview is constrained to a phone width and
+          centered on a darker backdrop so responsive sites render their mobile layout. */}
+      <div style={{
+        flex: 1, minHeight: 0, position: "relative", background: "rgba(0,0,0,0.18)",
+        display: "flex", justifyContent: device === "mobile" ? "center" : "stretch",
+      }}>
         {/* In-page find bar (Cmd/Ctrl+F) — floats over the top-right of the preview */}
         {findOpen && (
           <div
@@ -444,7 +465,9 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, chrom
             // across tabs, custom apps, and app restarts — like a normal browser.
             partition="persist:rcw-web"
             allowpopups
-            style={{ width: "100%", height: "100%", border: 0 }}
+            style={device === "mobile"
+              ? { width: 390, maxWidth: "100%", height: "100%", border: 0, flex: "0 0 390px", boxShadow: "0 0 0 1px var(--border), 0 12px 40px rgba(0,0,0,0.5)" }
+              : { width: "100%", height: "100%", border: 0, flex: 1 }}
           />
         ) : (
           <div

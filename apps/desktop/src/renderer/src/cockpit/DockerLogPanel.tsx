@@ -271,21 +271,7 @@ export default function DockerLogPanel({ streamId, active }: { streamId: string;
         <span style={{ fontSize: 13 }}>🐳</span>
         {machine ? (
           containers.length > 0 ? (
-            <select
-              value={container}
-              onChange={(e) => setContainer(e.target.value)}
-              className="mono"
-              style={{
-                flex: 1, minWidth: 0, background: "rgb(var(--primary) / 0.06)", color: "var(--text)",
-                border: "1px solid var(--border)", borderRadius: 8, padding: "4px 8px", fontSize: 11.5, outline: "none", cursor: "pointer",
-              }}
-            >
-              {containers.map((c) => (
-                <option key={c.id || c.name} value={shortName(c.name)}>
-                  {shortName(c.name)} · {c.state}
-                </option>
-              ))}
-            </select>
+            <ContainerPicker containers={containers} value={container} onChange={setContainer} />
           ) : (
             <span className="mono faint" style={{ fontSize: 11, flex: 1 }}>no containers on {machine}</span>
           )
@@ -377,3 +363,69 @@ const findBtn: React.CSSProperties = {
   border: "1px solid var(--border)", background: "transparent", color: "var(--text-soft)",
   borderRadius: 6, padding: "2px 7px", fontSize: 11, fontFamily: "var(--font-mono)", cursor: "pointer", lineHeight: 1.4,
 };
+
+/** Searchable container picker: a button that opens a filterable list — so a host
+ * with many containers stays easy to search rather than scrolling a long <select>. */
+function ContainerPicker({ containers, value, onChange }: { containers: DockerContainer[]; value: string; onChange: (v: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const boxRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => { if (boxRef.current && !boxRef.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+  const s = q.trim().toLowerCase();
+  const filtered = s
+    ? containers.filter((c) => shortName(c.name).toLowerCase().includes(s) || (c.state ?? "").toLowerCase().includes(s))
+    : containers;
+  const cur = containers.find((c) => shortName(c.name) === value) ?? null;
+  return (
+    <div ref={boxRef} style={{ position: "relative", flex: 1, minWidth: 0 }}>
+      <button
+        onClick={() => { setOpen((o) => !o); setQ(""); }}
+        className="mono"
+        style={{ width: "100%", display: "flex", alignItems: "center", gap: 6, background: "rgb(var(--primary) / 0.06)", color: "var(--text)", border: "1px solid var(--border)", borderRadius: 8, padding: "4px 8px", fontSize: 11.5, outline: "none", cursor: "pointer" }}
+      >
+        <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textAlign: "left" }}>
+          {cur ? `${shortName(cur.name)} · ${cur.state}` : value || "select container"}
+        </span>
+        <span className="faint" style={{ fontSize: 9, flexShrink: 0 }}>▾</span>
+      </button>
+      {open && (
+        <div className="hud-window" style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 50, borderRadius: 10, border: "1px solid var(--border-strong)", boxShadow: "0 12px 40px rgb(0 0 0 / 0.5)", background: "var(--app-panel)", padding: 6 }}>
+          <input
+            autoFocus
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") { setOpen(false); }
+              if (e.key === "Enter" && filtered.length) { onChange(shortName(filtered[0].name)); setOpen(false); }
+            }}
+            placeholder="Search containers…"
+            className="mono"
+            style={{ width: "100%", boxSizing: "border-box", background: "rgba(255,255,255,0.03)", border: "1px solid var(--border)", borderRadius: 7, padding: "5px 8px", fontSize: 11.5, color: "var(--text)", outline: "none", marginBottom: 6 }}
+          />
+          <div className="no-scrollbar" style={{ maxHeight: 260, overflowY: "auto", display: "flex", flexDirection: "column", gap: 2 }}>
+            {filtered.length === 0 ? (
+              <div className="mono faint" style={{ fontSize: 10.5, padding: "4px 6px" }}>no match</div>
+            ) : filtered.map((c) => {
+              const name = shortName(c.name);
+              const on = name === value;
+              const run = c.state === "running";
+              return (
+                <div key={c.id || c.name} onClick={() => { onChange(name); setOpen(false); }} className="hud-rail-row"
+                  style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 8px", borderRadius: 7, cursor: "pointer", background: on ? "rgb(var(--primary) / 0.18)" : "transparent" }}>
+                  <span style={{ width: 6, height: 6, borderRadius: 999, background: run ? "rgb(var(--accent))" : "var(--border-strong)", flexShrink: 0 }} />
+                  <span className="mono" style={{ flex: 1, minWidth: 0, fontSize: 11.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
+                  <span className="mono faint" style={{ fontSize: 9, flexShrink: 0 }}>{c.state}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
