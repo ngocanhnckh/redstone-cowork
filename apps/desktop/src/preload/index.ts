@@ -74,6 +74,15 @@ contextBridge.exposeInMainWorld("cowork", {
   revokeAccessKey: (id: string): Promise<{ ok: boolean }> =>
     ipcRenderer.invoke(IPC.accessKeyRevoke, { id }),
 
+  // Named Claude endpoint/model config profiles.
+  listClaudeConfigs: (): Promise<Array<{ name: string }>> => ipcRenderer.invoke(IPC.claudeConfigsList),
+  getClaudeConfig: (name: string): Promise<{ name: string; env: Record<string, string> }> =>
+    ipcRenderer.invoke(IPC.claudeConfigGet, { name }),
+  putClaudeConfig: (name: string, env: Record<string, string>): Promise<{ ok: true }> =>
+    ipcRenderer.invoke(IPC.claudeConfigPut, { name, env }),
+  deleteClaudeConfig: (name: string): Promise<{ ok: true }> =>
+    ipcRenderer.invoke(IPC.claudeConfigDelete, { name }),
+
   // Workspace config
   getWorkspaceConfig: (a: {
     sessionId: string;

@@ -45,6 +45,12 @@ declare global {
       createAccessKey(name: string, scope: "read" | "control"): Promise<{ id: string; key: string; scope: string }>;
       revokeAccessKey(id: string): Promise<{ ok: boolean }>;
 
+      // Named Claude endpoint/model config profiles
+      listClaudeConfigs(): Promise<Array<{ name: string }>>;
+      getClaudeConfig(name: string): Promise<{ name: string; env: Record<string, string> }>;
+      putClaudeConfig(name: string, env: Record<string, string>): Promise<{ ok: true }>;
+      deleteClaudeConfig(name: string): Promise<{ ok: true }>;
+
       // Workspace config
       getWorkspaceConfig(a: {
         sessionId: string;

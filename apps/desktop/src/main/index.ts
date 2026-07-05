@@ -328,6 +328,10 @@ ipcMain.handle(IPC.inventoryTagRemove, (_e, a: { id: string; tag: string }) => a
 ipcMain.handle(IPC.accessKeysList, () => api.listAccessKeys());
 ipcMain.handle(IPC.accessKeyCreate, (_e, a: { name: string; scope: "read" | "control" }) => api.createAccessKey(a.name, a.scope));
 ipcMain.handle(IPC.accessKeyRevoke, (_e, a: { id: string }) => api.revokeAccessKey(a.id));
+ipcMain.handle(IPC.claudeConfigsList, () => api.listClaudeConfigs());
+ipcMain.handle(IPC.claudeConfigGet, (_e, a: { name: string }) => api.getClaudeConfig(a.name));
+ipcMain.handle(IPC.claudeConfigPut, (_e, a: { name: string; env: Record<string, string> }) => api.putClaudeConfig(a.name, a.env));
+ipcMain.handle(IPC.claudeConfigDelete, (_e, a: { name: string }) => api.deleteClaudeConfig(a.name));
 
 // Workspace config (per-session .redstone/session.json)
 ipcMain.handle(IPC.workspaceGet, (_e, a: Parameters<typeof getWorkspaceConfig>[0]) =>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useStore } from "../store";
 import AccessKeysManager from "./AccessKeysManager";
+import ClaudeConfigsManager from "./ClaudeConfigsManager";
 import {
   type Appearance,
   loadAppearance,
@@ -408,6 +409,8 @@ export default function SettingsPanel() {
             </>
           )}
         </div>
+
+        <ClaudeConfigsManager />
 
         <AccessKeysManager />
       </div>

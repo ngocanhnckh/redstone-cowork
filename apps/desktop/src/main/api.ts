@@ -202,6 +202,21 @@ export async function revokeAccessKey(id: string): Promise<unknown> {
   return (await req(`/access-keys/${encodeURIComponent(id)}/revoke`, { method: "POST" })).json();
 }
 
+// Named Claude endpoint/model config profiles (server-stored, env encrypted at
+// rest). `redstone --config="<name>" claude` injects a profile's env into the session.
+export async function listClaudeConfigs(): Promise<unknown> {
+  return (await req("/configs")).json();
+}
+export async function getClaudeConfig(name: string): Promise<unknown> {
+  return (await req(`/configs/${encodeURIComponent(name)}`)).json();
+}
+export async function putClaudeConfig(name: string, env: Record<string, string>): Promise<unknown> {
+  return (await req(`/configs/${encodeURIComponent(name)}`, { method: "PUT", body: JSON.stringify({ env }) })).json();
+}
+export async function deleteClaudeConfig(name: string): Promise<unknown> {
+  return (await req(`/configs/${encodeURIComponent(name)}`, { method: "DELETE" })).json();
+}
+
 export async function getTelemetry(): Promise<unknown[]> {
   return (await req("/telemetry")).json();
 }
