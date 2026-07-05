@@ -1,5 +1,5 @@
-import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, Notification, shell, dialog, clipboard } from "electron";
-import { fileURLToPath } from "node:url";
+import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, Notification, shell, dialog, clipboard, protocol, net } from "electron";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join, basename } from "node:path";
 import { saveConfig, loadConfig, clearConfig } from "./config";
 import * as api from "./api";
@@ -29,11 +29,17 @@ import {
 import { sshSetup, type SshSetupArgs } from "./ssh-setup";
 import { listDir, readFileAt, writeFileAt, deletePath, makeDir, createFile, uploadLocalFile, searchFiles } from "./files";
 import { gitInfo } from "./git";
-import { chooseBgImage, getBgImage, clearBgImage, setSimpleFullscreen, isFullscreen, setVibrancy } from "./appearance";
+import { chooseBgImage, getBgImage, clearBgImage, setSimpleFullscreen, isFullscreen, setVibrancy, chooseBgVideo, getBgVideoUrl, clearBgVideo, currentBgVideoPath } from "./appearance";
 import { registerSessionBrowser, unregisterSessionBrowser, startInspect, stopInspect, stopAllInspectors } from "./devtools";
 import { IPC } from "../shared/ipc";
 
 const here = dirname(fileURLToPath(import.meta.url));
+
+// The custom scheme that streams the user's background video to the renderer with
+// range support. Must be registered as privileged BEFORE the app is ready.
+protocol.registerSchemesAsPrivileged([
+  { scheme: "rcw-media", privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
+]);
 
 // ---------------------------------------------------------------------------
 // Tray state
@@ -169,6 +175,8 @@ function createWindow(): void {
       sandbox: false,
       // Enable the <webview> tag for the Browser tab's Chromium preview.
       webviewTag: true,
+      // Allow the looping background video to autoplay WITH sound (no gesture).
+      autoplayPolicy: "no-user-gesture-required",
     },
   });
 
@@ -491,6 +499,9 @@ ipcMain.handle(IPC.bgImageClear, async () => { await clearBgImage(); return { ok
 ipcMain.handle(IPC.simpleFullscreen, (e, a: { on: boolean }) => ({ fullscreen: setSimpleFullscreen(senderWindow(e), !!a?.on) }));
 ipcMain.handle(IPC.fullscreenState, (e) => ({ fullscreen: isFullscreen(senderWindow(e)) }));
 ipcMain.handle(IPC.setVibrancy, (e, a: { on: boolean }) => { setVibrancy(senderWindow(e), !!a?.on); return { ok: true }; });
+ipcMain.handle(IPC.bgVideoChoose, (e) => chooseBgVideo(senderWindow(e)));
+ipcMain.handle(IPC.bgVideoGet, () => getBgVideoUrl());
+ipcMain.handle(IPC.bgVideoClear, async () => { await clearBgVideo(); return { ok: true }; });
 
 // Browser inspector (console + network) wiring.
 ipcMain.handle(IPC.sessionBrowserRegister, (_e, a: { sessionId: string; webContentsId: number }) => {
@@ -742,6 +753,19 @@ app.on("login", (event, webContents, details, authInfo, callback) => {
 });
 
 app.whenReady().then(() => {
+  // Stream the current background video (range-capable) to the renderer. The
+  // handler always serves whatever file is configured now, so changing it just
+  // needs a fresh URL (mtime-versioned) on the renderer side.
+  protocol.handle("rcw-media", async () => {
+    const p = currentBgVideoPath();
+    if (!p) return new Response("", { status: 404 });
+    try {
+      return await net.fetch(pathToFileURL(p).toString());
+    } catch {
+      return new Response("", { status: 404 });
+    }
+  });
+
   // Create system tray
   try {
     // Use an empty image — on macOS tray title text is visible even without an icon image

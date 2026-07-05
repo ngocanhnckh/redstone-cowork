@@ -140,6 +140,9 @@ declare global {
       setSimpleFullscreen(on: boolean): Promise<{ fullscreen: boolean }>;
       getFullscreenState(): Promise<{ fullscreen: boolean }>;
       setVibrancy(on: boolean): Promise<{ ok: boolean }>;
+      chooseBgVideo(): Promise<{ ok: boolean; url?: string; error?: string }>;
+      getBgVideo(): Promise<string | null>;
+      clearBgVideo(): Promise<{ ok: boolean }>;
 
       // Browser inspector (console + network devtools).
       registerSessionBrowser(sessionId: string, webContentsId: number): Promise<{ ok: boolean }>;

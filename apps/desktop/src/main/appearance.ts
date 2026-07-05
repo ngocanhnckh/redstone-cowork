@@ -1,5 +1,6 @@
 import { app, dialog, BrowserWindow } from "electron";
 import { promises as fs } from "node:fs";
+import { statSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 // Custom background image support + the macOS "keep wallpaper in fullscreen" fix.
@@ -86,6 +87,58 @@ export function setSimpleFullscreen(win: BrowserWindow | undefined, on: boolean)
 export function isFullscreen(win: BrowserWindow | undefined): boolean {
   if (!win) return false;
   return win.isFullScreen() || win.isSimpleFullScreen();
+}
+
+// ---------------------------------------------------------------------------
+// Background video: an optional looping video (with audio) shown as the app
+// backdrop instead of the desktop wallpaper. The chosen file can be large, so we
+// store only its PATH and stream it to the renderer over the custom rcw-media://
+// protocol (range-capable) rather than copying or base64-ing it.
+// ---------------------------------------------------------------------------
+function videoStorePath(): string {
+  return path.join(app.getPath("userData"), "bg-video.txt");
+}
+
+/** Open the picker, remember the chosen video's path, and return its stream URL. */
+export async function chooseBgVideo(
+  win: BrowserWindow | undefined,
+): Promise<{ ok: true; url: string } | { ok: false; error?: string }> {
+  try {
+    const picked = await dialog.showOpenDialog(win!, {
+      title: "Choose background video",
+      properties: ["openFile"],
+      filters: [{ name: "Video", extensions: ["mp4", "webm", "mov", "m4v", "mkv", "ogg"] }],
+    });
+    if (picked.canceled || picked.filePaths.length === 0) return { ok: false };
+    await fs.writeFile(videoStorePath(), picked.filePaths[0], "utf8");
+    const url = getBgVideoUrl();
+    return url ? { ok: true, url } : { ok: false, error: "could not read the chosen file" };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/** The absolute path of the current background video, or null. */
+export function currentBgVideoPath(): string | null {
+  try {
+    const p = readFileSync(videoStorePath(), "utf8").trim();
+    return p || null;
+  } catch {
+    return null;
+  }
+}
+
+/** A cache-busted rcw-media:// URL for the current video (versioned by mtime), or null. */
+export function getBgVideoUrl(): string | null {
+  const p = currentBgVideoPath();
+  if (!p) return null;
+  let v = 0;
+  try { v = Math.floor(statSync(p).mtimeMs); } catch { return null; }
+  return `rcw-media://bg/video?v=${v}`;
+}
+
+export async function clearBgVideo(): Promise<void> {
+  try { await fs.unlink(videoStorePath()); } catch { /* already gone */ }
 }
 
 /**

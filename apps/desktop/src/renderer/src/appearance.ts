@@ -26,9 +26,11 @@ export type Appearance = {
   /** Panel/window glass solidity as a percentage (higher = more opaque/brighter
    * frosted glass, lower = more see-through). Drives --glass-pct. */
   glass: number;
+  /** Mute the looping background video (if one is set). */
+  videoMuted: boolean;
 };
 
-export const DEFAULT_APPEARANCE: Appearance = { veil: 6, blur: 28, bgAnim: true, dockPos: "bottom", dockScale: 1, hudClear: false, glass: 94 };
+export const DEFAULT_APPEARANCE: Appearance = { veil: 6, blur: 28, bgAnim: true, dockPos: "bottom", dockScale: 1, hudClear: false, glass: 94, videoMuted: false };
 
 const KEY = "rcw.appearance";
 
@@ -43,6 +45,7 @@ export function loadAppearance(): Appearance {
       dockScale: clampNum(raw.dockScale, 0.6, 1.6, DEFAULT_APPEARANCE.dockScale),
       hudClear: typeof raw.hudClear === "boolean" ? raw.hudClear : DEFAULT_APPEARANCE.hudClear,
       glass: clampNum(raw.glass, 40, 100, DEFAULT_APPEARANCE.glass),
+      videoMuted: typeof raw.videoMuted === "boolean" ? raw.videoMuted : DEFAULT_APPEARANCE.videoMuted,
     };
   } catch {
     return { ...DEFAULT_APPEARANCE };

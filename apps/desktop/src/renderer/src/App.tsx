@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Login from "./Login";
 import Cockpit from "./cockpit/Cockpit";
+import BgVideo from "./cockpit/BgVideo";
 
 type ConfigState = { serverUrl: string; hasToken: boolean } | null | "loading";
 
@@ -16,9 +17,9 @@ export default function App() {
     recheck();
   }, [recheck]);
 
-  // Loading state
+  let content: React.ReactNode;
   if (configState === "loading") {
-    return (
+    content = (
       <div data-app className="grain" style={{ minHeight: "100vh" }}>
         <div className="atmosphere">
           <div className="blob blob--a" />
@@ -44,14 +45,19 @@ export default function App() {
         </div>
       </div>
     );
+  } else if (!(configState !== null && configState.hasToken)) {
+    // Not configured — show login
+    content = <Login onConnected={recheck} />;
+  } else {
+    // Configured — show Focus Theater
+    content = <Cockpit />;
   }
 
-  // Not configured — show login
-  const configured = configState !== null && configState.hasToken;
-  if (!configured) {
-    return <Login onConnected={recheck} />;
-  }
-
-  // Configured — show Focus Theater
-  return <Cockpit />;
+  return (
+    <>
+      {/* Optional looping background video, behind everything. */}
+      <BgVideo />
+      {content}
+    </>
+  );
 }

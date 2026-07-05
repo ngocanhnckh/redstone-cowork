@@ -215,6 +215,9 @@ contextBridge.exposeInMainWorld("cowork", {
     ipcRenderer.invoke(IPC.simpleFullscreen, { on }),
   getFullscreenState: (): Promise<{ fullscreen: boolean }> => ipcRenderer.invoke(IPC.fullscreenState),
   setVibrancy: (on: boolean): Promise<{ ok: boolean }> => ipcRenderer.invoke(IPC.setVibrancy, { on }),
+  chooseBgVideo: (): Promise<{ ok: boolean; url?: string; error?: string }> => ipcRenderer.invoke(IPC.bgVideoChoose),
+  getBgVideo: (): Promise<string | null> => ipcRenderer.invoke(IPC.bgVideoGet),
+  clearBgVideo: (): Promise<{ ok: boolean }> => ipcRenderer.invoke(IPC.bgVideoClear),
 
   // Browser inspector (console + network devtools).
   registerSessionBrowser: (sessionId: string, webContentsId: number): Promise<{ ok: boolean }> =>

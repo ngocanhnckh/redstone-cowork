@@ -34,6 +34,8 @@ export default function SettingsPanel() {
   const [appr, setAppr] = useState<Appearance>(loadAppearance);
   const [hasBg, setHasBg] = useState(false);
   const [bgBusy, setBgBusy] = useState(false);
+  const [hasVideo, setHasVideo] = useState(false);
+  const [videoBusy, setVideoBusy] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const patchAppr = (p: Partial<Appearance>) => {
     setAppr((cur) => { const next = { ...cur, ...p }; saveAppearance(next); applyAppearance(next); return next; });
@@ -42,14 +44,35 @@ export default function SettingsPanel() {
     setBgBusy(true);
     try {
       const r = await window.cowork.chooseBgImage();
-      if (r.ok && r.dataUrl) { applyBgImage(r.dataUrl); setHasBg(true); }
-      else if (r.error) setStatus({ kind: "err", text: r.error });
+      if (r.ok && r.dataUrl) {
+        applyBgImage(r.dataUrl); setHasBg(true);
+        // image + video are mutually exclusive backdrops
+        await window.cowork.clearBgVideo().catch(() => {});
+        setHasVideo(false); window.dispatchEvent(new Event("rcw-bgvideo"));
+      } else if (r.error) setStatus({ kind: "err", text: r.error });
     } finally { setBgBusy(false); }
   };
   const removeBg = async () => {
     await window.cowork.clearBgImage().catch(() => {});
     applyBgImage(null);
     setHasBg(false);
+  };
+  const chooseVideo = async () => {
+    setVideoBusy(true);
+    try {
+      const r = await window.cowork.chooseBgVideo();
+      if (r.ok) {
+        setHasVideo(true); window.dispatchEvent(new Event("rcw-bgvideo"));
+        // image + video are mutually exclusive backdrops
+        await window.cowork.clearBgImage().catch(() => {});
+        applyBgImage(null); setHasBg(false);
+      } else if (r.error) setStatus({ kind: "err", text: r.error });
+    } finally { setVideoBusy(false); }
+  };
+  const removeVideo = async () => {
+    await window.cowork.clearBgVideo().catch(() => {});
+    setHasVideo(false);
+    window.dispatchEvent(new Event("rcw-bgvideo"));
   };
   const toggleFullscreen = async () => {
     try { const r = await window.cowork.setSimpleFullscreen(!fullscreen); setFullscreen(r.fullscreen); } catch { /* ignore */ }
@@ -70,6 +93,7 @@ export default function SettingsPanel() {
     });
     setAppr(loadAppearance());
     window.cowork.getBgImage().then((u) => setHasBg(!!u)).catch(() => {});
+    window.cowork.getBgVideo().then((u) => setHasVideo(!!u)).catch(() => {});
     window.cowork.getFullscreenState().then((s) => setFullscreen(s.fullscreen)).catch(() => {});
   }, [open]);
 
@@ -282,6 +306,28 @@ export default function SettingsPanel() {
         </div>
         <p className="faint" style={{ fontSize: 11, margin: "0 2px 18px", lineHeight: 1.5 }}>
           Shown blurred &amp; tinted behind the app (max 12&nbsp;MB). Leave empty for the transparent, see-through desktop look.
+        </p>
+
+        <label className="soft" style={labelStyle}>Background video</label>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6, flexWrap: "wrap" }}>
+          <button onClick={chooseVideo} disabled={videoBusy} className="glass-btn--clay" style={{ padding: "9px 16px", fontSize: 13, fontWeight: 600 }}>
+            {videoBusy ? "…" : hasVideo ? "Replace video…" : "Choose video…"}
+          </button>
+          {hasVideo && (
+            <button onClick={removeVideo} style={{ ...iconBtn, width: "auto", padding: "8px 14px", borderRadius: 999, fontSize: 12.5 }}>
+              Remove
+            </button>
+          )}
+          <span className="faint mono" style={{ fontSize: 11 }}>{hasVideo ? "✓ looping" : "off"}</span>
+        </div>
+        <SwitchRow
+          label="Mute video"
+          hint="The background video loops with sound by default; mute it here."
+          on={appr.videoMuted}
+          onToggle={() => patchAppr({ videoMuted: !appr.videoMuted })}
+        />
+        <p className="faint" style={{ fontSize: 11, margin: "0 2px 18px", lineHeight: 1.5 }}>
+          Plays on a loop behind the app (with audio) as a live wallpaper — great in fullscreen / transparent HUD mode. Takes precedence over a background image.
         </p>
 
         <SwitchRow

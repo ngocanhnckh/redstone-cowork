@@ -1248,7 +1248,7 @@ function HudConsole() {
           {tplMenu && (
             <>
               <div onClick={() => setTplMenu(false)} style={{ position: "fixed", inset: 0, zIndex: 1500 }} />
-              <div style={{
+              <div className="hud-window" style={{
                 position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 1600, width: 230, padding: 8, borderRadius: 12,
                 border: "1px solid var(--border-strong)", boxShadow: "0 12px 40px rgb(0 0 0 / 0.5)", ...WIN_GLASS,
               }}>
@@ -1343,7 +1343,7 @@ function HudConsole() {
                 <>
                   {/* click-away backdrop */}
                   <div onClick={() => setDockerMenu(false)} style={{ position: "fixed", inset: 0, zIndex: 1500 }} />
-                  <div style={{
+                  <div className="hud-window" style={{
                     ...dockMenuAnchor(dockPos), zIndex: 1600,
                     minWidth: 190, padding: 5, borderRadius: 12, border: "1px solid var(--border-strong)",
                     boxShadow: "0 12px 40px rgb(0 0 0 / 0.5)", ...WIN_GLASS,
