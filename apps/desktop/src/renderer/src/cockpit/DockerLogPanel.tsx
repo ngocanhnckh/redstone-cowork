@@ -139,11 +139,15 @@ export default function DockerLogPanel({ streamId, active }: { streamId: string;
   // Persist the picked container so it's restored on reopen / restart.
   useEffect(() => { if (container) saveSelection(selKey, container); }, [selKey, container]);
 
-  // Auto-pick the first running container (else the first) only when the current
-  // selection is empty or no longer present (a remembered one that still exists wins).
+  // Auto-pick the first running container (else the first) ONLY when there's no
+  // current selection at all. A remembered/user-picked container is sticky: we must
+  // never override it just because it's momentarily absent from the list — on restart
+  // the host is still connecting and the poll is empty/partial, and a stopped
+  // container is filtered out. Overriding here would persist the fallback over the
+  // user's choice (see the save effect above) and lose it permanently across restarts.
   useEffect(() => {
-    if (container && containers.some((c) => shortName(c.name) === container)) return;
-    if (containers.length === 0) return; // keep the remembered name until the list loads
+    if (container) return; // keep any existing selection (remembered or user-picked)
+    if (containers.length === 0) return; // nothing to pick from yet
     const first = containers.find((c) => c.state === "running") ?? containers[0];
     setContainer(first ? shortName(first.name) : "");
   }, [containers, container]);

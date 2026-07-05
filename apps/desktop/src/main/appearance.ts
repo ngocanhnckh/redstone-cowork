@@ -82,6 +82,16 @@ export function setSimpleFullscreen(win: BrowserWindow | undefined, on: boolean)
   }
   if (on && win.isFullScreen()) win.setFullScreen(false); // leave native first
   win.setSimpleFullScreen(on);
+  // Some macOS/Electron combos leave the content blank right after the simple-
+  // fullscreen style-mask change until the view is nudged to re-lay-out. Reassert
+  // vibrancy and force a repaint once the transition settles.
+  const kick = () => {
+    if (win.isDestroyed()) return;
+    win.setVibrancy("under-window");
+    if (!win.webContents.isDestroyed()) win.webContents.invalidate();
+  };
+  kick();
+  setTimeout(kick, 60);
   return win.isSimpleFullScreen();
 }
 
