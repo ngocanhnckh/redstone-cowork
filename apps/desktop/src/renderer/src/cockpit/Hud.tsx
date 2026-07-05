@@ -1521,12 +1521,12 @@ export default function Hud() {
       <span className="hud-grid" />
       <div style={{ position: "relative", zIndex: 1, height: "100%", display: "grid", gridTemplateColumns: cols, minHeight: 0 }}>
         {/* Left column: sessions queue (top half) + git history (bottom half) */}
-        <div style={{ display: "flex", flexDirection: "column", minHeight: 0, borderRight: "1px solid var(--border)" }}>
+        <div className="hud-sidecol" style={{ display: "flex", flexDirection: "column", minHeight: 0, borderRight: "1px solid var(--border)" }}>
           <div style={{ flex: "1 1 50%", minHeight: 0, display: "flex", flexDirection: "column" }}><QueueRail /></div>
           <div className="no-scrollbar" style={{ flex: "1 1 50%", minHeight: 0, overflowY: "auto", padding: "0 10px 10px" }}><GitPane /></div>
         </div>
         <HudConsole />
-        <div style={{ borderLeft: "1px solid var(--border)", padding: "14px 16px", minHeight: 0, display: "flex", flexDirection: "column", position: "relative" }}>
+        <div className="hud-sidecol" style={{ borderLeft: "1px solid var(--border)", padding: "14px 16px", minHeight: 0, display: "flex", flexDirection: "column", position: "relative" }}>
           {/* Drag handle straddling the left border of the telemetry column. */}
           <div
             className={`hud-resize-handle${resizing ? " dragging" : ""}`}

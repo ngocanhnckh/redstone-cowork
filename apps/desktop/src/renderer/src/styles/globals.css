@@ -88,6 +88,15 @@ body {
     backdrop-filter: none;
     box-shadow: none;
 }
+/* Give the two side columns (which hold the widgets) their own frosted glass
+   background so widget text stays readable over the raw desktop, while the
+   center/gaps stay fully transparent. Opacity follows the Glass slider
+   (--glass-pct); blur follows the Blur slider (--app-blur). */
+.rcw-hud-clear .hud-sidecol {
+    background: color-mix(in srgb, var(--app-panel) var(--glass-pct, 94%), transparent);
+    -webkit-backdrop-filter: blur(var(--app-blur, 28px)) saturate(1.3);
+    backdrop-filter: blur(var(--app-blur, 28px)) saturate(1.3);
+}
 /* …and remove the full-bleed decoration that only reads as noise over the raw
    desktop: the drifting HUD grid, the film-grain overlay, and the heavy window /
    dock drop-shadows (box-shadow is inline, so !important is required). */
