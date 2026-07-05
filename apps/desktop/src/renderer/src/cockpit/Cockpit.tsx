@@ -131,6 +131,7 @@ export default function Cockpit() {
       >
         {/* Title bar — draggable; left padding clears the macOS traffic lights */}
         <div
+          className="hud-chrome"
           style={
             {
               height: 40,

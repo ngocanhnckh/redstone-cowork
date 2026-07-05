@@ -229,7 +229,7 @@ function Clock() {
   const [now, setNow] = useState(new Date());
   useEffect(() => { const t = setInterval(() => setNow(new Date()), 1000); return () => clearInterval(t); }, []);
   return (
-    <div style={{ ...card, containerType: "inline-size" }}>
+    <div className="hud-card" style={{ ...card, containerType: "inline-size" }}>
       <span className="hud-corner" />
       {kicker("Mission Time")}
       <div className="display" style={{ fontSize: "clamp(24px, 20cqw, 38px)", lineHeight: 1, fontVariantNumeric: "tabular-nums", letterSpacing: "0.02em", whiteSpace: "nowrap" }}>
@@ -245,7 +245,7 @@ function Clock() {
 function HostCard({ t }: { t: HostTelemetryView }) {
   const ramPct = t.latest.ramTotal > 0 ? (t.latest.ramUsed / t.latest.ramTotal) * 100 : 0;
   return (
-    <div style={card}>
+    <div className="hud-card" style={card}>
       <span className="hud-corner" />
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
         <span className="ai-core" style={{ width: 8, height: 8 }} />
@@ -284,7 +284,7 @@ function HostCard({ t }: { t: HostTelemetryView }) {
 /** Lively placeholder shown until a redstone agent streams real telemetry. */
 function HostSkeleton() {
   return (
-    <div style={card}>
+    <div className="hud-card" style={card}>
       <span className="hud-corner" />
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
         <span className="ai-core" style={{ width: 8, height: 8 }} />
@@ -327,7 +327,7 @@ function GitPane() {
   useEffect(() => { const t = setInterval(load, 20_000); return () => clearInterval(t); }, [session?.id, session?.cwd, session?.machine]);
 
   return (
-    <div style={{ ...card, padding: "13px 15px" }}>
+    <div className="hud-card" style={{ ...card, padding: "13px 15px" }}>
       <span className="hud-corner" />
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
         <span style={{ fontSize: 12 }}>⎇</span>
@@ -418,7 +418,7 @@ function TelemetryColumn({ tele }: { tele: HostTelemetryView[] }) {
       variants={STAGGER} initial="hidden" animate="show">
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 14 }}>
         <motion.div variants={RISE}><Clock /></motion.div>
-        <motion.div variants={RISE} style={{ ...card, minWidth: 0 }}>
+        <motion.div variants={RISE} className="hud-card" style={{ ...card, minWidth: 0 }}>
           <span className="hud-corner" />
           {kicker("Transmission")}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(64px, 1fr))", gap: 12, marginBottom: 10 }}>
@@ -1217,7 +1217,7 @@ function HudConsole() {
         )}
         <span style={{ flex: 1 }} />
         {grid && (
-          <div style={{ display: "flex", gap: 3, padding: 3, borderRadius: 999, border: "1px solid var(--border)" }}>
+          <div className="hud-chrome" style={{ display: "flex", gap: 3, padding: 3, borderRadius: 999, border: "1px solid var(--border)" }}>
             {VIEW_ORDER.map((v) => (
               <button key={v} onClick={() => setView(v)} style={{
                 padding: "5px 11px", borderRadius: 8, fontFamily: "var(--font-mono)", fontSize: 10.5, cursor: "pointer", border: 0, whiteSpace: "nowrap",
@@ -1228,7 +1228,7 @@ function HudConsole() {
         )}
         {/* Minimized windows are restored from the app dock (Windows mode). */}
         {/* Grid ↔ Windows sub-mode toggle. */}
-        <div style={{ display: "flex", gap: 3, padding: 3, borderRadius: 999, border: "1px solid var(--border)" }}>
+        <div className="hud-chrome" style={{ display: "flex", gap: 3, padding: 3, borderRadius: 999, border: "1px solid var(--border)" }}>
           {(["grid", "windows"] as HudLayout[]).map((l) => (
             <button key={l} onClick={() => setLayout(l)} title={l === "grid" ? "Tiled grid" : "Free-floating windows"} style={{
               padding: "5px 11px", borderRadius: 8, fontFamily: "var(--font-mono)", fontSize: 10.5, cursor: "pointer", border: 0, whiteSpace: "nowrap",
@@ -1240,6 +1240,7 @@ function HudConsole() {
         {/* Layout templates: save the current arrangement / apply a saved one. */}
         <div style={{ position: "relative" }}>
           <button onClick={() => setTplMenu((m) => !m)} title="Save / load a window layout"
+            className="hud-chrome"
             style={{
               padding: "5px 11px", borderRadius: 999, fontFamily: "var(--font-mono)", fontSize: 10.5, cursor: "pointer", whiteSpace: "nowrap",
               border: "1px solid var(--border)", background: tplMenu ? "rgb(var(--primary) / 0.22)" : "transparent", color: "var(--text-soft)",
@@ -1521,12 +1522,12 @@ export default function Hud() {
       <span className="hud-grid" />
       <div style={{ position: "relative", zIndex: 1, height: "100%", display: "grid", gridTemplateColumns: cols, minHeight: 0 }}>
         {/* Left column: sessions queue (top half) + git history (bottom half) */}
-        <div className="hud-sidecol" style={{ display: "flex", flexDirection: "column", minHeight: 0, borderRight: "1px solid var(--border)" }}>
+        <div style={{ display: "flex", flexDirection: "column", minHeight: 0, borderRight: "1px solid var(--border)" }}>
           <div style={{ flex: "1 1 50%", minHeight: 0, display: "flex", flexDirection: "column" }}><QueueRail /></div>
           <div className="no-scrollbar" style={{ flex: "1 1 50%", minHeight: 0, overflowY: "auto", padding: "0 10px 10px" }}><GitPane /></div>
         </div>
         <HudConsole />
-        <div className="hud-sidecol" style={{ borderLeft: "1px solid var(--border)", padding: "14px 16px", minHeight: 0, display: "flex", flexDirection: "column", position: "relative" }}>
+        <div style={{ borderLeft: "1px solid var(--border)", padding: "14px 16px", minHeight: 0, display: "flex", flexDirection: "column", position: "relative" }}>
           {/* Drag handle straddling the left border of the telemetry column. */}
           <div
             className={`hud-resize-handle${resizing ? " dragging" : ""}`}

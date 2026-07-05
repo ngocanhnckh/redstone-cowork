@@ -57,7 +57,7 @@ export default function TokenSpendWidget() {
   const total = input + output;
 
   return (
-    <div style={card}>
+    <div className="hud-card" style={card}>
       <span className="hud-corner" />
       <div className="mono" style={{ fontSize: 10, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--text-soft)", marginBottom: 10 }}>Token Spend</div>
       {!session ? (

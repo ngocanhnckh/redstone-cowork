@@ -77,7 +77,7 @@ export default function SessionInfoWidget() {
   useEffect(() => { setIps(null); loadIps(); const t = setInterval(loadIps, 60_000); return () => clearInterval(t); }, [machine]);
 
   return (
-    <div style={{ ...card, containerType: "inline-size" }}>
+    <div className="hud-card" style={{ ...card, containerType: "inline-size" }}>
       <span className="hud-corner" />
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
         <span className="ai-core" style={{ width: 7, height: 7 }} />
