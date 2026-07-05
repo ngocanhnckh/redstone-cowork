@@ -10,6 +10,15 @@ import {
   DOCK_POSITIONS,
   DOCK_LABEL,
 } from "../appearance";
+import {
+  type AutoLayout,
+  type ScreenClass,
+  useAutoLayout,
+  saveAutoLayout,
+  loadTemplateNames,
+  screenClass,
+  currentScreenWidth,
+} from "../autoLayout";
 
 /**
  * Connection settings — reachable any time from the title bar. Lets the user see
@@ -40,6 +49,12 @@ export default function SettingsPanel() {
   const patchAppr = (p: Partial<Appearance>) => {
     setAppr((cur) => { const next = { ...cur, ...p }; saveAppearance(next); applyAppearance(next); return next; });
   };
+
+  // Auto-layout: switch each session's HUD arrangement to a saved template by screen
+  // size. The templates themselves are managed in the HUD's Layouts menu.
+  const auto = useAutoLayout();
+  const patchAuto = (p: Partial<AutoLayout>) => saveAutoLayout({ ...auto, ...p });
+  const tplNames = loadTemplateNames();
   const chooseBg = async () => {
     setBgBusy(true);
     try {
@@ -336,6 +351,63 @@ export default function SettingsPanel() {
           on={fullscreen}
           onToggle={toggleFullscreen}
         />
+
+        {/* Auto-layout by screen size */}
+        <div style={{ marginTop: 24, paddingTop: 18, borderTop: "1px solid var(--border)" }}>
+          <span className="kicker">Auto layout</span>
+          <h2 className="display" style={{ fontSize: 20, margin: "2px 0 4px" }}>Layout by screen size</h2>
+          <p className="faint" style={{ fontSize: 11.5, margin: "0 2px 14px", lineHeight: 1.5 }}>
+            Automatically switch each session to a saved layout template based on the screen — so a layout built on a desktop
+            monitor doesn’t have to be redone on a laptop. Applies on fullscreen, at launch, and when the screen changes.
+            Save templates from the HUD’s <strong>▤ Layouts</strong> menu (where you can also override per session).
+          </p>
+
+          <SwitchRow
+            label="Enable auto-layout"
+            on={auto.enabled}
+            onToggle={() => patchAuto({ enabled: !auto.enabled })}
+          />
+
+          {auto.enabled && (
+            <>
+              <SliderRow
+                label="Laptop when screen width is ≤"
+                hint={`Screens at or below this width use the laptop template; wider screens use the desktop template. This screen is ${currentScreenWidth()}px → ${screenClass(auto.breakpoint)}.`}
+                value={auto.breakpoint}
+                min={1000}
+                max={3840}
+                suffix="px"
+                onChange={(v) => patchAuto({ breakpoint: v })}
+              />
+
+              <label className="soft" style={{ ...labelStyle, marginTop: 6 }}>Global default templates</label>
+              {tplNames.length === 0 ? (
+                <p className="faint" style={{ fontSize: 11.5, margin: "2px 2px 8px" }}>No saved templates yet — save one from the HUD’s Layouts menu.</p>
+              ) : (
+                (["laptop", "desktop"] as ScreenClass[]).map((c) => (
+                  <div key={c} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                    <span className="mono faint" style={{ fontSize: 12, width: 62, flexShrink: 0, textTransform: "capitalize" }}>{c}</span>
+                    <select
+                      value={auto.global[c] ?? ""}
+                      onChange={(e) => patchAuto({ global: { ...auto.global, [c]: e.target.value || null } })}
+                      className="mono"
+                      style={{
+                        flex: 1, minWidth: 0, border: "1px solid var(--border)", background: "rgba(255,255,255,0.03)",
+                        color: "var(--text)", borderRadius: 8, padding: "7px 9px", fontSize: 12, outline: "none", cursor: "pointer",
+                      }}
+                    >
+                      <option value="">— none —</option>
+                      {tplNames.map((t) => <option key={t.name} value={t.name}>{t.name} ({t.kind})</option>)}
+                    </select>
+                  </div>
+                ))
+              )}
+              <p className="faint" style={{ fontSize: 11, margin: "2px 2px 4px", lineHeight: 1.5 }}>
+                Used for any session that doesn’t have its own per-session assignment in the Layouts menu.
+              </p>
+            </>
+          )}
+        </div>
 
         <AccessKeysManager />
       </div>

@@ -36,8 +36,12 @@ export default function Cockpit() {
   const [fullscreen, setFullscreen] = useState(false);
   useEffect(() => { window.cowork.getFullscreenState().then((s) => setFullscreen(s.fullscreen)).catch(() => {}); }, []);
   const toggleFullscreen = async () => {
-    try { const r = await window.cowork.setSimpleFullscreen(!fullscreen); setFullscreen(r.fullscreen); }
-    catch { /* ignore */ }
+    try {
+      const r = await window.cowork.setSimpleFullscreen(!fullscreen);
+      setFullscreen(r.fullscreen);
+      // Let auto-layout re-tile for the (now full-screen) display size.
+      window.dispatchEvent(new CustomEvent("rcw-fullscreen", { detail: { on: r.fullscreen } }));
+    } catch { /* ignore */ }
   };
 
   useEffect(() => {

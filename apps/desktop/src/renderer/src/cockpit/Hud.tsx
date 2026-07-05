@@ -21,6 +21,7 @@ import TokenSpendWidget from "./TokenSpendWidget";
 import SessionInfoWidget from "./SessionInfoWidget";
 import { GitInfo } from "../types";
 import { useAppearance, type DockPos } from "../appearance";
+import { loadAutoLayout, screenClass, resolveTemplate, useAutoLayout, loadTemplateNames, saveAutoLayout, type ScreenClass } from "../autoLayout";
 
 // Motion (motion.dev) entrance choreography for the widget column.
 const STAGGER: Variants = { hidden: {}, show: { transition: { staggerChildren: 0.07, delayChildren: 0.05 } } };
@@ -695,6 +696,9 @@ function sanitizeWinMap(p: Partial<WinMap> | undefined): WinMap {
 type SessionConsole = { view: ConsoleView; layout: HudLayout; win: WinMap };
 const CONSOLE_KEY = "rcw.hud.console.v1";
 const NO_SESSION = "__none__";
+// Auto-layout: the launch trigger fires only once per app run, not on every HUD
+// re-mount (so switching grid↔hud doesn't keep clobbering manual tweaks).
+let autoLaunchApplied = false;
 function defaultConsole(): SessionConsole {
   return { view: "ctf", layout: "grid", win: defaultWins() };
 }
@@ -974,6 +978,81 @@ function HudConsole() {
     setTplMenu(false);
   };
   const deleteTemplate = (name: string) => setTemplates((t) => { const n = { ...t }; delete n[name]; return n; });
+
+  // ── Auto-layout ──────────────────────────────────────────────────────────
+  // Apply the screen-class-appropriate saved template to EVERY session: resolve
+  // each session's template (its per-session assignment, else the global default)
+  // for the current screen class, clone it in, and clamp its windows to the canvas
+  // so a layout saved on a bigger screen never leaves a window off-view.
+  const autoCfg = useAutoLayout();
+  const templatesRef = useRef(templates);
+  templatesRef.current = templates;
+  const applyAutoLayout = useCallback(() => {
+    const cfg = loadAutoLayout();
+    if (!cfg.enabled) return;
+    const cls = screenClass(cfg.breakpoint);
+    const ids = [...sessions, ...queue].map((s) => s.id);
+    const rect = canvasRef.current?.getBoundingClientRect();
+    setConsoles((all) => {
+      let changed = false;
+      const next = { ...all };
+      for (const id of ids) {
+        const name = resolveTemplate(cfg, id, cls);
+        if (!name) continue;
+        const tpl = templatesRef.current[name];
+        if (!tpl) continue;
+        let c = cloneConsole(tpl);
+        if (rect && rect.width > 0 && rect.height > 0) {
+          const nw: WinMap["wins"] = { ...c.win.wins };
+          for (const k of Object.keys(nw)) nw[k] = clampWin(nw[k], rect.width, rect.height);
+          c = { ...c, win: { ...c.win, wins: nw } };
+        }
+        next[id] = c;
+        changed = true;
+      }
+      return changed ? next : all;
+    });
+  }, [sessions, queue]);
+
+  // Per-session template assignment (used by the Layouts menu). Persists to the
+  // shared auto-layout config so Settings and the menu stay in sync.
+  const setSessionDefault = (cls: ScreenClass, name: string | null) => {
+    const cfg = loadAutoLayout();
+    const key = focusKeyRef.current;
+    const prev = cfg.perSession[key] ?? { laptop: null, desktop: null };
+    saveAutoLayout({ ...cfg, perSession: { ...cfg.perSession, [key]: { ...prev, [cls]: name } } });
+  };
+
+  // Launch trigger: once per app run, as soon as sessions are available.
+  useEffect(() => {
+    if (autoLaunchApplied) return;
+    if (sessions.length === 0 && queue.length === 0) return; // wait for sessions to load
+    autoLaunchApplied = true;
+    applyAutoLayout();
+  }, [sessions, queue, applyAutoLayout]);
+
+  // Enable trigger: apply the moment auto-layout is switched on in Settings.
+  const prevEnabled = useRef(autoCfg.enabled);
+  useEffect(() => {
+    if (autoCfg.enabled && !prevEnabled.current) applyAutoLayout();
+    prevEnabled.current = autoCfg.enabled;
+  }, [autoCfg.enabled, applyAutoLayout]);
+
+  // Fullscreen + screen-change triggers: re-apply on entering fullscreen and when
+  // the screen class flips (e.g. plugging/unplugging a monitor), polled cheaply.
+  const lastClass = useRef<ScreenClass | null>(null);
+  useEffect(() => {
+    lastClass.current = screenClass(loadAutoLayout().breakpoint);
+    const onFull = (e: Event) => { if ((e as CustomEvent<{ on: boolean }>).detail?.on) applyAutoLayout(); };
+    window.addEventListener("rcw-fullscreen", onFull);
+    const t = setInterval(() => {
+      const cfg = loadAutoLayout();
+      if (!cfg.enabled) return;
+      const cls = screenClass(cfg.breakpoint);
+      if (cls !== lastClass.current) { lastClass.current = cls; applyAutoLayout(); }
+    }, 2500);
+    return () => { window.removeEventListener("rcw-fullscreen", onFull); clearInterval(t); };
+  }, [applyAutoLayout]);
 
   // First time Windows mode is shown with no saved layout, tile from the console size.
   useEffect(() => {
@@ -1287,6 +1366,42 @@ function HudConsole() {
                     ))}
                   </div>
                 )}
+
+                {/* Per-session auto-layout: pick a template for each screen class.
+                    Applied automatically (on fullscreen / launch / screen change)
+                    when auto-layout is enabled in Settings. */}
+                {(() => {
+                  const names = Object.keys(templates).sort();
+                  const key = focusId ?? NO_SESSION;
+                  const mine = autoCfg.perSession[key] ?? { laptop: null, desktop: null };
+                  const cls = screenClass(autoCfg.breakpoint);
+                  const sel: React.CSSProperties = {
+                    flex: 1, minWidth: 0, border: "1px solid var(--border)", background: "rgba(255,255,255,0.03)",
+                    color: "var(--text)", borderRadius: 7, padding: "4px 6px", fontSize: 10.5, outline: "none",
+                    fontFamily: "var(--font-mono)", cursor: "pointer",
+                  };
+                  return (
+                    <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid var(--border)" }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                        <span className="mono faint" style={{ fontSize: 9, letterSpacing: "0.12em", textTransform: "uppercase" }}>Auto-layout · this session</span>
+                        <span className="mono" style={{ fontSize: 9, color: "rgb(var(--primary-soft))" }} title="Current screen class">{cls}</span>
+                      </div>
+                      {names.length === 0 ? (
+                        <div className="mono faint" style={{ fontSize: 10, padding: "0 2px" }}>Save a template first to assign one.</div>
+                      ) : (
+                        (["laptop", "desktop"] as ScreenClass[]).map((c) => (
+                          <div key={c} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 5 }}>
+                            <span className="mono faint" style={{ fontSize: 10, width: 52, flexShrink: 0 }}>{c}</span>
+                            <select value={mine[c] ?? ""} onChange={(e) => setSessionDefault(c, e.target.value || null)} className="mono" style={sel}>
+                              <option value="">— use global —</option>
+                              {names.map((n) => <option key={n} value={n}>{n}</option>)}
+                            </select>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             </>
           )}
