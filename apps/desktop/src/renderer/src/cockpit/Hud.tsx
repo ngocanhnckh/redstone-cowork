@@ -837,7 +837,16 @@ function PanelShell({
       };
 
   return (
-    <div className="hud-window" style={wrapperStyle} onPointerDown={grid ? undefined : onFocus}>
+    // Raise on interaction: onPointerDown covers host DOM content, but a click inside
+    // a <webview> guest (Browser tab / custom apps) never bubbles a pointer event to
+    // the host — so also raise on focusin (onFocus bubbles), which fires when the
+    // click moves DOM focus into the webview element.
+    <div
+      className="hud-window"
+      style={wrapperStyle}
+      onPointerDown={grid ? undefined : onFocus}
+      onFocus={grid ? undefined : onFocus}
+    >
       <div
         onPointerDown={startDrag}
         style={{
