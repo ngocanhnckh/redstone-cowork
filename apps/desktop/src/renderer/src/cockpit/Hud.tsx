@@ -11,6 +11,7 @@ import NotesPanel from "./NotesPanel";
 import PortsPanel from "./PortsPanel";
 import DevToolsPanel from "./DevToolsPanel";
 import CustomAppPanel, { type CustomApp } from "./CustomAppPanel";
+import FolderSessionTabs from "./FolderSessionTabs";
 import AppsModal, { AppIcon } from "./AppsModal";
 import ContextColumn from "./ContextColumn";
 import AnswerDock from "./AnswerDock";
@@ -460,8 +461,9 @@ function TelemetryColumn({ tele }: { tele: HostTelemetryView[] }) {
 // ---------------------------------------------------------------------------
 const ACTIONABLE = ["question", "permission", "mode"];
 
-/** Compact terminal-styled chat for the focused session (full markdown render). */
-function ChatPane() {
+/** Compact terminal-styled chat. Defaults to the focused session; pass an explicit
+ * `sessionId` to bind it to one session (used by pop-out per-session windows). */
+function ChatPane({ sessionId }: { sessionId?: string } = {}) {
   const focusId = useStore((s) => s.focusId);
   const sessions = useStore((s) => s.sessions);
   const queue = useStore((s) => s.queue);
@@ -481,7 +483,8 @@ function ChatPane() {
     return next;
   });
 
-  const id = focusId;
+  const id = sessionId ?? focusId;
+  const boundToFocus = !sessionId; // a pop-out window is pinned to its own session
   const session = sessions.find((s) => s.id === id) ?? queue.find((s) => s.id === id);
   const transcript = session?.transcript ?? [];
   const pending = id ? pendingMap[id] ?? [] : [];
@@ -501,6 +504,9 @@ function ChatPane() {
 
   return (
     <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+      {/* Same-folder session switcher — only on the focus-bound chat (a pop-out
+          window is pinned to its own session, so switching there makes no sense). */}
+      {boundToFocus && <FolderSessionTabs sessionId={id} />}
       {/* Toolbar: permission-mode dropdown + context-window gauge */}
       {session && (
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 14px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
@@ -616,10 +622,14 @@ type WinState = { x: number; y: number; w: number; h: number; min: boolean };
 type WinMap = {
   wins: Record<string, WinState>;
   dockerIds: string[];
+  sessIds: string[]; // dynamic per-session chat windows ("sess:<sessionId>")
   z: string[];
   seq: number;
   _init: boolean;
 };
+const isSessId = (id: string): boolean => id.startsWith("sess:");
+const sessWinId = (sessionId: string): string => `sess:${sessionId}`;
+const sessIdOf = (winId: string): string => winId.slice("sess:".length);
 const WIN_MIN_W = 280;
 const WIN_MIN_H = 170;
 
@@ -656,6 +666,7 @@ function defaultWins(): WinMap {
       devtools: { x: 160, y: 110, w: 760, h: 480, min: true },
     },
     dockerIds: [],
+    sessIds: [],
     z: ["chat", "term", "files", "browser", "tasks", "notes", "ports", "devtools"],
     seq: 0,
     _init: false,
@@ -684,10 +695,13 @@ function sanitizeWinMap(p: Partial<WinMap> | undefined): WinMap {
   const dockerIds = Array.isArray(p.dockerIds)
     ? p.dockerIds.filter((id): id is string => typeof id === "string" && !!wins[id])
     : [];
-  const allIds = [...FIXED.map((f) => f.key), ...dockerIds];
+  const sessIds = Array.isArray(p.sessIds)
+    ? p.sessIds.filter((id): id is string => typeof id === "string" && !!wins[id])
+    : [];
+  const allIds = [...FIXED.map((f) => f.key), ...dockerIds, ...sessIds];
   const z = (Array.isArray(p.z) ? p.z.filter((id) => allIds.includes(id)) : []) as string[];
   for (const id of allIds) if (!z.includes(id)) z.push(id);
-  return { wins, dockerIds, z, seq: typeof p.seq === "number" ? p.seq : 0, _init: p._init ?? false };
+  return { wins, dockerIds, sessIds, z, seq: typeof p.seq === "number" ? p.seq : 0, _init: p._init ?? false };
 }
 
 // The console arrangement is stored PER SESSION so each session remembers its own
@@ -1191,6 +1205,41 @@ function HudConsole() {
     delete nextWins[id];
     return { ...w, dockerIds: w.dockerIds.filter((d) => d !== id), wins: nextWins, z: w.z.filter((k) => k !== id) };
   });
+
+  // Pop a session's chat into its own floating window (side-by-side sessions). If a
+  // window for that session already exists, just un-minimize + raise it.
+  const createSessionWindow = (sid: string) => {
+    setLayout("windows");
+    setWins((w) => {
+      const wid = sessWinId(sid);
+      if (w.sessIds.includes(wid)) {
+        const cur = w.wins[wid];
+        return { ...w, wins: { ...w.wins, [wid]: { ...cur, min: false } }, z: [...w.z.filter((k) => k !== wid), wid] };
+      }
+      const rect = canvasRef.current?.getBoundingClientRect();
+      const off = (w.sessIds.length * 32) % 160;
+      let ws: WinState = { x: 90 + off, y: 70 + off, w: 460, h: 520, min: false };
+      if (rect && rect.width > 0 && rect.height > 0) ws = clampWin(ws, rect.width, rect.height);
+      return { ...w, sessIds: [...w.sessIds, wid], wins: { ...w.wins, [wid]: ws }, z: [...w.z.filter((k) => k !== wid), wid] };
+    });
+  };
+  const closeSessionWindow = (wid: string) => setWins((w) => {
+    const nextWins = { ...w.wins };
+    delete nextWins[wid];
+    return { ...w, sessIds: w.sessIds.filter((d) => d !== wid), wins: nextWins, z: w.z.filter((k) => k !== wid) };
+  });
+
+  // React to a one-shot "pop this session into a window" request (from the
+  // same-folder tab strip's ⧉ button). Nonce-guarded so it fires exactly once.
+  const pendingSessionWindow = useStore((s) => s.pendingSessionWindow);
+  const sessWinNonce = useRef(0);
+  useEffect(() => {
+    const p = pendingSessionWindow;
+    if (!p || p.nonce === sessWinNonce.current) return;
+    sessWinNonce.current = p.nonce;
+    createSessionWindow(p.sessionId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingSessionWindow]);
   // The single Docker dock icon behaves like a normal app: left-click focuses /
   // minimizes / restores the frontmost Docker window (creating one if none exist).
   // A NEW window is only made via the right-click menu.
@@ -1268,6 +1317,7 @@ function HudConsole() {
       case "devtools": return <DevToolsPanel sessionId={session?.id} active={!grid && !wins.wins.devtools?.min} />;
       default:
         if (isDockerId(id)) return <DockerLogPanel streamId={id} active={!grid && !wins.wins[id]?.min} />;
+        if (isSessId(id)) return <ChatPane sessionId={sessIdOf(id)} />;
         if (isAppId(id)) { const app = apps.find((a) => appWinId(a.id) === id); return app ? <CustomAppPanel app={app} onFavicon={setAppFavicon} /> : null; }
         return null;
     }
@@ -1283,6 +1333,12 @@ function HudConsole() {
       area: (GRID_PANELS as string[]).includes(f.key) ? cfg.areas[f.key as GridKey] : undefined,
     })),
     ...wins.dockerIds.map((id, i) => ({ id, title: `Docker ${i + 1}`, onClose: () => closeDocker(id) })),
+    ...wins.sessIds.map((wid) => {
+      const sid = sessIdOf(wid);
+      const s = sessions.find((x) => x.id === sid) ?? queue.find((x) => x.id === sid);
+      const title = s ? `${projectName(s.cwd)} · ${s.gitBranch || "#" + sid.slice(0, 4)}` : `session ${sid.slice(0, 4)}`;
+      return { id: wid, title, onClose: () => closeSessionWindow(wid) };
+    }),
     ...apps
       .filter((a) => appVisible(a) && !!wins.wins[appWinId(a.id)])
       .map((a) => ({ id: appWinId(a.id), title: a.name, onClose: () => closeAppWindow(appWinId(a.id)) })),

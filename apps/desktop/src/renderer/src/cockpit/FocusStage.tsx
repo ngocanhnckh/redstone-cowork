@@ -9,6 +9,7 @@ import TerminalStack from "./TerminalStack";
 import BrowserStack from "./BrowserStack";
 import PortsPanel from "./PortsPanel";
 import FilesPanel from "./FilesPanel";
+import FolderSessionTabs from "./FolderSessionTabs";
 
 const TABS = [
   { key: "chat", label: "Chat", hint: "⌃1" },
@@ -254,6 +255,9 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
           );
         })}
       </div>
+
+      {/* Same-folder session switcher (only when >1 session shares this folder) */}
+      <FolderSessionTabs sessionId={id} />
 
       {activeTab === "terminal" ? (
         // Terminals live in a persistent, keep-alive stack (below) so they never

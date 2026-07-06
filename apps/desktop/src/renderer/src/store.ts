@@ -54,6 +54,10 @@ type State = {
   // A one-shot request to open a URL in a session's in-app browser (a new tab). The
   // session's MultiBrowser opens+activates a tab; the HUD reveals the browser window.
   pendingBrowserOpen: { sessionId: string; url: string; nonce: number } | null;
+  // A one-shot request to pop a session's chat into its own floating HUD window
+  // (for side-by-side work on multiple sessions in the same folder). The HUD reacts
+  // by creating/revealing a `sess:<id>` window; switches to HUD mode if needed.
+  pendingSessionWindow: { sessionId: string; nonce: number } | null;
   openTerminals: string[]; // sessionIds whose terminal was opened — kept alive (see TerminalStack)
   contextCollapsed: boolean; // right context sidebar collapsed (more room for the body)
   assistOpen: boolean; // LLM assistant slide-over
@@ -64,6 +68,7 @@ type State = {
   setActiveTab: (sessionId: string, tab: "chat" | "terminal" | "browser" | "ports" | "files") => void;
   openBrowser: (sessionId: string) => void;
   openUrlInBrowser: (sessionId: string, url: string) => void;
+  openSessionWindow: (sessionId: string) => void;
   openTerminal: (sessionId: string) => void;
   toggleContext: () => void;
   toggleAssist: () => void;
@@ -110,6 +115,7 @@ export const useStore = create<State>((set, get) => ({
   activeTab: {},
   openBrowsers: [],
   pendingBrowserOpen: null,
+  pendingSessionWindow: null,
   openTerminals: [],
   contextCollapsed: false,
   assistOpen: false,
@@ -143,6 +149,14 @@ export const useStore = create<State>((set, get) => ({
     set((state) => ({
       openBrowsers: state.openBrowsers.includes(sessionId) ? state.openBrowsers : [...state.openBrowsers, sessionId],
       pendingBrowserOpen: { sessionId, url, nonce: (state.pendingBrowserOpen?.nonce ?? 0) + 1 },
+    })),
+
+  // Pop a session's chat into a floating HUD window. Switch to HUD mode (windows
+  // live there) and bump a one-shot request the HUD reacts to.
+  openSessionWindow: (sessionId) =>
+    set((state) => ({
+      mode: "hud",
+      pendingSessionWindow: { sessionId, nonce: (state.pendingSessionWindow?.nonce ?? 0) + 1 },
     })),
 
   openTerminal: (sessionId) =>
