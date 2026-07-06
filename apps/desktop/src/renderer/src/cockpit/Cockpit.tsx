@@ -23,6 +23,7 @@ export default function Cockpit() {
   const closeDetail = useStore((s) => s.closeDetail);
   const focusId = useStore((s) => s.focusId);
   const setActiveTab = useStore((s) => s.setActiveTab);
+  const openUrlInBrowser = useStore((s) => s.openUrlInBrowser);
   const activeTabMap = useStore((s) => s.activeTab);
   const contextCollapsed = useStore((s) => s.contextCollapsed);
   const toggleContext = useStore((s) => s.toggleContext);
@@ -48,6 +49,26 @@ export default function Cockpit() {
     const unsub = startCockpit();
     return unsub;
   }, []);
+
+  // Open a URL in the focused session's in-app workspace browser as a NEW TAB. The
+  // main process routes here for: target=_blank / window.open, custom-app cross-
+  // domain links, and the git widget's GitHub link. This lives in Cockpit (mounted
+  // in EVERY mode) so "open in a new tab" works in Flow/Grid too — not only HUD.
+  // In Flow mode we also switch to the Browser tab so the new tab is visible; HUD
+  // reveals its own browser window via its internal reveal effect.
+  useEffect(() => {
+    const off = window.cowork.onOpenInWorkspaceBrowser((a) => {
+      const st = useStore.getState();
+      const sid = st.focusId;
+      if (a?.url && sid) {
+        openUrlInBrowser(sid, a.url);
+        if (st.mode !== "hud") setActiveTab(sid, "browser");
+      } else if (a?.url) {
+        window.cowork.openExternal(a.url).catch(() => {});
+      }
+    });
+    return off;
+  }, [openUrlInBrowser, setActiveTab]);
 
   // ⌃⌘F (F11 elsewhere) toggles keep-wallpaper fullscreen.
   useEffect(() => {

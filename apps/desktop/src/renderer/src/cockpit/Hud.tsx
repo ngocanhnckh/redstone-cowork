@@ -911,7 +911,6 @@ function HudConsole() {
   const session = sessions.find((s) => s.id === focusId) ?? queue.find((s) => s.id === focusId);
   const openBrowser = useStore((s) => s.openBrowser);
   const openTerminal = useStore((s) => s.openTerminal);
-  const openUrlInBrowser = useStore((s) => s.openUrlInBrowser);
   const pendingBrowserOpen = useStore((s) => s.pendingBrowserOpen);
   const appr = useAppearance();
   const dockPos = appr.dockPos;
@@ -1160,19 +1159,9 @@ function HudConsole() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingBrowserOpen]);
 
-  // A custom app tried to navigate to another domain — the main process cancelled
-  // the in-app navigation and asks us to open it in this session's workspace
-  // browser instead (never the OS browser). Fall back to the OS browser only if no
-  // session is focused to receive it.
-  useEffect(() => {
-    const off = window.cowork.onOpenInWorkspaceBrowser((a) => {
-      const sid = focusKeyRef.current;
-      if (a?.url && sid && sid !== NO_SESSION) openUrlInBrowser(sid, a.url);
-      else if (a?.url) window.cowork.openExternal(a.url).catch(() => {});
-    });
-    return off;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [openUrlInBrowser]);
+  // (The onOpenInWorkspaceBrowser listener lives in Cockpit — always mounted — so
+  // "open in a new tab" works in every mode, not just HUD. The reveal effect above
+  // handles surfacing the HUD browser window when a tab is opened here.)
 
   // Dock item click: minimized/hidden → restore + raise; visible-but-behind → raise
   // to front; visible-and-frontmost → toggle-minimize (second click hides it).
