@@ -639,12 +639,15 @@ app.on("web-contents-created", (_e, contents) => {
     openInWorkspaceBrowser(url);
   });
   contents.setWindowOpenHandler(({ url }) => {
-    const home = appGuestHomes.get(contents.id);
-    if (home && !sameSite(url, home)) {
-      openInWorkspaceBrowser(url);
-      return { action: "deny" };
-    }
-    return { action: "allow" };
+    // A link/script asked for a NEW window/tab (target=_blank, window.open). Never
+    // let Electron spawn the native popup — for a <webview> guest it isn't attached
+    // to any element, so it just shows nothing (the "new tab doesn't work" bug).
+    // Instead open http(s) URLs as a new tab in the session's in-app workspace
+    // browser (both the Browser app and custom apps), and hand other schemes
+    // (mailto:, tel:, …) to the OS.
+    if (/^https?:\/\//i.test(url)) openInWorkspaceBrowser(url);
+    else if (url) shell.openExternal(url).catch(() => {/* ignore */});
+    return { action: "deny" };
   });
   contents.once("destroyed", () => appGuestHomes.delete(contents.id));
 
