@@ -722,8 +722,20 @@ function defaultConsole(): SessionConsole {
 const TEMPLATES_KEY = "rcw.hud.templates.v1";
 function loadTemplates(): Record<string, SessionConsole> {
   try {
-    const p = JSON.parse(localStorage.getItem(TEMPLATES_KEY) || "{}");
-    return p && typeof p === "object" ? p : {};
+    const p = JSON.parse(localStorage.getItem(TEMPLATES_KEY) || "{}") as Record<string, Partial<SessionConsole>>;
+    if (!p || typeof p !== "object") return {};
+    const out: Record<string, SessionConsole> = {};
+    for (const [k, v] of Object.entries(p)) {
+      // Sanitize each template's window map so older templates (saved before newer
+      // window kinds like dockerIds/sessIds existed) get those fields backfilled —
+      // otherwise applying one would yield a console that crashes the HUD render.
+      out[k] = {
+        view: (v.view as ConsoleView) ?? "ctf",
+        layout: (v.layout as HudLayout) ?? "grid",
+        win: sanitizeWinMap(v.win as Partial<WinMap> | undefined),
+      };
+    }
+    return out;
   } catch {
     return {};
   }
@@ -1200,16 +1212,17 @@ function HudConsole() {
   const createSessionWindow = (sid: string) => {
     setLayout("windows");
     setWins((w) => {
+      const sessIds = w.sessIds ?? [];
       const wid = sessWinId(sid);
-      if (w.sessIds.includes(wid)) {
+      if (sessIds.includes(wid)) {
         const cur = w.wins[wid];
-        return { ...w, wins: { ...w.wins, [wid]: { ...cur, min: false } }, z: [...w.z.filter((k) => k !== wid), wid] };
+        return { ...w, sessIds, wins: { ...w.wins, [wid]: { ...cur, min: false } }, z: [...w.z.filter((k) => k !== wid), wid] };
       }
       const rect = canvasRef.current?.getBoundingClientRect();
-      const off = (w.sessIds.length * 32) % 160;
+      const off = (sessIds.length * 32) % 160;
       let ws: WinState = { x: 90 + off, y: 70 + off, w: 460, h: 520, min: false };
       if (rect && rect.width > 0 && rect.height > 0) ws = clampWin(ws, rect.width, rect.height);
-      return { ...w, sessIds: [...w.sessIds, wid], wins: { ...w.wins, [wid]: ws }, z: [...w.z.filter((k) => k !== wid), wid] };
+      return { ...w, sessIds: [...sessIds, wid], wins: { ...w.wins, [wid]: ws }, z: [...w.z.filter((k) => k !== wid), wid] };
     });
   };
   const closeSessionWindow = (wid: string) => setWins((w) => {
@@ -1321,8 +1334,8 @@ function HudConsole() {
       title: f.title,
       area: (GRID_PANELS as string[]).includes(f.key) ? cfg.areas[f.key as GridKey] : undefined,
     })),
-    ...wins.dockerIds.map((id, i) => ({ id, title: `Docker ${i + 1}`, onClose: () => closeDocker(id) })),
-    ...wins.sessIds.map((wid) => {
+    ...(wins.dockerIds ?? []).map((id, i) => ({ id, title: `Docker ${i + 1}`, onClose: () => closeDocker(id) })),
+    ...(wins.sessIds ?? []).map((wid) => {
       const sid = sessIdOf(wid);
       const s = sessions.find((x) => x.id === sid) ?? queue.find((x) => x.id === sid);
       const title = s ? `${projectName(s.cwd)} · ${s.gitBranch || "#" + sid.slice(0, 4)}` : `session ${sid.slice(0, 4)}`;
@@ -1335,8 +1348,8 @@ function HudConsole() {
   // Dock entries: just the fixed apps. Docker gets ONE dedicated icon (below) with
   // a right-click menu to manage its (possibly several) windows.
   const dockItems = FIXED.map((f) => ({ id: f.key, title: f.title, icon: f.icon }));
-  const anyDockerOpen = wins.dockerIds.some((id) => !wins.wins[id]?.min);
-  const dockerFront = wins.dockerIds.length > 0 && wins.dockerIds.includes(wins.z[wins.z.length - 1]);
+  const anyDockerOpen = (wins.dockerIds ?? []).some((id) => !wins.wins[id]?.min);
+  const dockerFront = (wins.dockerIds ?? []).length > 0 && (wins.dockerIds ?? []).includes(wins.z[wins.z.length - 1]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10, minHeight: 0, padding: "12px 14px" }}>
