@@ -17,7 +17,10 @@ export default function FolderSessionTabs({ sessionId }: { sessionId?: string | 
   const openSessionWindow = useStore((s) => s.openSessionWindow);
 
   const id = sessionId ?? focusId;
-  const all = [...sessions, ...queue];
+  // `sessions` and `queue` are overlapping API views — the SAME session can appear
+  // in both. Dedupe by id first, or a lone session counts itself as a "sibling" and
+  // the strip wrongly shows for every session.
+  const all = Array.from(new Map([...sessions, ...queue].map((s) => [s.id, s])).values());
   const ref = all.find((s) => s.id === id);
   if (!ref) return null;
 
