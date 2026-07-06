@@ -344,6 +344,60 @@ function prettyMaybe(s: string): string {
   try { return JSON.stringify(JSON.parse(t), null, 2); } catch { return s; }
 }
 
+/** Parse a body string into an object/array if it's valid JSON, else undefined. */
+function asJson(s: string): unknown | undefined {
+  const t = s.trim();
+  if (!t || (t[0] !== "{" && t[0] !== "[")) return undefined;
+  try {
+    const v = JSON.parse(t);
+    return v !== null && typeof v === "object" ? v : undefined;
+  } catch { return undefined; }
+}
+
+const JC = {
+  key: "rgb(var(--primary-soft))", string: "#8fce9b", number: "rgb(var(--accent))",
+  bool: "rgb(var(--primary-soft))", null: "var(--text-faint)", punct: "var(--text-faint)",
+};
+function JsonPrim({ value }: { value: unknown }) {
+  if (value === null) return <span style={{ color: JC.null }}>null</span>;
+  const t = typeof value;
+  if (t === "string") return <span style={{ color: JC.string, overflowWrap: "anywhere" }}>{JSON.stringify(value)}</span>;
+  if (t === "number" || t === "boolean") return <span style={{ color: t === "number" ? JC.number : JC.bool }}>{String(value)}</span>;
+  return <span>{String(value)}</span>;
+}
+/** One node of a collapsible, syntax-colored JSON tree (objects/arrays expandable). */
+function JsonNode({ k, value, last, depth }: { k?: string; value: unknown; last: boolean; depth: number }) {
+  const isObj = value !== null && typeof value === "object";
+  const [open, setOpen] = useState(depth < 2); // auto-expand the first couple of levels
+  const keyEl = k !== undefined ? (<><span style={{ color: JC.key }}>&quot;{k}&quot;</span><span style={{ color: JC.punct }}>: </span></>) : null;
+  const gutter = <span style={{ display: "inline-block", width: 12, color: "var(--text-faint)", fontSize: 9 }} />;
+  if (!isObj) {
+    return <div>{gutter}{keyEl}<JsonPrim value={value} />{!last && <span style={{ color: JC.punct }}>,</span>}</div>;
+  }
+  const arr = Array.isArray(value);
+  const entries: [string | undefined, unknown][] = arr
+    ? (value as unknown[]).map((v) => [undefined, v])
+    : Object.entries(value as Record<string, unknown>);
+  const O = arr ? "[" : "{", C = arr ? "]" : "}";
+  return (
+    <div>
+      <div onClick={() => setOpen((o) => !o)} style={{ cursor: "pointer" }}>
+        <span style={{ display: "inline-block", width: 12, color: "var(--text-faint)", fontSize: 9 }}>{open ? "▾" : "▸"}</span>
+        {keyEl}<span style={{ color: JC.punct }}>{O}</span>
+        {!open && <span style={{ color: "var(--text-faint)" }}> {entries.length}{arr ? " items " : " keys "}{C}{!last ? "," : ""}</span>}
+      </div>
+      {open && (
+        <>
+          <div style={{ marginLeft: 13, borderLeft: "1px solid rgb(255 255 255 / 0.06)", paddingLeft: 6 }}>
+            {entries.map(([kk, vv], i) => <JsonNode key={i} k={kk} value={vv} last={i === entries.length - 1} depth={depth + 1} />)}
+          </div>
+          <div>{gutter}<span style={{ color: JC.punct }}>{C}</span>{!last && <span style={{ color: JC.punct }}>,</span>}</div>
+        </>
+      )}
+    </div>
+  );
+}
+
 /**
  * A futuristic detail overlay for one network request — General / Headers /
  * Payload / Response, with the response body fetched on demand over CDP. Rendered
@@ -353,6 +407,7 @@ function NetDetail({ row, sessionId, onClose }: { row: NetRow; sessionId?: strin
   const [sub, setSub] = useState<"general" | "headers" | "payload" | "response">("general");
   const [body, setBody] = useState<string | null>(null);
   const [bodyState, setBodyState] = useState<"idle" | "loading" | "empty" | "err">("idle");
+  const [respView, setRespView] = useState<"pretty" | "raw">("pretty");
   const [copied, setCopied] = useState(false);
 
   // Fetch the response body the first time the Response tab is opened.
@@ -424,21 +479,43 @@ function NetDetail({ row, sessionId, onClose }: { row: NetRow; sessionId?: strin
           </>
         )}
         {sub === "payload" && (
-          row.postData ? <pre className="dt-pre">{prettyMaybe(row.postData)}</pre>
+          row.postData ? (() => {
+            const j = asJson(row.postData);
+            return j !== undefined
+              ? <div className="dt-pre" style={{ overflowX: "auto" }}><JsonNode value={j} last depth={0} /></div>
+              : <pre className="dt-pre">{prettyMaybe(row.postData)}</pre>;
+          })()
             : <div className="faint" style={{ fontSize: 11.5, paddingTop: 6 }}>No request payload{row.method === "GET" ? " (GET request)" : ""}.</div>
         )}
         {sub === "response" && (
           bodyState === "loading" ? <div className="faint mono hud-blink" style={{ fontSize: 11.5, paddingTop: 6 }}>fetching response body…</div>
             : bodyState === "empty" ? <div className="faint" style={{ fontSize: 11.5, paddingTop: 6 }}>Body not available (it may have been evicted, or the request is still in flight — reload to re-capture).</div>
             : bodyState === "err" ? <div style={{ fontSize: 11.5, paddingTop: 6, color: "#e0736a" }}>Could not read the response body.</div>
-            : body !== null ? (
-              <>
-                <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 6 }}>
-                  <button onClick={() => copy(body)} className="mono" style={{ border: "1px solid var(--border)", background: "transparent", color: "var(--text-soft)", borderRadius: 6, padding: "3px 9px", fontSize: 10.5, cursor: "pointer" }}>{copied ? "copied" : "copy"}</button>
-                </div>
-                <pre className="dt-pre">{prettyMaybe(body).slice(0, 200_000)}</pre>
-              </>
-            ) : <div className="faint" style={{ fontSize: 11.5, paddingTop: 6 }}>Open to load the response body.</div>
+            : body !== null ? (() => {
+                const json = asJson(body);
+                const showTree = json !== undefined && respView === "pretty";
+                return (
+                  <>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+                      {json !== undefined && (
+                        <div style={{ display: "flex", gap: 4 }}>
+                          <button onClick={() => setRespView("pretty")} className={`dt-tab ${respView === "pretty" ? "dt-tab-on" : "dt-tab-off"}`} style={{ fontSize: 9.5, padding: "2px 9px" }}>object</button>
+                          <button onClick={() => setRespView("raw")} className={`dt-tab ${respView === "raw" ? "dt-tab-on" : "dt-tab-off"}`} style={{ fontSize: 9.5, padding: "2px 9px" }}>raw</button>
+                        </div>
+                      )}
+                      <span style={{ flex: 1 }} />
+                      <button onClick={() => copy(body)} className="mono" style={{ border: "1px solid var(--border)", background: "transparent", color: "var(--text-soft)", borderRadius: 6, padding: "3px 9px", fontSize: 10.5, cursor: "pointer" }}>{copied ? "copied" : "copy"}</button>
+                    </div>
+                    {showTree ? (
+                      <div className="dt-pre" style={{ overflowX: "auto" }}>
+                        <JsonNode value={json} last depth={0} />
+                      </div>
+                    ) : (
+                      <pre className="dt-pre">{prettyMaybe(body).slice(0, 200_000)}</pre>
+                    )}
+                  </>
+                );
+              })() : <div className="faint" style={{ fontSize: 11.5, paddingTop: 6 }}>Open to load the response body.</div>
         )}
       </div>
     </div>
