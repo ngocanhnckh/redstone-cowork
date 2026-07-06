@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import ConnectionBar from "./ConnectionBar";
+import { useStore } from "../store";
+import { wireOpenTab } from "./openTabIntercept";
 
 interface Props {
   sessionId: string;
@@ -35,6 +37,7 @@ type WebviewEl = HTMLElement & {
   findInPage(text: string, options?: { forward?: boolean; findNext?: boolean }): number;
   stopFindInPage(action: "clearSelection" | "keepSelection" | "activateSelection"): void;
   setZoomFactor(factor: number): void;
+  executeJavaScript(code: string): Promise<unknown>;
 };
 
 declare global {
@@ -260,6 +263,18 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, chrom
     if (findOpen) runFind(find, true, false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [find]);
+
+  // "Open in a new tab" from links inside the page → a new tab in this session's
+  // workspace browser (renderer-side, so no full app relaunch needed).
+  useEffect(() => {
+    const wv = webviewRef.current;
+    if (!wv) return;
+    return wireOpenTab(wv, (url) => {
+      const st = useStore.getState();
+      st.openUrlInBrowser(sessionId, url);
+      if (st.mode !== "hud") st.setActiveTab(sessionId, "browser");
+    });
+  }, [loadUrl, sessionId]);
 
   // Apply the page zoom factor — on change and on each navigation (a fresh document
   // resets the webContents zoom back to 1).

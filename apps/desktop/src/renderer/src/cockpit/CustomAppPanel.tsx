@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { useStore } from "../store";
+import { wireOpenTab } from "./openTabIntercept";
 
 // Reuse the same imperative <webview> surface as BrowserPanel (its `declare global`
 // augments JSX for the whole app, so the intrinsic + partition/allowpopups exist).
@@ -13,6 +15,7 @@ type WebviewEl = HTMLElement & {
   getWebContentsId(): number;
   findInPage(text: string, options?: { forward?: boolean; findNext?: boolean }): number;
   stopFindInPage(action: "clearSelection" | "keepSelection" | "activateSelection"): void;
+  executeJavaScript(code: string): Promise<unknown>;
 };
 
 export type CustomApp = {
@@ -111,6 +114,19 @@ export default function CustomAppPanel({ app, onFavicon }: { app: CustomApp; onF
     if (findOpen) runFind(find, true, false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [find]);
+
+  // Links that open a new tab → a new tab in the focused session's workspace
+  // browser (renderer-side; works on reload without a full relaunch).
+  useEffect(() => {
+    const wv = ref.current;
+    if (!wv) return;
+    return wireOpenTab(wv, (url) => {
+      const st = useStore.getState();
+      const sid = st.focusId;
+      if (sid) { st.openUrlInBrowser(sid, url); if (st.mode !== "hud") st.setActiveTab(sid, "browser"); }
+      else window.cowork.openExternal(url).catch(() => {});
+    });
+  }, [app.id]);
 
   useEffect(() => {
     const wv = ref.current;
