@@ -47,7 +47,16 @@ export function buildTmuxCommands(
   const session = `rcw-${wrapperId}`;
   const autoMode = args.includes("--enable-auto-mode");
   const envPrefix = buildEnvPrefix(autoMode, wrapperId, configEnv);
-  const claudeCmd = `${envPrefix} claude ${args.map(shq).join(" ")}`;
+  const inner = `${envPrefix} claude ${args.map(shq).join(" ")}`;
+  // If claude exits non-zero (e.g. a bad ANTHROPIC_* value from a --config profile,
+  // or `claude` not on PATH), keep the pane open showing the exit code + a hint,
+  // instead of collapsing to the blank poll window — otherwise the failure looks
+  // like "an empty terminal". On a normal exit (0) the pane closes as usual.
+  const cfgKeys = configEnv ? Object.keys(configEnv).join(", ") : "";
+  const hint = cfgKeys ? ` — check the env from your --config profile (${cfgKeys})` : "";
+  const claudeCmd =
+    `${inner}; rcw_ec=$?; [ $rcw_ec -eq 0 ] || ` +
+    `{ echo; echo "redstone: claude exited with status $rcw_ec${hint}"; echo "press Enter to close…"; read _; }`;
   const pollCmd = `node ${mainBin} poll --wrapper ${wrapperId} --tmux ${session}:0`;
 
   return [
