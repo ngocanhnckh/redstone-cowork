@@ -621,6 +621,41 @@ const NAV_KEYS_JS = `(() => {
   }, true);
 })();`;
 
+// "Open in a new tab" that works WITHOUT relying on the webview's allowpopups (which
+// can silently block window.open/target=_blank, so a click does nothing). Injected
+// into the guest: intercept a click that wants a new tab (target=_blank, middle-
+// click, or ⌘/Ctrl-click) and signal the host via a distinctive document.title
+// marker (the only zero-preload channel a guest has). The main process listens for
+// `page-title-updated`, extracts the URL, and opens it as a workspace browser tab.
+// The title is restored immediately so the page's real title is untouched.
+const OPEN_TAB_MARK = "__RCW_OPEN_TAB__::";
+const OPEN_TAB_JS = `(() => {
+  if (window.__rcwOpenTab) return; window.__rcwOpenTab = true;
+  const MARK = ${JSON.stringify(OPEN_TAB_MARK)};
+  const signal = (raw) => {
+    try {
+      if (!raw) return;
+      const abs = new URL(raw, location.href).href;
+      if (!/^https?:/i.test(abs)) return;
+      const prev = document.title;
+      document.title = MARK + abs;
+      setTimeout(() => { try { document.title = prev; } catch (e) {} }, 0);
+    } catch (e) {}
+  };
+  document.addEventListener('click', (e) => {
+    if (e.defaultPrevented) return;
+    if (e.button !== 0 && e.button !== 1) return;
+    let el = e.target;
+    while (el && el.nodeName !== 'A') el = el.parentElement;
+    if (!el || !el.href) return;
+    const target = (el.getAttribute('target') || '').toLowerCase();
+    const wantNew = target === '_blank' || e.button === 1 || e.metaKey || e.ctrlKey;
+    if (!wantNew) return;
+    e.preventDefault(); e.stopPropagation();
+    signal(el.href);
+  }, true);
+})();`;
+
 // Right-click context menu (incl. Inspect Element) for the Browser tab's <webview>
 // guests. Wired in the main process because the guest's context-menu can't be
 // handled from the renderer.
@@ -660,10 +695,20 @@ app.on("web-contents-created", (_e, contents) => {
   const patchDialogs = () => {
     contents.executeJavaScript(NEUTRALIZE_DIALOGS_JS, true).catch(() => {/* page gone / not ready */});
     contents.executeJavaScript(NAV_KEYS_JS, true).catch(() => {/* page gone / not ready */});
+    contents.executeJavaScript(OPEN_TAB_JS, true).catch(() => {/* page gone / not ready */});
   };
   contents.on("dom-ready", patchDialogs);
   contents.on("did-navigate", patchDialogs);
   contents.on("did-navigate-in-page", patchDialogs);
+
+  // The guest's OPEN_TAB_JS signals a "open in new tab" click via a title marker.
+  // Catch it, restore intent, and open the URL as a workspace browser tab.
+  contents.on("page-title-updated", (ev, title) => {
+    if (typeof title === "string" && title.startsWith(OPEN_TAB_MARK)) {
+      ev.preventDefault();
+      openInWorkspaceBrowser(title.slice(OPEN_TAB_MARK.length));
+    }
+  });
 
   // Cmd/Ctrl+F opens the workspace browser's in-page find bar. A keystroke while
   // the guest has focus never reaches the host renderer, so we intercept it here
