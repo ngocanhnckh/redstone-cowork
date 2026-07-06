@@ -108,7 +108,14 @@ export async function runWrapper(args: string[], mainBin: string, configName?: s
 
 // Standalone `redstone-claude` bin (back-compat). The folded `redstone claude`
 // path in main.ts is what the installed bundle uses.
-if (require.main === module) {
+//
+// The argv[1] guard is CRITICAL: esbuild inlines this module into the single-file
+// bundle (entry = main.ts), where `require.main === module` wrongly evaluates true —
+// which would run this block IN ADDITION to main.ts's dispatch, spawning a second
+// Claude session with the RAW args (so `--config=<name>` leaks straight to `claude`,
+// which rejects it and exits → a blank pane). Only fire when the actually-invoked
+// script is claude-wrapper.js (the real redstone-claude bin), never the bundle.
+if (require.main === module && /claude-wrapper\.[cm]?js$/.test(argv[1] ?? "")) {
   const wrapperBin = realpathSync(argv[1]);
   const mainBin = wrapperBin.replace(/claude-wrapper\.js$/, "main.js");
   runWrapper(argv.slice(2), mainBin).catch(() => exit(0));
