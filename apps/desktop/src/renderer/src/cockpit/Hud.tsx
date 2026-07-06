@@ -12,6 +12,7 @@ import PortsPanel from "./PortsPanel";
 import DevToolsPanel from "./DevToolsPanel";
 import CustomAppPanel, { type CustomApp } from "./CustomAppPanel";
 import FolderSessionTabs from "./FolderSessionTabs";
+import CompletionNotifier from "./CompletionNotifier";
 import AppsModal, { AppIcon } from "./AppsModal";
 import ContextColumn from "./ContextColumn";
 import AnswerDock from "./AnswerDock";
@@ -1702,6 +1703,8 @@ export default function Hud() {
     <div ref={rootRef} className="hud-root" style={{ flex: 1, minHeight: 0, position: "relative", overflow: "hidden" }}>
       <HudStyles />
       <span className="hud-grid" />
+      {/* Futuristic pop-up alerts when a background session finishes / needs an answer */}
+      <CompletionNotifier />
       <div style={{ position: "relative", zIndex: 1, height: "100%", display: "grid", gridTemplateColumns: cols, minHeight: 0 }}>
         {/* Left column: sessions queue (top half) + git history (bottom half) */}
         <div style={{ display: "flex", flexDirection: "column", minHeight: 0, borderRight: "1px solid var(--border)" }}>
