@@ -28,8 +28,12 @@ const CSS = `
 @keyframes cn-in { from { opacity:0; transform: translateX(28px) scale(.96); } to { opacity:1; transform:none; } }
 @keyframes cn-sheen { from { background-position: -140% 0; } to { background-position: 240% 0; } }
 .cn-card { animation: cn-in .34s cubic-bezier(.2,.9,.2,1) both; position: relative; overflow: hidden;
-  border:1px solid rgb(var(--primary-soft) / 0.45); border-radius:14px; padding:12px 13px 11px;
-  box-shadow: 0 14px 44px rgb(0 0 0 / 0.5), 0 0 0 1px rgb(var(--primary-soft) / 0.12), inset 0 0 26px -18px rgb(var(--primary-soft)); }
+  border:1px solid rgb(var(--primary-soft) / 0.45); border-radius:14px; padding:14px 15px 13px;
+  /* Strong opaque glass so the text is readable even in transparent HUD mode
+     (the theme's .glass-surface gets frosted to near-nothing there). */
+  background: color-mix(in srgb, var(--app-panel, #1b1712) 93%, transparent) !important;
+  backdrop-filter: blur(26px) saturate(1.45); -webkit-backdrop-filter: blur(26px) saturate(1.45);
+  box-shadow: 0 22px 60px rgb(0 0 0 / 0.6), 0 0 0 1px rgb(var(--primary-soft) / 0.14), inset 0 0 30px -18px rgb(var(--primary-soft)); }
 .cn-card::before { content:""; position:absolute; inset:0; pointer-events:none; opacity:.5;
   background: linear-gradient(115deg, transparent 30%, rgb(var(--primary-soft) / 0.14) 48%, transparent 66%);
   background-size: 220% 100%; animation: cn-sheen 3.6s ease-in-out infinite; }
@@ -98,10 +102,10 @@ export default function CompletionNotifier() {
   if (notes.length === 0) return null;
 
   return (
-    <div style={{ position: "absolute", top: 14, right: 16, zIndex: 4000, display: "flex", flexDirection: "column", gap: 10, width: 340, maxWidth: "42vw", pointerEvents: "none" }}>
+    <div style={{ position: "absolute", inset: 0, zIndex: 4000, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, padding: 20, pointerEvents: "none" }}>
       <style>{CSS}</style>
       {notes.map((n) => (
-        <div key={n.key} className={`cn-card glass-surface${n.needsAnswer ? " cn-ask" : ""}`} style={{ pointerEvents: "auto" }}>
+        <div key={n.key} className={`cn-card${n.needsAnswer ? " cn-ask" : ""}`} style={{ pointerEvents: "auto", width: 420, maxWidth: "88%" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 7 }}>
             <span className="ai-core" style={{ width: 15, height: 15, flexShrink: 0 }} />
             <div style={{ flex: 1, minWidth: 0 }}>
@@ -116,7 +120,7 @@ export default function CompletionNotifier() {
             <button className="cn-x" onClick={() => dismiss(n.key)} title="Dismiss">✕</button>
           </div>
           {n.answer && (
-            <div className="no-scrollbar" style={{ maxHeight: 108, overflowY: "auto", fontSize: 11.5, lineHeight: 1.5, color: "var(--text-soft)", margin: "0 0 10px", position: "relative", zIndex: 1 }}>
+            <div className="no-scrollbar" style={{ maxHeight: 150, overflowY: "auto", fontSize: 12, lineHeight: 1.55, color: "var(--text-soft)", margin: "0 0 12px", position: "relative", zIndex: 1 }}>
               <Markdown>{n.answer}</Markdown>
             </div>
           )}
