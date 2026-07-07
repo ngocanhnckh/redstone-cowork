@@ -16,8 +16,47 @@ const TAIL_BYTES = 256 * 1024;
 
 const EDIT_TOOLS = new Set(["Edit", "Write", "MultiEdit", "NotebookEdit"]);
 
-type ContentBlock = { type?: string; text?: string; name?: string; input?: unknown };
-type TranscriptLine = { type?: string; message?: { role?: string; content?: ContentBlock[] | string } };
+type ContentBlock = { type?: string; text?: string; name?: string; input?: unknown; content?: unknown; is_error?: boolean };
+type TranscriptLine = {
+  type?: string;
+  subtype?: string;
+  content?: unknown; // system messages (e.g. local_command) carry content at top level
+  message?: { role?: string; content?: ContentBlock[] | string };
+};
+
+/** Strip one `<tag>…</tag>` wrapper and return its inner text, or null if absent. */
+function unwrapTag(s: string, tag: string): string | null {
+  const m = s.match(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`));
+  return m ? m[1].trim() : null;
+}
+
+/**
+ * Claude Code represents user "!" bash commands and slash commands as XML-ish
+ * tagged strings, and their output as `<local-command-stdout>` (or bash-stdout).
+ * Turn those into clean chat text ("$ <cmd>" / the output), or return the string
+ * unchanged when it carries no command tags. Empty output → null (skip the turn).
+ */
+function renderCommandString(s: string): string | null {
+  if (s.indexOf("<") < 0) return s; // fast path — no tags at all
+  const bashIn = unwrapTag(s, "bash-input");
+  if (bashIn !== null) return `$ ${bashIn}`;
+  const cmdName = unwrapTag(s, "command-name");
+  if (cmdName !== null) {
+    const args = unwrapTag(s, "command-args");
+    return `$ ${cmdName}${args ? " " + args : ""}`;
+  }
+  const stdout = unwrapTag(s, "local-command-stdout") ?? unwrapTag(s, "bash-stdout");
+  if (stdout !== null) return stdout || null; // empty stdout → nothing to show
+  const stderr = unwrapTag(s, "bash-stderr");
+  if (stderr !== null) return stderr || null;
+  return s;
+}
+
+/** True if a tool_result's text is a notable status worth surfacing in the chat
+ *  (background-command start/finish notices) rather than ordinary tool output noise. */
+function isNotableToolResult(text: string): boolean {
+  return /running in background|background task .*(completed|finished|failed)|Command running in background/i.test(text);
+}
 
 /** Split a string into lines, defending against non-string input. */
 function toLines(s: unknown): string[] {
@@ -125,13 +164,27 @@ export function readRecentMessages(path: string | null | undefined, limit = 40):
       if (!t) continue;
       let obj: TranscriptLine;
       try { obj = JSON.parse(t); } catch { continue; }
+
+      // Local command output (a "!" bash command or slash command) is a system
+      // message with the text in a top-level `content` string (`<local-command-
+      // stdout>…`). Surface it as an assistant-side output block so the cockpit
+      // mirrors what the user saw in the terminal, instead of dropping it.
+      if (obj.type === "system" && obj.subtype === "local_command" && typeof obj.content === "string") {
+        const outText = renderCommandString(obj.content);
+        if (outText) out.push({ role: "assistant", text: outText.slice(0, MAX_ASSISTANT_CHARS) });
+        continue;
+      }
+
       const role = obj.message?.role ?? (obj.type === "assistant" ? "assistant" : obj.type === "user" ? "user" : undefined);
       if (role !== "assistant" && role !== "user") continue;
       const content = obj.message?.content;
       let prose = "";
       const edits: string[] = [];
-      if (typeof content === "string") prose = content;
-      else if (Array.isArray(content)) {
+      if (typeof content === "string") {
+        // A "!" bash / slash command the user typed arrives as a tagged string —
+        // clean it to "$ <cmd>" so it renders instead of disappearing / showing raw XML.
+        prose = renderCommandString(content) ?? "";
+      } else if (Array.isArray(content)) {
         prose = content.filter((b) => b?.type === "text" && typeof b.text === "string").map((b) => b.text!).join("\n").trim();
         if (role === "assistant") {
           for (const b of content) {
@@ -139,6 +192,17 @@ export function readRecentMessages(path: string | null | undefined, limit = 40):
               const snip = formatEditTool(b);
               if (snip) edits.push(snip);
             }
+          }
+        } else {
+          // User turns also carry tool_result blocks. Most are ordinary tool output
+          // (noise), but the "Command running in background…" notice IS the status
+          // the user is waiting on — surface just those, not every tool_result.
+          for (const b of content) {
+            if (b?.type !== "tool_result") continue;
+            const rt = typeof b.content === "string" ? b.content
+              : Array.isArray(b.content) ? (b.content as ContentBlock[]).filter((x) => x?.type === "text" && typeof x.text === "string").map((x) => x.text!).join("\n")
+              : "";
+            if (rt && isNotableToolResult(rt)) prose = prose ? prose + "\n" + rt.trim() : rt.trim();
           }
         }
       }

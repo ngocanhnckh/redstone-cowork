@@ -219,4 +219,51 @@ describe("readRecentMessages", () => {
     ]);
     expect(readRecentMessages(path)[0].text).toContain("… (truncated)");
   });
+
+  it("renders a '!' bash command (bash-input) as a clean '$ cmd' line instead of dropping it", () => {
+    const path = writeJsonl([
+      { type: "user", message: { role: "user", content: "<bash-input>bash ~/yerp/scripts/deploy.sh</bash-input>" } },
+    ]);
+    const msgs = readRecentMessages(path);
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0].role).toBe("user");
+    expect(msgs[0].text).toBe("$ bash ~/yerp/scripts/deploy.sh");
+  });
+
+  it("renders a slash command (command-name/args) cleanly", () => {
+    const path = writeJsonl([
+      { type: "user", message: { role: "user", content: "<command-name>/model</command-name>\n<command-message>model</command-message>\n<command-args>opus</command-args>" } },
+    ]);
+    expect(readRecentMessages(path)[0].text).toBe("$ /model opus");
+  });
+
+  it("surfaces local_command stdout from a system message", () => {
+    const path = writeJsonl([
+      { type: "system", subtype: "local_command", content: "<local-command-stdout>Deploy started on 3 hosts</local-command-stdout>" },
+    ]);
+    const msgs = readRecentMessages(path);
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0].role).toBe("assistant");
+    expect(msgs[0].text).toBe("Deploy started on 3 hosts");
+  });
+
+  it("surfaces a 'Command running in background' tool_result status", () => {
+    const path = writeJsonl([
+      { type: "user", message: { role: "user", content: [
+        { type: "tool_result", tool_use_id: "t1", content: "Command running in background with ID: b80v77b70. Output is being written to: /tmp/x.output.", is_error: false },
+      ] } },
+    ]);
+    const msgs = readRecentMessages(path);
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0].text).toContain("Command running in background with ID: b80v77b70");
+  });
+
+  it("still drops ordinary (non-notable) tool_result output as noise", () => {
+    const path = writeJsonl([
+      { type: "user", message: { role: "user", content: [
+        { type: "tool_result", tool_use_id: "t1", content: "total 8\ndrwxr-xr-x  2 user  staff", is_error: false },
+      ] } },
+    ]);
+    expect(readRecentMessages(path)).toHaveLength(0);
+  });
 });
