@@ -126,6 +126,17 @@ export default function DevToolsPanel({ sessionId, active }: { sessionId?: strin
   const openBrowsers = useStore((s) => s.openBrowsers);
   const browserOpen = !!sessionId && openBrowsers.includes(sessionId);
 
+  // Reset captured data whenever the target session changes — otherwise session B's
+  // inspector keeps showing session A's console/network until B's browser reloads.
+  // Keyed on sessionId ONLY (not `active`), so minimizing/restoring the window
+  // doesn't wipe the log.
+  useEffect(() => {
+    setRows([]);
+    setNet([]);
+    setSelId(null);
+    setAttached(false);
+  }, [sessionId]);
+
   // Stream console + network events for this session while the panel is live.
   useEffect(() => {
     if (!active || !sessionId) return;
