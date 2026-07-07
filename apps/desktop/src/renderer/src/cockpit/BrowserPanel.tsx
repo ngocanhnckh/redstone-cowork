@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import ConnectionBar from "./ConnectionBar";
 import { useStore } from "../store";
 import { wireOpenTab } from "./openTabIntercept";
 
@@ -337,16 +336,8 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, chrom
         }
       }}
     >
-      {!chromeHidden && (
-        <ConnectionBar
-          sessionId={sessionId}
-          machine={machine}
-          onHostChange={() => {
-            if (previewPort != null) ensureForward(previewPort);
-            webviewRef.current?.reload();
-          }}
-        />
-      )}
+      {/* The SSH-connection bar lives in the Ports tab (where port/ssh config
+          belongs) — it's just wasted space in the browser, so it's not shown here. */}
 
       {/* Single compact toolbar: nav · address · go · open · preview-port */}
       {!chromeHidden && (
