@@ -23,8 +23,11 @@ export default function MultiBrowser({ sessionId, cwd, machine }: { sessionId: s
   // Per-tab page zoom + responsive device mode (applied to that tab's <webview>).
   const [zoomByTab, setZoomByTab] = useState<Record<number, number>>({});
   const [deviceByTab, setDeviceByTab] = useState<Record<number, "laptop" | "mobile">>({});
+  // Effective viewport (CSS px the page sees) per tab, reported by each BrowserPanel.
+  const [vpByTab, setVpByTab] = useState<Record<number, { w: number; h: number }>>({});
   const zoom = zoomByTab[active] ?? 1;
   const device = deviceByTab[active] ?? "laptop";
+  const vp = vpByTab[active];
   const setZoom = (z: number) => setZoomByTab((m) => ({ ...m, [active]: Math.min(3, Math.max(0.25, +z.toFixed(2))) }));
   const bumpZoom = (dir: 1 | -1) => setZoom(zoom * (dir > 0 ? 1.1 : 1 / 1.1));
   const toggleDevice = () => setDeviceByTab((m) => ({ ...m, [active]: (m[active] ?? "laptop") === "mobile" ? "laptop" : "mobile" }));
@@ -92,10 +95,11 @@ export default function MultiBrowser({ sessionId, cwd, machine }: { sessionId: s
         })}
         <button onClick={addTab} title="New browser tab" style={{ ...tabBtn, background: "transparent", color: "var(--text-soft)", border: "1px dashed var(--border-strong)" }}>+ new</button>
         <span style={{ flex: 1 }} />
-        {/* Zoom controls for the active tab */}
+        {/* Zoom controls for the active tab — the middle shows the effective viewport
+            size (px the page sees, changes as you zoom); click it to reset to 100%. */}
         <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
           <button onClick={() => bumpZoom(-1)} title="Zoom out" style={ctrlBtn}>−</button>
-          <button onClick={() => setZoom(1)} title="Reset zoom to 100%" style={{ ...ctrlBtn, minWidth: 42, textAlign: "center" }}>{Math.round(zoom * 100)}%</button>
+          <button onClick={() => setZoom(1)} title={`Effective viewport ${vp ? `${vp.w}×${vp.h}px` : ""} · zoom ${Math.round(zoom * 100)}% — click to reset`} style={{ ...ctrlBtn, minWidth: 74, textAlign: "center" }}>{vp ? `${vp.w}×${vp.h}` : `${Math.round(zoom * 100)}%`}</button>
           <button onClick={() => bumpZoom(1)} title="Zoom in" style={ctrlBtn}>+</button>
         </div>
         {/* Responsive device switch (laptop ⇄ mobile) */}
@@ -117,7 +121,12 @@ export default function MultiBrowser({ sessionId, cwd, machine }: { sessionId: s
       <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
         {tabs.map((tab) => (
           <div key={tab.id} style={{ position: "absolute", inset: 0, display: tab.id === active ? "flex" : "none", flexDirection: "column" }}>
-            <BrowserPanel sessionId={sessionId} cwd={cwd} machine={machine} ephemeral={tab.id !== 0} chromeHidden={chromeHidden} initialUrl={tab.url} zoom={zoomByTab[tab.id] ?? 1} device={deviceByTab[tab.id] ?? "laptop"} />
+            <BrowserPanel
+              sessionId={sessionId} cwd={cwd} machine={machine}
+              ephemeral={tab.id !== 0} chromeHidden={chromeHidden} initialUrl={tab.url}
+              zoom={zoomByTab[tab.id] ?? 1} device={deviceByTab[tab.id] ?? "laptop"}
+              onViewport={(w, h) => setVpByTab((m) => (m[tab.id]?.w === w && m[tab.id]?.h === h ? m : { ...m, [tab.id]: { w, h } }))}
+            />
           </div>
         ))}
       </div>

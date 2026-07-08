@@ -20,6 +20,9 @@ interface Props {
   /** Responsive preview mode — "mobile" constrains the view to a phone width so
    * responsive sites render their mobile layout. */
   device?: "laptop" | "mobile";
+  /** Reports the webview's effective viewport (CSS px the page sees, i.e. rendered
+   * size ÷ zoom) so the tab row can show it instead of a bare zoom %. */
+  onViewport?: (w: number, h: number) => void;
 }
 
 // Minimal typing for Electron's <webview> so JSX type-checks. We only use the
@@ -94,7 +97,7 @@ function portUrl(port: number): string {
   return `http://localhost:${port}`;
 }
 
-export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, chromeHidden, initialUrl, zoom = 1, device = "laptop" }: Props) {
+export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, chromeHidden, initialUrl, zoom = 1, device = "laptop", onViewport }: Props) {
   // Saved override URL (a typed address); when empty the preview is port-driven.
   const [browserUrl, setBrowserUrl] = useState("");
   const [forwardPorts, setForwardPorts] = useState<number[]>([]);
@@ -297,6 +300,28 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, chrom
       if (st.mode !== "hud") st.setActiveTab(sessionId, "browser");
     });
   }, [loadUrl, sessionId]);
+
+  // Report the webview's effective viewport (what the page sees = rendered px ÷ zoom)
+  // so the tab row can show "1280×720" instead of a bare zoom %. Recomputed on resize
+  // (window/layout change) and whenever zoom or device mode changes. The callback is
+  // held in a ref so re-renders don't churn the ResizeObserver.
+  const onViewportRef = useRef(onViewport);
+  onViewportRef.current = onViewport;
+  useEffect(() => {
+    const wv = webviewRef.current;
+    if (!wv) return;
+    const report = () => {
+      const cb = onViewportRef.current;
+      if (!cb) return;
+      const w = Math.round(wv.clientWidth / zoom);
+      const h = Math.round(wv.clientHeight / zoom);
+      if (w > 0 && h > 0) cb(w, h);
+    };
+    report();
+    const ro = new ResizeObserver(report);
+    ro.observe(wv);
+    return () => ro.disconnect();
+  }, [zoom, device, loadUrl]);
 
   // Apply the page zoom factor — on change and on each navigation (a fresh document
   // resets the webContents zoom back to 1).
