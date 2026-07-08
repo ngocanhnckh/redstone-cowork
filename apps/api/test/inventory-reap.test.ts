@@ -8,9 +8,11 @@ import { EventsBus } from "../src/application/events-bus";
 
 const OLD = new Date(Date.now() - 10 * 60_000); // well past the 2-min grace
 
-const session = (id: string, machine: string, attachedAt = OLD): AgentSession => ({
+// `lastSeenAt` defaults to OLD (gone quiet → reapable). A live session passes a
+// recent lastSeenAt and must be protected from reaping.
+const session = (id: string, machine: string, lastSeenAt: Date = OLD): AgentSession => ({
   id, machine, cwd: "/repo", gitBranch: "main",
-  attachedAt, lastSeenAt: new Date(),
+  attachedAt: OLD, lastSeenAt,
   wrapperId: `w-${id}`, permissionMode: "default", autoModeEnabled: false,
   latestAnswer: null, summary: null, todos: [], userTodos: [], tags: [], transcript: [],
   working: false, contextTokens: null, model: null, tokensInput: 0, tokensOutput: 0,
@@ -54,10 +56,20 @@ describe("inventory auto-reap reconciliation", () => {
     expect((await sessions.get("C"))?.closedAt).toBeNull();
   });
 
-  it("does not reap a session younger than the grace window", async () => {
+  it("does not reap a session seen within the grace window (just attached / heartbeating)", async () => {
     const { sessions, svc } = make();
-    await sessions.upsert(session("young", "mac", new Date())); // attached just now
+    await sessions.upsert(session("young", "mac", new Date())); // seen just now
     await svc.reportInventory("h1", { machine: "mac", sessions: [scan("A")] });
     expect((await sessions.get("young"))?.closedAt).toBeNull();
+  });
+
+  it("keeps a LIVE session that's missing from the scan (recent heartbeat) — the disappears-after-1-min bug", async () => {
+    const { sessions, svc } = make();
+    // Attached long ago, but its poller still heartbeats (fresh lastSeenAt), and the
+    // scan can't see its transcript (e.g. cwd hidden past the head window).
+    await sessions.upsert(session("live", "mac", new Date(Date.now() - 20_000)));
+    await svc.reportInventory("h1", { machine: "mac", sessions: [scan("A")] });
+    expect((await sessions.get("live"))?.closedAt).toBeNull();
+    expect((await sessions.list()).map((s) => s.id)).toContain("live");
   });
 });

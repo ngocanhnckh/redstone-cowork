@@ -56,7 +56,15 @@ export class InventoryService {
       if (s.machine !== machine) continue;
       if (s.closedAt) continue; // already retired
       if (scannedIds.has(s.id)) continue; // still has a transcript
-      if (now.getTime() - s.attachedAt.getTime() < REAP_GRACE_MS) continue; // too fresh to judge
+      // Only reap sessions that have ALSO gone quiet. A LIVE session heartbeats
+      // every ~25s (its tmux poller loops, and delivery long-polls count too), so a
+      // recent lastSeenAt means it's alive even if this scan can't see its transcript
+      // — e.g. a huge first line pushes the `cwd` past the scanner's head window and
+      // the session gets dropped from the snapshot. Closing an actively-chatting
+      // session on that basis is exactly the "disappears after ~1 min" bug. Use
+      // lastSeenAt (freshest signal, ≥ attachedAt) so only genuinely dead sessions
+      // (poller gone) are reaped.
+      if (now.getTime() - s.lastSeenAt.getTime() < REAP_GRACE_MS) continue;
       await this.sessions.close(s.id, now);
       this.bus.emit({ type: "session.updated", payload: { id: s.id } });
     }
