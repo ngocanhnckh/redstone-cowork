@@ -189,7 +189,7 @@ describe("pollOnce", () => {
   it("acks but does not send for skipped deliveries", async () => {
     const deps = {
       deliveries: vi.fn().mockResolvedValue([
-        { id: "d2", kind: "question", options: [], resolution: { choice: null, answers: null, custom: "free" } },
+        { id: "d2", kind: "question", options: [], resolution: { choice: null, answers: null, custom: null } },
       ]),
       markDelivered: vi.fn(),
       sendKeys: vi.fn(),

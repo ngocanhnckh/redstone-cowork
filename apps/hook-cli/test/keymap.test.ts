@@ -24,6 +24,14 @@ describe("deliveryToKeys", () => {
     expect(deliveryToKeys({ ...base, kind: "question", options: [{ label: "A" }, { label: "B" }], resolution: { choice: "B", answers: null, custom: null } } as never))
       .toEqual([["2"], ["Enter"]]);
   });
+  it("question custom free-text answer -> Escape then the text + Enter (never dropped)", () => {
+    expect(deliveryToKeys({ ...base, kind: "question", options: [{ label: "A" }, { label: "B" }], resolution: { choice: null, answers: null, custom: "actually do it this other way" } } as never))
+      .toEqual([["Escape"], ["-l", "actually do it this other way"], ["Enter"]]);
+  });
+  it("permission custom free-text reply -> Escape then the text + Enter", () => {
+    expect(deliveryToKeys({ ...base, kind: "permission", options: [{ label: "Allow" }, { label: "Deny" }], resolution: { choice: null, answers: null, custom: "only for src/" } } as never))
+      .toEqual([["Escape"], ["-l", "only for src/"], ["Enter"]]);
+  });
 
   it("two single-select questions -> a digit each (auto-advance), then one Enter to submit review", () => {
     const body = { tool_input: { questions: [
@@ -131,7 +139,8 @@ describe("deliveryToKeys", () => {
   });
   it("local-answered or unmapped -> null (skip)", () => {
     expect(deliveryToKeys({ ...base, kind: "permission", options: [{ label: "Allow" }], resolution: { choice: "__local__", answers: null, custom: null } } as never)).toBeNull();
-    expect(deliveryToKeys({ ...base, kind: "question", options: [], resolution: { choice: null, answers: null, custom: "free text" } } as never)).toBeNull();
+    // a question resolution with NO choice, custom, or answers has nothing to deliver
+    expect(deliveryToKeys({ ...base, kind: "question", options: [], resolution: { choice: null, answers: null, custom: null } } as never)).toBeNull();
   });
 
   it("mode delivery with btabs=2 -> two BTab sequences", () => {

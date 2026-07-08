@@ -136,6 +136,16 @@ export function deliveryToKeys(d: Delivery): string[][] | null {
     if (idx >= 0) return [[String(idx + 1)], ["Enter"]];
   }
 
-  // unmapped (e.g. free-text answer to a question dialog, no matching option) — ack + skip
+  // Free-text (custom) reply to a question/permission dialog. The AskUserQuestion
+  // TUI won't accept a raw typed answer through its option UI, so escape the prompt
+  // first (returns to the normal input) and deliver the user's exact words as a
+  // message. WITHOUT this, a custom answer matched none of the branches above and
+  // fell through to `return null` — the delivery was acked and DISCARDED, silently
+  // losing the user's message. The poller waits INTERRUPT_SETTLE_MS after Escape.
+  if ((d.kind === "question" || d.kind === "permission") && r.custom) {
+    return [["Escape"], ["-l", r.custom], ["Enter"]];
+  }
+
+  // unmapped (no choice, no custom, no structured answers) — ack + skip
   return null;
 }
