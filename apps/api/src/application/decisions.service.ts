@@ -98,6 +98,14 @@ export class DecisionsService {
       resolution: { choice: null, answers: null, custom: trimmed }, deliveredAt: null,
     };
     const created = await this.store.create(decision);
+    // Interrupting aborts the current turn, but an Escape doesn't fire a Stop hook,
+    // so `working` would otherwise stay true forever — leaving the cockpit's "working"
+    // animation spinning after the user hit Stop. Clear it now; a genuine resumption
+    // re-sets it on the next hook event.
+    try {
+      const updated = await this.sessions.patchState(sessionId, { working: false });
+      if (updated) this.bus.emit({ type: "session.updated", payload: { id: sessionId } });
+    } catch { /* best-effort — never block the interrupt */ }
     this.deliveryWaiters.notify(sessionId);
     this.bus.emit({ type: "decision.created", payload: created });
     return created;

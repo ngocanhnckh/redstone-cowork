@@ -208,6 +208,23 @@ export default function FilesPanel({ sessionId, cwd, machine }: Props) {
     }
   }, [openPath, drafts, original, cwd, machine]);
 
+  // Download the open file to a local path chosen via the OS Save dialog. Works
+  // for any file (text or binary), no size cap — streams from the host.
+  const [downloading, setDownloading] = useState(false);
+  const download = useCallback(async () => {
+    if (openPath == null || downloading) return;
+    setDownloading(true);
+    try {
+      const res = await window.cowork.downloadFile({ cwd, machine, file: openPath });
+      if (res.ok) setToast(`Downloaded ${baseName(openPath)}`);
+      else if (!res.canceled) setToast(`Download failed: ${res.error ?? "error"}`);
+    } catch (e) {
+      setToast(`Download failed: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setDownloading(false);
+    }
+  }, [openPath, cwd, machine, downloading]);
+
   // ⌘S / Ctrl+S saves the open file.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -521,6 +538,28 @@ export default function FilesPanel({ sessionId, cwd, machine }: Props) {
                   >
                     {saveState.kind === "saving" ? "saving…" : saveState.text}
                   </span>
+                )}
+                {openPath != null && (
+                  <button
+                    onClick={download}
+                    disabled={downloading}
+                    title="Download this file to your computer"
+                    style={{
+                      border: "1px solid var(--border)",
+                      background: "transparent",
+                      color: "var(--text-soft)",
+                      borderRadius: 8,
+                      padding: "4px 11px",
+                      fontSize: 10.5,
+                      fontFamily: "var(--font-mono)",
+                      cursor: downloading ? "default" : "pointer",
+                      whiteSpace: "nowrap",
+                      opacity: downloading ? 0.6 : 1,
+                      flexShrink: 0,
+                    }}
+                  >
+                    {downloading ? "⤓ …" : "⤓ Download"}
+                  </button>
                 )}
                 {read?.ok && read.encoding === "text" && (
                   <button

@@ -27,7 +27,7 @@ import {
   type StartArgs as ForwardStartArgs,
 } from "./forwarding";
 import { sshSetup, type SshSetupArgs } from "./ssh-setup";
-import { listDir, readFileAt, writeFileAt, deletePath, makeDir, createFile, uploadLocalFile, searchFiles } from "./files";
+import { listDir, readFileAt, writeFileAt, deletePath, makeDir, createFile, uploadLocalFile, searchFiles, downloadFileTo } from "./files";
 import { gitInfo } from "./git";
 import { chooseBgImage, getBgImage, clearBgImage, setSimpleFullscreen, isFullscreen, setVibrancy, chooseBgVideo, getBgVideoUrl, clearBgVideo, currentBgVideoPath } from "./appearance";
 import { registerSessionBrowser, unregisterSessionBrowser, startInspect, stopInspect, stopAllInspectors, getResponseBody } from "./devtools";
@@ -546,6 +546,22 @@ ipcMain.handle(IPC.filesMkdir, (_e, a: { cwd: string; machine: string; parent: s
 ipcMain.handle(IPC.filesCreate, (_e, a: { cwd: string; machine: string; parent: string; name: string }) =>
   createFile(a)
 );
+// Download: pick a local destination via the OS Save dialog, then stream/copy the
+// session file there (no size cap — works for large binaries too).
+ipcMain.handle(IPC.filesDownload, async (e, a: { cwd: string; machine: string; file: string }) => {
+  try {
+    const win = BrowserWindow.fromWebContents(e.sender) ?? undefined;
+    const suggested = a.file.split("/").pop() || "download";
+    const picked = win
+      ? await dialog.showSaveDialog(win, { defaultPath: suggested })
+      : await dialog.showSaveDialog({ defaultPath: suggested });
+    if (picked.canceled || !picked.filePath) return { ok: false, canceled: true };
+    const res = await downloadFileTo({ cwd: a.cwd, machine: a.machine, file: a.file, dest: picked.filePath });
+    return { ...res, path: picked.filePath };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+});
 // Upload: open the OS file picker, then copy each chosen file into destDir.
 ipcMain.handle(IPC.filesUpload, async (e, a: { cwd: string; machine: string; destDir: string }) => {
   try {

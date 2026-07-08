@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { sshMuxOpts } from "./ssh-common";
 import { isLocalMachine, getSshTarget, type SshTarget } from "./workspace";
 
@@ -234,6 +234,42 @@ export async function readFileAt(args: Loc & { file: string }): Promise<ReadResu
     }
     return { ok: true, encoding: "text", content, size, truncated: false };
   } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/**
+ * Save a session file to a local path (the "Download" action). Unlike readFileAt
+ * this has NO size cap and streams — a large binary downloads fine. Local sessions
+ * copy directly; remote sessions stream `ssh … cat <file>` into the destination.
+ */
+export async function downloadFileTo(args: Loc & { file: string; dest: string }): Promise<{ ok: boolean; error?: string }> {
+  const { machine, file, dest } = args;
+  try {
+    if (isLocalMachine(machine)) {
+      await fsp.copyFile(file, dest);
+      return { ok: true };
+    }
+    const target = await getSshTarget(machine);
+    await new Promise<void>((resolve, reject) => {
+      const out = fs.createWriteStream(dest);
+      out.on("error", reject);
+      const child = spawn(
+        "ssh",
+        [...sshMuxOpts(), ...target.opts, "-o", "BatchMode=yes", "-o", "ConnectTimeout=8", target.host, `cat ${shellQuote(file)}`],
+        { stdio: ["ignore", "pipe", "pipe"] },
+      );
+      let err = "";
+      child.stderr.on("data", (d) => { err += String(d); });
+      child.on("error", reject);
+      child.stdout.pipe(out);
+      out.on("finish", () => (child.exitCode === 0 || child.exitCode === null ? resolve() : reject(new Error(err.trim() || `ssh exit ${child.exitCode}`))));
+      child.on("close", (code) => { if (code !== 0) { out.destroy(); reject(new Error(err.trim() || `ssh exit ${code}`)); } });
+    });
+    return { ok: true };
+  } catch (e) {
+    // Best-effort: remove a partial file so a failed download doesn't leave junk.
+    try { await fsp.unlink(dest); } catch { /* ignore */ }
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }

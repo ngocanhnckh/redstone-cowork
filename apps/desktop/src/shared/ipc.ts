@@ -86,6 +86,7 @@ export const IPC = {
   filesMkdir: "api:files:mkdir",
   filesCreate: "api:files:create",
   filesUpload: "api:files:upload",
+  filesDownload: "api:files:download",
   clipboardWrite: "api:clipboard:write",
   llmModels: "api:llm:models",
   llmAssist: "api:llm:assist",

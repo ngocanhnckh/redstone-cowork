@@ -309,6 +309,11 @@ contextBridge.exposeInMainWorld("cowork", {
     machine: string;
     destDir: string;
   }): Promise<{ ok: boolean; uploaded: number; error?: string }> => ipcRenderer.invoke(IPC.filesUpload, a),
+  downloadFile: (a: {
+    cwd: string;
+    machine: string;
+    file: string;
+  }): Promise<{ ok: boolean; canceled?: boolean; path?: string; error?: string }> => ipcRenderer.invoke(IPC.filesDownload, a),
   copyText: (text: string): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke(IPC.clipboardWrite, { text }),
 

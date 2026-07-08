@@ -350,6 +350,13 @@ export const useStore = create<State>((set, get) => ({
       // Show the redirect instantly, like a normal send. A bare stop (no text)
       // just aborts. Stay on this session — the user is redirecting it, not moving on.
       if (text && text.trim()) get().recordSent(sessionId, text);
+      // Optimistically clear `working` so the "processing" animation stops the moment
+      // you hit Stop — an Escape doesn't fire a Stop hook, so we'd otherwise wait on
+      // the server. The server also clears it on interrupt, so the refresh agrees.
+      set((state) => ({
+        sessions: state.sessions.map((s) => (s.id === sessionId ? { ...s, working: false } : s)),
+        queue: state.queue.map((s) => (s.id === sessionId ? { ...s, working: false } : s)),
+      }));
       await window.cowork.interrupt(sessionId, text?.trim() || undefined);
       await get().refresh();
     } catch (e) { set({ error: e instanceof Error ? e.message : String(e) }); }
