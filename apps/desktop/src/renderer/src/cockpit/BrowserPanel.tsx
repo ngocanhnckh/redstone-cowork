@@ -106,6 +106,7 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, chrom
   const [address, setAddress] = useState(initialUrl?.trim() ? initialUrl : "");
   const [status, setStatus] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(false); // page in flight — drives the sci-fi loader
   const webviewRef = useRef<WebviewEl | null>(null);
 
   // In-page find (Cmd/Ctrl+F). `find` is the query; matches tracks active/total
@@ -189,6 +190,28 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, chrom
       cancelled = true;
     };
   }, [sessionId, cwd, machine]);
+
+  // Track page load state to drive the sci-fi loading overlay. `did-start-loading`
+  // fires the moment a navigation begins (before the site paints anything), and
+  // `did-stop-loading` when it settles; a fail also ends the loader.
+  useEffect(() => {
+    const wv = webviewRef.current;
+    if (!wv) return;
+    const start = () => setLoading(true);
+    const stop = () => setLoading(false);
+    wv.addEventListener("did-start-loading", start as EventListener);
+    wv.addEventListener("did-stop-loading", stop as EventListener);
+    wv.addEventListener("did-finish-load", stop as EventListener);
+    wv.addEventListener("did-fail-load", stop as EventListener);
+    wv.addEventListener("crashed", stop as EventListener);
+    return () => {
+      wv.removeEventListener("did-start-loading", start as EventListener);
+      wv.removeEventListener("did-stop-loading", stop as EventListener);
+      wv.removeEventListener("did-finish-load", stop as EventListener);
+      wv.removeEventListener("did-fail-load", stop as EventListener);
+      wv.removeEventListener("crashed", stop as EventListener);
+    };
+  }, [loadUrl]);
 
   // Report the primary browser guest's webContents id so the Inspector (DevTools)
   // panel can attach console/network capture to it. Only the primary tab (not
@@ -476,6 +499,11 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, chrom
               : { width: "100%", height: "100%", border: 0, flex: 1 }}
           />
         ) : (
+          <div style={{ display: "none" }} />
+        )}
+        {/* Sci-fi loading overlay — covers the preview until the page paints. */}
+        {hasUrl && loading && <BrowserLoader url={address || loadUrl} />}
+        {!hasUrl && (
           <div
             style={{
               position: "absolute",
@@ -490,6 +518,76 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, chrom
             </span>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+/** Short host label for the loader status line. */
+function hostLabel(url: string): string {
+  try { return new URL(url).host || url; } catch { return url.replace(/^https?:\/\//, "").split("/")[0] || "target"; }
+}
+
+const LOADER_CSS = `
+@keyframes rcwl-spin { to { transform: rotate(360deg); } }
+@keyframes rcwl-spin-rev { to { transform: rotate(-360deg); } }
+@keyframes rcwl-sweep { to { transform: rotate(360deg); } }
+@keyframes rcwl-pulse { 0%,100% { opacity:.35; transform: scale(.9); } 50% { opacity:1; transform: scale(1.05); } }
+@keyframes rcwl-bar { 0% { left:-40%; } 100% { left:100%; } }
+@keyframes rcwl-grid { to { background-position: 0 -34px, -34px 0; } }
+@keyframes rcwl-blink { 0%,100% { opacity:1; } 50% { opacity:.2; } }
+@keyframes rcwl-in { from { opacity:0; } to { opacity:1; } }
+.rcwl { position:absolute; inset:0; z-index:6; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:22px;
+  overflow:hidden; animation: rcwl-in .18s ease both;
+  background: radial-gradient(120% 90% at 50% 42%, rgb(var(--primary) / 0.10), rgba(0,0,0,0.55) 72%), #0b0a09; }
+.rcwl-grid { position:absolute; inset:0; opacity:.5; pointer-events:none;
+  background-image:
+    linear-gradient(rgb(var(--primary-soft) / 0.09) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(var(--primary-soft) / 0.09) 1px, transparent 1px);
+  background-size: 34px 34px, 34px 34px;
+  mask-image: radial-gradient(70% 60% at 50% 45%, #000 30%, transparent 78%);
+  -webkit-mask-image: radial-gradient(70% 60% at 50% 45%, #000 30%, transparent 78%);
+  animation: rcwl-grid 3.2s linear infinite; }
+.rcwl-reticle { position:relative; width:118px; height:118px; }
+.rcwl-ring { position:absolute; inset:0; border-radius:50%; }
+.rcwl-ring.r1 { border:1.5px solid rgb(var(--primary-soft) / 0.18); border-top-color: rgb(var(--primary-soft)); animation: rcwl-spin 1.15s cubic-bezier(.5,.1,.4,.9) infinite; box-shadow: 0 0 18px -6px rgb(var(--primary-soft)); }
+.rcwl-ring.r2 { inset:18px; border:1.5px dashed rgb(var(--accent) / 0.4); border-bottom-color: rgb(var(--accent)); animation: rcwl-spin-rev 1.9s linear infinite; }
+.rcwl-ring.r3 { inset:36px; border:1px solid rgb(var(--primary-soft) / 0.14); border-left-color: rgb(var(--primary-soft) / 0.8); animation: rcwl-spin 2.6s linear infinite; }
+.rcwl-sweep { position:absolute; inset:0; border-radius:50%; animation: rcwl-sweep 1.6s linear infinite;
+  background: conic-gradient(from 0deg, transparent 0deg, rgb(var(--primary-soft) / 0.28) 40deg, transparent 70deg);
+  mask: radial-gradient(circle, transparent 26px, #000 27px);
+  -webkit-mask: radial-gradient(circle, transparent 26px, #000 27px); }
+.rcwl-core { position:absolute; top:50%; left:50%; width:16px; height:16px; margin:-8px 0 0 -8px; border-radius:50%;
+  background: radial-gradient(circle, #fff, rgb(var(--accent)) 55%, transparent 72%);
+  box-shadow: 0 0 22px 4px rgb(var(--accent) / 0.7); animation: rcwl-pulse 1.1s ease-in-out infinite; }
+.rcwl-track { position:relative; width:min(58%, 340px); height:3px; border-radius:999px; overflow:hidden;
+  background: rgb(var(--primary-soft) / 0.12); box-shadow: inset 0 0 0 1px rgb(var(--primary-soft) / 0.1); }
+.rcwl-track > i { position:absolute; top:0; height:100%; width:38%; border-radius:999px;
+  background: linear-gradient(90deg, transparent, rgb(var(--primary-soft)), rgb(var(--accent)), transparent);
+  box-shadow: 0 0 14px 1px rgb(var(--primary-soft) / 0.8); animation: rcwl-bar 1.15s cubic-bezier(.6,0,.4,1) infinite; }
+.rcwl-label { display:flex; align-items:center; gap:9px; font-family:var(--font-mono); font-size:10.5px; letter-spacing:.28em;
+  text-transform:uppercase; color: rgb(var(--primary-soft)); text-shadow: 0 0 12px rgb(var(--primary-soft) / 0.6); }
+.rcwl-label b { color: var(--text-soft); font-weight:500; letter-spacing:.12em; text-transform:none; }
+.rcwl-dot { width:6px; height:6px; border-radius:50%; background: rgb(var(--accent)); box-shadow:0 0 10px 1px rgb(var(--accent)); animation: rcwl-blink 1s steps(1) infinite; }
+`;
+
+/** A self-contained sci-fi loading overlay shown while a page is in flight. */
+function BrowserLoader({ url }: { url: string }) {
+  return (
+    <div className="rcwl no-scrollbar">
+      <style>{LOADER_CSS}</style>
+      <span className="rcwl-grid" />
+      <div className="rcwl-reticle">
+        <span className="rcwl-sweep" />
+        <span className="rcwl-ring r1" />
+        <span className="rcwl-ring r2" />
+        <span className="rcwl-ring r3" />
+        <span className="rcwl-core" />
+      </div>
+      <div className="rcwl-track"><i /></div>
+      <div className="rcwl-label">
+        <span className="rcwl-dot" />
+        Establishing link<b style={{ marginLeft: 4 }}>{hostLabel(url)}</b>
       </div>
     </div>
   );
