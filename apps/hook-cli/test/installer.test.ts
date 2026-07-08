@@ -42,7 +42,11 @@ describe("installer", () => {
     const s = JSON.parse(readFileSync(join(dir, ".claude/settings.local.json"), "utf8"));
     expect(HOOK_EVENTS).toHaveLength(7);
     expect(HOOK_EVENTS).toContain("PostToolUse");
-    expect(Object.keys(s.hooks)).toHaveLength(7);
+    // 7 unmatched events + PreToolUse (matched to AskUserQuestion) = 8 hook keys.
+    expect(Object.keys(s.hooks)).toHaveLength(8);
+    const pre = s.hooks.PreToolUse;
+    expect(pre).toBeDefined();
+    expect(pre[0].matcher).toBe("AskUserQuestion");
   });
 
   it("uses HOOK_TIMEOUT_S = 10", () => {

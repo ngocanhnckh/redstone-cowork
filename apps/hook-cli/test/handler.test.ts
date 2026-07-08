@@ -106,6 +106,35 @@ describe("processEvent", () => {
     );
   });
 
+  it("PreToolUse AskUserQuestion → creates a question decision (works in bypass mode)", async () => {
+    const deps = baseDeps({ wrapperId: "wrap1" });
+    const out = await processEvent(
+      ev("PreToolUse", { tool_name: "AskUserQuestion", tool_input: { questions: [
+        { question: "Ship now or bundle?", options: [{ label: "Ship now" }, { label: "Bundle" }] },
+      ] } }),
+      deps
+    );
+    expect(deps.api.createDecision).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: "question", title: "Ship now or bundle?", options: [{ label: "Ship now" }, { label: "Bundle" }] })
+    );
+    expect(out).toBeNull();
+  });
+
+  it("PreToolUse for a non-AskUserQuestion tool → no decision", async () => {
+    const deps = baseDeps({ wrapperId: "wrap1" });
+    await processEvent(ev("PreToolUse", { tool_name: "Bash", tool_input: { command: "ls" } }), deps);
+    expect(deps.api.createDecision).not.toHaveBeenCalled();
+  });
+
+  it("PermissionRequest for AskUserQuestion → skipped (handled on PreToolUse, no duplicate)", async () => {
+    const deps = baseDeps({ wrapperId: "wrap1" });
+    await processEvent(
+      ev("PermissionRequest", { tool_name: "AskUserQuestion", tool_input: { questions: [{ question: "x" }] } }),
+      deps
+    );
+    expect(deps.api.createDecision).not.toHaveBeenCalled();
+  });
+
   it("Notification with message → kind notification", async () => {
     const deps = baseDeps();
     const out = await processEvent(

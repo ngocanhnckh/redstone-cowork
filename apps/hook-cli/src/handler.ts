@@ -141,7 +141,23 @@ export async function processEvent(
         await deps.api.resolveLocal(event.session_id);
         return null;
 
+      case "PreToolUse": {
+        // AskUserQuestion needs a real answer regardless of permission mode, but in
+        // bypassPermissions / auto mode PermissionRequest never fires — so surface
+        // the question here (PreToolUse fires for every tool call, unaffected by
+        // permission mode). Scoped to AskUserQuestion by the installer's matcher.
+        if (event.tool_name !== "AskUserQuestion") return null;
+        const spec = buildDecisionSpec(event, !!deps.wrapperId);
+        if (!spec) return null;
+        const body = { ...spec.body, lastMessage: deps.lastAssistantText(event) };
+        await deps.api.createDecision({ sessionId: event.session_id, ...spec, body });
+        return null;
+      }
+
       case "PermissionRequest": {
+        // AskUserQuestion is handled on PreToolUse (works in every permission mode);
+        // skip it here so a non-bypass session doesn't create a duplicate card.
+        if (event.tool_name === "AskUserQuestion") return null;
         const deliverable = !!deps.wrapperId;
         const spec = buildDecisionSpec(event, deliverable);
         if (!spec) return null;
