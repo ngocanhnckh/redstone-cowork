@@ -4,24 +4,32 @@ import { pickFocus, nextWaiting } from "./autoAdvance";
 
 /**
  * A reply shown instantly in the timeline before the host echoes it back. We
- * snapshot the session's transcript length at send time (`baseLen`); once the
- * transcript grows past that, the host has incorporated the message and the
- * optimistic copy is dropped. This is robust to the host rewriting the text
- * (chunking / trimming) — unlike matching on the exact string, which used to
- * leave the bubble stuck until a TTL.
+ * snapshot the session's USER-message count at send time (`baseUsers`); once the
+ * transcript has one more user turn than that, the host has recorded this message
+ * and the optimistic copy is dropped. Counting user turns (not total length) is
+ * key: Claude's assistant output streams in continuously, so a length snapshot
+ * would prune the bubble the instant Claude speaks — before the user's message
+ * lands — making it vanish. Robust to the host rewriting the text (chunk/trim).
  */
-export type PendingSend = { text: string; baseLen: number; ts: number };
+export type PendingSend = { text: string; baseUsers: number; ts: number };
 
-/** Safety net: drop an un-incorporated optimistic send after this long (ms). */
-const PENDING_TTL_MS = 60 * 1000;
+/** Safety net: drop an un-incorporated optimistic send after this long (ms). A
+ * message can sit queued in Claude's input while a long turn finishes (multi-minute
+ * "cogitating"), so keep the bubble visible generously rather than dropping it. */
+const PENDING_TTL_MS = 10 * 60 * 1000;
 
-/** Current transcript length for a session, looking across both sessions and queue. */
-function transcriptLen(sessions: SessionView[], queue: SessionView[], id: string): number {
+/** Number of USER messages in a session's transcript, across sessions and queue.
+ * We count user turns (not total length) because Claude's own assistant output
+ * streams into the transcript continuously — using total length would prune an
+ * optimistic send the moment Claude speaks, before the user's message ever lands. */
+function userMsgCount(sessions: SessionView[], queue: SessionView[], id: string): number {
   const s = sessions.find((x) => x.id === id) ?? queue.find((x) => x.id === id);
-  return s?.transcript?.length ?? 0;
+  return (s?.transcript ?? []).reduce((n, m) => n + (m.role === "user" ? 1 : 0), 0);
 }
 
-/** Drop optimistic sends the host has incorporated (transcript grew past baseLen) or that aged out. */
+/** Drop optimistic sends once the host has recorded them as a user turn (the user
+ * message count grew past the snapshot) or they aged out. Assistant-only transcript
+ * growth never prunes them — otherwise a still-queued message vanishes mid-turn. */
 function prunePending(
   pending: Record<string, PendingSend[]>,
   sessions: SessionView[],
@@ -30,8 +38,8 @@ function prunePending(
 ): Record<string, PendingSend[]> {
   const next: Record<string, PendingSend[]> = {};
   for (const [id, list] of Object.entries(pending)) {
-    const len = transcriptLen(sessions, queue, id);
-    const kept = list.filter((p) => now - p.ts < PENDING_TTL_MS && len <= p.baseLen);
+    const users = userMsgCount(sessions, queue, id);
+    const kept = list.filter((p) => now - p.ts < PENDING_TTL_MS && users <= p.baseUsers);
     if (kept.length) next[id] = kept;
   }
   return next;
@@ -196,13 +204,13 @@ export const useStore = create<State>((set, get) => ({
     if (!t) return;
     set((state) => {
       const existing = state.pending[sessionId] ?? [];
-      // Snapshot transcript length + already-queued sends, so multiple quick sends
-      // each clear in order as the host incorporates them one at a time.
-      const baseLen = transcriptLen(state.sessions, state.queue, sessionId) + existing.length;
+      // Snapshot the user-message count + already-queued sends, so multiple quick
+      // sends each clear in order as the host records them one at a time.
+      const baseUsers = userMsgCount(state.sessions, state.queue, sessionId) + existing.length;
       return {
         pending: {
           ...state.pending,
-          [sessionId]: [...existing, { text: t, baseLen, ts: Date.now() }],
+          [sessionId]: [...existing, { text: t, baseUsers, ts: Date.now() }],
         },
       };
     });
