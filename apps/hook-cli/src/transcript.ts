@@ -11,8 +11,10 @@ export const MAX_ASSISTANT_CHARS = 6000;
 const MAX_DIFF_LINES = 60;
 const MAX_DIFF_CHARS = 1500;
 
-/** Only scan the tail of the transcript; the last assistant prose is always near the end. */
-const TAIL_BYTES = 256 * 1024;
+/** Only scan the tail of the transcript; the last assistant prose is always near the
+ * end. Sized so the recent-messages window (see readRecentMessages `limit`) can be
+ * filled even in tool-heavy sessions where many JSONL lines are non-prose. */
+const TAIL_BYTES = 768 * 1024;
 
 const EDIT_TOOLS = new Set(["Edit", "Write", "MultiEdit", "NotebookEdit"]);
 
@@ -144,8 +146,10 @@ function formatEditTool(block: ContentBlock): string | null {
  * long the session has run. Never throws — callers run inside the hook handler,
  * which must never break the user's session.
  */
-/** Recent user prompts + assistant prose from the transcript tail, oldest→newest, capped at `limit`. */
-export function readRecentMessages(path: string | null | undefined, limit = 40): TranscriptMessage[] {
+/** Recent user prompts + assistant prose from the transcript tail, oldest→newest,
+ * capped at `limit` (the cockpit's scroll-back window — posted on every hook event,
+ * so it's a rolling window of the tail, not the full on-disk history). */
+export function readRecentMessages(path: string | null | undefined, limit = 150): TranscriptMessage[] {
   if (!path) return [];
   let fd: number | null = null;
   try {
