@@ -23,6 +23,10 @@ interface Props {
   /** Reports the webview's effective viewport (CSS px the page sees, i.e. rendered
    * size ÷ zoom) so the tab row can show it instead of a bare zoom %. */
   onViewport?: (w: number, h: number) => void;
+  /** Reports the page's <title> so the tab can be labelled with the site title. */
+  onTitle?: (title: string) => void;
+  /** Reports the current URL on navigation, so tabs can be persisted/restored. */
+  onUrl?: (url: string) => void;
 }
 
 // Minimal typing for Electron's <webview> so JSX type-checks. We only use the
@@ -97,7 +101,7 @@ function portUrl(port: number): string {
   return `http://localhost:${port}`;
 }
 
-export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, chromeHidden, initialUrl, zoom = 1, device = "laptop", onViewport }: Props) {
+export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, chromeHidden, initialUrl, zoom = 1, device = "laptop", onViewport, onTitle, onUrl }: Props) {
   // Saved override URL (a typed address); when empty the preview is port-driven.
   const [browserUrl, setBrowserUrl] = useState("");
   const [forwardPorts, setForwardPorts] = useState<number[]>([]);
@@ -239,19 +243,33 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, chrom
     };
   }, [ephemeral, sessionId, loadUrl]);
 
-  // Keep the address bar synced from live webview navigation.
+  // Callbacks held in refs so re-renders don't churn the webview event listeners.
+  const onTitleRef = useRef(onTitle);
+  onTitleRef.current = onTitle;
+  const onUrlRef = useRef(onUrl);
+  onUrlRef.current = onUrl;
+
+  // Keep the address bar synced from live webview navigation, and report the URL up
+  // (for tab persistence) and the page title (for the tab label).
   useEffect(() => {
     const wv = webviewRef.current;
     if (!wv) return;
     const onNav = (e: Event) => {
       const url = (e as unknown as { url?: string }).url;
-      if (url) setAddress(url);
+      if (url) { setAddress(url); onUrlRef.current?.(url); }
+    };
+    const onTitleEv = (e: Event) => {
+      const t = (e as unknown as { title?: string }).title;
+      // Ignore the open-in-new-tab title marker (see openTabIntercept.ts).
+      if (typeof t === "string" && t && !t.startsWith("__RCW_OPEN_TAB__::")) onTitleRef.current?.(t);
     };
     wv.addEventListener("did-navigate", onNav as EventListener);
     wv.addEventListener("did-navigate-in-page", onNav as EventListener);
+    wv.addEventListener("page-title-updated", onTitleEv as EventListener);
     return () => {
       wv.removeEventListener("did-navigate", onNav as EventListener);
       wv.removeEventListener("did-navigate-in-page", onNav as EventListener);
+      wv.removeEventListener("page-title-updated", onTitleEv as EventListener);
     };
   }, [loadUrl]);
 

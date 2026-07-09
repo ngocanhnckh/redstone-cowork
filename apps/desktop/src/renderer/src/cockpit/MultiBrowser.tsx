@@ -7,6 +7,20 @@ function urlLabel(url: string): string {
   try { return new URL(url).hostname || url; } catch { return url.slice(0, 24); }
 }
 
+type Tab = { id: number; url?: string };
+type SavedTabs = { tabs: Tab[]; active: number; seq: number };
+const TABS_KEY = "rcw.browser.tabs.v1";
+
+/** Load a session's persisted open tabs (so reopening Redstone restores them). */
+function loadSavedTabs(sessionId: string): SavedTabs | null {
+  try {
+    const all = JSON.parse(localStorage.getItem(TABS_KEY) || "{}") as Record<string, SavedTabs>;
+    const s = all[sessionId];
+    if (s && Array.isArray(s.tabs) && s.tabs.some((t) => t.id === 0)) return s;
+  } catch { /* ignore */ }
+  return null;
+}
+
 /**
  * A tabbed set of browser previews for one session — like Chrome tabs. Each tab is
  * its own <webview>, all kept mounted and toggled with `display` so switching tabs
@@ -14,17 +28,23 @@ function urlLabel(url: string): string {
  * URL/port config); extra tabs are ephemeral (navigate freely, don't overwrite it).
  */
 export default function MultiBrowser({ sessionId, cwd, machine }: { sessionId: string; cwd: string; machine: string }) {
-  const seq = useRef(0);
+  // Restore this session's tabs from a previous run (Redstone remembers them).
+  const saved = useRef(loadSavedTabs(sessionId)).current;
+  const seq = useRef(saved?.seq ?? 0);
   // Tab 0 is the session's primary preview (config-driven, no url). Extra tabs may
   // carry a url when opened for an external link ("open in the workspace browser").
-  const [tabs, setTabs] = useState<{ id: number; url?: string }[]>([{ id: 0 }]);
-  const [active, setActive] = useState(0);
+  const [tabs, setTabs] = useState<Tab[]>(saved?.tabs?.length ? saved.tabs : [{ id: 0 }]);
+  const [active, setActive] = useState(saved?.active ?? 0);
 
   // Per-tab page zoom + responsive device mode (applied to that tab's <webview>).
   const [zoomByTab, setZoomByTab] = useState<Record<number, number>>({});
   const [deviceByTab, setDeviceByTab] = useState<Record<number, "laptop" | "mobile">>({});
   // Effective viewport (CSS px the page sees) per tab, reported by each BrowserPanel.
   const [vpByTab, setVpByTab] = useState<Record<number, { w: number; h: number }>>({});
+  // Page title + current URL per tab, reported by each BrowserPanel (title → tab
+  // label; url → persistence so a tab restores to where you left it).
+  const [titleByTab, setTitleByTab] = useState<Record<number, string>>({});
+  const [urlByTab, setUrlByTab] = useState<Record<number, string>>({});
   const zoom = zoomByTab[active] ?? 1;
   const device = deviceByTab[active] ?? "laptop";
   const vp = vpByTab[active];
@@ -58,6 +78,21 @@ export default function MultiBrowser({ sessionId, cwd, machine }: { sessionId: s
     });
   };
 
+  // Persist this session's open tabs (+ active + seq) so reopening Redstone restores
+  // them. Tab 0 stays config-driven (no saved url); extra tabs remember their current
+  // URL so they reload where you left off.
+  useEffect(() => {
+    try {
+      const all = JSON.parse(localStorage.getItem(TABS_KEY) || "{}") as Record<string, SavedTabs>;
+      all[sessionId] = {
+        tabs: tabs.map((t) => (t.id === 0 ? { id: 0 } : { id: t.id, url: urlByTab[t.id] ?? t.url })),
+        active,
+        seq: seq.current,
+      };
+      localStorage.setItem(TABS_KEY, JSON.stringify(all));
+    } catch { /* ignore */ }
+  }, [tabs, active, urlByTab, sessionId]);
+
   const addTab = () => { const n = ++seq.current; setTabs((t) => [...t, { id: n }]); setActive(n); };
   const closeTab = (n: number) => {
     setTabs((t) => {
@@ -81,10 +116,15 @@ export default function MultiBrowser({ sessionId, cwd, machine }: { sessionId: s
       <div className="no-scrollbar" style={{ display: "flex", alignItems: "center", gap: 4, padding: "6px 10px", borderBottom: "1px solid var(--border)", flexShrink: 0, overflowX: "auto" }}>
         {tabs.map((tab, i) => {
           const on = tab.id === active;
-          const label = i === 0 ? "preview" : tab.url ? urlLabel(tab.url) : `tab ${i + 1}`;
+          const url = urlByTab[tab.id] ?? tab.url;
+          const title = titleByTab[tab.id];
+          // Prefer the page title; fall back to the hostname, then "preview"/"tab N".
+          const label = title || (url ? urlLabel(url) : i === 0 ? "preview" : `tab ${i + 1}`);
+          // Full title (+ url) on hover, since the label is truncated.
+          const tip = [title, url].filter(Boolean).join("\n") || label;
           return (
-            <span key={tab.id} onClick={() => setActive(tab.id)} title={tab.url ?? label}
-              style={{ ...tabBtn, maxWidth: 160, background: on ? "rgb(var(--primary) / 0.22)" : "transparent", color: on ? "var(--text)" : "var(--text-soft)", borderColor: on ? "rgb(var(--primary-soft) / 0.4)" : "transparent" }}>
+            <span key={tab.id} onClick={() => setActive(tab.id)} title={tip}
+              style={{ ...tabBtn, maxWidth: 180, background: on ? "rgb(var(--primary) / 0.22)" : "transparent", color: on ? "var(--text)" : "var(--text-soft)", borderColor: on ? "rgb(var(--primary-soft) / 0.4)" : "transparent" }}>
               <span style={{ width: 5, height: 5, borderRadius: 999, background: on ? "rgb(var(--accent))" : "var(--border-strong)", flexShrink: 0 }} />
               <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
               {tabs.length > 1 && (
@@ -126,6 +166,8 @@ export default function MultiBrowser({ sessionId, cwd, machine }: { sessionId: s
               ephemeral={tab.id !== 0} chromeHidden={chromeHidden} initialUrl={tab.url}
               zoom={zoomByTab[tab.id] ?? 1} device={deviceByTab[tab.id] ?? "laptop"}
               onViewport={(w, h) => setVpByTab((m) => (m[tab.id]?.w === w && m[tab.id]?.h === h ? m : { ...m, [tab.id]: { w, h } }))}
+              onTitle={(t) => setTitleByTab((m) => (m[tab.id] === t ? m : { ...m, [tab.id]: t }))}
+              onUrl={(u) => setUrlByTab((m) => (m[tab.id] === u ? m : { ...m, [tab.id]: u }))}
             />
           </div>
         ))}
