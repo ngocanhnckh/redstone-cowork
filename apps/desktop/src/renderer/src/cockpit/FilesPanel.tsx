@@ -208,22 +208,31 @@ export default function FilesPanel({ sessionId, cwd, machine }: Props) {
     }
   }, [openPath, drafts, original, cwd, machine]);
 
-  // Download the open file to a local path chosen via the OS Save dialog. Works
-  // for any file (text or binary), no size cap — streams from the host.
+  // Download any file to a local path chosen via the OS Save dialog. Works for any
+  // file (text or binary), no size cap — streams from the host. Used by the toolbar
+  // button (open file) and the tree's right-click menu (any file).
   const [downloading, setDownloading] = useState(false);
-  const download = useCallback(async () => {
-    if (openPath == null || downloading) return;
+  const downloadPath = useCallback(async (path: string) => {
+    if (!path || downloading) return;
     setDownloading(true);
     try {
-      const res = await window.cowork.downloadFile({ cwd, machine, file: openPath });
-      if (res.ok) setToast(`Downloaded ${baseName(openPath)}`);
+      const res = await window.cowork.downloadFile({ cwd, machine, file: path });
+      if (res.ok) setToast(`Downloaded ${baseName(path)}`);
       else if (!res.canceled) setToast(`Download failed: ${res.error ?? "error"}`);
     } catch (e) {
       setToast(`Download failed: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setDownloading(false);
     }
-  }, [openPath, cwd, machine, downloading]);
+  }, [cwd, machine, downloading]);
+
+  // Auto-dismiss the toast so it never sticks around (some callers set it without
+  // their own timer — e.g. download / replace). Cleared whenever the text changes.
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 2600);
+    return () => clearTimeout(t);
+  }, [toast]);
 
   // ⌘S / Ctrl+S saves the open file.
   useEffect(() => {
@@ -541,7 +550,7 @@ export default function FilesPanel({ sessionId, cwd, machine }: Props) {
                 )}
                 {openPath != null && (
                   <button
-                    onClick={download}
+                    onClick={() => downloadPath(openPath)}
                     disabled={downloading}
                     title="Download this file to your computer"
                     style={{
@@ -703,6 +712,17 @@ export default function FilesPanel({ sessionId, cwd, machine }: Props) {
               <MenuItem onClick={() => copyAbs(menu.target.path)}>Copy path</MenuItem>
               <MenuItem onClick={() => copyRel(menu.target.path)}>Copy relative path</MenuItem>
             </>
+          )}
+          {menu.target.kind === "file" && (
+            <MenuItem
+              onClick={() => {
+                const t = menu.target as Extract<MenuTarget, { kind: "file" | "dir" }>;
+                setMenu(null);
+                downloadPath(t.path);
+              }}
+            >
+              Download…
+            </MenuItem>
           )}
           <MenuItem onClick={() => beginCreate(menu.target.parent, "file")}>New file…</MenuItem>
           <MenuItem onClick={() => beginCreate(menu.target.parent, "folder")}>New folder…</MenuItem>
