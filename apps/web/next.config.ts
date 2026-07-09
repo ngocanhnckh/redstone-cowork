@@ -44,6 +44,10 @@ const nextConfig: NextConfig = {
       // Named Claude endpoint config profiles.
       { source: "/configs", destination: `${API_URL}/configs` },
       { source: "/configs/:path*", destination: `${API_URL}/configs/:path*` },
+      // Jira profiles (per-session project management). Session-scoped Jira routes
+      // (/sessions/:id/jira/*) are already covered by /sessions/:path* above.
+      { source: "/jira", destination: `${API_URL}/jira` },
+      { source: "/jira/:path*", destination: `${API_URL}/jira/:path*` },
     ];
   },
 };
