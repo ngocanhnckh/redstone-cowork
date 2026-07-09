@@ -237,6 +237,13 @@ declare global {
       extensionSetEnabled(id: string, enabled: boolean): Promise<{ ok: boolean }>;
       extensionRemove(id: string): Promise<{ ok: boolean }>;
 
+      // Encrypted credential vault (workspace browser)
+      vaultAvailable(): Promise<boolean>;
+      vaultList(): Promise<Array<{ origin: string; username: string }>>;
+      vaultGetForOrigin(origin: string): Promise<{ username: string; password: string } | null>;
+      vaultSave(origin: string, username: string, password: string): Promise<{ ok: boolean }>;
+      vaultDelete(origin: string, username: string): Promise<{ ok: boolean }>;
+
       // LLM assistant
       getLlmModels(): Promise<LlmModelInfo[]>;
       llmAssist(a: {

@@ -340,6 +340,16 @@ contextBridge.exposeInMainWorld("cowork", {
   extensionRemove: (id: string): Promise<{ ok: boolean }> =>
     ipcRenderer.invoke(IPC.extensionRemove, { id }),
 
+  // Encrypted credential vault for the workspace browser
+  vaultAvailable: (): Promise<boolean> => ipcRenderer.invoke(IPC.vaultAvailable),
+  vaultList: (): Promise<Array<{ origin: string; username: string }>> => ipcRenderer.invoke(IPC.vaultList),
+  vaultGetForOrigin: (origin: string): Promise<{ username: string; password: string } | null> =>
+    ipcRenderer.invoke(IPC.vaultGetForOrigin, { origin }),
+  vaultSave: (origin: string, username: string, password: string): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke(IPC.vaultSave, { origin, username, password }),
+  vaultDelete: (origin: string, username: string): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke(IPC.vaultDelete, { origin, username }),
+
   // LLM assistant
   getLlmModels: (): Promise<Array<{ id: string; label: string; model: string; kind: "preset" | "custom" }>> =>
     ipcRenderer.invoke(IPC.llmModels),

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useStore } from "../store";
 import { wireOpenTab } from "./openTabIntercept";
 import BrowserContextMenu, { type CtxMenuState, type WebviewContextParams } from "./BrowserContextMenu";
+import { fillJs, SAVE_DETECT_JS, decodeCred } from "./credAutofill";
 
 interface Props {
   sessionId: string;
@@ -131,6 +132,8 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, chrom
 
   // Custom right-click menu for the guest (Electron shows none by default).
   const [ctxMenu, setCtxMenu] = useState<CtxMenuState>(null);
+  // "Save password?" banner, shown when a login form submits with new credentials.
+  const [savePrompt, setSavePrompt] = useState<{ origin: string; username: string; password: string } | null>(null);
 
   const openFind = () => {
     setFindOpen(true);
@@ -269,8 +272,18 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, chrom
     };
     const onTitleEv = (e: Event) => {
       const t = (e as unknown as { title?: string }).title;
+      if (typeof t !== "string" || !t) return;
+      // A credential-capture marker (a login form was submitted) → offer to save.
+      const cred = decodeCred(t);
+      if (cred) {
+        try {
+          const origin = new URL(wv.getURL()).origin;
+          if (origin && origin !== "null") setSavePrompt({ origin, ...cred });
+        } catch { /* no origin — skip */ }
+        return;
+      }
       // Ignore the open-in-new-tab title marker (see openTabIntercept.ts).
-      if (typeof t === "string" && t && !t.startsWith("__RCW_OPEN_TAB__::")) onTitleRef.current?.(t);
+      if (!t.startsWith("__RCW_OPEN_TAB__::")) onTitleRef.current?.(t);
     };
     wv.addEventListener("did-navigate", onNav as EventListener);
     wv.addEventListener("did-navigate-in-page", onNav as EventListener);
@@ -329,6 +342,25 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, chrom
     return wireOpenTab(wv, openInNewTab);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadUrl, sessionId]);
+
+  // Password autofill: on each document, fill saved credentials for the current
+  // origin and install the save-detector (which signals new logins back via the
+  // title marker, handled above). Runs on dom-ready and every navigation.
+  useEffect(() => {
+    const wv = webviewRef.current;
+    if (!wv) return;
+    const apply = () => {
+      let origin = "";
+      try { origin = new URL(wv.getURL()).origin; } catch { return; }
+      if (!origin || origin === "null") return;
+      try { void wv.executeJavaScript(SAVE_DETECT_JS); } catch { /* not ready */ }
+      window.cowork.vaultGetForOrigin(origin).then((cred) => {
+        if (cred) { try { void wv.executeJavaScript(fillJs(cred.username, cred.password)); } catch { /* ignore */ } }
+      }).catch(() => {});
+    };
+    wv.addEventListener("dom-ready", apply as EventListener);
+    return () => wv.removeEventListener("dom-ready", apply as EventListener);
+  }, [loadUrl]);
 
   // Right-click menu: Electron webviews show no native menu, so we surface our own
   // from the guest's `context-menu` event. `params` is in the guest's coordinate
@@ -440,6 +472,41 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, chrom
           onOpenExternal={(url) => window.cowork.openExternal(url).catch(() => {})}
           onClose={() => setCtxMenu(null)}
         />
+      )}
+
+      {savePrompt && (
+        <div
+          className="glass-surface"
+          style={{
+            position: "absolute", top: 10, left: "50%", transform: "translateX(-50%)", zIndex: 7,
+            display: "flex", alignItems: "center", gap: 12, padding: "9px 12px", borderRadius: 12,
+            border: "1px solid var(--border)", boxShadow: "0 10px 32px rgba(0,0,0,0.45)", maxWidth: "92%",
+          }}
+        >
+          <span style={{ fontSize: 15 }}>🔑</span>
+          <span style={{ fontSize: 12.5, minWidth: 0 }}>
+            Save password for <b style={{ overflowWrap: "anywhere" }}>{hostLabel(savePrompt.origin)}</b>
+            {savePrompt.username ? <span className="faint"> · {savePrompt.username}</span> : null}?
+          </span>
+          <button
+            className="glass-btn--clay"
+            style={{ padding: "5px 13px", fontSize: 12, fontWeight: 600, flexShrink: 0 }}
+            onClick={() => {
+              const p = savePrompt;
+              window.cowork.vaultSave(p.origin, p.username, p.password).catch(() => {});
+              setSavePrompt(null);
+            }}
+          >
+            Save
+          </button>
+          <button
+            onClick={() => setSavePrompt(null)}
+            title="Not now"
+            style={{ border: "1px solid var(--border)", background: "transparent", color: "var(--text-soft)", borderRadius: 8, padding: "5px 9px", fontSize: 12, cursor: "pointer", flexShrink: 0 }}
+          >
+            ✕
+          </button>
+        </div>
       )}
 
       {/* Single compact toolbar: nav · address · go · open · preview-port */}

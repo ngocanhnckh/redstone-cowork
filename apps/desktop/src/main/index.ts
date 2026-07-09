@@ -32,6 +32,7 @@ import { gitInfo } from "./git";
 import { chooseBgImage, getBgImage, clearBgImage, setSimpleFullscreen, isFullscreen, setVibrancy, chooseBgVideo, getBgVideoUrl, clearBgVideo, currentBgVideoPath } from "./appearance";
 import { registerSessionBrowser, unregisterSessionBrowser, startInspect, stopInspect, stopAllInspectors, getResponseBody } from "./devtools";
 import { loadEnabledExtensions, listExtensions, chooseAndAddExtension, setExtensionEnabled, removeExtension } from "./browser-extensions";
+import { vaultAvailable, listCredentials, getCredentialForOrigin, saveCredential, deleteCredential } from "./browser-vault";
 import { IPC } from "../shared/ipc";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -542,6 +543,13 @@ ipcMain.handle(IPC.extensionsList, () => listExtensions());
 ipcMain.handle(IPC.extensionAdd, () => chooseAndAddExtension());
 ipcMain.handle(IPC.extensionSetEnabled, (_e, a: { id: string; enabled: boolean }) => setExtensionEnabled(a.id, !!a.enabled));
 ipcMain.handle(IPC.extensionRemove, (_e, a: { id: string }) => removeExtension(a.id));
+
+// Encrypted browser credential vault (autofill + save prompts).
+ipcMain.handle(IPC.vaultAvailable, () => vaultAvailable());
+ipcMain.handle(IPC.vaultList, () => listCredentials());
+ipcMain.handle(IPC.vaultGetForOrigin, (_e, a: { origin: string }) => getCredentialForOrigin(a.origin));
+ipcMain.handle(IPC.vaultSave, (_e, a: { origin: string; username: string; password: string }) => saveCredential(a.origin, a.username, a.password));
+ipcMain.handle(IPC.vaultDelete, (_e, a: { origin: string; username: string }) => deleteCredential(a.origin, a.username));
 
 // File browser — list / read / write, local or over ssh. Main never throws across IPC.
 ipcMain.handle(IPC.filesList, (_e, a: { cwd: string; machine: string; dir: string }) =>
