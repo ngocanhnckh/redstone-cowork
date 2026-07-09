@@ -8,7 +8,7 @@ import FilesPanel from "./FilesPanel";
 import BrowserStack from "./BrowserStack";
 import DockerLogPanel from "./DockerLogPanel";
 import NotesPanel from "./NotesPanel";
-import PortsPanel from "./PortsPanel";
+import SessionSettingsPanel from "./SessionSettingsPanel";
 import DevToolsPanel from "./DevToolsPanel";
 import CustomAppPanel, { type CustomApp } from "./CustomAppPanel";
 import FolderSessionTabs from "./FolderSessionTabs";
@@ -590,7 +590,7 @@ const FIXED: { key: FixedKey; title: string; icon: string }[] = [
   { key: "browser", title: "Browser", icon: "◍" },
   { key: "tasks", title: "Tasks", icon: "☑" },
   { key: "notes", title: "Notes", icon: "✎" },
-  { key: "ports", title: "Ports", icon: "⇄" },
+  { key: "ports", title: "Settings", icon: "⚙" },
   { key: "devtools", title: "Inspector", icon: "◫" },
 ];
 const GRID_PANELS: GridKey[] = ["chat", "term", "files", "browser"];
@@ -1316,7 +1316,7 @@ function HudConsole() {
       case "browser": return <BrowserStack activeId={session?.id} active={browserActive} />;
       case "tasks": return <ContextColumn sessionId={session?.id} hideSummary />;
       case "notes": return <NotesPanel active={!grid && !wins.wins.notes?.min} />;
-      case "ports": return session ? <PortsPanel key={`${session.id}-hud-ports`} sessionId={session.id} cwd={session.cwd} machine={session.machine} /> : none;
+      case "ports": return session ? <SessionSettingsPanel key={`${session.id}-hud-settings`} sessionId={session.id} cwd={session.cwd} machine={session.machine} /> : none;
       case "devtools": return <DevToolsPanel sessionId={session?.id} active={!grid && !wins.wins.devtools?.min} />;
       default:
         if (isDockerId(id)) return <DockerLogPanel streamId={id} active={!grid && !wins.wins[id]?.min} />;

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useStore } from "../store";
 import { Todo, UserTodo } from "../types";
 import Markdown from "./Markdown";
+import TodoProgress from "./TodoProgress";
 
 /** A small square checkbox glyph shared by Claude's plan rows and user checklist rows. */
 function CheckBox({
@@ -119,6 +120,7 @@ export default function ContextColumn({ sessionId, hideSummary }: { sessionId?: 
   const deleteUserTodo = useStore((s) => s.deleteUserTodo);
   const [summarizing, setSummarizing] = useState(false);
   const [draft, setDraft] = useState("");
+  const [tab, setTab] = useState<"tasks" | "claude">("tasks"); // Tasks (yours) ⇄ Claude's plan
   const todosScrollRef = useRef<HTMLDivElement>(null);
   const wantScroll = useRef(false);
 
@@ -130,6 +132,11 @@ export default function ContextColumn({ sessionId, hideSummary }: { sessionId?: 
   const planRank = (t: Todo) => (t.status === "completed" ? 2 : t.status === "in_progress" ? 0 : 1);
   const plan = [...(session?.todos ?? [])].sort((a, b) => planRank(a) - planRank(b));
   const userTodos = session?.userTodos ?? [];
+  // Progress items per tab ("done" means different things for each list).
+  const userItems = userTodos.map((t) => ({ done: t.done }));
+  const planItems = plan.map((t) => ({ done: t.status === "completed" }));
+  const userDone = userItems.filter((t) => t.done).length;
+  const planDone = planItems.filter((t) => t.done).length;
 
   function submitTodo() {
     if (!id || !draft.trim()) return;
@@ -235,46 +242,70 @@ export default function ContextColumn({ sessionId, hideSummary }: { sessionId?: 
         </>
       )}
 
-      {/* Todos — scrollable middle region: Claude's read-only plan + your checklist. */}
-      <div className="kicker" style={{ flexShrink: 0 }}>Session todos</div>
+      {/* Progress ring for the active tab (your tasks, or Claude's plan). */}
+      <div style={{ flexShrink: 0 }}>
+        <TodoProgress items={tab === "tasks" ? userItems : planItems} label={tab === "tasks" ? "your tasks" : "claude's plan"} />
+      </div>
+
+      {/* Tabs: your checklist ⇄ Claude's plan (each carries a done/total badge). */}
+      <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+        {([
+          { key: "tasks", label: "Tasks", badge: `${userDone}/${userItems.length}` },
+          { key: "claude", label: "Claude", badge: `${planDone}/${planItems.length}` },
+        ] as const).map((t) => {
+          const on = tab === t.key;
+          return (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 11px", borderRadius: 999,
+                fontFamily: "var(--font-mono)", fontSize: 11, cursor: "pointer",
+                border: `1px solid ${on ? "rgb(var(--primary-soft) / 0.5)" : "var(--border)"}`,
+                background: on ? "rgb(var(--primary) / 0.22)" : "transparent",
+                color: on ? "var(--text)" : "var(--text-soft)",
+              }}
+            >
+              {t.label}
+              <span className="mono faint" style={{ fontSize: 9.5, opacity: 0.75 }}>{t.badge}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Active tab's list — scrollable middle region. */}
       <div
         ref={todosScrollRef}
         className="no-scrollbar"
-        style={{ flex: 1, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 }}
+        style={{ flex: 1, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: 3 }}
       >
-        {plan.length > 0 && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-            <div className="faint" style={{ fontSize: 10, fontFamily: "var(--font-mono)", padding: "0 9px 2px", opacity: 0.6 }}>
-              Claude's plan
-            </div>
-            {plan.map((todo, i) => <PlanRow key={i} todo={todo} />)}
-          </div>
-        )}
-
-        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-          <div className="faint" style={{ fontSize: 10, fontFamily: "var(--font-mono)", padding: "0 9px 2px", opacity: 0.6 }}>
-            Your checklist
-          </div>
-          {userTodos.length > 0 ? (
-            userTodos.map((t) => (
-              <UserRow
-                key={t.id}
-                todo={t}
-                onToggle={() => id && toggleUserTodo(id, t.id)}
-                onDelete={() => id && deleteUserTodo(id, t.id)}
-              />
-            ))
+        {tab === "claude" ? (
+          plan.length > 0 ? (
+            plan.map((todo, i) => <PlanRow key={i} todo={todo} />)
           ) : (
-            plan.length === 0 && (
-              <span className="faint" style={{ fontSize: 12, fontStyle: "italic", padding: "4px 9px" }}>
-                No todos yet.
-              </span>
-            )
-          )}
-        </div>
+            <span className="faint" style={{ fontSize: 12, fontStyle: "italic", padding: "4px 9px" }}>
+              Claude hasn't set a plan yet.
+            </span>
+          )
+        ) : userTodos.length > 0 ? (
+          userTodos.map((t) => (
+            <UserRow
+              key={t.id}
+              todo={t}
+              onToggle={() => id && toggleUserTodo(id, t.id)}
+              onDelete={() => id && deleteUserTodo(id, t.id)}
+            />
+          ))
+        ) : (
+          <span className="faint" style={{ fontSize: 12, fontStyle: "italic", padding: "4px 9px" }}>
+            No tasks yet — add one below.
+          </span>
+        )}
       </div>
 
-      {/* Add a checklist item — pinned below the scroll region. */}
+      {/* Add a checklist item — pinned below the scroll region (Tasks tab only;
+          Claude's plan is read-only). */}
+      {tab === "tasks" && (
       <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
         <input
           value={draft}
@@ -311,6 +342,7 @@ export default function ContextColumn({ sessionId, hideSummary }: { sessionId?: 
           +
         </button>
       </div>
+      )}
     </div>
   );
 }

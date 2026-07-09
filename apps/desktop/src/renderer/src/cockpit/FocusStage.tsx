@@ -7,15 +7,17 @@ import Markdown from "./Markdown";
 import Kbd from "./Kbd";
 import TerminalStack from "./TerminalStack";
 import BrowserStack from "./BrowserStack";
-import PortsPanel from "./PortsPanel";
+import SessionSettingsPanel from "./SessionSettingsPanel";
 import FilesPanel from "./FilesPanel";
 import FolderSessionTabs from "./FolderSessionTabs";
 
+// The "ports" key is kept internally (per-session active-tab state, the ⌃4 shortcut)
+// even though it now opens the broader per-session Settings panel.
 const TABS = [
   { key: "chat", label: "Chat", hint: "⌃1" },
   { key: "terminal", label: "Terminal", hint: "⌃2" },
   { key: "browser", label: "Browser", hint: "⌃3" },
-  { key: "ports", label: "Ports", hint: "⌃4" },
+  { key: "ports", label: "Settings", hint: "⌃4" },
   { key: "files", label: "Files", hint: "⌃5" },
 ] as const;
 
@@ -268,8 +270,8 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
         // reloads on tab/session switch — like a Chrome tab. Nothing renders here.
         null
       ) : activeTab === "ports" ? (
-        <PortsPanel
-          key={`${id}-ports`}
+        <SessionSettingsPanel
+          key={`${id}-settings`}
           sessionId={id ?? ""}
           cwd={session.cwd}
           machine={session.machine}
