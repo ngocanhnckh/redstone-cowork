@@ -131,10 +131,11 @@ export default function AnswerDock({ decision, working, sessionId: sessionIdProp
           <button
             className="glass-btn--clay"
             onClick={() => { if (idleSessionId) interrupt(idleSessionId); }}
-            title="Interrupt Claude (Esc) without sending anything"
-            style={{ padding: "10px 24px", fontSize: 14, fontWeight: 500, display: "inline-flex", alignItems: "center", gap: 8 }}
+            title="Stop Claude — interrupt (Esc) without sending anything"
+            aria-label="Stop Claude"
+            style={{ width: 34, height: 34, borderRadius: 999, padding: 0, fontSize: 14, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
           >
-            ⎋ Stop Claude
+            ⎋
           </button>
         ) : (
           <button
