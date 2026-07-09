@@ -66,11 +66,13 @@ export class ApiClient {
     return r.json();
   }
 
-  /** POST /sessions/:id/resolve-local — fires and resolves (≤2s timeout). */
-  async resolveLocal(sessionId: string): Promise<void> {
+  /** POST /sessions/:id/resolve-local — fires and resolves (≤2s timeout).
+   * `toolName` scopes the resolve to cards for that tool (the one whose PostToolUse
+   * fired), so a parallel tool completing can't clear an unrelated pending prompt. */
+  async resolveLocal(sessionId: string, toolName?: string): Promise<void> {
     await this.req(
       `/sessions/${encodeURIComponent(sessionId)}/resolve-local`,
-      { method: "POST", headers: json(this.cfg.token) },
+      { method: "POST", headers: json(this.cfg.token), body: JSON.stringify({ toolName: toolName ?? null }) },
       2000
     );
     // Errors are silently swallowed by the handler's outer try/catch

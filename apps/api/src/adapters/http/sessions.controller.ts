@@ -94,8 +94,9 @@ export class SessionsController {
 
   @Post(":id/resolve-local")
   @HttpCode(200)
-  async resolveLocal(@Param("id") id: string) {
-    const resolved = await this.decisions.resolveLocal(id);
+  async resolveLocal(@Param("id") id: string, @Body() body: unknown) {
+    const toolName = (body as { toolName?: unknown } | null)?.toolName;
+    const resolved = await this.decisions.resolveLocal(id, typeof toolName === "string" ? toolName : undefined);
     return { resolved };
   }
 

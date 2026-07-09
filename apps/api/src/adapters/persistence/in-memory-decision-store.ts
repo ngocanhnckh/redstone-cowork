@@ -42,10 +42,15 @@ export class InMemoryDecisionStore implements DecisionStore {
     const d = this.decisions.get(id);
     if (d) this.decisions.set(id, { ...d, deliveredAt: at });
   }
-  async resolveAllPendingLocal(sessionId: string, at: Date): Promise<number> {
+  async resolveAllPendingLocal(sessionId: string, at: Date, toolName?: string): Promise<number> {
     let count = 0;
     for (const d of this.decisions.values()) {
-      if (d.sessionId === sessionId && d.status === "pending" && (d.kind === "permission" || d.kind === "question")) {
+      if (
+        d.sessionId === sessionId && d.status === "pending" &&
+        (d.kind === "permission" || d.kind === "question") &&
+        // Scope to the tool whose prompt was answered, when known.
+        (toolName === undefined || (d.body as { tool_name?: unknown } | undefined)?.tool_name === toolName)
+      ) {
         this.decisions.set(d.id, {
           ...d,
           status: "resolved",

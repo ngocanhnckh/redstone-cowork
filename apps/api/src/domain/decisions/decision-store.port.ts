@@ -12,8 +12,10 @@ export interface DecisionStore {
   /** Returns resolved decisions with no deliveredAt for this session (permission|question|instruction). */
   listUndelivered(sessionId: string): Promise<Decision[]>;
   markDelivered(id: string, at: Date): Promise<void>;
-  /** Resolves pending permission|question decisions as __local__ and marks them delivered. Returns count. */
-  resolveAllPendingLocal(sessionId: string, at: Date): Promise<number>;
+  /** Resolves pending permission|question decisions as __local__ and marks them delivered. Returns count.
+   * When `toolName` is given, only cards whose body.tool_name matches are resolved — so a parallel
+   * tool's PostToolUse can't clear an unrelated still-open prompt. Omit to resolve all (legacy). */
+  resolveAllPendingLocal(sessionId: string, at: Date, toolName?: string): Promise<number>;
   /** Resolves prior pending decisions of the given kinds for a session, superseded by a newer one. Returns count. */
   supersedePending(sessionId: string, kinds: string[], at: Date): Promise<number>;
 }

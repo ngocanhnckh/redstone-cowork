@@ -141,7 +141,7 @@ export class DecisionsService {
   }
 
   markDelivered(id: string) { return this.store.markDelivered(id, new Date()); }
-  resolveLocal(sessionId: string) { return this.store.resolveAllPendingLocal(sessionId, new Date()); }
+  resolveLocal(sessionId: string, toolName?: string) { return this.store.resolveAllPendingLocal(sessionId, new Date(), toolName); }
 
   async switchMode(sessionId: string, target: string): Promise<{ switched: boolean; btabs: number; mode: string }> {
     const session = await this.sessions.get(sessionId);

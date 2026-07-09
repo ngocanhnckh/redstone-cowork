@@ -137,8 +137,11 @@ export async function processEvent(
       }
 
       case "PostToolUse":
-        // User answered at the terminal — auto-resolve any pending permission/question cards
-        await deps.api.resolveLocal(event.session_id);
+        // A tool finished — if the user answered its prompt at the terminal, clear the
+        // matching pending card. Scope to THIS tool: Claude runs tools in parallel, so a
+        // sibling tool finishing must not resolve a still-open AskUserQuestion/permission
+        // for a different tool (that produced no keystrokes and wedged the native prompt).
+        await deps.api.resolveLocal(event.session_id, event.tool_name);
         return null;
 
       case "PreToolUse": {

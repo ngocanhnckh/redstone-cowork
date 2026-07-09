@@ -57,4 +57,18 @@ describe("delivery queue", () => {
     const pending = await request(app.getHttpServer()).get("/decisions?status=pending").set(auth);
     expect(pending.body.some((x: { id: string }) => x.id === d.body.id)).toBe(false);
   });
+
+  it("resolve-local scoped to a tool leaves a pending question for a different tool open", async () => {
+    // A still-open AskUserQuestion card…
+    const q = await request(app.getHttpServer()).post("/decisions").set(auth)
+      .send({ sessionId: "sess-w", kind: "question", title: "pick one", options: [{ label: "A" }], body: { tool_name: "AskUserQuestion" } });
+    // …must NOT be cleared when a *parallel* tool (Read) finishes.
+    await request(app.getHttpServer()).post("/sessions/sess-w/resolve-local").set(auth).send({ toolName: "Read" }).expect(200);
+    let pending = await request(app.getHttpServer()).get("/decisions?status=pending").set(auth);
+    expect(pending.body.some((x: { id: string }) => x.id === q.body.id)).toBe(true);
+    // The matching tool's PostToolUse (user answered at the terminal) does clear it.
+    await request(app.getHttpServer()).post("/sessions/sess-w/resolve-local").set(auth).send({ toolName: "AskUserQuestion" }).expect(200);
+    pending = await request(app.getHttpServer()).get("/decisions?status=pending").set(auth);
+    expect(pending.body.some((x: { id: string }) => x.id === q.body.id)).toBe(false);
+  });
 });

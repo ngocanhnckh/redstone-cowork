@@ -59,13 +59,16 @@ export class PostgresDecisionStore implements DecisionStore {
   async markDelivered(id: string, at: Date): Promise<void> {
     await this.pool.query(`UPDATE decisions SET delivered_at=$2 WHERE id=$1`, [id, at]);
   }
-  async resolveAllPendingLocal(sessionId: string, at: Date): Promise<number> {
+  async resolveAllPendingLocal(sessionId: string, at: Date, toolName?: string): Promise<number> {
+    // When a tool is named, only resolve cards for THAT tool (body.tool_name) — a
+    // parallel tool's PostToolUse must not clear an unrelated still-open prompt.
     const { rowCount } = await this.pool.query(
       `UPDATE decisions SET status='resolved',
         resolution='{"choice":"__local__","answers":null,"custom":null}'::jsonb,
         resolved_at=$2, delivered_at=$2
-       WHERE session_id=$1 AND status='pending' AND kind IN ('permission','question')`,
-      [sessionId, at]
+       WHERE session_id=$1 AND status='pending' AND kind IN ('permission','question')
+         AND ($3::text IS NULL OR body->>'tool_name' = $3)`,
+      [sessionId, at, toolName ?? null]
     );
     return rowCount ?? 0;
   }

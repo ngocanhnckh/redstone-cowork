@@ -149,8 +149,8 @@ describe("processEvent", () => {
 
   it("PostToolUse → resolveLocal called, returns null", async () => {
     const deps = baseDeps();
-    const out = await processEvent(ev("PostToolUse"), deps);
-    expect(deps.api.resolveLocal).toHaveBeenCalledWith("s1");
+    const out = await processEvent(ev("PostToolUse", { tool_name: "Bash" }), deps);
+    expect(deps.api.resolveLocal).toHaveBeenCalledWith("s1", "Bash");
     expect(out).toBeNull();
   });
 

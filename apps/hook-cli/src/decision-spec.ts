@@ -38,8 +38,11 @@ export function buildDecisionSpec(
     if (!q) return null;
     return {
       kind: "question",
+      // Record the tool so a terminal-answered card is only auto-resolved by the
+      // matching tool's PostToolUse — a *parallel* tool completing must not clear a
+      // still-open AskUserQuestion (that left the native prompt stuck, swallowing input).
       title: q.question,
-      body: { tool_input: event.tool_input, deliverable },
+      body: { tool_name: event.tool_name, tool_input: event.tool_input, deliverable },
       options: q.options ?? [],
     };
   }
