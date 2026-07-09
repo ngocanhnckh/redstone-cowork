@@ -330,6 +330,16 @@ contextBridge.exposeInMainWorld("cowork", {
   copyText: (text: string): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke(IPC.clipboardWrite, { text }),
 
+  // Chrome extensions for the shared workspace browser session
+  extensionsList: (): Promise<Array<{ id: string; name: string; version: string; enabled: boolean; loaded: boolean; error?: string }>> =>
+    ipcRenderer.invoke(IPC.extensionsList),
+  extensionAdd: (): Promise<{ ok: boolean; error?: string; added?: { id: string; name: string; version: string; enabled: boolean; loaded: boolean; error?: string } }> =>
+    ipcRenderer.invoke(IPC.extensionAdd),
+  extensionSetEnabled: (id: string, enabled: boolean): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke(IPC.extensionSetEnabled, { id, enabled }),
+  extensionRemove: (id: string): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke(IPC.extensionRemove, { id }),
+
   // LLM assistant
   getLlmModels: (): Promise<Array<{ id: string; label: string; model: string; kind: "preset" | "custom" }>> =>
     ipcRenderer.invoke(IPC.llmModels),

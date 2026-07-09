@@ -31,6 +31,7 @@ import { listDir, readFileAt, writeFileAt, deletePath, makeDir, createFile, uplo
 import { gitInfo } from "./git";
 import { chooseBgImage, getBgImage, clearBgImage, setSimpleFullscreen, isFullscreen, setVibrancy, chooseBgVideo, getBgVideoUrl, clearBgVideo, currentBgVideoPath } from "./appearance";
 import { registerSessionBrowser, unregisterSessionBrowser, startInspect, stopInspect, stopAllInspectors, getResponseBody } from "./devtools";
+import { loadEnabledExtensions, listExtensions, chooseAndAddExtension, setExtensionEnabled, removeExtension } from "./browser-extensions";
 import { IPC } from "../shared/ipc";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -536,6 +537,12 @@ ipcMain.handle(IPC.devtoolsStart, (_e, a: { sessionId: string }) => (a?.sessionI
 ipcMain.handle(IPC.devtoolsStop, (_e, a: { sessionId: string }) => { if (a?.sessionId) stopInspect(a.sessionId); return { ok: true }; });
 ipcMain.handle(IPC.devtoolsBody, (_e, a: { sessionId: string; requestId: string }) => (a?.sessionId && a?.requestId ? getResponseBody(a.sessionId, a.requestId) : null));
 
+// Chrome-extension management for the shared browser session (partition-wide).
+ipcMain.handle(IPC.extensionsList, () => listExtensions());
+ipcMain.handle(IPC.extensionAdd, () => chooseAndAddExtension());
+ipcMain.handle(IPC.extensionSetEnabled, (_e, a: { id: string; enabled: boolean }) => setExtensionEnabled(a.id, !!a.enabled));
+ipcMain.handle(IPC.extensionRemove, (_e, a: { id: string }) => removeExtension(a.id));
+
 // File browser — list / read / write, local or over ssh. Main never throws across IPC.
 ipcMain.handle(IPC.filesList, (_e, a: { cwd: string; machine: string; dir: string }) =>
   listDir(a)
@@ -809,7 +816,7 @@ app.on("login", (event, webContents, details, authInfo, callback) => {
   void p.then((creds) => (creds ? callback(creds.username, creds.password) : callback()));
 });
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   // Stream the current background video (range-capable) to the renderer. The
   // handler always serves whatever file is configured now, so changing it just
   // needs a fresh URL (mtime-versioned) on the renderer side.
@@ -846,6 +853,10 @@ app.whenReady().then(() => {
   } catch {
     // Tray not available in this environment — ignore
   }
+
+  // Load enabled Chrome extensions into the shared browser session BEFORE any
+  // <webview> mounts, so they apply to the first page a tab shows. Best-effort.
+  await loadEnabledExtensions().catch(() => {});
 
   createWindow();
   if (loadConfig()?.hasToken) {

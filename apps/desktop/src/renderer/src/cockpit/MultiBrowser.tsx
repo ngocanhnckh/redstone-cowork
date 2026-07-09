@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import BrowserPanel from "./BrowserPanel";
+import ExtensionsPanel from "./ExtensionsPanel";
 import { useStore } from "../store";
 
 /** Short label for a URL tab: its hostname, or a truncated string as a fallback. */
@@ -37,6 +38,8 @@ export default function MultiBrowser({ sessionId, cwd, machine }: { sessionId: s
   const [active, setActive] = useState(saved?.active ?? 0);
 
   // Per-tab page zoom + responsive device mode (applied to that tab's <webview>).
+  // Global extensions manager (partition-wide, shared across sessions).
+  const [extOpen, setExtOpen] = useState(false);
   const [zoomByTab, setZoomByTab] = useState<Record<number, number>>({});
   const [deviceByTab, setDeviceByTab] = useState<Record<number, "laptop" | "mobile">>({});
   // Effective viewport (CSS px the page sees) per tab, reported by each BrowserPanel.
@@ -151,6 +154,13 @@ export default function MultiBrowser({ sessionId, cwd, machine }: { sessionId: s
           {device === "mobile" ? "📱 mobile" : "🖥 laptop"}
         </button>
         <button
+          onClick={() => setExtOpen(true)}
+          title="Browser extensions"
+          style={{ ...ctrlBtn, fontSize: 13, padding: "3px 8px" }}
+        >
+          🧩
+        </button>
+        <button
           onClick={toggleChrome}
           title={chromeHidden ? "Show address bar & connection" : "Hide address bar & connection (tabs only)"}
           style={{ ...tabBtn, background: "transparent", color: "var(--text-soft)", border: "1px solid var(--border)", flexShrink: 0 }}
@@ -158,6 +168,7 @@ export default function MultiBrowser({ sessionId, cwd, machine }: { sessionId: s
           {chromeHidden ? "▾ bar" : "▴ bar"}
         </button>
       </div>
+      {extOpen && <ExtensionsPanel onClose={() => setExtOpen(false)} />}
       <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
         {tabs.map((tab) => (
           <div key={tab.id} style={{ position: "absolute", inset: 0, display: tab.id === active ? "flex" : "none", flexDirection: "column" }}>

@@ -231,6 +231,12 @@ declare global {
       }): Promise<{ ok: boolean; canceled?: boolean; path?: string; error?: string }>;
       copyText(text: string): Promise<{ ok: boolean; error?: string }>;
 
+      // Chrome extensions (shared workspace browser session)
+      extensionsList(): Promise<BrowserExtension[]>;
+      extensionAdd(): Promise<{ ok: boolean; error?: string; added?: BrowserExtension }>;
+      extensionSetEnabled(id: string, enabled: boolean): Promise<{ ok: boolean }>;
+      extensionRemove(id: string): Promise<{ ok: boolean }>;
+
       // LLM assistant
       getLlmModels(): Promise<LlmModelInfo[]>;
       llmAssist(a: {
@@ -268,6 +274,8 @@ declare global {
   type ForwardStatus = "local" | "starting" | "active" | "failed" | "stopped";
 
   type LlmModelInfo = { id: string; label: string; model: string; kind: "preset" | "custom"; maxTokens?: number | null; maxInputTokens?: number | null };
+
+  type BrowserExtension = { id: string; name: string; version: string; enabled: boolean; loaded: boolean; error?: string };
 
   type DirEntry = { name: string; path: string; kind: "dir" | "file"; size: number };
 
