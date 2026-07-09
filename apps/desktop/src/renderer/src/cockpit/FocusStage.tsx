@@ -46,7 +46,12 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
   const actionableDecision = sessionDecisions.find((d) =>
     (ACTIONABLE_KINDS as readonly string[]).includes(d.kind)
   );
-  const decision = actionableDecision ?? sessionDecisions[0];
+  // Only an ACTIONABLE decision (a question/permission/mode) drives the answer dock.
+  // Passive cards (a "Claude is waiting for your input" notification, a completion
+  // ping) must NOT hijack the dock — they'd render as an un-answerable card that
+  // takes up space and never clears on send/answer. When nothing needs action the
+  // dock falls back to its idle reply box.
+  const decision = actionableDecision;
 
   // Server transcript + optimistic sends not yet incorporated by the host. The
   // optimistic copies render instantly so the user sees their message right away;

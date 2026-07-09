@@ -496,7 +496,10 @@ function ChatPane({ sessionId }: { sessionId?: string } = {}) {
   for (let i = timeline.length - 1; i >= 0; i--) { if (timeline[i].role === "user") { lastSent = timeline[i].text; break; } }
   const sessionDecisions = decisions.filter((d) => d.sessionId === id);
   const actionable = sessionDecisions.find((d) => ACTIONABLE.includes(d.kind));
-  const decision = actionable ?? sessionDecisions[0];
+  // Only actionable decisions drive the answer dock — a passive "waiting for input"
+  // notification / completion ping must not render as an un-answerable card that
+  // lingers after you send or answer. Idle → the dock's plain reply box.
+  const decision = actionable;
   const isWorking = !!session && session.status !== "lost" && !actionable && (!!session.working || pending.length > 0);
 
   useEffect(() => {
