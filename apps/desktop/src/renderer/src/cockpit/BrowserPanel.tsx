@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useStore } from "../store";
 import { wireOpenTab } from "./openTabIntercept";
+import BrowserContextMenu, { type CtxMenuState, type WebviewContextParams } from "./BrowserContextMenu";
 
 interface Props {
   sessionId: string;
@@ -44,6 +45,11 @@ type WebviewEl = HTMLElement & {
   stopFindInPage(action: "clearSelection" | "keepSelection" | "activateSelection"): void;
   setZoomFactor(factor: number): void;
   executeJavaScript(code: string): Promise<unknown>;
+  cut(): void;
+  copy(): void;
+  paste(): void;
+  selectAll(): void;
+  inspectElement(x: number, y: number): void;
 };
 
 declare global {
@@ -122,6 +128,9 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, chrom
   const [find, setFind] = useState("");
   const [matches, setMatches] = useState<{ active: number; total: number }>({ active: 0, total: 0 });
   const findInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Custom right-click menu for the guest (Electron shows none by default).
+  const [ctxMenu, setCtxMenu] = useState<CtxMenuState>(null);
 
   const openFind = () => {
     setFindOpen(true);
@@ -309,15 +318,33 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, chrom
 
   // "Open in a new tab" from links inside the page → a new tab in this session's
   // workspace browser (renderer-side, so no full app relaunch needed).
+  const openInNewTab = (url: string) => {
+    const st = useStore.getState();
+    st.openUrlInBrowser(sessionId, url);
+    if (st.mode !== "hud") st.setActiveTab(sessionId, "browser");
+  };
   useEffect(() => {
     const wv = webviewRef.current;
     if (!wv) return;
-    return wireOpenTab(wv, (url) => {
-      const st = useStore.getState();
-      st.openUrlInBrowser(sessionId, url);
-      if (st.mode !== "hud") st.setActiveTab(sessionId, "browser");
-    });
+    return wireOpenTab(wv, openInNewTab);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadUrl, sessionId]);
+
+  // Right-click menu: Electron webviews show no native menu, so we surface our own
+  // from the guest's `context-menu` event. `params` is in the guest's coordinate
+  // space; offset by the webview's on-screen rect to position the host menu.
+  useEffect(() => {
+    const wv = webviewRef.current;
+    if (!wv) return;
+    const onMenu = (e: Event) => {
+      const params = (e as unknown as { params?: WebviewContextParams }).params;
+      if (!params) return;
+      const rect = wv.getBoundingClientRect();
+      setCtxMenu({ x: rect.left + (params.x ?? 0), y: rect.top + (params.y ?? 0), params });
+    };
+    wv.addEventListener("context-menu", onMenu as EventListener);
+    return () => wv.removeEventListener("context-menu", onMenu as EventListener);
+  }, [loadUrl]);
 
   // Report the webview's effective viewport (what the page sees = rendered px ÷ zoom)
   // so the tab row can show "1280×720" instead of a bare zoom %. Recomputed on resize
@@ -404,6 +431,16 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, chrom
     >
       {/* The SSH-connection bar lives in the Ports tab (where port/ssh config
           belongs) — it's just wasted space in the browser, so it's not shown here. */}
+
+      {ctxMenu && (
+        <BrowserContextMenu
+          state={ctxMenu}
+          target={webviewRef.current}
+          onOpenInNewTab={openInNewTab}
+          onOpenExternal={(url) => window.cowork.openExternal(url).catch(() => {})}
+          onClose={() => setCtxMenu(null)}
+        />
+      )}
 
       {/* Single compact toolbar: nav · address · go · open · preview-port */}
       {!chromeHidden && (
