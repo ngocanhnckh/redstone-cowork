@@ -45,6 +45,37 @@ function prunePending(
   return next;
 }
 
+/**
+ * Retire the oldest optimistic send for any session whose server `working` flag
+ * just flipped true→false — a definitive "the turn ended" signal from the host's
+ * Stop hook. This is the safety net for when the count-based prune can't fire: a
+ * big turn's output can push the user's own prompt out of the transcript tail
+ * (byte/line-bounded), so the user-message count never grows past `baseUsers` and
+ * the send (plus its "working" loader) would otherwise wedge until the TTL. One
+ * transition retires exactly one send (oldest first), mirroring the in-order
+ * count-based prune, so a message still queued behind an earlier one isn't dropped
+ * prematurely. `nowWorking`/`prevWorking` map sessionId → last-seen working flag.
+ */
+export function consumeFinishedPending(
+  pending: Record<string, PendingSend[]>,
+  prevWorking: Record<string, boolean>,
+  nowWorking: Record<string, boolean>
+): Record<string, PendingSend[]> {
+  const next: Record<string, PendingSend[]> = { ...pending };
+  for (const id of Object.keys(next)) {
+    if (prevWorking[id] === true && nowWorking[id] === false && next[id]?.length) {
+      const [, ...rest] = next[id];
+      if (rest.length) next[id] = rest;
+      else delete next[id];
+    }
+  }
+  return next;
+}
+
+/** Last-seen server `working` flag per session — module-level bookkeeping so
+ * refresh() can detect the true→false edge (a turn ending) between polls. */
+let lastWorking: Record<string, boolean> = {};
+
 type State = {
   sessions: SessionView[];
   queue: SessionView[];
@@ -186,14 +217,21 @@ export const useStore = create<State>((set, get) => ({
       const q = queue as SessionView[];
       const s = sessions as SessionView[];
       const d = decisions as Decision[];
+      // Snapshot each session's current `working` flag, then retire an optimistic
+      // send for any that just finished a turn (true→false) before the count-based
+      // prune runs — covers the case where a big turn scrolled the user's prompt
+      // out of the transcript tail so the count can never catch up.
+      const nowWorking: Record<string, boolean> = {};
+      for (const sv of [...q, ...s]) nowWorking[sv.id] = !!sv.working;
       set((state) => ({
         queue: q,
         sessions: s,
         decisions: d,
         focusId: pickFocus(q, s, state.focusId),
-        pending: prunePending(state.pending, s, q, Date.now()),
+        pending: prunePending(consumeFinishedPending(state.pending, lastWorking, nowWorking), s, q, Date.now()),
         error: null,
       }));
+      lastWorking = nowWorking;
     } catch (e) {
       set({ error: e instanceof Error ? e.message : String(e) });
     }
