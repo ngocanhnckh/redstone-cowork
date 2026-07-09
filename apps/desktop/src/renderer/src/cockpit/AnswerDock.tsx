@@ -156,6 +156,14 @@ export default function AnswerDock({ decision, working, sessionId: sessionIdProp
 
   const sessionId = decision.sessionId;
 
+  // The question(s) Claude is asking. For AskUserQuestion these live in the tool
+  // input (not any assistant message), so without this the dock showed options with
+  // no prompt. Fall back to the decision title (a permission prompt, or a question
+  // with no structured body).
+  const questions =
+    (decision.body?.tool_input as { questions?: Array<{ question: string; multiSelect?: boolean }> } | undefined)?.questions ??
+    [];
+
   const handleSend = () => {
     const el = inputRef.current;
     const val = el?.value.trim();
@@ -181,6 +189,30 @@ export default function AnswerDock({ decision, working, sessionId: sessionIdProp
         backdropFilter: "blur(20px)",
       }}
     >
+      {/* The question(s) being asked — options are meaningless without them. */}
+      <div style={{ marginBottom: 12 }}>
+        {questions.length > 0 ? (
+          questions.map((q, i) => (
+            <div key={i} style={{ marginBottom: i < questions.length - 1 ? 8 : 0 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.45, color: "var(--text)" }}>
+                {questions.length > 1 && <span className="mono faint" style={{ fontSize: 11, marginRight: 6 }}>{i + 1}.</span>}
+                {q.question}
+              </div>
+              {q.multiSelect && (
+                <div className="mono faint" style={{ fontSize: 10, marginTop: 2 }}>select all that apply</div>
+              )}
+            </div>
+          ))
+        ) : (
+          <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.45, color: "var(--text)" }}>{decision.title}</div>
+        )}
+        {questions.length > 1 && (
+          <div className="mono faint" style={{ fontSize: 10.5, marginTop: 6 }}>
+            Options below answer the first question — use the reply box for the rest.
+          </div>
+        )}
+      </div>
+
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {decision.options.map((opt, i) => (
           <div
