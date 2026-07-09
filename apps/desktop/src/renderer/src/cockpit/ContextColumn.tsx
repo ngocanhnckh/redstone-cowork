@@ -171,9 +171,19 @@ export default function ContextColumn({ sessionId, hideSummary }: { sessionId?: 
 
   function submitTodo() {
     if (!id || !draft.trim()) return;
-    wantScroll.current = true; // scroll the list to the new item once it renders
-    addUserTodo(id, draft);
+    const text = draft.trim();
     setDraft("");
+    if (jiraProject) {
+      // Jira-connected session → create a Jira issue (assigned to you) instead of a
+      // local todo. Optimistically show it; the poll reconciles (a backlog issue
+      // that isn't in the sprint will drop off, but it's created in Jira regardless).
+      window.cowork.jiraCreateIssue(id, text)
+        .then((iss) => setJiraIssues((cur) => (cur.some((c) => c.key === iss.key) ? cur : [...cur, iss])))
+        .catch(() => {});
+      return;
+    }
+    wantScroll.current = true; // scroll the list to the new item once it renders
+    addUserTodo(id, text);
   }
 
   // After adding a task, scroll the todo list to the bottom so the new item shows.
@@ -376,7 +386,7 @@ export default function ContextColumn({ sessionId, hideSummary }: { sessionId?: 
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") submitTodo(); }}
-          placeholder="Add a to-do…"
+          placeholder={jiraProject ? `New ${jiraProject} issue (assigned to you)…` : "Add a to-do…"}
           disabled={!session}
           style={{
             flex: 1,

@@ -8,6 +8,7 @@ import { JiraClient, mapCat } from "../src/adapters/jira/jira-client";
 import { InMemoryJiraProfileStore } from "../src/adapters/persistence/in-memory-jira-profile-store";
 import { InMemorySessionStore } from "../src/adapters/persistence/in-memory-session-store";
 import { CredentialCipher } from "../src/infrastructure/credential-cipher";
+import { jiraToolsFor } from "../src/adapters/agent/jira.tools";
 import type { AgentSession } from "@rcw/shared";
 
 const TOKEN = "jira-token";
@@ -229,5 +230,136 @@ describe("JiraService (unit, fake deps)", () => {
     const { svc } = makeService();
     svc.fetchImpl = fakeFetch([{ match: "/rest/api/2/myself", status: 401, body: {} }]);
     await expect(svc.upsert("p2", { baseUrl: "https://j.example", pat: "bad" })).rejects.toThrow(/Jira auth failed/);
+  });
+});
+
+const bareSession = (id: string): AgentSession => ({
+  id, machine: "m1", cwd: "/repo", gitBranch: "main",
+  attachedAt: new Date(), lastSeenAt: new Date(),
+  wrapperId: "w1", permissionMode: "default", autoModeEnabled: false,
+  latestAnswer: null, summary: null, todos: [], transcript: [], working: false, pinned: false, snoozedUntil: null,
+});
+
+describe("JiraService write-through (unit, fake deps)", () => {
+  /** A service with profile "main" stored and a session "s1" bound to project RCW. */
+  const makeBound = async (fetchImpl: typeof fetch) => {
+    const store = new InMemoryJiraProfileStore();
+    const sessions = new InMemorySessionStore();
+    await store.upsert({ name: "main", baseUrl: "https://j.example", patEncrypted: "plain:pat", createdAt: new Date() });
+    await sessions.upsert(bareSession("s1"));
+    const svc = new JiraService(store, new CredentialCipher(undefined), sessions);
+    svc.fetchImpl = fetchImpl;
+    await svc.setBinding("s1", { profile: "main", projectKey: "RCW", boardId: null });
+    return { svc, sessions };
+  };
+
+  it("createSessionIssue POSTs the right fields, assigns to the DC user, returns a JiraIssue", async () => {
+    let sentBody: any = null;
+    const fetchImpl = (async (input: unknown, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("/rest/api/2/myself")) {
+        return { ok: true, status: 200, json: async () => ({ name: "me", displayName: "Me" }) } as Response;
+      }
+      if (url.includes("/rest/api/2/issue") && init?.method === "POST") {
+        sentBody = JSON.parse(String(init.body));
+        return { ok: true, status: 201, json: async () => ({ key: "RCW-9" }) } as Response;
+      }
+      return { ok: false, status: 404, json: async () => ({}) } as Response;
+    }) as unknown as typeof fetch;
+
+    const { svc } = await makeBound(fetchImpl);
+    const issue = await svc.createSessionIssue("s1", "Ship it", "the description");
+    expect(sentBody.fields.project.key).toBe("RCW");
+    expect(sentBody.fields.summary).toBe("Ship it");
+    expect(sentBody.fields.issuetype.name).toBe("Task");
+    expect(sentBody.fields.description).toBe("the description");
+    expect(sentBody.fields.assignee.name).toBe("me");
+    expect(issue).toEqual({
+      key: "RCW-9",
+      summary: "Ship it",
+      status: "To Do",
+      statusCategory: "todo",
+      assignee: "Me",
+      url: "https://j.example/browse/RCW-9",
+    });
+  });
+
+  it("commentIssue POSTs the comment body to the issue", async () => {
+    let sentUrl = "";
+    let sentBody: any = null;
+    const fetchImpl = (async (input: unknown, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("/comment") && init?.method === "POST") {
+        sentUrl = url;
+        sentBody = JSON.parse(String(init.body));
+        return { ok: true, status: 201, json: async () => ({}) } as Response;
+      }
+      return { ok: false, status: 404, json: async () => ({}) } as Response;
+    }) as unknown as typeof fetch;
+
+    const { svc } = await makeBound(fetchImpl);
+    await svc.commentIssue("s1", "RCW-9", "looks good");
+    expect(sentUrl).toContain("/rest/api/2/issue/RCW-9/comment");
+    expect(sentBody).toEqual({ body: "looks good" });
+  });
+
+  it("createSessionIssue throws BadRequest when the session has no binding", async () => {
+    const store = new InMemoryJiraProfileStore();
+    const sessions = new InMemorySessionStore();
+    await sessions.upsert(bareSession("s-unbound"));
+    const svc = new JiraService(store, new CredentialCipher(undefined), sessions);
+    await expect(svc.createSessionIssue("s-unbound", "x")).rejects.toThrow(/no Jira binding/);
+  });
+});
+
+describe("jiraToolsFor (agent tools)", () => {
+  const boundSvc = async (fetchImpl: typeof fetch) => {
+    const store = new InMemoryJiraProfileStore();
+    const sessions = new InMemorySessionStore();
+    await store.upsert({ name: "main", baseUrl: "https://j.example", patEncrypted: "plain:pat", createdAt: new Date() });
+    await sessions.upsert(bareSession("s1"));
+    const svc = new JiraService(store, new CredentialCipher(undefined), sessions);
+    svc.fetchImpl = fetchImpl;
+    await svc.setBinding("s1", { profile: "main", projectKey: "RCW", boardId: null });
+    return svc;
+  };
+
+  it("returns [] when there's no session id", () => {
+    const svc = new JiraService(new InMemoryJiraProfileStore(), new CredentialCipher(undefined), new InMemorySessionStore());
+    expect(jiraToolsFor(svc, undefined)).toEqual([]);
+  });
+
+  it("exposes the four Jira tools for a session", async () => {
+    const svc = await boundSvc(fakeFetch([]));
+    const names = jiraToolsFor(svc, "s1").map((t) => t.name);
+    expect(names).toEqual(["jira_list_sprint_issues", "jira_get_issue", "jira_create_issue", "jira_comment"]);
+  });
+
+  it("jira_create_issue returns the new key for a bound session", async () => {
+    const fetchImpl = (async (input: unknown, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("/rest/api/2/myself")) {
+        return { ok: true, status: 200, json: async () => ({ name: "me", displayName: "Me" }) } as Response;
+      }
+      if (url.includes("/rest/api/2/issue") && init?.method === "POST") {
+        return { ok: true, status: 201, json: async () => ({ key: "RCW-42" }) } as Response;
+      }
+      return { ok: false, status: 404, json: async () => ({}) } as Response;
+    }) as unknown as typeof fetch;
+
+    const svc = await boundSvc(fetchImpl);
+    const tool = jiraToolsFor(svc, "s1").find((t) => t.name === "jira_create_issue")!;
+    const out = await tool.run('{"summary":"x"}');
+    expect(JSON.parse(out)).toEqual({ key: "RCW-42", url: "https://j.example/browse/RCW-42" });
+  });
+
+  it("jira_create_issue returns a 'not connected' string (never throws) for an unbound session", async () => {
+    const store = new InMemoryJiraProfileStore();
+    const sessions = new InMemorySessionStore();
+    await sessions.upsert(bareSession("s-unbound"));
+    const svc = new JiraService(store, new CredentialCipher(undefined), sessions);
+    const tool = jiraToolsFor(svc, "s-unbound").find((t) => t.name === "jira_create_issue")!;
+    const out = await tool.run('{"summary":"x"}');
+    expect(out).toMatch(/isn't connected/i);
   });
 });

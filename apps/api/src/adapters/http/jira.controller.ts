@@ -6,10 +6,11 @@ import {
   Get,
   HttpCode,
   Param,
+  Post,
   Put,
   UseGuards,
 } from "@nestjs/common";
-import { ZodError } from "zod";
+import { ZodError, z } from "zod";
 import {
   JiraBindingSchema,
   JiraProfileNameSchema,
@@ -17,6 +18,17 @@ import {
 } from "@rcw/shared";
 import { JiraService } from "../../application/jira.service";
 import { InstanceTokenGuard } from "./instance-token.guard";
+
+/** Body for creating an issue in a session's bound project. */
+const CreateIssueSchema = z.object({
+  summary: z.string().min(1),
+  description: z.string().optional(),
+});
+
+/** Body for commenting on an issue. */
+const CommentSchema = z.object({
+  body: z.string().min(1),
+});
 
 /**
  * Per-session Jira integration (owner-only). Manages named Jira profiles and each
@@ -88,6 +100,31 @@ export class JiraController {
   @Get("sessions/:id/jira/issues/:key")
   issueDetail(@Param("id") id: string, @Param("key") key: string) {
     return this.jira.issueDetail(id, key);
+  }
+
+  @Post("sessions/:id/jira/issues")
+  @HttpCode(201)
+  async createIssue(@Param("id") id: string, @Body() body: unknown) {
+    try {
+      const { summary, description } = CreateIssueSchema.parse(body);
+      return await this.jira.createSessionIssue(id, summary, description);
+    } catch (e) {
+      if (e instanceof ZodError) throw new BadRequestException(e.issues);
+      throw e;
+    }
+  }
+
+  @Post("sessions/:id/jira/issues/:key/comment")
+  @HttpCode(200)
+  async commentIssue(@Param("id") id: string, @Param("key") key: string, @Body() body: unknown) {
+    try {
+      const { body: text } = CommentSchema.parse(body);
+      await this.jira.commentIssue(id, key, text);
+      return { ok: true };
+    } catch (e) {
+      if (e instanceof ZodError) throw new BadRequestException(e.issues);
+      throw e;
+    }
   }
 
   private parseName(name: string): string {

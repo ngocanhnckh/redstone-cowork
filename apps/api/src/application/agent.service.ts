@@ -5,6 +5,8 @@ import { PromptLoader } from "../infrastructure/prompts/prompt-loader";
 import { LlmService } from "./llm.service";
 import { RedstoneService } from "./redstone.service";
 import { redstoneToolsFor } from "../adapters/agent/redstone.tools";
+import { JiraService } from "./jira.service";
+import { jiraToolsFor } from "../adapters/agent/jira.tools";
 
 export type AgentStep = { tool: string; args: string; result: string };
 export type AgentResult = { text: string; steps: AgentStep[] };
@@ -28,6 +30,7 @@ export class AgentService {
     private readonly prompts: PromptLoader,
     private readonly llmService: LlmService,
     private readonly redstone: RedstoneService,
+    private readonly jira: JiraService,
   ) {}
 
   /**
@@ -46,7 +49,11 @@ export class AgentService {
   async run(input: { sessionId: string; input: string; modelId?: string; redstoneToken?: string }): Promise<AgentResult> {
     // Static tools plus, for a signed-in Redstone (org) user, tools that call the
     // Redstone agent AS them — so the assistant can pull the user's real context.
-    const tools = [...this.tools, ...redstoneToolsFor(this.redstone, input.redstoneToken)];
+    const tools = [
+      ...this.tools,
+      ...redstoneToolsFor(this.redstone, input.redstoneToken),
+      ...jiraToolsFor(this.jira, input.sessionId),
+    ];
     // Default to the Text (deep) model — agent reasoning wants the strong one.
     const endpoint = await this.llmService.resolveEndpoint(input.modelId ?? "text");
     const conversation = await this.llmService.conversationForSession(input.sessionId, endpoint.maxInputTokens);

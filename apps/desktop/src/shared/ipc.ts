@@ -41,6 +41,7 @@ export const IPC = {
   jiraClearBinding: "api:jira:binding:clear",
   jiraSessionIssues: "api:jira:issues",
   jiraIssueDetail: "api:jira:issue",
+  jiraCreateIssue: "api:jira:issue:create",
   telemetryList: "api:telemetry:list",
   dockerList: "api:docker:list",
   capsList: "api:caps:list",

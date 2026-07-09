@@ -105,6 +105,39 @@ export class JiraService {
     return client.sprintIssues(binding.projectKey);
   }
 
+  /**
+   * Create an issue in the session's bound project, assigned to the profile's own
+   * user (DC `name`, else Cloud `accountId`), and best-effort add it to the board's
+   * active sprint. Returns a JiraIssue for the new issue (status "To Do" / todo).
+   */
+  async createSessionIssue(sessionId: string, summary: string, description?: string): Promise<JiraIssue> {
+    const binding = await this.getBinding(sessionId);
+    if (!binding) throw new BadRequestException("Session has no Jira binding");
+    const client = await this.clientFor(binding.profile);
+    if (!client) throw new BadRequestException(`Unknown Jira profile: ${binding.profile}`);
+    const me = await client.myself();
+    const assignee = me.name ? { name: me.name } : me.accountId ? { accountId: me.accountId } : undefined;
+    const { key, url } = await client.createIssue(binding.projectKey, summary, { description, assignee });
+    if (binding.boardId != null) await client.addToActiveSprint(binding.boardId, key);
+    return {
+      key,
+      summary,
+      status: "To Do",
+      statusCategory: "todo",
+      assignee: me.displayName || null,
+      url,
+    };
+  }
+
+  /** Add a comment to an issue under a session's binding. */
+  async commentIssue(sessionId: string, key: string, body: string): Promise<void> {
+    const binding = await this.getBinding(sessionId);
+    if (!binding) throw new BadRequestException("Session has no Jira binding");
+    const client = await this.clientFor(binding.profile);
+    if (!client) throw new BadRequestException(`Unknown Jira profile: ${binding.profile}`);
+    await client.addComment(key, body);
+  }
+
   /** Full detail for one issue under a session's binding. */
   async issueDetail(sessionId: string, key: string): Promise<JiraIssueDetail> {
     const binding = await this.getBinding(sessionId);

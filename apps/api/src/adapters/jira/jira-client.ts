@@ -53,12 +53,73 @@ export class JiraClient {
     return { Authorization: `Bearer ${this.pat}`, Accept: "application/json" };
   }
 
-  /** Validate the PAT and return the authenticated user. */
-  async myself(): Promise<{ accountId?: string; displayName: string }> {
+  private jsonHeaders() {
+    return { ...this.headers(), "Content-Type": "application/json" };
+  }
+
+  /**
+   * Validate the PAT and return the authenticated user. Jira Data Center returns
+   * `name` (the username, used for the `assignee.name` write field) and `key`;
+   * Cloud returns `accountId`. We surface whatever is present.
+   */
+  async myself(): Promise<{ accountId?: string; name?: string; displayName: string }> {
     const res = await this.fetchImpl(`${this.base}/rest/api/2/myself`, { headers: this.headers() });
     if (!res.ok) throw new Error(`Jira /myself responded ${res.status}`);
     const data = (await res.json()) as { accountId?: string; displayName?: string; name?: string };
-    return { accountId: data.accountId, displayName: data.displayName ?? data.name ?? "" };
+    return { accountId: data.accountId, name: data.name, displayName: data.displayName ?? data.name ?? "" };
+  }
+
+  /** Create an issue and return its key + browse URL. Throws with Jira's error body on failure. */
+  async createIssue(
+    projectKey: string,
+    summary: string,
+    opts?: { description?: string; assignee?: { name?: string; accountId?: string }; issueType?: string },
+  ): Promise<{ key: string; url: string }> {
+    const fields: Record<string, unknown> = {
+      project: { key: projectKey },
+      summary,
+      issuetype: { name: opts?.issueType ?? "Task" },
+      ...(opts?.description ? { description: opts.description } : {}),
+      ...(opts?.assignee ? { assignee: opts.assignee } : {}),
+    };
+    const res = await this.fetchImpl(`${this.base}/rest/api/2/issue`, {
+      method: "POST",
+      headers: this.jsonHeaders(),
+      body: JSON.stringify({ fields }),
+    });
+    if (!res.ok) throw new Error(`Jira create issue responded ${res.status}: ${await res.text().catch(() => "")}`);
+    const data = (await res.json()) as { key: string };
+    return { key: data.key, url: `${this.base}/browse/${data.key}` };
+  }
+
+  /** Add a plain-text comment to an issue. */
+  async addComment(key: string, body: string): Promise<void> {
+    const res = await this.fetchImpl(`${this.base}/rest/api/2/issue/${encodeURIComponent(key)}/comment`, {
+      method: "POST",
+      headers: this.jsonHeaders(),
+      body: JSON.stringify({ body }),
+    });
+    if (!res.ok) throw new Error(`Jira add comment responded ${res.status}: ${await res.text().catch(() => "")}`);
+  }
+
+  /** Best-effort: move a freshly-created issue into the board's active sprint. Swallows errors. */
+  async addToActiveSprint(boardId: number, issueKey: string): Promise<void> {
+    try {
+      const res = await this.fetchImpl(`${this.base}/rest/agile/1.0/board/${boardId}/sprint?state=active`, {
+        headers: this.headers(),
+      });
+      if (!res.ok) return;
+      const data = (await res.json()) as { values?: Array<{ id?: number }> };
+      const sprintId = data.values?.[0]?.id;
+      if (sprintId == null) return;
+      await this.fetchImpl(`${this.base}/rest/agile/1.0/sprint/${sprintId}/issue`, {
+        method: "POST",
+        headers: this.jsonHeaders(),
+        body: JSON.stringify({ issues: [issueKey] }),
+      });
+    } catch {
+      // best-effort — a failure here must not fail issue creation
+    }
   }
 
   /**
