@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { JiraBindingSchema } from "../jira/jira.js";
 
 export const TodoStatusSchema = z.enum(["pending", "in_progress", "completed"]);
 export const TodoItemSchema = z.object({
@@ -48,6 +49,8 @@ export const SessionStatePatchSchema = z
     tokenSeries: z.array(TokenSampleSchema).optional(),
     /** Soft-close timestamp: when set, the session is retired and hidden from lists. */
     closedAt: z.coerce.date().nullable().optional(),
+    /** Per-session Jira binding (profile + project); null clears it. */
+    jira: JiraBindingSchema.nullable().optional(),
   })
   .strict();
 export type SessionStatePatch = z.infer<typeof SessionStatePatchSchema>;
@@ -79,6 +82,8 @@ export const AgentSessionSchema = z.object({
   snoozedUntil: z.coerce.date().nullable().default(null),
   /** Soft-close timestamp: closed sessions keep their history but drop out of the cockpit. */
   closedAt: z.coerce.date().nullable().default(null),
+  /** Per-session Jira binding (which profile + project to read), or null. */
+  jira: JiraBindingSchema.nullable().default(null),
 });
 export type AgentSession = z.infer<typeof AgentSessionSchema>;
 

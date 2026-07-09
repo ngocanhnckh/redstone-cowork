@@ -3,6 +3,10 @@ import { useStore } from "../store";
 import { Todo, UserTodo } from "../types";
 import Markdown from "./Markdown";
 import TodoProgress from "./TodoProgress";
+import JiraIssueModal from "./JiraIssueModal";
+
+type JiraIssue = { key: string; summary: string; status: string; statusCategory: "todo" | "inprogress" | "done"; assignee: string | null; url: string };
+const CAT_DOT: Record<string, string> = { todo: "var(--border-strong)", inprogress: "rgb(var(--primary-soft))", done: "#6bbf82" };
 
 /** A small square checkbox glyph shared by Claude's plan rows and user checklist rows. */
 function CheckBox({
@@ -121,6 +125,9 @@ export default function ContextColumn({ sessionId, hideSummary }: { sessionId?: 
   const [summarizing, setSummarizing] = useState(false);
   const [draft, setDraft] = useState("");
   const [tab, setTab] = useState<"tasks" | "claude">("tasks"); // Tasks (yours) ⇄ Claude's plan
+  const [jiraIssues, setJiraIssues] = useState<JiraIssue[]>([]);
+  const [jiraProject, setJiraProject] = useState<string | null>(null);
+  const [openIssue, setOpenIssue] = useState<string | null>(null);
   const todosScrollRef = useRef<HTMLDivElement>(null);
   const wantScroll = useRef(false);
 
@@ -128,14 +135,38 @@ export default function ContextColumn({ sessionId, hideSummary }: { sessionId?: 
   const session =
     sessions.find((s) => s.id === id) ?? queue.find((s) => s.id === id);
 
+  // Load this session's Jira binding + current-sprint issues (if connected). Polls
+  // and refetches when the binding changes (Settings dispatches `rcw-jira-binding`).
+  useEffect(() => {
+    if (!id) { setJiraIssues([]); setJiraProject(null); return; }
+    let alive = true;
+    const load = async () => {
+      try {
+        const binding = await window.cowork.jiraGetBinding(id);
+        if (!alive) return;
+        if (!binding) { setJiraProject(null); setJiraIssues([]); return; }
+        setJiraProject(binding.projectKey);
+        const issues = await window.cowork.jiraSessionIssues(id);
+        if (alive) setJiraIssues(issues as JiraIssue[]);
+      } catch { if (alive) { setJiraProject(null); setJiraIssues([]); } }
+    };
+    load();
+    const t = setInterval(load, 30_000);
+    const onBind = (e: Event) => { if ((e as CustomEvent<{ sessionId: string }>).detail?.sessionId === id) load(); };
+    window.addEventListener("rcw-jira-binding", onBind);
+    return () => { alive = false; clearInterval(t); window.removeEventListener("rcw-jira-binding", onBind); };
+  }, [id]);
+
   // Claude's plan sorted undone-first (in_progress, then pending, then completed).
   const planRank = (t: Todo) => (t.status === "completed" ? 2 : t.status === "in_progress" ? 0 : 1);
   const plan = [...(session?.todos ?? [])].sort((a, b) => planRank(a) - planRank(b));
   const userTodos = session?.userTodos ?? [];
-  // Progress items per tab ("done" means different things for each list).
-  const userItems = userTodos.map((t) => ({ done: t.done }));
+  // Progress items per tab. Tasks = your todos + connected Jira sprint issues
+  // (a Jira issue is "done" when its status category is done).
+  const jiraItems = jiraIssues.map((i) => ({ done: i.statusCategory === "done" }));
+  const taskItems = [...userTodos.map((t) => ({ done: t.done })), ...jiraItems];
   const planItems = plan.map((t) => ({ done: t.status === "completed" }));
-  const userDone = userItems.filter((t) => t.done).length;
+  const taskDone = taskItems.filter((t) => t.done).length;
   const planDone = planItems.filter((t) => t.done).length;
 
   function submitTodo() {
@@ -244,13 +275,13 @@ export default function ContextColumn({ sessionId, hideSummary }: { sessionId?: 
 
       {/* Progress ring for the active tab (your tasks, or Claude's plan). */}
       <div style={{ flexShrink: 0 }}>
-        <TodoProgress items={tab === "tasks" ? userItems : planItems} label={tab === "tasks" ? "your tasks" : "claude's plan"} />
+        <TodoProgress items={tab === "tasks" ? taskItems : planItems} label={tab === "tasks" ? (jiraProject ? `tasks + ${jiraProject}` : "your tasks") : "claude's plan"} />
       </div>
 
       {/* Tabs: your checklist ⇄ Claude's plan (each carries a done/total badge). */}
       <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
         {([
-          { key: "tasks", label: "Tasks", badge: `${userDone}/${userItems.length}` },
+          { key: "tasks", label: "Tasks", badge: `${taskDone}/${taskItems.length}` },
           { key: "claude", label: "Claude", badge: `${planDone}/${planItems.length}` },
         ] as const).map((t) => {
           const on = tab === t.key;
@@ -287,21 +318,55 @@ export default function ContextColumn({ sessionId, hideSummary }: { sessionId?: 
               Claude hasn't set a plan yet.
             </span>
           )
-        ) : userTodos.length > 0 ? (
-          userTodos.map((t) => (
-            <UserRow
-              key={t.id}
-              todo={t}
-              onToggle={() => id && toggleUserTodo(id, t.id)}
-              onDelete={() => id && deleteUserTodo(id, t.id)}
-            />
-          ))
         ) : (
-          <span className="faint" style={{ fontSize: 12, fontStyle: "italic", padding: "4px 9px" }}>
-            No tasks yet — add one below.
-          </span>
+          <>
+            {userTodos.map((t) => (
+              <UserRow
+                key={t.id}
+                todo={t}
+                onToggle={() => id && toggleUserTodo(id, t.id)}
+                onDelete={() => id && deleteUserTodo(id, t.id)}
+              />
+            ))}
+
+            {/* Jira sprint issues for a connected session — a dedicated group. */}
+            {jiraProject && (
+              <div style={{ marginTop: userTodos.length ? 8 : 0, display: "flex", flexDirection: "column", gap: 3 }}>
+                <div className="faint" style={{ fontSize: 10, fontFamily: "var(--font-mono)", padding: "0 9px 2px", opacity: 0.6, display: "flex", alignItems: "center", gap: 6 }}>
+                  <span>◆ {jiraProject} · current sprint</span>
+                  <span style={{ flex: 1 }} />
+                  <span>{jiraIssues.filter((i) => i.statusCategory === "done").length}/{jiraIssues.length}</span>
+                </div>
+                {jiraIssues.length > 0 ? (
+                  jiraIssues.map((iss) => (
+                    <div
+                      key={iss.key}
+                      onClick={() => setOpenIssue(iss.key)}
+                      title={`${iss.status}${iss.assignee ? " · " + iss.assignee : ""} — click for details`}
+                      style={{ display: "flex", alignItems: "center", gap: 9, padding: "8px 9px", borderRadius: 9, fontSize: 13, cursor: "pointer", color: iss.statusCategory === "done" ? "var(--text-faint)" : "var(--text)" }}
+                      className="glass-inset-hover"
+                    >
+                      <span style={{ width: 8, height: 8, borderRadius: 999, background: CAT_DOT[iss.statusCategory] ?? "var(--border-strong)", flexShrink: 0 }} />
+                      <span className="mono faint" style={{ fontSize: 10, flexShrink: 0 }}>{iss.key}</span>
+                      <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textDecoration: iss.statusCategory === "done" ? "line-through" : undefined }}>{iss.summary}</span>
+                    </div>
+                  ))
+                ) : (
+                  <span className="faint" style={{ fontSize: 11.5, fontStyle: "italic", padding: "2px 9px" }}>No sprint issues assigned to you.</span>
+                )}
+              </div>
+            )}
+
+            {userTodos.length === 0 && !jiraProject && (
+              <span className="faint" style={{ fontSize: 12, fontStyle: "italic", padding: "4px 9px" }}>
+                No tasks yet — add one below.
+              </span>
+            )}
+          </>
         )}
       </div>
+
+      {openIssue && id && <JiraIssueModal sessionId={id} issueKey={openIssue} onClose={() => setOpenIssue(null)} />}
 
       {/* Add a checklist item — pinned below the scroll region (Tasks tab only;
           Claude's plan is read-only). */}

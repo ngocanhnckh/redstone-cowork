@@ -1,4 +1,5 @@
 import PortsPanel from "./PortsPanel";
+import JiraSettings from "./JiraSettings";
 
 /**
  * Per-session Settings — the tab formerly known as "Ports". A scrollable, sectioned
@@ -14,6 +15,9 @@ export default function SessionSettingsPanel({ sessionId, cwd, machine }: { sess
     <div className="no-scrollbar" style={{ flex: 1, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column" }}>
       <Section title="Connection & Ports" hint="SSH host for this session and the ports forwarded to your machine.">
         <PortsPanel sessionId={sessionId} cwd={cwd} machine={machine} />
+      </Section>
+      <Section title="Project Management" hint="Connect this session to a Jira project — its current-sprint issues assigned to you flow into the Tasks tab.">
+        <JiraSettings sessionId={sessionId} />
       </Section>
     </div>
   );

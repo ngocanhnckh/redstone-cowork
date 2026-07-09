@@ -51,6 +51,17 @@ declare global {
       putClaudeConfig(name: string, env: Record<string, string>): Promise<{ ok: true }>;
       deleteClaudeConfig(name: string): Promise<{ ok: true }>;
 
+      // Jira (per-session project management)
+      jiraProfilesList(): Promise<Array<{ name: string; baseUrl: string; account: string | null }>>;
+      jiraProfilePut(name: string, baseUrl: string, pat: string): Promise<{ name: string; baseUrl: string; account: string | null }>;
+      jiraProfileDelete(name: string): Promise<{ ok: true }>;
+      jiraProfileValidate(name: string): Promise<{ ok: boolean; account?: string; error?: string }>;
+      jiraGetBinding(sessionId: string): Promise<{ profile: string; projectKey: string; boardId: number | null } | null>;
+      jiraSetBinding(sessionId: string, binding: { profile: string; projectKey: string; boardId?: number | null }): Promise<unknown>;
+      jiraClearBinding(sessionId: string): Promise<{ ok: true }>;
+      jiraSessionIssues(sessionId: string): Promise<Array<{ key: string; summary: string; status: string; statusCategory: "todo" | "inprogress" | "done"; assignee: string | null; url: string }>>;
+      jiraIssueDetail(sessionId: string, key: string): Promise<{ key: string; summary: string; status: string; statusCategory: string; assignee: string | null; url: string; descriptionHtml: string; comments: Array<{ author: string | null; created: string; bodyHtml: string }> }>;
+
       // Workspace config
       getWorkspaceConfig(a: {
         sessionId: string;

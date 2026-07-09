@@ -28,6 +28,7 @@ export class InMemorySessionStore implements SessionStore {
           tokenSeries: existing.tokenSeries,
           pinned: existing.pinned,
           snoozedUntil: existing.snoozedUntil,
+          jira: existing.jira,
         }
       : s;
     this.sessions.set(s.id, merged);
@@ -67,6 +68,7 @@ export class InMemorySessionStore implements SessionStore {
       ...(patch.tokensInput !== undefined ? { tokensInput: patch.tokensInput } : {}),
       ...(patch.tokensOutput !== undefined ? { tokensOutput: patch.tokensOutput } : {}),
       ...(patch.tokenSeries !== undefined ? { tokenSeries: patch.tokenSeries } : {}),
+      ...(patch.jira !== undefined ? { jira: patch.jira } : {}),
     };
     this.sessions.set(id, next);
     return next;

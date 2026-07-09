@@ -332,6 +332,15 @@ ipcMain.handle(IPC.claudeConfigsList, () => api.listClaudeConfigs());
 ipcMain.handle(IPC.claudeConfigGet, (_e, a: { name: string }) => api.getClaudeConfig(a.name));
 ipcMain.handle(IPC.claudeConfigPut, (_e, a: { name: string; env: Record<string, string> }) => api.putClaudeConfig(a.name, a.env));
 ipcMain.handle(IPC.claudeConfigDelete, (_e, a: { name: string }) => api.deleteClaudeConfig(a.name));
+ipcMain.handle(IPC.jiraProfilesList, () => api.jiraProfilesList());
+ipcMain.handle(IPC.jiraProfilePut, (_e, a: { name: string; baseUrl: string; pat: string }) => api.jiraProfilePut(a.name, a.baseUrl, a.pat));
+ipcMain.handle(IPC.jiraProfileDelete, (_e, a: { name: string }) => api.jiraProfileDelete(a.name));
+ipcMain.handle(IPC.jiraProfileValidate, (_e, a: { name: string }) => api.jiraProfileValidate(a.name));
+ipcMain.handle(IPC.jiraGetBinding, (_e, a: { sessionId: string }) => api.jiraGetBinding(a.sessionId));
+ipcMain.handle(IPC.jiraSetBinding, (_e, a: { sessionId: string; binding: { profile: string; projectKey: string; boardId?: number | null } }) => api.jiraSetBinding(a.sessionId, a.binding));
+ipcMain.handle(IPC.jiraClearBinding, (_e, a: { sessionId: string }) => api.jiraClearBinding(a.sessionId));
+ipcMain.handle(IPC.jiraSessionIssues, (_e, a: { sessionId: string }) => api.jiraSessionIssues(a.sessionId));
+ipcMain.handle(IPC.jiraIssueDetail, (_e, a: { sessionId: string; key: string }) => api.jiraIssueDetail(a.sessionId, a.key));
 
 // Workspace config (per-session .redstone/session.json)
 ipcMain.handle(IPC.workspaceGet, (_e, a: Parameters<typeof getWorkspaceConfig>[0]) =>

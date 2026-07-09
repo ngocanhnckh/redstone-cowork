@@ -59,6 +59,7 @@ export class SessionsService {
       pinned: false,
       snoozedUntil: null,
       closedAt: null, // a fresh attach reopens a previously-reaped/dismissed session
+      jira: existing?.jira ?? null, // preserve the session's Jira binding across re-attach
     });
     this.bus.emit({ type: "session.updated", payload: { id: session.id } });
     return session;

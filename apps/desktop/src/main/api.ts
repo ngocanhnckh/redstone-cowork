@@ -373,6 +373,35 @@ export async function llmAgent(a: { sessionId: string; input: string; modelId?: 
   return (await (await req("/llm/agent", { method: "POST", body: JSON.stringify(a) })).json()) as { text: string; steps: AgentStep[] };
 }
 
+// ---- Jira (per-session project management) ----
+const sid = (s: string) => encodeURIComponent(s);
+export async function jiraProfilesList(): Promise<unknown> { return (await req("/jira/profiles")).json(); }
+export async function jiraProfilePut(name: string, baseUrl: string, pat: string): Promise<unknown> {
+  return (await req(`/jira/profiles/${sid(name)}`, { method: "PUT", body: JSON.stringify({ baseUrl, pat }) })).json();
+}
+export async function jiraProfileDelete(name: string): Promise<unknown> {
+  return (await req(`/jira/profiles/${sid(name)}`, { method: "DELETE" })).json();
+}
+export async function jiraProfileValidate(name: string): Promise<unknown> {
+  return (await req(`/jira/profiles/${sid(name)}/validate`)).json();
+}
+export async function jiraGetBinding(sessionId: string): Promise<unknown> {
+  const t = await (await req(`/sessions/${sid(sessionId)}/jira`)).text();
+  return t && t.trim() ? JSON.parse(t) : null;
+}
+export async function jiraSetBinding(sessionId: string, binding: { profile: string; projectKey: string; boardId?: number | null }): Promise<unknown> {
+  return (await req(`/sessions/${sid(sessionId)}/jira`, { method: "PUT", body: JSON.stringify(binding) })).json();
+}
+export async function jiraClearBinding(sessionId: string): Promise<unknown> {
+  return (await req(`/sessions/${sid(sessionId)}/jira`, { method: "DELETE" })).json();
+}
+export async function jiraSessionIssues(sessionId: string): Promise<unknown> {
+  return (await req(`/sessions/${sid(sessionId)}/jira/issues`)).json();
+}
+export async function jiraIssueDetail(sessionId: string, key: string): Promise<unknown> {
+  return (await req(`/sessions/${sid(sessionId)}/jira/issues/${sid(key)}`)).json();
+}
+
 export async function getSshResult(sessionId: string): Promise<SshResult | null> {
   const res = await req(`/sessions/${encodeURIComponent(sessionId)}/ssh-result`);
   const text = await res.text();

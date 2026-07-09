@@ -9,3 +9,4 @@ export * from "./inventory/inventory.js";
 export * from "./access-keys/access-key.js";
 export * from "./tunnels/tunnel.js";
 export * from "./claude-configs/claude-config.js";
+export * from "./jira/jira.js";

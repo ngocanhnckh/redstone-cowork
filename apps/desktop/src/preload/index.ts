@@ -83,6 +83,18 @@ contextBridge.exposeInMainWorld("cowork", {
   deleteClaudeConfig: (name: string): Promise<{ ok: true }> =>
     ipcRenderer.invoke(IPC.claudeConfigDelete, { name }),
 
+  // Jira (per-session project management).
+  jiraProfilesList: (): Promise<Array<{ name: string; baseUrl: string; account: string | null }>> => ipcRenderer.invoke(IPC.jiraProfilesList),
+  jiraProfilePut: (name: string, baseUrl: string, pat: string): Promise<{ name: string; baseUrl: string; account: string | null }> =>
+    ipcRenderer.invoke(IPC.jiraProfilePut, { name, baseUrl, pat }),
+  jiraProfileDelete: (name: string): Promise<{ ok: true }> => ipcRenderer.invoke(IPC.jiraProfileDelete, { name }),
+  jiraProfileValidate: (name: string): Promise<{ ok: boolean; account?: string; error?: string }> => ipcRenderer.invoke(IPC.jiraProfileValidate, { name }),
+  jiraGetBinding: (sessionId: string): Promise<{ profile: string; projectKey: string; boardId: number | null } | null> => ipcRenderer.invoke(IPC.jiraGetBinding, { sessionId }),
+  jiraSetBinding: (sessionId: string, binding: { profile: string; projectKey: string; boardId?: number | null }): Promise<unknown> => ipcRenderer.invoke(IPC.jiraSetBinding, { sessionId, binding }),
+  jiraClearBinding: (sessionId: string): Promise<{ ok: true }> => ipcRenderer.invoke(IPC.jiraClearBinding, { sessionId }),
+  jiraSessionIssues: (sessionId: string): Promise<Array<{ key: string; summary: string; status: string; statusCategory: "todo" | "inprogress" | "done"; assignee: string | null; url: string }>> => ipcRenderer.invoke(IPC.jiraSessionIssues, { sessionId }),
+  jiraIssueDetail: (sessionId: string, key: string): Promise<{ key: string; summary: string; status: string; statusCategory: string; assignee: string | null; url: string; descriptionHtml: string; comments: Array<{ author: string | null; created: string; bodyHtml: string }> }> => ipcRenderer.invoke(IPC.jiraIssueDetail, { sessionId, key }),
+
   // Workspace config
   getWorkspaceConfig: (a: {
     sessionId: string;
