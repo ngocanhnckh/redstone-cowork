@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, rmSync, readFileSync, existsSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { pollOnce, pasteSettleMs, reportHostInfo } from "../src/poller";
+import { pollOnce, pasteSettleMs, reportHostInfo, transcriptSig, syncTranscript } from "../src/poller";
 
 describe("pollOnce", () => {
   it("sends keys for each delivery and acks", async () => {
@@ -197,5 +197,47 @@ describe("pollOnce", () => {
     await pollOnce(deps);
     expect(deps.sendKeys).not.toHaveBeenCalled();
     expect(deps.markDelivered).toHaveBeenCalledWith("d2");
+  });
+});
+
+describe("syncTranscript (hook-independent transcript fallback)", () => {
+  const msgs = [
+    { role: "user" as const, text: "hi" },
+    { role: "assistant" as const, text: "the answer" },
+  ];
+  const stub = (over = {}) => ({
+    find: () => "/fake/transcript.jsonl",
+    read: () => msgs,
+    lastAnswer: () => "the answer",
+    todos: () => [],
+    ...over,
+  });
+
+  it("pushes the transcript file's content when it changed since the last sync", async () => {
+    const api = { pushState: vi.fn().mockResolvedValue(undefined) };
+    const sig = await syncTranscript(api, "s1", "", stub());
+    expect(api.pushState).toHaveBeenCalledWith("s1", expect.objectContaining({ transcript: msgs, latestAnswer: "the answer" }));
+    expect(sig).toBe(transcriptSig(msgs));
+  });
+
+  it("does not push again when the content is unchanged", async () => {
+    const api = { pushState: vi.fn().mockResolvedValue(undefined) };
+    const prev = transcriptSig(msgs);
+    const sig = await syncTranscript(api, "s1", prev, stub());
+    expect(api.pushState).not.toHaveBeenCalled();
+    expect(sig).toBe(prev);
+  });
+
+  it("no-ops (never throws) when the transcript file can't be found", async () => {
+    const api = { pushState: vi.fn().mockResolvedValue(undefined) };
+    const sig = await syncTranscript(api, "s1", "prev", stub({ find: () => null }));
+    expect(api.pushState).not.toHaveBeenCalled();
+    expect(sig).toBe("prev");
+  });
+
+  it("swallows a pushState failure and keeps the previous signature", async () => {
+    const api = { pushState: vi.fn().mockRejectedValue(new Error("network")) };
+    const sig = await syncTranscript(api, "s1", "prev", stub());
+    expect(sig).toBe("prev");
   });
 });

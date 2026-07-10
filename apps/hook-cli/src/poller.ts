@@ -4,6 +4,8 @@ import { mkdir, readFile, writeFile, chmod } from "node:fs/promises";
 import { homedir, userInfo } from "node:os";
 import { join } from "node:path";
 import { deliveryToKeys } from "./keymap";
+import { findTranscriptPath } from "./scanner";
+import { readRecentMessages, readLastAssistantText, readLatestTodos } from "./transcript";
 import type { ApiClient } from "./api-client";
 
 const execFileP = promisify(execFile);
@@ -234,6 +236,52 @@ export async function pollOnce(deps: PollOnceDeps): Promise<void> {
 }
 
 /**
+ * A cheap change signature for a transcript push, so the poller's file-sync fallback
+ * only pushes when the content actually changed (not every poll). Keys on the message
+ * count + the last message's role/length — enough to catch a new turn or streamed text.
+ */
+export function transcriptSig(msgs: Array<{ role: string; text: string }>): string {
+  const last = msgs[msgs.length - 1];
+  return `${msgs.length}:${last?.role ?? ""}:${(last?.text ?? "").length}`;
+}
+
+/**
+ * Fallback transcript sync: read Claude's own transcript file for this session and
+ * push it to the server, INDEPENDENT of Claude's hooks. Hooks are the primary path,
+ * but if they stop firing for a session (e.g. Claude was restarted in the tmux without
+ * the wrapper, or its hook config drifted) the cockpit would otherwise never see new
+ * answers even though the poller is alive and still delivering the user's messages.
+ * Returns the new signature when it pushed, else the previous one. Never throws.
+ */
+export async function syncTranscript(
+  api: Pick<ApiClient, "pushState">,
+  sessionId: string,
+  prevSig: string,
+  deps?: { find?: typeof findTranscriptPath; read?: typeof readRecentMessages; lastAnswer?: typeof readLastAssistantText; todos?: typeof readLatestTodos },
+): Promise<string> {
+  try {
+    const find = deps?.find ?? findTranscriptPath;
+    const read = deps?.read ?? readRecentMessages;
+    const lastAnswer = deps?.lastAnswer ?? readLastAssistantText;
+    const todos = deps?.todos ?? readLatestTodos;
+    const path = find(sessionId);
+    if (!path) return prevSig;
+    const msgs = read(path);
+    if (!msgs.length) return prevSig;
+    const sig = transcriptSig(msgs);
+    if (sig === prevSig) return prevSig; // nothing new since our last push
+    await api.pushState(sessionId, {
+      transcript: msgs,
+      latestAnswer: lastAnswer(path),
+      todos: todos(path),
+    });
+    return sig;
+  } catch {
+    return prevSig; // best-effort — hooks remain the primary path
+  }
+}
+
+/**
  * Long-running poller loop launched by `redstone-claude` in a hidden tmux window.
  *
  * 1. Wait until the session is registered (hook handler fires on first Claude activity).
@@ -272,9 +320,13 @@ export async function runPoller(opts: {
   // session: while the tmux session lives, the poller keeps running even when
   // Claude is blocked waiting for the user — so the server can tell a live
   // waiting session from a killed one (whose poller is gone) by staleness.
+  let syncSig = "";
   for (;;) {
     try {
       await api.heartbeat(sessionId).catch(() => {});
+      // Sync the transcript file directly (fallback for when Claude's hooks stop
+      // firing) so new answers still reach the cockpit. Guarded; never throws.
+      syncSig = await syncTranscript(api, sessionId, syncSig);
       await pollOnce({
         deliveries: () =>
           api.deliveries(wrapperId, 25_000) as Promise<Delivery[]>,
