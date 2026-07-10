@@ -153,6 +153,9 @@ declare global {
       // browser (a custom app left its domain). Returns an unsubscribe fn.
       onOpenInWorkspaceBrowser(cb: (a: { url: string }) => void): () => void;
       onBrowserFind(cb: (a: { guestId: number; action: "open" | "close" }) => void): () => void;
+      onDisplayMediaRequest(cb: (a: { screens: Array<{ id: string; name: string; kind: string; thumb: string }>; tabs: Array<{ id: string; title: string; url: string }> }) => void): () => void;
+      displayMediaPick(choice: { kind: "screen" | "window" | "tab"; id: string }): Promise<{ ok: boolean }>;
+      displayMediaCancel(): Promise<{ ok: boolean }>;
 
       // Appearance — custom background image + macOS fullscreen-keeps-wallpaper.
       chooseBgImage(): Promise<{ ok: boolean; dataUrl?: string; error?: string }>;

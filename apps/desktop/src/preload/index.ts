@@ -229,6 +229,18 @@ contextBridge.exposeInMainWorld("cowork", {
     ipcRenderer.on(IPC.openInWorkspaceBrowser, handler);
     return () => ipcRenderer.removeListener(IPC.openInWorkspaceBrowser, handler);
   },
+  // Screen-share source picker: main asks the renderer to choose a source for a
+  // getDisplayMedia request (screens/windows + the app's own browser tabs).
+  onDisplayMediaRequest: (
+    cb: (a: { screens: Array<{ id: string; name: string; kind: string; thumb: string }>; tabs: Array<{ id: string; title: string; url: string }> }) => void,
+  ): (() => void) => {
+    const handler = (_e: unknown, a: Parameters<typeof cb>[0]) => cb(a);
+    ipcRenderer.on(IPC.displayMediaRequest, handler);
+    return () => ipcRenderer.removeListener(IPC.displayMediaRequest, handler);
+  },
+  displayMediaPick: (choice: { kind: "screen" | "window" | "tab"; id: string }): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke(IPC.displayMediaPick, choice),
+  displayMediaCancel: (): Promise<{ ok: boolean }> => ipcRenderer.invoke(IPC.displayMediaCancel),
   // Main forwards Cmd/Ctrl+F (and Esc) from a focused browser <webview> guest so
   // the owning panel can open/close its in-page find bar. `guestId` is the guest's
   // webContents id, matched against the webview's getWebContentsId().
