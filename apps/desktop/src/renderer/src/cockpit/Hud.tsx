@@ -471,6 +471,7 @@ function ChatPane({ sessionId }: { sessionId?: string } = {}) {
   const queue = useStore((s) => s.queue);
   const decisions = useStore((s) => s.decisions);
   const pendingMap = useStore((s) => s.pending);
+  const workingStale = useStore((s) => s.workingStale);
   const instruct = useStore((s) => s.instruct);
   const scrollRef = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
@@ -501,7 +502,10 @@ function ChatPane({ sessionId }: { sessionId?: string } = {}) {
   // notification / completion ping must not render as an un-answerable card that
   // lingers after you send or answer. Idle → the dock's plain reply box.
   const decision = actionable;
-  const isWorking = !!session && session.status !== "lost" && !actionable && (!!session.working || pending.length > 0);
+  // A stuck `working` flag (true with no new output; host hooks stopped firing) is
+  // treated as idle so the HUD loader can't spin forever — see store.workingStale.
+  const isWorking = !!session && session.status !== "lost" && !actionable &&
+    ((!!session.working && !workingStale[session.id]) || pending.length > 0);
 
   useEffect(() => {
     if (scrollRef.current && stick.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;

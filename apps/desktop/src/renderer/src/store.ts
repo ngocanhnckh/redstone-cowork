@@ -76,6 +76,46 @@ export function consumeFinishedPending(
  * refresh() can detect the true→false edge (a turn ending) between polls. */
 let lastWorking: Record<string, boolean> = {};
 
+/**
+ * Backstop for a stuck server `working` flag. The host clears `working` on Claude's
+ * Stop/idle hooks — but if those hooks stop firing (e.g. Claude was restarted in the
+ * tmux without the wrapper, or the session's hooks broke) while the poller keeps the
+ * session alive, `working` can sit true forever and the cockpit spins its loader with
+ * no end. Real work continuously grows the transcript (each tool result is pushed), so
+ * we treat `working` as stale once it's been true with NO new output for this long.
+ */
+const STUCK_WORKING_MS = 3 * 60 * 1000;
+let workingSinceById: Record<string, number> = {}; // sessionId → when the current working spell (or its last output) was seen
+let lastTranscriptLen: Record<string, number> = {}; // sessionId → transcript length at that time
+
+/**
+ * Sessions whose `working` flag is stale (true, but no new transcript output for
+ * STUCK_WORKING_MS). Recomputed each poll; the timer resets whenever the transcript
+ * grows, so a genuinely-working session (which keeps emitting output) is never marked
+ * stale. Returns a set of sessionIds the UI should treat as NOT working.
+ */
+export function computeStaleWorking(lists: SessionView[][], now: number): Record<string, boolean> {
+  const stale: Record<string, boolean> = {};
+  const seen = new Set<string>();
+  for (const list of lists) {
+    for (const s of list) {
+      if (seen.has(s.id)) continue;
+      seen.add(s.id);
+      const tl = s.transcript?.length ?? 0;
+      if (s.working) {
+        // (Re)start the timer when we first see it working or when new output arrives.
+        if (workingSinceById[s.id] == null || lastTranscriptLen[s.id] !== tl) workingSinceById[s.id] = now;
+        lastTranscriptLen[s.id] = tl;
+        if (now - workingSinceById[s.id] > STUCK_WORKING_MS) stale[s.id] = true;
+      } else {
+        delete workingSinceById[s.id];
+        lastTranscriptLen[s.id] = tl;
+      }
+    }
+  }
+  return stale;
+}
+
 type State = {
   sessions: SessionView[];
   queue: SessionView[];
@@ -88,6 +128,7 @@ type State = {
   caps: CapsHostView[]; // installed skills + slash commands per host
   capsOpen: boolean; // the skills/commands browser modal
   pending: Record<string, PendingSend[]>; // sessionId → optimistic sends, shown instantly
+  workingStale: Record<string, boolean>; // sessionId → server `working` is stuck (no output for a while); UI treats as idle
   activeTab: Record<string, "chat" | "terminal" | "browser" | "ports" | "files">; // sessionId → active workspace tab
   openBrowsers: string[]; // sessionIds whose browser tab was opened — kept alive (see BrowserStack)
   // A one-shot request to open a URL in a session's in-app browser (a new tab). The
@@ -151,6 +192,7 @@ export const useStore = create<State>((set, get) => ({
   caps: [],
   capsOpen: false,
   pending: {},
+  workingStale: {},
   activeTab: {},
   openBrowsers: [],
   pendingBrowserOpen: null,
@@ -223,12 +265,14 @@ export const useStore = create<State>((set, get) => ({
       // out of the transcript tail so the count can never catch up.
       const nowWorking: Record<string, boolean> = {};
       for (const sv of [...q, ...s]) nowWorking[sv.id] = !!sv.working;
+      const workingStale = computeStaleWorking([s, q], Date.now());
       set((state) => ({
         queue: q,
         sessions: s,
         decisions: d,
         focusId: pickFocus(q, s, state.focusId),
         pending: prunePending(consumeFinishedPending(state.pending, lastWorking, nowWorking), s, q, Date.now()),
+        workingStale,
         error: null,
       }));
       lastWorking = nowWorking;

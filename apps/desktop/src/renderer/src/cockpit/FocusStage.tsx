@@ -88,8 +88,13 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
   // notification card must NOT hide that Claude is working.
   // A `lost` session's poller is gone, so a `working=true` left over from an
   // interrupted turn (no Stop fired to clear it) can never be trusted — force it off.
+  // A `working` flag that's been stuck true with no new output (host hooks stopped
+  // firing) is treated as idle, so the loader can't spin forever. See store's
+  // computeStaleWorking.
+  const workingStale = useStore((s) => s.workingStale);
   const isWorking =
-    session?.status !== "lost" && !actionableDecision && (!!session?.working || pending.length > 0);
+    session?.status !== "lost" && !actionableDecision &&
+    ((!!session?.working && (!id || !workingStale[id])) || pending.length > 0);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   // Only auto-scroll to the bottom when the user is already near it, so a poll
