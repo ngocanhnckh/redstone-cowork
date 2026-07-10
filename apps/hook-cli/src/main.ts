@@ -119,10 +119,12 @@ async function main() {
     const cfg = loadCliConfig();
     const wrapper = argv[argv.indexOf("--wrapper") + 1];
     const tmux = argv[argv.indexOf("--tmux") + 1];
+    const cwdIdx = argv.indexOf("--cwd");
+    const cwd = cwdIdx >= 0 ? argv[cwdIdx + 1] : undefined;
     if (!cfg || !wrapper || !tmux) exit(0);
     const { runPoller } = await import("./poller");
     const { ApiClient } = await import("./api-client");
-    await runPoller({ wrapperId: wrapper, tmuxTarget: tmux, api: new ApiClient(cfg) });
+    await runPoller({ wrapperId: wrapper, tmuxTarget: tmux, api: new ApiClient(cfg), cwd });
   } else if (cmd === "agent") {
     const cfg = loadCliConfig();
     if (!cfg) { console.error("run `redstone init` first"); exit(1); }

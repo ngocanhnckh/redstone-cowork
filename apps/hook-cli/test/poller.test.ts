@@ -205,39 +205,52 @@ describe("syncTranscript (hook-independent transcript fallback)", () => {
     { role: "user" as const, text: "hi" },
     { role: "assistant" as const, text: "the answer" },
   ];
+  // `now` fixed so the busy/idle boundary is deterministic. newest() returns a fresh
+  // mtime (busy) by default; override for the idle case.
+  const NOW = 1_000_000;
   const stub = (over = {}) => ({
     find: () => "/fake/transcript.jsonl",
+    newest: () => ({ path: "/fake/transcript.jsonl", mtimeMs: NOW - 1000 }), // 1s old → busy
     read: () => msgs,
     lastAnswer: () => "the answer",
     todos: () => [],
+    now: () => NOW,
     ...over,
   });
 
-  it("pushes the transcript file's content when it changed since the last sync", async () => {
+  it("pushes the newest transcript's content when it changed since the last sync", async () => {
     const api = { pushState: vi.fn().mockResolvedValue(undefined) };
-    const sig = await syncTranscript(api, "s1", "", stub());
+    const sig = await syncTranscript(api, "s1", "/cwd", "", stub());
     expect(api.pushState).toHaveBeenCalledWith("s1", expect.objectContaining({ transcript: msgs, latestAnswer: "the answer" }));
-    expect(sig).toBe(transcriptSig(msgs));
+    expect(sig).toBe(`${transcriptSig(msgs)}:busy`);
   });
 
-  it("does not push again when the content is unchanged", async () => {
+  it("clears working (never sets it true) once the transcript goes idle", async () => {
     const api = { pushState: vi.fn().mockResolvedValue(undefined) };
-    const prev = transcriptSig(msgs);
-    const sig = await syncTranscript(api, "s1", prev, stub());
+    // mtime far in the past → idle.
+    const sig = await syncTranscript(api, "s1", "/cwd", "", stub({ newest: () => ({ path: "/fake/transcript.jsonl", mtimeMs: NOW - 999_999 }) }));
+    expect(api.pushState).toHaveBeenCalledWith("s1", expect.objectContaining({ working: false }));
+    expect(sig).toBe(`${transcriptSig(msgs)}:idle`);
+  });
+
+  it("does not push again when nothing changed", async () => {
+    const api = { pushState: vi.fn().mockResolvedValue(undefined) };
+    const prev = `${transcriptSig(msgs)}:busy`;
+    const sig = await syncTranscript(api, "s1", "/cwd", prev, stub());
     expect(api.pushState).not.toHaveBeenCalled();
     expect(sig).toBe(prev);
   });
 
-  it("no-ops (never throws) when the transcript file can't be found", async () => {
+  it("no-ops (never throws) when no transcript file is found", async () => {
     const api = { pushState: vi.fn().mockResolvedValue(undefined) };
-    const sig = await syncTranscript(api, "s1", "prev", stub({ find: () => null }));
+    const sig = await syncTranscript(api, "s1", "/cwd", "prev", stub({ newest: () => null, find: () => null }));
     expect(api.pushState).not.toHaveBeenCalled();
     expect(sig).toBe("prev");
   });
 
   it("swallows a pushState failure and keeps the previous signature", async () => {
     const api = { pushState: vi.fn().mockRejectedValue(new Error("network")) };
-    const sig = await syncTranscript(api, "s1", "prev", stub());
+    const sig = await syncTranscript(api, "s1", "/cwd", "prev", stub());
     expect(sig).toBe("prev");
   });
 });

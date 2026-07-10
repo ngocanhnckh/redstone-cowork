@@ -40,6 +40,30 @@ export function findTranscriptPath(sessionId: string, root = projectsRoot()): st
   return null;
 }
 
+/**
+ * The most-recently-modified transcript in a cwd's project folder — i.e. whatever
+ * Claude is actively writing right now, regardless of session-id changes across
+ * resume/continue. Used by the poller's hook-independent sync so it always reflects
+ * the live conversation, not a stale file named after the originally-attached id.
+ */
+export function newestTranscript(cwd: string, root = projectsRoot()): { path: string; mtimeMs: number } | null {
+  const dir = join(root, cwd.replace(/\//g, "-"));
+  let best: { path: string; mtimeMs: number } | null = null;
+  try {
+    for (const f of readdirSync(dir)) {
+      if (!f.endsWith(".jsonl")) continue;
+      const p = join(dir, f);
+      try {
+        const m = statSync(p).mtimeMs;
+        if (!best || m > best.mtimeMs) best = { path: p, mtimeMs: m };
+      } catch { /* file vanished — skip */ }
+    }
+  } catch {
+    return null;
+  }
+  return best;
+}
+
 /** Read the first `bytes` of a file as UTF-8 (for cheap head parsing of huge transcripts). */
 function readHead(path: string, bytes: number): string {
   let fd: number | null = null;

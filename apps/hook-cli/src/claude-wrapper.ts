@@ -57,7 +57,10 @@ export function buildTmuxCommands(
   const claudeCmd =
     `${inner}; rcw_ec=$?; [ $rcw_ec -eq 0 ] || ` +
     `{ echo; echo "redstone: claude exited with status $rcw_ec${hint}"; echo "press Enter to close…"; read _; }`;
-  const pollCmd = `node ${mainBin} poll --wrapper ${wrapperId} --tmux ${session}:0`;
+  // Pass cwd (shell-quoted) so the poller can sync the transcript file directly as a
+  // fallback when Claude's hooks stop firing.
+  const cwdQ = `'${cwd.replace(/'/g, "'\\''")}'`;
+  const pollCmd = `node ${mainBin} poll --wrapper ${wrapperId} --tmux ${session}:0 --cwd ${cwdQ}`;
 
   return [
     // 0: create session in background with claude running

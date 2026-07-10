@@ -4,7 +4,7 @@ import { mkdir, readFile, writeFile, chmod } from "node:fs/promises";
 import { homedir, userInfo } from "node:os";
 import { join } from "node:path";
 import { deliveryToKeys } from "./keymap";
-import { findTranscriptPath } from "./scanner";
+import { findTranscriptPath, newestTranscript } from "./scanner";
 import { readRecentMessages, readLastAssistantText, readLatestTodos } from "./transcript";
 import type { ApiClient } from "./api-client";
 
@@ -245,36 +245,57 @@ export function transcriptSig(msgs: Array<{ role: string; text: string }>): stri
   return `${msgs.length}:${last?.role ?? ""}:${(last?.text ?? "").length}`;
 }
 
+/** After this long with no new transcript writes, treat the turn as finished and
+ * clear a possibly-stuck `working` flag. Generous so a single long silent tool
+ * doesn't flip the loader off mid-run. */
+export const POLLER_IDLE_MS = 45_000;
+
 /**
- * Fallback transcript sync: read Claude's own transcript file for this session and
- * push it to the server, INDEPENDENT of Claude's hooks. Hooks are the primary path,
- * but if they stop firing for a session (e.g. Claude was restarted in the tmux without
- * the wrapper, or its hook config drifted) the cockpit would otherwise never see new
- * answers even though the poller is alive and still delivering the user's messages.
- * Returns the new signature when it pushed, else the previous one. Never throws.
+ * Hook-independent transcript sync: read whatever transcript Claude is actively
+ * writing for this session (the newest file in the cwd's project folder — robust to
+ * session-id changes on resume) and push it to the server. This keeps the cockpit
+ * current even when Claude's hooks stop firing (the poller lives separately and still
+ * delivers messages). When the transcript has gone idle it also clears `working`, so a
+ * stuck "loading" spinner resolves; it NEVER sets `working` true (that stays the hooks'
+ * job, so the poller can't raise a false loader). Returns the new signature. Never throws.
  */
 export async function syncTranscript(
   api: Pick<ApiClient, "pushState">,
   sessionId: string,
+  cwd: string | undefined,
   prevSig: string,
-  deps?: { find?: typeof findTranscriptPath; read?: typeof readRecentMessages; lastAnswer?: typeof readLastAssistantText; todos?: typeof readLatestTodos },
+  deps?: {
+    find?: typeof findTranscriptPath; newest?: typeof newestTranscript;
+    read?: typeof readRecentMessages; lastAnswer?: typeof readLastAssistantText;
+    todos?: typeof readLatestTodos; now?: () => number;
+  },
 ): Promise<string> {
   try {
     const find = deps?.find ?? findTranscriptPath;
+    const newest = deps?.newest ?? newestTranscript;
     const read = deps?.read ?? readRecentMessages;
     const lastAnswer = deps?.lastAnswer ?? readLastAssistantText;
     const todos = deps?.todos ?? readLatestTodos;
-    const path = find(sessionId);
+    const now = deps?.now ?? Date.now;
+
+    const hit = cwd ? newest(cwd) : null;
+    const path = hit?.path ?? find(sessionId);
     if (!path) return prevSig;
     const msgs = read(path);
     if (!msgs.length) return prevSig;
-    const sig = transcriptSig(msgs);
-    if (sig === prevSig) return prevSig; // nothing new since our last push
-    await api.pushState(sessionId, {
+
+    // Idle = no transcript writes for a while → the turn has settled.
+    const idle = hit ? now() - hit.mtimeMs > POLLER_IDLE_MS : false;
+    const sig = `${transcriptSig(msgs)}:${idle ? "idle" : "busy"}`;
+    if (sig === prevSig) return prevSig; // nothing changed since our last push
+
+    const patch: Parameters<ApiClient["pushState"]>[1] = {
       transcript: msgs,
       latestAnswer: lastAnswer(path),
       todos: todos(path),
-    });
+    };
+    if (idle) patch.working = false; // clear a stuck loader; never raise one
+    await api.pushState(sessionId, patch);
     return sig;
   } catch {
     return prevSig; // best-effort — hooks remain the primary path
@@ -291,8 +312,9 @@ export async function runPoller(opts: {
   wrapperId: string;
   tmuxTarget: string;
   api: ApiClient;
+  cwd?: string;
 }): Promise<void> {
-  const { wrapperId, tmuxTarget, api } = opts;
+  const { wrapperId, tmuxTarget, api, cwd } = opts;
 
   const sendKeys = async (keys: string[]): Promise<void> => {
     await execFileP("tmux", ["send-keys", "-t", tmuxTarget, ...keys]);
@@ -326,7 +348,7 @@ export async function runPoller(opts: {
       await api.heartbeat(sessionId).catch(() => {});
       // Sync the transcript file directly (fallback for when Claude's hooks stop
       // firing) so new answers still reach the cockpit. Guarded; never throws.
-      syncSig = await syncTranscript(api, sessionId, syncSig);
+      syncSig = await syncTranscript(api, sessionId, cwd, syncSig);
       await pollOnce({
         deliveries: () =>
           api.deliveries(wrapperId, 25_000) as Promise<Delivery[]>,
