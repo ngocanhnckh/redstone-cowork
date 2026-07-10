@@ -62,6 +62,8 @@ declare global {
       jiraSessionIssues(sessionId: string): Promise<Array<{ key: string; summary: string; status: string; statusCategory: "todo" | "inprogress" | "done"; assignee: string | null; url: string }>>;
       jiraIssueDetail(sessionId: string, key: string): Promise<{ key: string; summary: string; status: string; statusCategory: string; assignee: string | null; url: string; descriptionHtml: string; comments: Array<{ author: string | null; created: string; bodyHtml: string }> }>;
       jiraCreateIssue(sessionId: string, summary: string): Promise<{ key: string; summary: string; status: string; statusCategory: "todo" | "inprogress" | "done"; assignee: string | null; url: string }>;
+      jiraIssueTransitions(sessionId: string, key: string): Promise<Array<{ id: string; name: string; to: string }>>;
+      jiraTransitionIssue(sessionId: string, key: string, transitionId: string): Promise<{ ok: boolean }>;
 
       // Workspace config
       getWorkspaceConfig(a: {

@@ -133,9 +133,9 @@ export default function AnswerDock({ decision, working, sessionId: sessionIdProp
             onClick={() => { if (idleSessionId) interrupt(idleSessionId); }}
             title="Stop Claude — interrupt (Esc) without sending anything"
             aria-label="Stop Claude"
-            style={{ width: 34, height: 34, borderRadius: 999, padding: 0, fontSize: 14, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+            style={{ width: 34, height: 34, borderRadius: 999, padding: 0, fontSize: 12, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
           >
-            ⎋
+            ◼
           </button>
         ) : mode !== "hud" ? (
           // Advance-to-next affordance for the full cockpit; pointless in the compact

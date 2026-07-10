@@ -147,6 +147,24 @@ export class JiraService {
     return client.issueDetail(key);
   }
 
+  /** Available status transitions for an issue (workflow-specific, incl. custom statuses). */
+  async issueTransitions(sessionId: string, key: string): Promise<Array<{ id: string; name: string; to: string }>> {
+    const binding = await this.getBinding(sessionId);
+    if (!binding) throw new BadRequestException("Session has no Jira binding");
+    const client = await this.clientFor(binding.profile);
+    if (!client) throw new BadRequestException(`Unknown Jira profile: ${binding.profile}`);
+    return client.transitions(key);
+  }
+
+  /** Apply a status transition to an issue. */
+  async transitionIssue(sessionId: string, key: string, transitionId: string): Promise<void> {
+    const binding = await this.getBinding(sessionId);
+    if (!binding) throw new BadRequestException("Session has no Jira binding");
+    const client = await this.clientFor(binding.profile);
+    if (!client) throw new BadRequestException(`Unknown Jira profile: ${binding.profile}`);
+    await client.transition(key, transitionId);
+  }
+
   private decryptPat(stored: string): string {
     return stored.startsWith(PLAINTEXT_PREFIX) ? stored.slice(PLAINTEXT_PREFIX.length) : this.cipher.decrypt(stored);
   }

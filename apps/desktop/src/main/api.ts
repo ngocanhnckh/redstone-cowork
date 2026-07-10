@@ -404,6 +404,12 @@ export async function jiraIssueDetail(sessionId: string, key: string): Promise<u
 export async function jiraCreateIssue(sessionId: string, summary: string): Promise<unknown> {
   return (await req(`/sessions/${sid(sessionId)}/jira/issues`, { method: "POST", body: JSON.stringify({ summary }) })).json();
 }
+export async function jiraIssueTransitions(sessionId: string, key: string): Promise<unknown> {
+  return (await req(`/sessions/${sid(sessionId)}/jira/issues/${sid(key)}/transitions`)).json();
+}
+export async function jiraTransitionIssue(sessionId: string, key: string, transitionId: string): Promise<unknown> {
+  return (await req(`/sessions/${sid(sessionId)}/jira/issues/${sid(key)}/transitions`, { method: "POST", body: JSON.stringify({ transitionId }) })).json();
+}
 
 export async function getSshResult(sessionId: string): Promise<SshResult | null> {
   const res = await req(`/sessions/${encodeURIComponent(sessionId)}/ssh-result`);

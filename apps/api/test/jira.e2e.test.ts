@@ -207,6 +207,37 @@ describe("JiraClient (unit)", () => {
       comments: [{ author: "Bob", created: "2026-01-01", bodyHtml: "<p>hi</p>" }],
     });
   });
+
+  it("transitions() maps Jira's workflow transitions to {id,name,to} (custom statuses included)", async () => {
+    const fetchImpl = fakeFetch([
+      {
+        match: "/rest/api/2/issue/RCW-1/transitions",
+        body: {
+          transitions: [
+            { id: "11", name: "Start Progress", to: { name: "In Progress" } },
+            { id: "42", name: "Ship It", to: { name: "Ready for QA" } }, // a project-custom status
+          ],
+        },
+      },
+    ]);
+    const client = new JiraClient("https://jira.example.com", "pat", fetchImpl);
+    expect(await client.transitions("RCW-1")).toEqual([
+      { id: "11", name: "Start Progress", to: "In Progress" },
+      { id: "42", name: "Ship It", to: "Ready for QA" },
+    ]);
+  });
+
+  it("transition() POSTs the chosen transition id", async () => {
+    let captured: { method?: string; body?: unknown } = {};
+    const fetchImpl = (async (input: unknown, init?: { method?: string; body?: string }) => {
+      captured = { method: init?.method, body: init?.body ? JSON.parse(init.body) : undefined };
+      return { ok: true, status: 204, json: async () => ({}), text: async () => "" } as Response;
+    }) as unknown as typeof fetch;
+    const client = new JiraClient("https://jira.example.com", "pat", fetchImpl);
+    await client.transition("RCW-1", "42");
+    expect(captured.method).toBe("POST");
+    expect(captured.body).toEqual({ transition: { id: "42" } });
+  });
 });
 
 describe("JiraService (unit, fake deps)", () => {

@@ -164,6 +164,29 @@ export class JiraClient {
     return { ...base, descriptionHtml: raw.renderedFields?.description ?? "", comments };
   }
 
+  /**
+   * Available workflow transitions for an issue, as `{id, name, to}` where `to` is
+   * the destination status name. Jira computes these per-issue from the project's
+   * workflow — so custom statuses come through automatically (no hardcoding).
+   */
+  async transitions(key: string): Promise<Array<{ id: string; name: string; to: string }>> {
+    const url = `${this.base}/rest/api/2/issue/${encodeURIComponent(key)}/transitions`;
+    const res = await this.fetchImpl(url, { headers: this.headers() });
+    if (!res.ok) throw new Error(`Jira transitions ${key} responded ${res.status}`);
+    const data = (await res.json()) as { transitions?: Array<{ id: string; name?: string; to?: { name?: string } }> };
+    return (data.transitions ?? []).map((t) => ({ id: t.id, name: t.name ?? "", to: t.to?.name ?? t.name ?? "" }));
+  }
+
+  /** Apply a workflow transition (change the issue's status). */
+  async transition(key: string, transitionId: string): Promise<void> {
+    const res = await this.fetchImpl(`${this.base}/rest/api/2/issue/${encodeURIComponent(key)}/transitions`, {
+      method: "POST",
+      headers: this.jsonHeaders(),
+      body: JSON.stringify({ transition: { id: transitionId } }),
+    });
+    if (!res.ok) throw new Error(`Jira transition ${key} responded ${res.status}: ${await res.text().catch(() => "")}`);
+  }
+
   private toIssue(i: RawIssue): JiraIssue {
     const f = i.fields ?? {};
     return {

@@ -95,6 +95,8 @@ contextBridge.exposeInMainWorld("cowork", {
   jiraSessionIssues: (sessionId: string): Promise<Array<{ key: string; summary: string; status: string; statusCategory: "todo" | "inprogress" | "done"; assignee: string | null; url: string }>> => ipcRenderer.invoke(IPC.jiraSessionIssues, { sessionId }),
   jiraIssueDetail: (sessionId: string, key: string): Promise<{ key: string; summary: string; status: string; statusCategory: string; assignee: string | null; url: string; descriptionHtml: string; comments: Array<{ author: string | null; created: string; bodyHtml: string }> }> => ipcRenderer.invoke(IPC.jiraIssueDetail, { sessionId, key }),
   jiraCreateIssue: (sessionId: string, summary: string): Promise<{ key: string; summary: string; status: string; statusCategory: "todo" | "inprogress" | "done"; assignee: string | null; url: string }> => ipcRenderer.invoke(IPC.jiraCreateIssue, { sessionId, summary }),
+  jiraIssueTransitions: (sessionId: string, key: string): Promise<Array<{ id: string; name: string; to: string }>> => ipcRenderer.invoke(IPC.jiraIssueTransitions, { sessionId, key }),
+  jiraTransitionIssue: (sessionId: string, key: string, transitionId: string): Promise<{ ok: boolean }> => ipcRenderer.invoke(IPC.jiraTransitionIssue, { sessionId, key, transitionId }),
 
   // Workspace config
   getWorkspaceConfig: (a: {

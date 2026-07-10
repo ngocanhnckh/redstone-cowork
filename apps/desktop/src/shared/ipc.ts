@@ -42,6 +42,8 @@ export const IPC = {
   jiraSessionIssues: "api:jira:issues",
   jiraIssueDetail: "api:jira:issue",
   jiraCreateIssue: "api:jira:issue:create",
+  jiraIssueTransitions: "api:jira:issue:transitions",
+  jiraTransitionIssue: "api:jira:issue:transition",
   telemetryList: "api:telemetry:list",
   dockerList: "api:docker:list",
   capsList: "api:caps:list",

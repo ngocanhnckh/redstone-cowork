@@ -21,18 +21,41 @@ function sanitize(html: string): string {
 
 /** Rich Jira issue detail — summary, status, assignee, rendered description and
  * comments — in a themed modal overlay. Esc or the backdrop closes it. */
+type Transition = { id: string; name: string; to: string };
+
 export default function JiraIssueModal({ sessionId, issueKey, onClose }: { sessionId: string; issueKey: string; onClose: () => void }) {
   const [detail, setDetail] = useState<Detail | null>(null);
   const [state, setState] = useState<"loading" | "ok" | "err">("loading");
+  // Workflow transitions available for this issue (project-specific, incl. custom
+  // statuses) + a busy flag while a status change is applied.
+  const [transitions, setTransitions] = useState<Transition[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let alive = true;
     setState("loading");
-    window.cowork.jiraIssueDetail(sessionId, issueKey)
-      .then((d) => { if (alive) { setDetail(d as Detail); setState("ok"); } })
+    Promise.all([
+      window.cowork.jiraIssueDetail(sessionId, issueKey),
+      window.cowork.jiraIssueTransitions(sessionId, issueKey).catch(() => [] as Transition[]),
+    ])
+      .then(([d, t]) => { if (alive) { setDetail(d as Detail); setTransitions(t as Transition[]); setState("ok"); } })
       .catch(() => { if (alive) setState("err"); });
     return () => { alive = false; };
-  }, [sessionId, issueKey]);
+  }, [sessionId, issueKey, reloadKey]);
+
+  // Apply a status transition, then reload the issue (new status + fresh transitions)
+  // and nudge the Tasks tab to refetch so its list/progress ring reflect the change.
+  const applyTransition = async (transitionId: string) => {
+    if (!transitionId || busy) return;
+    setBusy(true);
+    try {
+      await window.cowork.jiraTransitionIssue(sessionId, issueKey, transitionId);
+      window.dispatchEvent(new CustomEvent("rcw-jira-binding", { detail: { sessionId } }));
+      setReloadKey((k) => k + 1);
+    } catch { /* leave the current status; the dropdown stays put */ }
+    finally { setBusy(false); }
+  };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") { e.stopPropagation(); onClose(); } };
@@ -49,7 +72,29 @@ export default function JiraIssueModal({ sessionId, issueKey, onClose }: { sessi
           <a href={detail?.url || "#"} onClick={(e) => { e.preventDefault(); if (detail?.url) window.cowork.openExternal(detail.url).catch(() => {}); }}
             className="mono" style={{ fontSize: 12, color: "rgb(var(--primary-soft))", textDecoration: "none", flexShrink: 0, cursor: "pointer" }} title="Open in Jira">{issueKey} ↗</a>
           <span style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{detail?.summary}</span>
-          {detail && <span className="mono faint" style={{ fontSize: 10.5, flexShrink: 0 }}>{detail.status}{detail.assignee ? ` · ${detail.assignee}` : ""}</span>}
+          {detail && detail.assignee && <span className="mono faint" style={{ fontSize: 10.5, flexShrink: 0 }}>{detail.assignee}</span>}
+          {detail && (
+            // Status control: current status is the placeholder; options are the
+            // workflow transitions Jira allows from here (so custom statuses just work).
+            <select
+              value=""
+              disabled={busy || transitions.length === 0}
+              onChange={(e) => applyTransition(e.target.value)}
+              title={transitions.length ? "Change status" : "No transitions available"}
+              className="mono"
+              style={{
+                flexShrink: 0, maxWidth: 150, border: "1px solid var(--border-strong)",
+                background: `color-mix(in srgb, ${CAT_COLOR[detail.statusCategory] ?? "var(--text-faint)"} 22%, transparent)`,
+                color: "var(--text)", borderRadius: 8, padding: "4px 8px", fontSize: 11,
+                outline: "none", cursor: busy ? "wait" : "pointer",
+              }}
+            >
+              <option value="">{busy ? "updating…" : detail.status || "status"}</option>
+              {transitions.map((t) => (
+                <option key={t.id} value={t.id}>→ {t.to || t.name}</option>
+              ))}
+            </select>
+          )}
           <button onClick={onClose} style={{ border: "1px solid var(--border)", background: "transparent", color: "var(--text-soft)", borderRadius: 7, padding: "3px 10px", fontSize: 12, cursor: "pointer", flexShrink: 0 }}>✕</button>
         </div>
         {/* body */}

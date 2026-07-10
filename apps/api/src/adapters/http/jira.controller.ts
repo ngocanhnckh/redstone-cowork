@@ -30,6 +30,11 @@ const CommentSchema = z.object({
   body: z.string().min(1),
 });
 
+/** Body for transitioning an issue's status. */
+const TransitionSchema = z.object({
+  transitionId: z.string().min(1),
+});
+
 /**
  * Per-session Jira integration (owner-only). Manages named Jira profiles and each
  * session's binding, and proxies live sprint issues / issue detail. Profile secrets
@@ -100,6 +105,24 @@ export class JiraController {
   @Get("sessions/:id/jira/issues/:key")
   issueDetail(@Param("id") id: string, @Param("key") key: string) {
     return this.jira.issueDetail(id, key);
+  }
+
+  @Get("sessions/:id/jira/issues/:key/transitions")
+  issueTransitions(@Param("id") id: string, @Param("key") key: string) {
+    return this.jira.issueTransitions(id, key);
+  }
+
+  @Post("sessions/:id/jira/issues/:key/transitions")
+  @HttpCode(200)
+  async transitionIssue(@Param("id") id: string, @Param("key") key: string, @Body() body: unknown) {
+    try {
+      const { transitionId } = TransitionSchema.parse(body);
+      await this.jira.transitionIssue(id, key, transitionId);
+      return { ok: true };
+    } catch (e) {
+      if (e instanceof ZodError) throw new BadRequestException(e.issues);
+      throw e;
+    }
   }
 
   @Post("sessions/:id/jira/issues")
