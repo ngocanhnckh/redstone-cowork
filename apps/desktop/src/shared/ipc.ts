@@ -103,6 +103,7 @@ export const IPC = {
   filesSearch: "api:files:search",
   filesRead: "api:files:read",
   filesWrite: "api:files:write",
+  filesWriteBase64: "api:files:write-base64",
   filesDelete: "api:files:delete",
   filesMkdir: "api:files:mkdir",
   filesCreate: "api:files:create",

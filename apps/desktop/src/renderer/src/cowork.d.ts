@@ -204,6 +204,12 @@ declare global {
         file: string;
         content: string;
       }): Promise<{ ok: boolean; error?: string }>;
+      writeFileBase64(a: {
+        cwd: string;
+        machine: string;
+        file: string;
+        base64: string;
+      }): Promise<{ ok: boolean; error?: string }>;
       deletePath(a: {
         cwd: string;
         machine: string;

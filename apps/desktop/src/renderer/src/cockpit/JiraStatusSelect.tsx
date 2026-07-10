@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type Transition = { id: string; name: string; to: string };
 
@@ -19,13 +19,16 @@ export default function JiraStatusSelect({
 }) {
   const [transitions, setTransitions] = useState<Transition[]>([]);
   const [busy, setBusy] = useState(false);
-  const [loaded, setLoaded] = useState(false);
 
-  const loadTransitions = () => {
-    if (loaded) return;
-    setLoaded(true);
-    window.cowork.jiraIssueTransitions(sessionId, issueKey).then(setTransitions).catch(() => {});
-  };
+  // Load eagerly on mount — a native <select> opens with whatever options exist at
+  // click time, so lazy-loading would show an empty dropdown on the first click.
+  useEffect(() => {
+    let alive = true;
+    window.cowork.jiraIssueTransitions(sessionId, issueKey)
+      .then((t) => { if (alive) setTransitions(t); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [sessionId, issueKey]);
 
   const apply = async (transitionId: string) => {
     if (!transitionId || busy) return;
@@ -40,12 +43,10 @@ export default function JiraStatusSelect({
   return (
     <select
       value=""
-      disabled={busy}
-      title="Change status"
+      disabled={busy || transitions.length === 0}
+      title={transitions.length ? "Change status" : "No transitions available"}
       // Stop the click bubbling so the row's open-detail handler doesn't also fire.
       onClick={(e) => e.stopPropagation()}
-      onMouseDown={loadTransitions}
-      onFocus={loadTransitions}
       onChange={(e) => apply(e.target.value)}
       className="mono"
       style={{

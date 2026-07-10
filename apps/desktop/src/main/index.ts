@@ -27,7 +27,7 @@ import {
   type StartArgs as ForwardStartArgs,
 } from "./forwarding";
 import { sshSetup, type SshSetupArgs } from "./ssh-setup";
-import { listDir, readFileAt, writeFileAt, deletePath, makeDir, createFile, uploadLocalFile, searchFiles, downloadFileTo } from "./files";
+import { listDir, readFileAt, writeFileAt, writeFileBase64, deletePath, makeDir, createFile, uploadLocalFile, searchFiles, downloadFileTo } from "./files";
 import { gitInfo } from "./git";
 import { chooseBgImage, getBgImage, clearBgImage, setSimpleFullscreen, isFullscreen, setVibrancy, chooseBgVideo, getBgVideoUrl, clearBgVideo, currentBgVideoPath } from "./appearance";
 import { registerSessionBrowser, unregisterSessionBrowser, startInspect, stopInspect, stopAllInspectors, getResponseBody } from "./devtools";
@@ -563,6 +563,9 @@ ipcMain.handle(IPC.filesRead, (_e, a: { cwd: string; machine: string; file: stri
 );
 ipcMain.handle(IPC.filesWrite, (_e, a: { cwd: string; machine: string; file: string; content: string }) =>
   writeFileAt(a)
+);
+ipcMain.handle(IPC.filesWriteBase64, (_e, a: { cwd: string; machine: string; file: string; base64: string }) =>
+  writeFileBase64(a)
 );
 ipcMain.handle(IPC.filesDelete, (_e, a: { cwd: string; machine: string; path: string }) =>
   deletePath(a)

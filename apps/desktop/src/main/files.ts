@@ -292,6 +292,26 @@ export async function writeFileAt(args: Loc & { file: string; content: string })
   }
 }
 
+/** Write a binary file from base64 (used to save edited Office docs). Locally we
+ * decode + write the buffer; over SSH we pipe the base64 through `base64 -d`. */
+export async function writeFileBase64(args: Loc & { file: string; base64: string }): Promise<{ ok: boolean; error?: string }> {
+  const { machine, file, base64 } = args;
+  try {
+    const buf = Buffer.from(base64, "base64");
+    if (isLocalMachine(machine)) {
+      await fsp.mkdir(path.dirname(file), { recursive: true });
+      await fsp.writeFile(file, buf);
+      return { ok: true };
+    }
+    const sshTarget = await getSshTarget(machine);
+    // Feed the base64 text on stdin and decode it remotely into the target file.
+    await sshWrite(sshTarget, `base64 -d > ${shellQuote(file)}`, base64);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 // ------------------------------ mutations ----------------------------------
 
 /**

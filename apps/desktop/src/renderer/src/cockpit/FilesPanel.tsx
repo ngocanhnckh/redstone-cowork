@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import FileSearch from "./FileSearch";
 import { createPortal } from "react-dom";
 import Editor from "@monaco-editor/react";
+import OfficeViewer, { isOfficeFile } from "./OfficeViewer";
 import ConnectionBar from "./ConnectionBar";
 import Markdown from "./Markdown";
 import { ensureMonaco, languageForFile, RCW_MONACO_THEME } from "./monaco-setup";
@@ -617,6 +618,10 @@ export default function FilesPanel({ sessionId, cwd, machine }: Props) {
                   <Centered>Loading…</Centered>
                 ) : !read ? null : !read.ok ? (
                   <Centered error>{read.error}</Centered>
+                ) : isOfficeFile(baseName(openPath)) && read.encoding === "base64" ? (
+                  <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column" }}>
+                    <OfficeViewer cwd={cwd} machine={machine} path={openPath} base64={read.content} name={baseName(openPath)} />
+                  </div>
                 ) : read.encoding === "binary" ? (
                   <Centered>
                     Binary file · {humanSize(read.size)} — too large or not previewable

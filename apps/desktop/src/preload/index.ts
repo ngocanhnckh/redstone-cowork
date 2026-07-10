@@ -302,6 +302,12 @@ contextBridge.exposeInMainWorld("cowork", {
     file: string;
     content: string;
   }): Promise<{ ok: boolean; error?: string }> => ipcRenderer.invoke(IPC.filesWrite, a),
+  writeFileBase64: (a: {
+    cwd: string;
+    machine: string;
+    file: string;
+    base64: string;
+  }): Promise<{ ok: boolean; error?: string }> => ipcRenderer.invoke(IPC.filesWriteBase64, a),
   deletePath: (a: {
     cwd: string;
     machine: string;
