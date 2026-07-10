@@ -242,6 +242,7 @@ declare global {
       // Chrome extensions (shared workspace browser session)
       extensionsList(): Promise<BrowserExtension[]>;
       extensionAdd(): Promise<{ ok: boolean; error?: string; added?: BrowserExtension }>;
+      extensionInstallWebStore(idOrUrl: string): Promise<{ ok: boolean; error?: string; added?: BrowserExtension }>;
       extensionSetEnabled(id: string, enabled: boolean): Promise<{ ok: boolean }>;
       extensionRemove(id: string): Promise<{ ok: boolean }>;
 

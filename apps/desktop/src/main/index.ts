@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, Notification, shell, dialog, clipboard, protocol, net } from "electron";
+import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, Notification, shell, dialog, clipboard, protocol, net, desktopCapturer } from "electron";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join, basename } from "node:path";
 import { saveConfig, loadConfig, clearConfig } from "./config";
@@ -31,7 +31,7 @@ import { listDir, readFileAt, writeFileAt, writeFileBase64, deletePath, makeDir,
 import { gitInfo } from "./git";
 import { chooseBgImage, getBgImage, clearBgImage, setSimpleFullscreen, isFullscreen, setVibrancy, chooseBgVideo, getBgVideoUrl, clearBgVideo, currentBgVideoPath } from "./appearance";
 import { registerSessionBrowser, unregisterSessionBrowser, startInspect, stopInspect, stopAllInspectors, getResponseBody } from "./devtools";
-import { loadEnabledExtensions, listExtensions, chooseAndAddExtension, setExtensionEnabled, removeExtension } from "./browser-extensions";
+import { loadEnabledExtensions, listExtensions, chooseAndAddExtension, installFromWebStore, setExtensionEnabled, removeExtension, browserSession } from "./browser-extensions";
 import { vaultAvailable, listCredentials, getCredentialForOrigin, saveCredential, deleteCredential } from "./browser-vault";
 import { IPC } from "../shared/ipc";
 
@@ -543,6 +543,7 @@ ipcMain.handle(IPC.devtoolsBody, (_e, a: { sessionId: string; requestId: string 
 // Chrome-extension management for the shared browser session (partition-wide).
 ipcMain.handle(IPC.extensionsList, () => listExtensions());
 ipcMain.handle(IPC.extensionAdd, () => chooseAndAddExtension());
+ipcMain.handle(IPC.extensionInstallWebStore, (_e, a: { idOrUrl: string }) => installFromWebStore(a.idOrUrl));
 ipcMain.handle(IPC.extensionSetEnabled, (_e, a: { id: string; enabled: boolean }) => setExtensionEnabled(a.id, !!a.enabled));
 ipcMain.handle(IPC.extensionRemove, (_e, a: { id: string }) => removeExtension(a.id));
 
@@ -894,6 +895,30 @@ app.whenReady().then(async () => {
   // Load enabled Chrome extensions into the shared browser session BEFORE any
   // <webview> mounts, so they apply to the first page a tab shows. Best-effort.
   await loadEnabledExtensions().catch(() => {});
+
+  // Enable camera/mic + screen sharing inside the workspace browser. Electron denies
+  // these by default; grant them for the app's own session and wire up a source for
+  // getDisplayMedia (screen share in Meet/Zoom/etc). macOS still needs the app to
+  // have the Screen Recording permission granted in System Settings.
+  try {
+    const ses = browserSession();
+    ses.setPermissionRequestHandler((_wc, permission, cb) =>
+      cb(["media", "display-capture", "clipboard-read", "clipboard-sanitized-write", "fullscreen", "pointerLock"].includes(permission)),
+    );
+    ses.setPermissionCheckHandler(() => true);
+    ses.setDisplayMediaRequestHandler((_request, callback) => {
+      desktopCapturer
+        .getSources({ types: ["screen", "window"] })
+        .then((sources) => {
+          const src = sources.find((s) => s.id.startsWith("screen:")) ?? sources[0];
+          if (src) callback({ video: src });
+          else callback({});
+        })
+        .catch(() => callback({}));
+    }, { useSystemPicker: true });
+  } catch {
+    /* older Electron / unsupported — screen share just stays unavailable */
+  }
 
   createWindow();
   if (loadConfig()?.hasToken) {

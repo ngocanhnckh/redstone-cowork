@@ -212,6 +212,42 @@ export async function addExtension(src: string): Promise<{ ok: boolean; error?: 
   }
 }
 
+/** Extract a 32-char Chrome extension id from a Web Store URL or a raw id. */
+function extensionIdFrom(input: string): string | null {
+  const s = input.trim();
+  if (/^[a-p]{32}$/.test(s)) return s;
+  const m = s.match(/[a-p]{32}/); // the id in a .../detail/<name>/<id> URL
+  return m ? m[0] : null;
+}
+
+/**
+ * Install an extension straight from a Chrome Web Store URL (or id) by downloading
+ * its CRX from Google's update endpoint, then materialising + loading it like any
+ * other .crx. NOTE: the embedded browser can't run the Web Store's own "Add to
+ * Chrome" flow (it only offers that to real Chrome), so this is the way in. Many
+ * extensions work; native-messaging ones (1Password/etc) still won't.
+ */
+export async function installFromWebStore(idOrUrl: string): Promise<{ ok: boolean; error?: string; added?: ExtensionView }> {
+  const id = extensionIdFrom(idOrUrl);
+  if (!id) return { ok: false, error: "Couldn't find an extension id in that — paste a Chrome Web Store link or the 32-char id." };
+  const url =
+    `https://clients2.google.com/service/update2/crx?response=redirect&acceptformat=crx2,crx3` +
+    `&prodversion=120.0.0.0&x=${encodeURIComponent(`id=${id}&installsource=ondemand&uc`)}`;
+  const tmpCrx = join(tmpdir(), `rcw-ext-${id}.crx`);
+  try {
+    const res = await fetch(url, { redirect: "follow" });
+    if (!res.ok) return { ok: false, error: `download failed (HTTP ${res.status})` };
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (buf.length < 1000) return { ok: false, error: "downloaded file is too small to be a real extension" };
+    await writeFile(tmpCrx, buf);
+    return await addExtension(tmpCrx);
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  } finally {
+    await rm(tmpCrx, { force: true }).catch(() => {});
+  }
+}
+
 /** Enable/disable a managed extension (load or unload it live + persist the flag). */
 export async function setExtensionEnabled(id: string, enabled: boolean): Promise<{ ok: boolean }> {
   const reg = await readRegistry();

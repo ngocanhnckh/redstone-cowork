@@ -10,6 +10,7 @@ export default function ExtensionsPanel({ onClose }: { onClose: () => void }) {
   const [exts, setExts] = useState<BrowserExtension[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [storeUrl, setStoreUrl] = useState("");
 
   const refresh = () => window.cowork.extensionsList().then(setExts).catch(() => {});
   useEffect(() => { refresh(); }, []);
@@ -20,6 +21,19 @@ export default function ExtensionsPanel({ onClose }: { onClose: () => void }) {
     try {
       const r = await window.cowork.extensionAdd();
       if (r.error) setError(r.error);
+      await refresh();
+    } finally {
+      setBusy(false);
+    }
+  };
+  const installFromStore = async () => {
+    if (!storeUrl.trim() || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await window.cowork.extensionInstallWebStore(storeUrl.trim());
+      if (r.error) setError(r.error);
+      else setStoreUrl("");
       await refresh();
     } finally {
       setBusy(false);
@@ -70,8 +84,25 @@ export default function ExtensionsPanel({ onClose }: { onClose: () => void }) {
           className="glass-btn--clay"
           style={{ padding: "9px 16px", fontSize: 13, fontWeight: 600, marginBottom: 14, opacity: busy ? 0.6 : 1 }}
         >
-          {busy ? "Adding…" : "+ Add extension"}
+          {busy ? "Adding…" : "+ Add unpacked / .crx"}
         </button>
+
+        {/* Install straight from a Chrome Web Store link (the store hides its own
+            "Add to Chrome" button for non-Chrome browsers). */}
+        <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
+          <input
+            value={storeUrl}
+            onChange={(e) => setStoreUrl(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") installFromStore(); }}
+            placeholder="Paste a Chrome Web Store link or extension id…"
+            className="mono"
+            style={{ flex: 1, minWidth: 0, border: "1px solid var(--border)", background: "rgba(255,255,255,0.03)", color: "var(--text)", borderRadius: 8, padding: "8px 11px", fontSize: 11.5, outline: "none" }}
+          />
+          <button onClick={installFromStore} disabled={busy || !storeUrl.trim()} className="glass-inset-hover"
+            style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "0 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", color: "var(--text)", opacity: busy || !storeUrl.trim() ? 0.5 : 1 }}>
+            Install
+          </button>
+        </div>
 
         {error && (
           <div style={{ fontSize: 11.5, color: "#e0736a", marginBottom: 12, lineHeight: 1.5 }}>⚠ {error}</div>

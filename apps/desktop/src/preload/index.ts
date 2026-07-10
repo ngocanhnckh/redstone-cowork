@@ -343,6 +343,8 @@ contextBridge.exposeInMainWorld("cowork", {
     ipcRenderer.invoke(IPC.extensionsList),
   extensionAdd: (): Promise<{ ok: boolean; error?: string; added?: { id: string; name: string; version: string; enabled: boolean; loaded: boolean; error?: string } }> =>
     ipcRenderer.invoke(IPC.extensionAdd),
+  extensionInstallWebStore: (idOrUrl: string): Promise<{ ok: boolean; error?: string; added?: { id: string; name: string; version: string; enabled: boolean; loaded: boolean; error?: string } }> =>
+    ipcRenderer.invoke(IPC.extensionInstallWebStore, { idOrUrl }),
   extensionSetEnabled: (id: string, enabled: boolean): Promise<{ ok: boolean }> =>
     ipcRenderer.invoke(IPC.extensionSetEnabled, { id, enabled }),
   extensionRemove: (id: string): Promise<{ ok: boolean }> =>

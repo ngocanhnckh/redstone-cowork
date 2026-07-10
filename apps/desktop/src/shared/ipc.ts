@@ -73,6 +73,7 @@ export const IPC = {
   openExternal: "api:open-external",
   extensionsList: "api:extensions:list",
   extensionAdd: "api:extensions:add",
+  extensionInstallWebStore: "api:extensions:install-webstore",
   extensionSetEnabled: "api:extensions:enabled",
   extensionRemove: "api:extensions:remove",
   vaultAvailable: "api:vault:available",
