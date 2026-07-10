@@ -10,6 +10,7 @@ Self-hosted AI cowork assistant: the user is the CEO of a simulated company; a v
   - Credentials: `.creds` at repo root (gitignored): `JIRA_PAT`, `JIRA_ENDPOINT`, `MATTERMOST_PAT`, `MATTERMOST_ENDPOINT`. Jira is self-hosted Data Center: `Authorization: Bearer $JIRA_PAT`, API `/rest/api/2/...`.
 - **Push to GitHub regularly** (`ngocanhnckh/redstone-cowork`, private) — at least at every task completion.
 - **Never run Docker on this Mac.** Use `deploy/remote.sh {sync|init|build|up|down|logs|ps|smoke}` against the dev server (`youruser@your-server.example.com`, dir `/home/youruser/redstone-cowork`). Public via a cloudflared token tunnel → `cowork.example.com`.
+  - **Always restart `web` after rebuilding `api`.** Recreating only the `api` container (`docker compose up -d --build api`) gives it a new internal IP, but the `web` container (the Next.js proxy the desktop + browser talk through) keeps stale keep-alive connections to the old API IP → `ECONNREFUSED` → sessions fail to connect. So finish an API deploy with `docker compose restart web` (or rebuild both: `up -d --build`). Symptom to recognize: web container `unhealthy` + `ECONNREFUSED <old-ip>:3001` in `docker compose logs web`.
 - **Never commit secrets** — `.creds`, `.env*` (except `.env.example`) are gitignored; keep it that way.
 
 ## Architecture rules
