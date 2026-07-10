@@ -170,7 +170,10 @@ export async function listDir(args: Loc & { dir: string }): Promise<{ ok: true; 
     // Remote: one stat call per entry is too chatty; use a single find with printf.
     const sshTarget = await getSshTarget(machine);
     // %y = file type (d/f/l...), %s = size, %p = path. NUL-separate fields & records.
-    const cmd = `cd ${shellQuote(dir)} && for n in * .*; do [ "$n" = "." ] || [ "$n" = ".." ] || [ ! -e "$n" -a ! -L "$n" ] || { if [ -d "$n" ]; then t=d; s=0; else t=f; s=$(wc -c < "$n" 2>/dev/null || echo 0); fi; printf '%s\\t%s\\t%s\\n' "$t" "$s" "$n"; }; done`;
+    // `setopt nonomatch` stops zsh (a common login shell) from ABORTING on an
+    // unmatched `.*` glob when a dir has no dotfiles; it's a no-op in bash/sh
+    // (which pass an unmatched glob through literally, then the `-e` guard skips it).
+    const cmd = `setopt nonomatch 2>/dev/null; cd ${shellQuote(dir)} && for n in * .*; do [ "$n" = "." ] || [ "$n" = ".." ] || [ ! -e "$n" -a ! -L "$n" ] || { if [ -d "$n" ]; then t=d; s=0; else t=f; s=$(wc -c < "$n" 2>/dev/null || echo 0); fi; printf '%s\\t%s\\t%s\\n' "$t" "$s" "$n"; }; done`;
     const out = await sshCapture(sshTarget, cmd);
     const entries: DirEntry[] = [];
     for (const line of out.split("\n")) {
