@@ -137,7 +137,9 @@ export default function AnswerDock({ decision, working, sessionId: sessionIdProp
           >
             ⎋
           </button>
-        ) : (
+        ) : mode !== "hud" ? (
+          // Advance-to-next affordance for the full cockpit; pointless in the compact
+          // HUD (which just needs the reply box), so it's hidden there.
           <button
             className="glass-btn--clay"
             onClick={() => {
@@ -150,7 +152,7 @@ export default function AnswerDock({ decision, working, sessionId: sessionIdProp
           >
             Acknowledge
           </button>
-        )}
+        ) : null}
       </div>
     );
   }
