@@ -24,9 +24,12 @@ export default function JiraStatusSelect({
   // click time, so lazy-loading would show an empty dropdown on the first click.
   useEffect(() => {
     let alive = true;
-    window.cowork.jiraIssueTransitions(sessionId, issueKey)
-      .then((t) => { if (alive) setTransitions(t); })
-      .catch(() => {});
+    // Guard against a stale preload (old app instance without this IPC) so the
+    // component degrades to "current status only" instead of throwing.
+    const fn = window.cowork.jiraIssueTransitions;
+    if (typeof fn === "function") {
+      fn(sessionId, issueKey).then((t) => { if (alive) setTransitions(t); }).catch(() => {});
+    }
     return () => { alive = false; };
   }, [sessionId, issueKey]);
 
@@ -43,8 +46,8 @@ export default function JiraStatusSelect({
   return (
     <select
       value=""
-      disabled={busy || transitions.length === 0}
-      title={transitions.length ? "Change status" : "No transitions available"}
+      disabled={busy}
+      title="Change status"
       // Stop the click bubbling so the row's open-detail handler doesn't also fire.
       onClick={(e) => e.stopPropagation()}
       onChange={(e) => apply(e.target.value)}

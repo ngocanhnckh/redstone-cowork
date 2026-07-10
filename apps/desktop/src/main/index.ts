@@ -730,19 +730,43 @@ app.on("web-contents-created", (_e, contents) => {
 
   contents.on("context-menu", (_ev, params) => {
     const nav = contents.navigationHistory;
-    const menu = Menu.buildFromTemplate([
+    const t: Electron.MenuItemConstructorOptions[] = [];
+    const sep = () => { if (t.length && t[t.length - 1].type !== "separator") t.push({ type: "separator" }); };
+
+    // Link actions (real-browser: open in a new tab of the session's workspace browser).
+    if (params.linkURL) {
+      t.push(
+        { label: "Open Link in New Tab", click: () => openInWorkspaceBrowser(params.linkURL) },
+        { label: "Open Link in Real Browser", click: () => shell.openExternal(params.linkURL).catch(() => {}) },
+        { label: "Copy Link Address", click: () => clipboard.writeText(params.linkURL) },
+      );
+      sep();
+    }
+    // Image actions.
+    if (params.mediaType === "image" && params.srcURL) {
+      t.push(
+        { label: "Open Image in New Tab", click: () => openInWorkspaceBrowser(params.srcURL) },
+        { label: "Copy Image", click: () => contents.copyImageAt(params.x, params.y) },
+        { label: "Copy Image Address", click: () => clipboard.writeText(params.srcURL) },
+      );
+      sep();
+    }
+    // Text editing (roles operate on the guest's current selection/field).
+    if (params.isEditable && params.editFlags.canCut) t.push({ label: "Cut", role: "cut" });
+    if (params.editFlags.canCopy || params.selectionText) t.push({ label: "Copy", role: "copy" });
+    if (params.isEditable && params.editFlags.canPaste) t.push({ label: "Paste", role: "paste" });
+    if (params.isEditable && params.editFlags.canSelectAll) t.push({ label: "Select All", role: "selectAll" });
+    sep();
+
+    t.push(
       { label: "Back", enabled: nav?.canGoBack?.() ?? false, click: () => nav?.goBack?.() },
       { label: "Forward", enabled: nav?.canGoForward?.() ?? false, click: () => nav?.goForward?.() },
       { label: "Reload", click: () => contents.reload() },
       { label: "Hard Reload (bypass cache)", click: () => contents.reloadIgnoringCache() },
       { type: "separator" },
-      ...(params.editFlags.canCopy ? [{ label: "Copy", role: "copy" as const }] : []),
-      ...(params.editFlags.canPaste ? [{ label: "Paste", role: "paste" as const }] : []),
-      ...(params.selectionText ? [{ label: "Copy Link Address", enabled: !!params.linkURL, click: () => clipboard.writeText(params.linkURL) }] : []),
-      { type: "separator" },
       { label: "Inspect Element", click: () => contents.inspectElement(params.x, params.y) },
-    ]);
-    menu.popup();
+    );
+    Menu.buildFromTemplate(t).popup();
   });
 });
 

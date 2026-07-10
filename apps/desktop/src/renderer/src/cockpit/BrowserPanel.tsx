@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useStore } from "../store";
 import { wireOpenTab } from "./openTabIntercept";
-import BrowserContextMenu, { type CtxMenuState, type WebviewContextParams } from "./BrowserContextMenu";
 import { fillJs, SAVE_DETECT_JS, decodeCred } from "./credAutofill";
 
 interface Props {
@@ -108,6 +107,25 @@ function portUrl(port: number): string {
   return `http://localhost:${port}`;
 }
 
+/**
+ * Turn whatever the user typed in the address bar into a URL, like a real browser:
+ * an existing scheme is kept; a bare host/domain gets a scheme prepended (http for
+ * localhost/IPs, https otherwise); anything else becomes a Google search.
+ */
+export function normalizeAddress(raw: string): string {
+  const s = raw.trim();
+  if (!s) return "";
+  // Already a full URL / special scheme — leave it alone.
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(s) || /^(about|data|blob|chrome|view-source|file):/i.test(s)) return s;
+  const isLocal = /^localhost(:\d+)?(\/.*)?$/i.test(s) || /^\d{1,3}(\.\d{1,3}){3}(:\d+)?(\/.*)?$/.test(s);
+  // A host looks like: localhost[:port], an IPv4[:port], or something with a dot in
+  // its first segment (a domain) — and never contains a space.
+  const looksLikeHost = !/\s/.test(s) && (isLocal || /^[^\s/]+\.[^\s/.]{2,}(:\d+)?(\/.*)?$/.test(s));
+  if (looksLikeHost) return (isLocal ? "http://" : "https://") + s;
+  // Otherwise: search it.
+  return "https://www.google.com/search?q=" + encodeURIComponent(s);
+}
+
 export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, chromeHidden, initialUrl, zoom = 1, device = "laptop", onViewport, onTitle, onUrl }: Props) {
   // Saved override URL (a typed address); when empty the preview is port-driven.
   const [browserUrl, setBrowserUrl] = useState("");
@@ -130,8 +148,6 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, chrom
   const [matches, setMatches] = useState<{ active: number; total: number }>({ active: 0, total: 0 });
   const findInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Custom right-click menu for the guest (Electron shows none by default).
-  const [ctxMenu, setCtxMenu] = useState<CtxMenuState>(null);
   // "Save password?" banner, shown when a login form submits with new credentials.
   const [savePrompt, setSavePrompt] = useState<{ origin: string; username: string; password: string } | null>(null);
 
@@ -362,21 +378,9 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, chrom
     return () => wv.removeEventListener("dom-ready", apply as EventListener);
   }, [loadUrl]);
 
-  // Right-click menu: Electron webviews show no native menu, so we surface our own
-  // from the guest's `context-menu` event. `params` is in the guest's coordinate
-  // space; offset by the webview's on-screen rect to position the host menu.
-  useEffect(() => {
-    const wv = webviewRef.current;
-    if (!wv) return;
-    const onMenu = (e: Event) => {
-      const params = (e as unknown as { params?: WebviewContextParams }).params;
-      if (!params) return;
-      const rect = wv.getBoundingClientRect();
-      setCtxMenu({ x: rect.left + (params.x ?? 0), y: rect.top + (params.y ?? 0), params });
-    };
-    wv.addEventListener("context-menu", onMenu as EventListener);
-    return () => wv.removeEventListener("context-menu", onMenu as EventListener);
-  }, [loadUrl]);
+  // The right-click menu is built in the main process on the guest's webContents
+  // (see index.ts `context-menu`) — a <webview> does NOT forward that event to the
+  // renderer DOM, so it must live in main.
 
   // Report the webview's effective viewport (what the page sees = rendered px ÷ zoom)
   // so the tab row can show "1280×720" instead of a bare zoom %. Recomputed on resize
@@ -423,9 +427,10 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, chrom
     }
   }
 
-  // Go: treat the address-bar text as a saved override URL and load it.
+  // Go: normalize the address-bar text into a URL (bare domain → https, non-URL →
+  // Google search), save it as the override, and load it.
   async function handleGo() {
-    const url = address.trim();
+    const url = normalizeAddress(address);
     if (!url) return;
     setSaving(true);
     setStatus(null);
@@ -463,16 +468,6 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, chrom
     >
       {/* The SSH-connection bar lives in the Ports tab (where port/ssh config
           belongs) — it's just wasted space in the browser, so it's not shown here. */}
-
-      {ctxMenu && (
-        <BrowserContextMenu
-          state={ctxMenu}
-          target={webviewRef.current}
-          onOpenInNewTab={openInNewTab}
-          onOpenExternal={(url) => window.cowork.openExternal(url).catch(() => {})}
-          onClose={() => setCtxMenu(null)}
-        />
-      )}
 
       {savePrompt && (
         <div

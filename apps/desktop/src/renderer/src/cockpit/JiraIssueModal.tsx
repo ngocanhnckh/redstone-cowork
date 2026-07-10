@@ -35,9 +35,12 @@ export default function JiraIssueModal({ sessionId, issueKey, onClose }: { sessi
   useEffect(() => {
     let alive = true;
     setState("loading");
+    // Guard the transitions call against a stale preload (old running app without
+    // the IPC) so the modal still loads the detail instead of erroring.
+    const transFn = window.cowork.jiraIssueTransitions;
     Promise.all([
       window.cowork.jiraIssueDetail(sessionId, issueKey),
-      window.cowork.jiraIssueTransitions(sessionId, issueKey).catch(() => [] as Transition[]),
+      typeof transFn === "function" ? transFn(sessionId, issueKey).catch(() => [] as Transition[]) : Promise.resolve([] as Transition[]),
     ])
       .then(([d, t]) => { if (alive) { setDetail(d as Detail); setTransitions(t as Transition[]); setState("ok"); } })
       .catch(() => { if (alive) setState("err"); });
