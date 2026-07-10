@@ -126,6 +126,21 @@ export async function processEvent(
       case "Notification": {
         const message = String((event as { message?: unknown }).message ?? "");
         if (!message) return null;
+        // A permission-request notification is ACTIONABLE — Claude is blocked on a
+        // permission prompt in the TUI. There's no separate PermissionRequest hook
+        // event firing here, so surface it as an Allow/Deny card the user can answer
+        // remotely (the keymap turns Allow→"1", Deny→Escape). Other notifications
+        // (e.g. "waiting for your input") stay passive.
+        if (/permission/i.test(message)) {
+          await deps.api.createDecision({
+            sessionId: event.session_id,
+            kind: "permission",
+            title: message.slice(0, 200),
+            body: { message, lastMessage: deps.lastAssistantText(event), deliverable: !!deps.wrapperId },
+            options: [{ label: "Allow" }, { label: "Deny" }],
+          });
+          return null;
+        }
         await deps.api.createDecision({
           sessionId: event.session_id,
           kind: "notification",

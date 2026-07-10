@@ -147,6 +147,14 @@ describe("processEvent", () => {
     expect(out).toBeNull();
   });
 
+  it("Notification about permission → actionable Allow/Deny permission card", async () => {
+    const deps = baseDeps();
+    await processEvent(ev("Notification", { message: "Claude needs your permission to use Bash" }), deps);
+    expect(deps.api.createDecision).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: "permission", options: [{ label: "Allow" }, { label: "Deny" }] })
+    );
+  });
+
   it("PostToolUse → resolveLocal called, returns null", async () => {
     const deps = baseDeps();
     const out = await processEvent(ev("PostToolUse", { tool_name: "Bash" }), deps);

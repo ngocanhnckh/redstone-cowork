@@ -16,9 +16,13 @@ describe("deliveryToKeys", () => {
     expect(deliveryToKeys({ ...base, kind: "interrupt", options: [], resolution: { choice: null, answers: null, custom: "do X instead" } } as never))
       .toEqual([["Escape"], ["-l", "do X instead"], ["Enter"]]);
   });
-  it("permission Allow -> digit of the option position", () => {
+  it("permission Allow -> '1' + Enter (the TUI's Yes option)", () => {
     expect(deliveryToKeys({ ...base, kind: "permission", options: [{ label: "Allow" }, { label: "Deny" }], resolution: { choice: "Allow", answers: null, custom: null } } as never))
       .toEqual([["1"], ["Enter"]]);
+  });
+  it("permission Deny -> Escape (cancels the tool, no guessing the No digit)", () => {
+    expect(deliveryToKeys({ ...base, kind: "permission", options: [{ label: "Allow" }, { label: "Deny" }], resolution: { choice: "Deny", answers: null, custom: null } } as never))
+      .toEqual([["Escape"]]);
   });
   it("question option pick -> its digit", () => {
     expect(deliveryToKeys({ ...base, kind: "question", options: [{ label: "A" }, { label: "B" }], resolution: { choice: "B", answers: null, custom: null } } as never))

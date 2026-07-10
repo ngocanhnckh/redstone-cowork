@@ -127,6 +127,15 @@ export function deliveryToKeys(d: Delivery): string[][] | null {
     return keys;
   }
 
+  // Permission prompt (Allow/Deny): map to the TUI's numbered choices. Allow = "1"
+  // (the "Yes" option); Deny = Escape — safer than guessing a "No" digit, whose
+  // position varies (2 vs 3 options) and could hit "Yes, and don't ask again".
+  if (d.kind === "permission" && r.choice) {
+    const c = r.choice.toLowerCase();
+    if (/allow|yes|approve|grant|accept/.test(c)) return [["1"], ["Enter"]];
+    if (/den|no|reject|decline|cancel/.test(c)) return [["Escape"]];
+  }
+
   // permission or question: highlight the option by its 1-based digit, then
   // Enter to confirm. Claude's question dialog selects on the digit but needs
   // Enter to submit; for prompts that auto-act on the digit the trailing Enter
