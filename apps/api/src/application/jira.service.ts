@@ -118,7 +118,11 @@ export class JiraService {
     const me = await client.myself();
     const assignee = me.name ? { name: me.name } : me.accountId ? { accountId: me.accountId } : undefined;
     const { key, url } = await client.createIssue(binding.projectKey, summary, { description, assignee });
+    // Put it in the current sprint. Use the configured board if set, otherwise
+    // auto-discover the project's board — so a new task always lands in the active
+    // sprint when the project has one (no boardId configuration required).
     if (binding.boardId != null) await client.addToActiveSprint(binding.boardId, key);
+    else await client.addToProjectActiveSprint(binding.projectKey, key);
     return {
       key,
       summary,

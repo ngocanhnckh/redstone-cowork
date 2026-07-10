@@ -238,6 +238,38 @@ describe("JiraClient (unit)", () => {
     expect(captured.method).toBe("POST");
     expect(captured.body).toEqual({ transition: { id: "42" } });
   });
+
+  it("addToProjectActiveSprint() auto-discovers the scrum board and adds the issue to its active sprint", async () => {
+    const calls: Array<{ url: string; method?: string; body?: unknown }> = [];
+    const fetchImpl = (async (input: unknown, init?: { method?: string; body?: string }) => {
+      const url = String(input);
+      calls.push({ url, method: init?.method, body: init?.body ? JSON.parse(init.body) : undefined });
+      if (url.includes("/board?projectKeyOrId=RED")) return { ok: true, json: async () => ({ values: [{ id: 7, type: "kanban" }, { id: 9, type: "scrum" }] }) } as Response;
+      if (url.includes("/board/9/sprint")) return { ok: true, json: async () => ({ values: [{ id: 42 }] }) } as Response;
+      if (url.includes("/board/7/sprint")) return { ok: true, json: async () => ({ values: [] }) } as Response;
+      return { ok: true, json: async () => ({}) } as Response; // the POST to /sprint/42/issue
+    }) as unknown as typeof fetch;
+    const client = new JiraClient("https://jira.example.com", "pat", fetchImpl);
+    await client.addToProjectActiveSprint("RED", "RED-1");
+    // Scrum board (9) is tried first; its active sprint (42) gets the issue.
+    const post = calls.find((c) => c.method === "POST");
+    expect(post?.url).toContain("/rest/agile/1.0/sprint/42/issue");
+    expect(post?.body).toEqual({ issues: ["RED-1"] });
+  });
+
+  it("addToProjectActiveSprint() is a no-op when the project has no active sprint", async () => {
+    let posted = false;
+    const fetchImpl = (async (input: unknown, init?: { method?: string }) => {
+      const url = String(input);
+      if (init?.method === "POST") posted = true;
+      if (url.includes("/board?projectKeyOrId=RED")) return { ok: true, json: async () => ({ values: [{ id: 9, type: "scrum" }] }) } as Response;
+      if (url.includes("/board/9/sprint")) return { ok: true, json: async () => ({ values: [] }) } as Response;
+      return { ok: true, json: async () => ({}) } as Response;
+    }) as unknown as typeof fetch;
+    const client = new JiraClient("https://jira.example.com", "pat", fetchImpl);
+    await client.addToProjectActiveSprint("RED", "RED-1");
+    expect(posted).toBe(false);
+  });
 });
 
 describe("JiraService (unit, fake deps)", () => {

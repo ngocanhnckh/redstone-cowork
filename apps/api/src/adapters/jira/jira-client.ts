@@ -105,21 +105,55 @@ export class JiraClient {
   /** Best-effort: move a freshly-created issue into the board's active sprint. Swallows errors. */
   async addToActiveSprint(boardId: number, issueKey: string): Promise<void> {
     try {
-      const res = await this.fetchImpl(`${this.base}/rest/agile/1.0/board/${boardId}/sprint?state=active`, {
-        headers: this.headers(),
-      });
-      if (!res.ok) return;
-      const data = (await res.json()) as { values?: Array<{ id?: number }> };
-      const sprintId = data.values?.[0]?.id;
-      if (sprintId == null) return;
-      await this.fetchImpl(`${this.base}/rest/agile/1.0/sprint/${sprintId}/issue`, {
-        method: "POST",
-        headers: this.jsonHeaders(),
-        body: JSON.stringify({ issues: [issueKey] }),
-      });
+      const sprintId = await this.activeSprintOfBoard(boardId);
+      if (sprintId != null) await this.moveIssueToSprint(sprintId, issueKey);
     } catch {
       // best-effort — a failure here must not fail issue creation
     }
+  }
+
+  /**
+   * Best-effort: put a freshly-created issue into the project's CURRENT sprint,
+   * auto-discovering the board (so no boardId needs to be configured). Finds the
+   * project's boards, prefers scrum boards (they own sprints), and adds the issue to
+   * the first board that has an active sprint. No-op if the project has no active
+   * sprint (kanban / sprint not started) — the issue simply stays in the backlog.
+   */
+  async addToProjectActiveSprint(projectKey: string, issueKey: string): Promise<void> {
+    try {
+      const res = await this.fetchImpl(
+        `${this.base}/rest/agile/1.0/board?projectKeyOrId=${encodeURIComponent(projectKey)}`,
+        { headers: this.headers() },
+      );
+      if (!res.ok) return;
+      const boards = ((await res.json()) as { values?: Array<{ id: number; type?: string }> }).values ?? [];
+      // Scrum boards first — they're the ones with sprints.
+      boards.sort((a, b) => (b.type === "scrum" ? 1 : 0) - (a.type === "scrum" ? 1 : 0));
+      for (const b of boards) {
+        const sprintId = await this.activeSprintOfBoard(b.id);
+        if (sprintId != null) { await this.moveIssueToSprint(sprintId, issueKey); return; }
+      }
+    } catch {
+      // best-effort
+    }
+  }
+
+  /** The active sprint id for a board, or null (no active sprint / not a scrum board). */
+  private async activeSprintOfBoard(boardId: number): Promise<number | null> {
+    const res = await this.fetchImpl(`${this.base}/rest/agile/1.0/board/${boardId}/sprint?state=active`, {
+      headers: this.headers(),
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { values?: Array<{ id?: number }> };
+    return data.values?.[0]?.id ?? null;
+  }
+
+  private async moveIssueToSprint(sprintId: number, issueKey: string): Promise<void> {
+    await this.fetchImpl(`${this.base}/rest/agile/1.0/sprint/${sprintId}/issue`, {
+      method: "POST",
+      headers: this.jsonHeaders(),
+      body: JSON.stringify({ issues: [issueKey] }),
+    });
   }
 
   /**
