@@ -4,6 +4,7 @@ import { Todo, UserTodo } from "../types";
 import Markdown from "./Markdown";
 import TodoProgress from "./TodoProgress";
 import JiraIssueModal from "./JiraIssueModal";
+import JiraStatusSelect from "./JiraStatusSelect";
 
 type JiraIssue = { key: string; summary: string; status: string; statusCategory: "todo" | "inprogress" | "done"; assignee: string | null; url: string };
 const CAT_DOT: Record<string, string> = { todo: "var(--border-strong)", inprogress: "rgb(var(--primary-soft))", done: "#6bbf82" };
@@ -359,6 +360,15 @@ export default function ContextColumn({ sessionId, hideSummary }: { sessionId?: 
                       <span style={{ width: 8, height: 8, borderRadius: 999, background: CAT_DOT[iss.statusCategory] ?? "var(--border-strong)", flexShrink: 0 }} />
                       <span className="mono faint" style={{ fontSize: 10, flexShrink: 0 }}>{iss.key}</span>
                       <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textDecoration: iss.statusCategory === "done" ? "line-through" : undefined }}>{iss.summary}</span>
+                      {id && (
+                        <JiraStatusSelect
+                          sessionId={id}
+                          issueKey={iss.key}
+                          status={iss.status}
+                          tint={CAT_DOT[iss.statusCategory]}
+                          onChanged={() => window.dispatchEvent(new CustomEvent("rcw-jira-binding", { detail: { sessionId: id } }))}
+                        />
+                      )}
                     </div>
                   ))
                 ) : (

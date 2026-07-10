@@ -65,7 +65,14 @@ export default function JiraIssueModal({ sessionId, issueKey, onClose }: { sessi
 
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 5000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24, background: "rgba(0,0,0,0.5)", backdropFilter: "blur(6px)" }}>
-      <div onClick={(e) => e.stopPropagation()} className="glass-surface" style={{ width: 640, maxWidth: "94vw", maxHeight: "86vh", display: "flex", flexDirection: "column", borderRadius: 16, border: "1px solid var(--border-strong)", boxShadow: "0 24px 70px rgba(0,0,0,0.6)", overflow: "hidden" }}>
+      <div onClick={(e) => e.stopPropagation()} className="glass-surface" style={{
+        width: 640, maxWidth: "94vw", maxHeight: "86vh", display: "flex", flexDirection: "column",
+        borderRadius: 16, border: "1px solid var(--border-strong)", boxShadow: "0 24px 70px rgba(0,0,0,0.6)", overflow: "hidden",
+        // Strong opaque background so the modal is readable in the transparent HUD
+        // theme (where .glass-surface frosts to near-nothing → a blank-looking screen).
+        background: "color-mix(in srgb, var(--app-panel, #1b1712) 94%, transparent)",
+        backdropFilter: "blur(26px) saturate(1.4)", WebkitBackdropFilter: "blur(26px) saturate(1.4)",
+      }}>
         {/* header */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "13px 16px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
           <span style={{ width: 8, height: 8, borderRadius: 999, background: CAT_COLOR[detail?.statusCategory ?? "todo"] ?? "var(--text-faint)", flexShrink: 0 }} />
