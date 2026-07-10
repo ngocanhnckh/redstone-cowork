@@ -17,6 +17,7 @@ import AppsModal, { AppIcon } from "./AppsModal";
 import ContextColumn from "./ContextColumn";
 import AnswerDock from "./AnswerDock";
 import Markdown from "./Markdown";
+import ErrorBoundary from "./ErrorBoundary";
 import ContextGauge from "./ContextGauge";
 import ModeSelect from "./ModeSelect";
 import TokenSpendWidget from "./TokenSpendWidget";
@@ -562,7 +563,7 @@ function ChatPane({ sessionId }: { sessionId?: string } = {}) {
           ) : (
             <div key={i} style={{ borderLeft: "2px solid rgb(var(--primary-soft) / 0.4)", paddingLeft: 12 }}>
               <div className="mono faint" style={{ fontSize: 9, letterSpacing: "0.18em", textTransform: "uppercase", marginBottom: 5, opacity: 0.6 }}>◇ claude</div>
-              <div style={{ fontFamily: "var(--font-body)" }}><Markdown>{m.text}</Markdown></div>
+              <div style={{ fontFamily: "var(--font-body)" }}><ErrorBoundary><Markdown>{m.text}</Markdown></ErrorBoundary></div>
             </div>
           )
         )}

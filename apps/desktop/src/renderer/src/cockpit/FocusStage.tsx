@@ -1,6 +1,7 @@
 import { useRef, useEffect, useState } from "react";
 import { useStore } from "../store";
 import AnswerDock from "./AnswerDock";
+import ErrorBoundary from "./ErrorBoundary";
 import ContextGauge from "./ContextGauge";
 import TagBar from "./TagBar";
 import Markdown from "./Markdown";
@@ -345,7 +346,7 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
                 >
                   claude
                 </span>
-                <Markdown>{msg.text}</Markdown>
+                <ErrorBoundary><Markdown>{msg.text}</Markdown></ErrorBoundary>
               </div>
             ) : (
               <div
@@ -383,7 +384,7 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
             className="glass-inset"
             style={{ padding: "13px 16px", borderRadius: 13, color: "var(--text)" }}
           >
-            <Markdown>{session.latestAnswer}</Markdown>
+            <ErrorBoundary><Markdown>{session.latestAnswer}</Markdown></ErrorBoundary>
           </div>
         ) : (
           <span className="faint" style={{ fontSize: 14, fontStyle: "italic" }}>
