@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "../store";
 import { wireOpenTab } from "./openTabIntercept";
 import { fillJs, SAVE_DETECT_JS, decodeCred } from "./credAutofill";
+import { recordVisit, updateTitle, suggestions, type HistEntry } from "./browserHistory";
 
 interface Props {
   sessionId: string;
@@ -138,6 +139,12 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, chrom
   const [address, setAddress] = useState(initialUrl?.trim() ? initialUrl : "");
   const [status, setStatus] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [saving, setSaving] = useState(false);
+  // Address-bar typeahead: frequent/matching links from history. `sugIndex` is the
+  // keyboard-highlighted row (-1 = none). `lastRecorded` dedupes visit recording.
+  const [addrFocused, setAddrFocused] = useState(false);
+  const [sugs, setSugs] = useState<HistEntry[]>([]);
+  const [sugIndex, setSugIndex] = useState(-1);
+  const lastRecorded = useRef<string>("");
   const [loading, setLoading] = useState(false); // page in flight — drives the sci-fi loader
   const webviewRef = useRef<WebviewEl | null>(null);
 
@@ -207,6 +214,10 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, chrom
           setAddress(initialUrl);
           return;
         }
+        // A fresh extra tab (ephemeral, no explicit URL) opens BLANK — a new-tab
+        // page — instead of inheriting the session's preview link. Only tab 0 (the
+        // primary preview) auto-loads the saved workspace config below.
+        if (ephemeral) return;
         // Resolve the URL to load: explicit override wins, else the preview port.
         if (url.length > 0) {
           setLoadUrl(url);
@@ -224,7 +235,7 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, chrom
     return () => {
       cancelled = true;
     };
-  }, [sessionId, cwd, machine]);
+  }, [sessionId, cwd, machine, ephemeral, initialUrl]);
 
   // Track page load state to drive the sci-fi loading overlay. `did-start-loading`
   // fires the moment a navigation begins (before the site paints anything), and
@@ -284,7 +295,12 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, chrom
     if (!wv) return;
     const onNav = (e: Event) => {
       const url = (e as unknown as { url?: string }).url;
-      if (url) { setAddress(url); onUrlRef.current?.(url); }
+      if (url) {
+        setAddress(url);
+        onUrlRef.current?.(url);
+        // Remember visited sites for the address-bar typeahead (deduped per URL).
+        if (url !== lastRecorded.current) { lastRecorded.current = url; recordVisit(url); }
+      }
     };
     const onTitleEv = (e: Event) => {
       const t = (e as unknown as { title?: string }).title;
@@ -299,7 +315,10 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, chrom
         return;
       }
       // Ignore the open-in-new-tab title marker (see openTabIntercept.ts).
-      if (!t.startsWith("__RCW_OPEN_TAB__::")) onTitleRef.current?.(t);
+      if (!t.startsWith("__RCW_OPEN_TAB__::")) {
+        onTitleRef.current?.(t);
+        try { updateTitle(wv.getURL(), t); } catch { /* no url yet */ }
+      }
     };
     wv.addEventListener("did-navigate", onNav as EventListener);
     wv.addEventListener("did-navigate-in-page", onNav as EventListener);
@@ -435,10 +454,33 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, chrom
     setSaving(true);
     setStatus(null);
     setBrowserUrl(url);
+    setAddrFocused(false);
+    setSugs([]);
     await saveConfig({ browserUrl: url, previewPort });
     setSaving(false);
     navigate(url);
   }
+
+  // Load an exact URL chosen from the typeahead / new-tab frequent list.
+  async function openSuggestion(url: string) {
+    setAddress(url);
+    setAddrFocused(false);
+    setSugs([]);
+    setSugIndex(-1);
+    setBrowserUrl(url);
+    await saveConfig({ browserUrl: url, previewPort });
+    navigate(url);
+  }
+
+  // Recompute address-bar suggestions while the bar is focused. When the text is
+  // still the loaded URL (untouched), show the top frequent sites; once the user
+  // edits it, filter history by what they've typed.
+  useEffect(() => {
+    if (!addrFocused) return;
+    const q = address.trim() === loadUrl.trim() ? "" : address;
+    setSugs(suggestions(q, 6));
+    setSugIndex(-1);
+  }, [address, addrFocused, loadUrl]);
 
   // Pick a forwarded port as the default preview: clear the override and load it.
   async function selectPreview(port: number) {
@@ -451,6 +493,8 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, chrom
   }
 
   const hasUrl = loadUrl.trim().length > 0;
+  // Top frequent sites for the blank new-tab page (recomputed when the tab empties).
+  const frequent = useMemo(() => (hasUrl ? [] : suggestions("", 8)), [hasUrl]);
 
   const gotoMatch = (forward: boolean) => { if (find) runFind(find, forward, true); };
 
@@ -520,16 +564,54 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, chrom
         <button style={navBtn} title="Forward" onClick={() => webviewRef.current?.goForward()}>▶</button>
         <button style={navBtn} title="Reload" onClick={() => webviewRef.current?.reload()}>⟳</button>
         <button style={navBtn} title="Hard reload (bypass cache)" onClick={() => webviewRef.current?.reloadIgnoringCache()}>⤿</button>
-        <input
-          className="reply-input"
-          value={address}
-          onChange={(e) => setAddress(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") handleGo();
-          }}
-          placeholder="http://localhost:5173"
-          style={{ ...inputStyle, padding: "7px 11px" }}
-        />
+        <div style={{ position: "relative", flex: 1, minWidth: 0 }}>
+          <input
+            className="reply-input"
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+            onFocus={() => setAddrFocused(true)}
+            // Delay clearing so a click on a suggestion (which blurs the input)
+            // still registers before the dropdown unmounts.
+            onBlur={() => setTimeout(() => setAddrFocused(false), 120)}
+            onKeyDown={(e) => {
+              if (e.key === "ArrowDown" && sugs.length) { e.preventDefault(); setSugIndex((i) => Math.min(i + 1, sugs.length - 1)); }
+              else if (e.key === "ArrowUp" && sugs.length) { e.preventDefault(); setSugIndex((i) => Math.max(i - 1, -1)); }
+              else if (e.key === "Enter") {
+                if (sugIndex >= 0 && sugs[sugIndex]) { e.preventDefault(); openSuggestion(sugs[sugIndex].url); }
+                else handleGo();
+              }
+              else if (e.key === "Escape") { setSugs([]); setAddrFocused(false); }
+            }}
+            placeholder="Search Google or type a URL"
+            style={{ ...inputStyle, width: "100%", padding: "7px 11px" }}
+          />
+          {addrFocused && sugs.length > 0 && (
+            <div
+              className="glass-menu"
+              style={{
+                position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 20,
+                borderRadius: 10, border: "1px solid var(--border-strong)", overflow: "hidden",
+                boxShadow: "0 14px 40px rgba(0,0,0,0.55)",
+              }}
+            >
+              {sugs.map((s, i) => (
+                <div
+                  key={s.url}
+                  // preventDefault on mousedown so the input doesn't blur first.
+                  onMouseDown={(e) => { e.preventDefault(); openSuggestion(s.url); }}
+                  onMouseEnter={() => setSugIndex(i)}
+                  style={{
+                    display: "flex", flexDirection: "column", gap: 1, padding: "6px 11px", cursor: "pointer",
+                    background: i === sugIndex ? "rgb(var(--primary) / 0.22)" : "transparent",
+                  }}
+                >
+                  {s.title && <span style={{ fontSize: 12, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.title}</span>}
+                  <span className="mono" style={{ fontSize: 11, color: "var(--text-soft)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.url}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
         <button
           className="glass-btn--clay"
           onClick={handleGo}
@@ -596,12 +678,15 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, chrom
         {/* In-page find bar (Cmd/Ctrl+F) — floats over the top-right of the preview */}
         {findOpen && (
           <div
-            className="glass-surface"
             style={{
               position: "absolute", top: 10, right: 12, zIndex: 5,
               display: "flex", alignItems: "center", gap: 6,
-              padding: "6px 8px", borderRadius: 12, border: "1px solid var(--border)",
-              boxShadow: "0 8px 28px rgba(0,0,0,0.4)",
+              padding: "6px 8px", borderRadius: 12, border: "1px solid var(--border-strong)",
+              // OPAQUE background: the find bar floats over the native <webview>, which
+              // a glass backdrop-filter can't sample — over a white page a translucent
+              // bar + light text vanished. A solid panel keeps it legible on any page.
+              background: "color-mix(in srgb, var(--app-panel) 96%, transparent)",
+              boxShadow: "0 8px 28px rgba(0,0,0,0.5)",
             }}
           >
             <input
@@ -615,9 +700,9 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, chrom
               placeholder="Find in page…"
               className="mono"
               style={{
-                width: 190, minWidth: 0, background: "rgba(255,255,255,0.04)",
-                border: "1px solid var(--border)", borderRadius: 8, padding: "5px 9px",
-                fontSize: 12, color: "var(--text)", outline: "none",
+                width: 190, minWidth: 0, background: "rgba(0,0,0,0.28)",
+                border: "1px solid var(--border-strong)", borderRadius: 8, padding: "5px 9px",
+                fontSize: 12, color: "var(--text)", WebkitTextFillColor: "var(--text)", outline: "none",
               }}
             />
             <span className="mono faint" style={{ fontSize: 10.5, minWidth: 44, textAlign: "right" }}>
@@ -648,16 +733,44 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, chrom
         {!hasUrl && (
           <div
             style={{
-              position: "absolute",
-              inset: 0,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
+              position: "absolute", inset: 0, display: "flex", flexDirection: "column",
+              alignItems: "center", justifyContent: "center", gap: 18, padding: 24, overflow: "auto",
             }}
           >
-            <span className="faint" style={{ fontSize: 13, fontStyle: "italic" }}>
-              Forward a port (Ports tab) or type a URL above to preview it here.
-            </span>
+            {frequent.length > 0 ? (
+              <>
+                <span className="faint mono" style={{ fontSize: 11, letterSpacing: 0.4, textTransform: "uppercase" }}>Frequently visited</span>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 10, justifyContent: "center", maxWidth: 620 }}>
+                  {frequent.map((s) => {
+                    let host = s.url;
+                    try { host = new URL(s.url).hostname.replace(/^www\./, ""); } catch { /* keep raw */ }
+                    return (
+                      <button
+                        key={s.url}
+                        onClick={() => openSuggestion(s.url)}
+                        title={s.title ? `${s.title}\n${s.url}` : s.url}
+                        className="glass-inset"
+                        style={{
+                          display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
+                          width: 108, padding: "14px 8px", borderRadius: 12, cursor: "pointer",
+                          border: "1px solid var(--border)", background: "rgba(255,255,255,0.03)",
+                        }}
+                      >
+                        <span style={{
+                          width: 34, height: 34, borderRadius: 9, display: "flex", alignItems: "center", justifyContent: "center",
+                          background: "rgb(var(--primary) / 0.25)", color: "var(--text)", fontSize: 15, fontWeight: 700, textTransform: "uppercase",
+                        }}>{host.charAt(0) || "?"}</span>
+                        <span style={{ fontSize: 11, color: "var(--text-soft)", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{host}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            ) : (
+              <span className="faint" style={{ fontSize: 13, fontStyle: "italic", textAlign: "center" }}>
+                Type a URL or search above{ephemeral ? "" : ", or forward a port (Ports tab)"} to get started.
+              </span>
+            )}
           </div>
         )}
       </div>

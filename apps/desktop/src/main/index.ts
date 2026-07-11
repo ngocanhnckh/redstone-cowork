@@ -211,6 +211,19 @@ function createWindow(): void {
     return { action: "deny" };
   });
 
+  // Right-click on a link in the chat/markdown → let the user choose where it
+  // opens. Left-click routes to the in-app workspace browser (renderer handles
+  // it); this menu is the "unless I right-click" escape hatch to the OS browser.
+  win.webContents.on("context-menu", (_e, params) => {
+    if (!params.linkURL) return;
+    Menu.buildFromTemplate([
+      { label: "Open in Workspace Browser", click: () => openInWorkspaceBrowser(params.linkURL) },
+      { label: "Open in Real Browser", click: () => shell.openExternal(params.linkURL).catch(() => {}) },
+      { type: "separator" },
+      { label: "Copy Link Address", click: () => clipboard.writeText(params.linkURL) },
+    ]).popup();
+  });
+
   if (process.env.ELECTRON_RENDERER_URL) {
     win.loadURL(process.env.ELECTRON_RENDERER_URL);
   } else {

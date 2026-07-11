@@ -1,5 +1,6 @@
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { useStore } from "../store";
 
 // Color each line of a ```diff fenced block: additions green, removals red,
 // everything else default. Keeps the monospace layout react-markdown gives us.
@@ -24,7 +25,34 @@ function DiffCode({ text }: { text: string }) {
   );
 }
 
+// A plain left-click on a chat/preview link opens it in the focused session's
+// IN-APP workspace browser (a new tab) rather than kicking out to the OS browser.
+// Modifier-clicks (⌘/Ctrl/Shift), middle-click, and right-click fall through to
+// default handling — the main-process context menu still offers "Open in Real
+// Browser". Non-http(s) links (mailto:, etc.) also fall through to the OS.
+function onLinkClick(e: React.MouseEvent<HTMLAnchorElement>, href?: string) {
+  if (!href) return;
+  if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  if (!/^https?:\/\//i.test(href)) return; // let the OS handle mailto:/tel:/etc.
+  e.preventDefault();
+  const st = useStore.getState();
+  const sid = st.focusId;
+  if (sid) {
+    st.openUrlInBrowser(sid, href);
+    if (st.mode !== "hud") st.setActiveTab(sid, "browser");
+  } else {
+    window.cowork.openExternal(href).catch(() => {});
+  }
+}
+
 const components: Components = {
+  a({ href, children, ...props }) {
+    return (
+      <a href={href} {...props} onClick={(e) => onLinkClick(e, href)}>
+        {children}
+      </a>
+    );
+  },
   code({ className, children, ...props }) {
     if (className?.includes("language-diff")) {
       return (
