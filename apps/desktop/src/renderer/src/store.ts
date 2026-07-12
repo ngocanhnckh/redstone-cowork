@@ -144,6 +144,10 @@ type State = {
   settingsOpen: boolean; // connection settings modal
   loading: boolean;
   error: string | null;
+  /** True once the FIRST session fetch has succeeded. Distinguishes "connected but
+   * genuinely nothing waiting" (show All-clear) from "never connected / failed"
+   * (show the boot screen + the real error, not a misleading All-clear). */
+  hasLoaded: boolean;
   refresh: () => Promise<void>;
   setActiveTab: (sessionId: string, tab: "chat" | "terminal" | "browser" | "ports" | "files") => void;
   openBrowser: (sessionId: string) => void;
@@ -203,6 +207,7 @@ export const useStore = create<State>((set, get) => ({
   settingsOpen: false,
   loading: false,
   error: null,
+  hasLoaded: false,
 
   setActiveTab: (sessionId, tab) => {
     set((state) => ({
@@ -274,9 +279,12 @@ export const useStore = create<State>((set, get) => ({
         pending: prunePending(consumeFinishedPending(state.pending, lastWorking, nowWorking), s, q, Date.now()),
         workingStale,
         error: null,
+        hasLoaded: true,
       }));
       lastWorking = nowWorking;
     } catch (e) {
+      // Keep any previously-loaded sessions on a transient blip, but record the
+      // error so the UI can surface WHY (and the boot screen, if we never loaded).
       set({ error: e instanceof Error ? e.message : String(e) });
     }
   },

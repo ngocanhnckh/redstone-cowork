@@ -8,6 +8,7 @@ import ContextColumn from "./ContextColumn";
 import AgentGrid from "./AgentGrid";
 import AllSessions from "./AllSessions";
 import Hud from "./Hud";
+import BootScreen from "./BootScreen";
 import AssistPanel from "./AssistPanel";
 import SettingsPanel from "./SettingsPanel";
 import CapsModal from "./CapsModal";
@@ -18,6 +19,7 @@ const noDrag = { WebkitAppRegion: "no-drag" } as CSSProperties;
 export default function Cockpit() {
   const queue = useStore((s) => s.queue);
   const sessions = useStore((s) => s.sessions);
+  const hasLoaded = useStore((s) => s.hasLoaded);
   const mode = useStore((s) => s.mode);
   const setMode = useStore((s) => s.setMode);
   const detailId = useStore((s) => s.detailId);
@@ -308,8 +310,11 @@ export default function Cockpit() {
           </div>
         </div>
 
-        {/* Main content */}
-        {mode === "hud" ? (
+        {/* Main content — until the first successful fetch, show the boot/connection
+            screen (which surfaces a real error instead of a misleading "All clear"). */}
+        {!hasLoaded ? (
+          <BootScreen />
+        ) : mode === "hud" ? (
           <Hud />
         ) : mode === "history" ? (
           <AllSessions />
