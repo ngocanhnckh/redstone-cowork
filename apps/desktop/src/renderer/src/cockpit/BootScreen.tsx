@@ -14,18 +14,21 @@ const STEPS = [
   "fetching active sessions",
 ];
 
-// req() surfaces bare HTTP statuses ("500") and fetch failures ("Failed to fetch").
-// Make them human without losing the detail.
+// req() throws bare HTTP statuses ("401") / fetch failures ("Failed to fetch"), but
+// the renderer sees them WRAPPED by Electron IPC as
+//   "Error invoking remote method 'api:queue': Error: 401"
+// so we scan for the status code ANYWHERE in the string, not an exact match.
+function statusOf(e: string): number | null {
+  const m = (e || "").match(/\b(4\d\d|5\d\d)\b/);
+  return m ? Number(m[1]) : null;
+}
 function humanizeError(e: string): string {
-  const s = (e || "").trim();
-  if (/^\d{3}$/.test(s)) {
-    const code = Number(s);
-    if (code === 401 || code === 403) return `Server rejected the instance token (HTTP ${code}). Re-check your login / token.`;
-    if (code === 502 || code === 503 || code === 504) return `Cowork server is unreachable or restarting (HTTP ${code}).`;
-    return `Cowork server responded HTTP ${code}.`;
-  }
-  if (/failed to fetch|networkerror|econnrefused|fetch failed/i.test(s)) return "Can't reach the cowork server — network down, server offline, or the web proxy hasn't reconnected.";
-  return s || "Unknown connection error.";
+  const code = statusOf(e);
+  if (code === 401 || code === 403) return `The cowork server rejected your token (HTTP ${code}) — it's expired or no longer valid. Sign in again to reconnect.`;
+  if (code === 502 || code === 503 || code === 504) return `Cowork server is unreachable or restarting (HTTP ${code}).`;
+  if (code) return `Cowork server responded HTTP ${code}.`;
+  if (/failed to fetch|networkerror|econnrefused|fetch failed/i.test(e || "")) return "Can't reach the cowork server — network down, server offline, or the web proxy hasn't reconnected.";
+  return (e || "").trim() || "Unknown connection error.";
 }
 
 const CSS = `
@@ -39,6 +42,11 @@ const CSS = `
 export default function BootScreen() {
   const error = useStore((s) => s.error);
   const refresh = useStore((s) => s.refresh);
+  // A 401/403 is a rejected/expired token — retrying with the same token is futile.
+  // Offer a real re-auth (clear the stored token → the app returns to the sign-in
+  // screen) instead of only a Retry.
+  const authRejected = /\b(401|403)\b/.test(error ?? "") || /unauthor/i.test(error ?? "");
+  const signInAgain = () => { window.cowork.clearConfig().then(() => window.location.reload()).catch(() => window.location.reload()); };
   // Advance the visible boot steps on a timer while connecting; freeze at the last
   // reached step if the connection errors (that's the step that failed).
   const [step, setStep] = useState(0);
@@ -50,13 +58,14 @@ export default function BootScreen() {
     return () => clearInterval(t);
   }, [failed]);
 
-  // While failed, keep retrying in the background so the app recovers on its own the
-  // moment the server/proxy comes back — no need to sit on the manual button.
+  // While failed on a NETWORK/server error, keep retrying so the app recovers on its
+  // own when the server/proxy comes back. Don't auto-retry an auth rejection — the
+  // token won't fix itself; the user must sign in again.
   useEffect(() => {
-    if (!failed) return;
+    if (!failed || authRejected) return;
     const t = setInterval(() => refresh(), 5000);
     return () => clearInterval(t);
-  }, [failed, refresh]);
+  }, [failed, authRejected, refresh]);
 
   const accent = failed ? "#e0736a" : "rgb(var(--accent))";
 
@@ -100,13 +109,20 @@ export default function BootScreen() {
           <div style={{ textAlign: "center", display: "flex", flexDirection: "column", gap: 12, alignItems: "center" }}>
             <div className="mono" style={{ fontSize: 12.5, color: "#e0736a", fontWeight: 600, letterSpacing: "0.06em" }}>◈ UPLINK FAILED</div>
             <p style={{ fontSize: 13, color: "var(--text-soft)", lineHeight: 1.6, margin: 0, maxWidth: 440 }}>{humanizeError(error)}</p>
-            <button
-              onClick={() => { setStep(0); refresh(); }}
-              className="glass-btn--clay"
-              style={{ padding: "9px 20px", fontSize: 13, fontWeight: 600 }}
-            >
-              ↻ Retry connection
-            </button>
+            <div style={{ display: "flex", gap: 10 }}>
+              {authRejected && (
+                <button onClick={signInAgain} className="glass-btn--clay" style={{ padding: "9px 20px", fontSize: 13, fontWeight: 600 }}>
+                  ⤿ Sign in again
+                </button>
+              )}
+              <button
+                onClick={() => { setStep(0); refresh(); }}
+                className={authRejected ? "" : "glass-btn--clay"}
+                style={{ padding: "9px 20px", fontSize: 13, fontWeight: 600, ...(authRejected ? { background: "transparent", border: "1px solid var(--border)", color: "var(--text-soft)", borderRadius: 10, cursor: "pointer" } : {}) }}
+              >
+                ↻ Retry
+              </button>
+            </div>
           </div>
         ) : (
           <div className="mono" style={{ fontSize: 11, color: "var(--text-faint)", letterSpacing: "0.14em", textTransform: "uppercase" }}>
