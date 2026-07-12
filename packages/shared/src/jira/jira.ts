@@ -60,9 +60,19 @@ export const JiraCommentSchema = z.object({
 });
 export type JiraComment = z.infer<typeof JiraCommentSchema>;
 
-/** Full issue detail: the issue fields + rendered description + comments. */
+/** Full issue detail: the issue fields + rendered description + comments, plus the
+ * raw description (for the editor), the issue type, whether it can own subtasks,
+ * and its existing subtasks. */
 export const JiraIssueDetailSchema = JiraIssueSchema.extend({
   descriptionHtml: z.string(),
+  /** Raw description source (wiki/plain) — what the inline editor edits. */
+  description: z.string().default(""),
+  /** Issue type name, e.g. "Task", "Story", "Bug", "Sub-task", "Epic". */
+  issueType: z.string().default(""),
+  /** True when this issue may have subtasks (a standard type, not itself a
+   * subtask and not an Epic) — drives the "add subtask" affordance. */
+  subtaskAllowed: z.boolean().default(false),
+  subtasks: z.array(JiraIssueSchema).default([]),
   comments: z.array(JiraCommentSchema),
 });
 export type JiraIssueDetail = z.infer<typeof JiraIssueDetailSchema>;

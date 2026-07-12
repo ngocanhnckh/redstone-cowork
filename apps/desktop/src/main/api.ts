@@ -404,6 +404,12 @@ export async function jiraIssueDetail(sessionId: string, key: string): Promise<u
 export async function jiraCreateIssue(sessionId: string, summary: string): Promise<unknown> {
   return (await req(`/sessions/${sid(sessionId)}/jira/issues`, { method: "POST", body: JSON.stringify({ summary }) })).json();
 }
+export async function jiraUpdateIssue(sessionId: string, key: string, fields: { summary?: string; description?: string }): Promise<unknown> {
+  return (await req(`/sessions/${sid(sessionId)}/jira/issues/${sid(key)}`, { method: "PUT", body: JSON.stringify(fields) })).json();
+}
+export async function jiraCreateSubtask(sessionId: string, key: string, summary: string, description?: string): Promise<unknown> {
+  return (await req(`/sessions/${sid(sessionId)}/jira/issues/${sid(key)}/subtasks`, { method: "POST", body: JSON.stringify({ summary, description }) })).json();
+}
 export async function jiraIssueTransitions(sessionId: string, key: string): Promise<unknown> {
   return (await req(`/sessions/${sid(sessionId)}/jira/issues/${sid(key)}/transitions`)).json();
 }

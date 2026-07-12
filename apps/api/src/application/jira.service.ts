@@ -79,6 +79,15 @@ export class JiraService {
     return new JiraClient(rec.baseUrl, this.decryptPat(rec.patEncrypted), this.fetchImpl);
   }
 
+  /** A client for a session's bound profile; throws BadRequest if unbound/unknown. */
+  private async clientForSession(sessionId: string): Promise<JiraClient> {
+    const binding = await this.getBinding(sessionId);
+    if (!binding) throw new BadRequestException("Session has no Jira binding");
+    const client = await this.clientFor(binding.profile);
+    if (!client) throw new BadRequestException(`Unknown Jira profile: ${binding.profile}`);
+    return client;
+  }
+
   async getBinding(sessionId: string): Promise<JiraBinding | null> {
     const s = await this.sessions.get(sessionId);
     if (!s) throw new NotFoundException();
@@ -123,6 +132,37 @@ export class JiraService {
     // sprint when the project has one (no boardId configuration required).
     if (binding.boardId != null) await client.addToActiveSprint(binding.boardId, key);
     else await client.addToProjectActiveSprint(binding.projectKey, key);
+    return {
+      key,
+      summary,
+      status: "To Do",
+      statusCategory: "todo",
+      assignee: me.displayName || null,
+      url,
+    };
+  }
+
+  /** Edit an issue's summary / description under a session's binding. */
+  async updateIssue(sessionId: string, key: string, fields: { summary?: string; description?: string }): Promise<void> {
+    const client = await this.clientForSession(sessionId);
+    await client.updateIssue(key, fields);
+  }
+
+  /**
+   * Create a subtask under a parent issue in the session's bound project, assigned
+   * to the profile's own user, using the project's subtask issue type. Returns a
+   * JiraIssue for the new subtask (status "To Do" / todo). Subtasks inherit their
+   * parent's sprint, so there's no sprint step here.
+   */
+  async createSubtask(sessionId: string, parentKey: string, summary: string, description?: string): Promise<JiraIssue> {
+    const binding = await this.getBinding(sessionId);
+    if (!binding) throw new BadRequestException("Session has no Jira binding");
+    const client = await this.clientFor(binding.profile);
+    if (!client) throw new BadRequestException(`Unknown Jira profile: ${binding.profile}`);
+    const me = await client.myself();
+    const assignee = me.name ? { name: me.name } : me.accountId ? { accountId: me.accountId } : undefined;
+    const issueType = await client.subtaskTypeName(binding.projectKey);
+    const { key, url } = await client.createIssue(binding.projectKey, summary, { description, assignee, issueType, parentKey });
     return {
       key,
       summary,

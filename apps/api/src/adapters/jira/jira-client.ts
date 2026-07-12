@@ -20,6 +20,9 @@ type RawIssue = {
     summary?: string;
     status?: { name?: string; statusCategory?: { key?: string } };
     assignee?: { displayName?: string } | null;
+    description?: string | null;
+    issuetype?: { name?: string; subtask?: boolean };
+    subtasks?: RawIssue[];
   };
   renderedFields?: {
     description?: string | null;
@@ -73,7 +76,7 @@ export class JiraClient {
   async createIssue(
     projectKey: string,
     summary: string,
-    opts?: { description?: string; assignee?: { name?: string; accountId?: string }; issueType?: string },
+    opts?: { description?: string; assignee?: { name?: string; accountId?: string }; issueType?: string; parentKey?: string },
   ): Promise<{ key: string; url: string }> {
     const fields: Record<string, unknown> = {
       project: { key: projectKey },
@@ -81,6 +84,8 @@ export class JiraClient {
       issuetype: { name: opts?.issueType ?? "Task" },
       ...(opts?.description ? { description: opts.description } : {}),
       ...(opts?.assignee ? { assignee: opts.assignee } : {}),
+      // A subtask must reference its parent issue at create time.
+      ...(opts?.parentKey ? { parent: { key: opts.parentKey } } : {}),
     };
     const res = await this.fetchImpl(`${this.base}/rest/api/2/issue`, {
       method: "POST",
@@ -90,6 +95,41 @@ export class JiraClient {
     if (!res.ok) throw new Error(`Jira create issue responded ${res.status}: ${await res.text().catch(() => "")}`);
     const data = (await res.json()) as { key: string };
     return { key: data.key, url: `${this.base}/browse/${data.key}` };
+  }
+
+  /** Patch an issue's editable fields (summary / description). No-op if given neither. */
+  async updateIssue(key: string, fields: { summary?: string; description?: string }): Promise<void> {
+    const patch: Record<string, unknown> = {};
+    if (fields.summary != null) patch.summary = fields.summary;
+    if (fields.description != null) patch.description = fields.description;
+    if (Object.keys(patch).length === 0) return;
+    const res = await this.fetchImpl(`${this.base}/rest/api/2/issue/${encodeURIComponent(key)}`, {
+      method: "PUT",
+      headers: this.jsonHeaders(),
+      body: JSON.stringify({ fields: patch }),
+    });
+    if (!res.ok) throw new Error(`Jira update issue ${key} responded ${res.status}: ${await res.text().catch(() => "")}`);
+  }
+
+  /**
+   * The project's subtask issue-type name (e.g. "Sub-task", "Subtask"). Jira lets
+   * projects rename it, so discover it from the project's issue types rather than
+   * hardcoding. Falls back to "Sub-task" (the Jira default) if none is found.
+   */
+  async subtaskTypeName(projectKey: string): Promise<string> {
+    try {
+      const res = await this.fetchImpl(`${this.base}/rest/api/2/project/${encodeURIComponent(projectKey)}`, {
+        headers: this.headers(),
+      });
+      if (res.ok) {
+        const data = (await res.json()) as { issueTypes?: Array<{ name?: string; subtask?: boolean }> };
+        const sub = (data.issueTypes ?? []).find((t) => t.subtask && t.name);
+        if (sub?.name) return sub.name;
+      }
+    } catch {
+      /* fall through to the default */
+    }
+    return "Sub-task";
   }
 
   /** Add a plain-text comment to an issue. */
@@ -181,10 +221,11 @@ export class JiraClient {
     return (data.issues ?? []).map((i) => this.toIssue(i));
   }
 
-  /** Full detail for one issue: rendered description + rendered comments. */
+  /** Full detail for one issue: rendered description + rendered comments, plus the
+   * raw description (editable), issue type, subtask-ability, and existing subtasks. */
   async issueDetail(key: string): Promise<JiraIssueDetail> {
     const url = `${this.base}/rest/api/2/issue/${encodeURIComponent(key)}?expand=renderedFields&fields=${encodeURIComponent(
-      "summary,status,assignee,comment",
+      "summary,status,assignee,comment,description,issuetype,subtasks",
     )}`;
     const res = await this.fetchImpl(url, { headers: this.headers() });
     if (!res.ok) throw new Error(`Jira issue ${key} responded ${res.status}`);
@@ -195,7 +236,19 @@ export class JiraClient {
       created: c.created ?? "",
       bodyHtml: c.body ?? "",
     }));
-    return { ...base, descriptionHtml: raw.renderedFields?.description ?? "", comments };
+    const itype = raw.fields?.issuetype;
+    // A standard issue (not itself a subtask, and not an Epic) can own subtasks.
+    const subtaskAllowed = !!itype && itype.subtask !== true && itype.name !== "Epic";
+    const subtasks = (raw.fields?.subtasks ?? []).map((s) => this.toIssue(s));
+    return {
+      ...base,
+      descriptionHtml: raw.renderedFields?.description ?? "",
+      description: raw.fields?.description ?? "",
+      issueType: itype?.name ?? "",
+      subtaskAllowed,
+      subtasks,
+      comments,
+    };
   }
 
   /**

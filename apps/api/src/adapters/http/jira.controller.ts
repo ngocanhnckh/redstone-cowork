@@ -35,6 +35,19 @@ const TransitionSchema = z.object({
   transitionId: z.string().min(1),
 });
 
+/** Body for editing an issue: at least one of summary / description. */
+const UpdateIssueSchema = z
+  .object({ summary: z.string().min(1).optional(), description: z.string().optional() })
+  .refine((v) => v.summary !== undefined || v.description !== undefined, {
+    message: "provide summary and/or description",
+  });
+
+/** Body for creating a subtask under a parent issue. */
+const CreateSubtaskSchema = z.object({
+  summary: z.string().min(1),
+  description: z.string().optional(),
+});
+
 /**
  * Per-session Jira integration (owner-only). Manages named Jira profiles and each
  * session's binding, and proxies live sprint issues / issue detail. Profile secrets
@@ -119,6 +132,31 @@ export class JiraController {
       const { transitionId } = TransitionSchema.parse(body);
       await this.jira.transitionIssue(id, key, transitionId);
       return { ok: true };
+    } catch (e) {
+      if (e instanceof ZodError) throw new BadRequestException(e.issues);
+      throw e;
+    }
+  }
+
+  @Put("sessions/:id/jira/issues/:key")
+  @HttpCode(200)
+  async updateIssue(@Param("id") id: string, @Param("key") key: string, @Body() body: unknown) {
+    try {
+      const fields = UpdateIssueSchema.parse(body);
+      await this.jira.updateIssue(id, key, fields);
+      return { ok: true };
+    } catch (e) {
+      if (e instanceof ZodError) throw new BadRequestException(e.issues);
+      throw e;
+    }
+  }
+
+  @Post("sessions/:id/jira/issues/:key/subtasks")
+  @HttpCode(201)
+  async createSubtask(@Param("id") id: string, @Param("key") key: string, @Body() body: unknown) {
+    try {
+      const { summary, description } = CreateSubtaskSchema.parse(body);
+      return await this.jira.createSubtask(id, key, summary, description);
     } catch (e) {
       if (e instanceof ZodError) throw new BadRequestException(e.issues);
       throw e;

@@ -180,13 +180,20 @@ describe("JiraClient (unit)", () => {
     expect(issues[0]).toMatchObject({ key: "RCW-9", statusCategory: "todo", assignee: null });
   });
 
-  it("issueDetail returns rendered description + comments", async () => {
+  it("issueDetail returns rendered + raw description, type, subtask-ability and subtasks", async () => {
     const fetchImpl = fakeFetch([
       {
         match: "/rest/api/2/issue/RCW-1",
         body: {
           key: "RCW-1",
-          fields: { summary: "Thing", status: { name: "Done", statusCategory: { key: "done" } }, assignee: { displayName: "Ada" } },
+          fields: {
+            summary: "Thing",
+            status: { name: "Done", statusCategory: { key: "done" } },
+            assignee: { displayName: "Ada" },
+            description: "raw desc",
+            issuetype: { name: "Story", subtask: false },
+            subtasks: [{ key: "RCW-2", fields: { summary: "sub", status: { name: "To Do", statusCategory: { key: "new" } }, assignee: null } }],
+          },
           renderedFields: {
             description: "<p>desc</p>",
             comment: { comments: [{ author: { displayName: "Bob" }, created: "2026-01-01", body: "<p>hi</p>" }] },
@@ -204,8 +211,51 @@ describe("JiraClient (unit)", () => {
       assignee: "Ada",
       url: "https://jira.example.com/browse/RCW-1",
       descriptionHtml: "<p>desc</p>",
+      description: "raw desc",
+      issueType: "Story",
+      subtaskAllowed: true,
+      subtasks: [{ key: "RCW-2", summary: "sub", status: "To Do", statusCategory: "todo", assignee: null, url: "https://jira.example.com/browse/RCW-2" }],
       comments: [{ author: "Bob", created: "2026-01-01", bodyHtml: "<p>hi</p>" }],
     });
+  });
+
+  it("issueDetail marks a Sub-task (and an Epic) as not subtask-able", async () => {
+    const mk = (name: string, subtask: boolean) => fakeFetch([
+      { match: "/rest/api/2/issue/X-1", body: { key: "X-1", fields: { summary: "s", issuetype: { name, subtask } } } },
+    ]);
+    const sub = await new JiraClient("https://j", "p", mk("Sub-task", true)).issueDetail("X-1");
+    expect(sub.subtaskAllowed).toBe(false);
+    const epic = await new JiraClient("https://j", "p", mk("Epic", false)).issueDetail("X-1");
+    expect(epic.subtaskAllowed).toBe(false);
+  });
+
+  it("updateIssue PUTs only the provided fields", async () => {
+    let captured: { method?: string; url?: string; body?: unknown } = {};
+    const fetchImpl = (async (input: unknown, init?: { method?: string; body?: string }) => {
+      captured = { method: init?.method, url: String(input), body: init?.body ? JSON.parse(init.body) : undefined };
+      return { ok: true, status: 204, json: async () => ({}), text: async () => "" } as Response;
+    }) as unknown as typeof fetch;
+    const client = new JiraClient("https://jira.example.com", "pat", fetchImpl);
+    await client.updateIssue("RCW-1", { description: "new body" });
+    expect(captured.method).toBe("PUT");
+    expect(captured.url).toContain("/rest/api/2/issue/RCW-1");
+    expect(captured.body).toEqual({ fields: { description: "new body" } });
+  });
+
+  it("updateIssue is a no-op (no request) when given no fields", async () => {
+    let called = false;
+    const fetchImpl = (async () => { called = true; return { ok: true, status: 200, json: async () => ({}), text: async () => "" } as Response; }) as unknown as typeof fetch;
+    await new JiraClient("https://j", "p", fetchImpl).updateIssue("RCW-1", {});
+    expect(called).toBe(false);
+  });
+
+  it("subtaskTypeName discovers the project's subtask type (else defaults to Sub-task)", async () => {
+    const withTypes = fakeFetch([
+      { match: "/rest/api/2/project/RCW", body: { issueTypes: [{ name: "Task", subtask: false }, { name: "Subtask", subtask: true }] } },
+    ]);
+    expect(await new JiraClient("https://j", "p", withTypes).subtaskTypeName("RCW")).toBe("Subtask");
+    const noTypes = fakeFetch([{ match: "/rest/api/2/project/RCW", body: { issueTypes: [] } }]);
+    expect(await new JiraClient("https://j", "p", noTypes).subtaskTypeName("RCW")).toBe("Sub-task");
   });
 
   it("transitions() maps Jira's workflow transitions to {id,name,to} (custom statuses included)", async () => {
@@ -345,6 +395,29 @@ describe("JiraService write-through (unit, fake deps)", () => {
       assignee: "Me",
       url: "https://j.example/browse/RCW-9",
     });
+  });
+
+  it("createSubtask resolves the subtask type, POSTs with a parent, assigns to the user", async () => {
+    let sentBody: any = null;
+    const fetchImpl = (async (input: unknown, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("/rest/api/2/myself")) return { ok: true, status: 200, json: async () => ({ name: "me", displayName: "Me" }) } as Response;
+      if (url.includes("/rest/api/2/project/RCW")) return { ok: true, status: 200, json: async () => ({ issueTypes: [{ name: "Sub-task", subtask: true }] }) } as Response;
+      if (url.includes("/rest/api/2/issue") && init?.method === "POST") {
+        sentBody = JSON.parse(String(init.body));
+        return { ok: true, status: 201, json: async () => ({ key: "RCW-10" }) } as Response;
+      }
+      return { ok: false, status: 404, json: async () => ({}) } as Response;
+    }) as unknown as typeof fetch;
+
+    const { svc } = await makeBound(fetchImpl);
+    const sub = await svc.createSubtask("s1", "RCW-1", "A subtask", "details");
+    expect(sentBody.fields.parent).toEqual({ key: "RCW-1" });
+    expect(sentBody.fields.issuetype.name).toBe("Sub-task");
+    expect(sentBody.fields.summary).toBe("A subtask");
+    expect(sentBody.fields.description).toBe("details");
+    expect(sentBody.fields.assignee.name).toBe("me");
+    expect(sub).toMatchObject({ key: "RCW-10", statusCategory: "todo", url: "https://j.example/browse/RCW-10" });
   });
 
   it("commentIssue POSTs the comment body to the issue", async () => {

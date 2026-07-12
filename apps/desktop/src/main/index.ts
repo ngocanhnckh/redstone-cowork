@@ -357,6 +357,8 @@ ipcMain.handle(IPC.jiraClearBinding, (_e, a: { sessionId: string }) => api.jiraC
 ipcMain.handle(IPC.jiraSessionIssues, (_e, a: { sessionId: string }) => api.jiraSessionIssues(a.sessionId));
 ipcMain.handle(IPC.jiraIssueDetail, (_e, a: { sessionId: string; key: string }) => api.jiraIssueDetail(a.sessionId, a.key));
 ipcMain.handle(IPC.jiraCreateIssue, (_e, a: { sessionId: string; summary: string }) => api.jiraCreateIssue(a.sessionId, a.summary));
+ipcMain.handle(IPC.jiraUpdateIssue, (_e, a: { sessionId: string; key: string; fields: { summary?: string; description?: string } }) => api.jiraUpdateIssue(a.sessionId, a.key, a.fields));
+ipcMain.handle(IPC.jiraCreateSubtask, (_e, a: { sessionId: string; key: string; summary: string; description?: string }) => api.jiraCreateSubtask(a.sessionId, a.key, a.summary, a.description));
 ipcMain.handle(IPC.jiraIssueTransitions, (_e, a: { sessionId: string; key: string }) => api.jiraIssueTransitions(a.sessionId, a.key));
 ipcMain.handle(IPC.jiraTransitionIssue, (_e, a: { sessionId: string; key: string; transitionId: string }) => api.jiraTransitionIssue(a.sessionId, a.key, a.transitionId));
 

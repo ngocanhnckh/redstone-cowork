@@ -129,6 +129,9 @@ export default function ContextColumn({ sessionId, hideSummary }: { sessionId?: 
   const [jiraIssues, setJiraIssues] = useState<JiraIssue[]>([]);
   const [jiraProject, setJiraProject] = useState<string | null>(null);
   const [openIssue, setOpenIssue] = useState<string | null>(null);
+  // When the issue modal is opened via right-click "Add subtask", start it in the
+  // subtask composer (only takes effect if the issue type allows subtasks).
+  const [openWithAddSub, setOpenWithAddSub] = useState(false);
   const todosScrollRef = useRef<HTMLDivElement>(null);
   const wantScroll = useRef(false);
 
@@ -352,8 +355,9 @@ export default function ContextColumn({ sessionId, hideSummary }: { sessionId?: 
                   jiraIssues.map((iss) => (
                     <div
                       key={iss.key}
-                      onClick={() => setOpenIssue(iss.key)}
-                      title={`${iss.status}${iss.assignee ? " · " + iss.assignee : ""} — click for details`}
+                      onClick={() => { setOpenWithAddSub(false); setOpenIssue(iss.key); }}
+                      onContextMenu={(e) => { e.preventDefault(); setOpenWithAddSub(true); setOpenIssue(iss.key); }}
+                      title={`${iss.status}${iss.assignee ? " · " + iss.assignee : ""} — click for details · right-click to add a subtask`}
                       style={{ display: "flex", alignItems: "center", gap: 9, padding: "8px 9px", borderRadius: 9, fontSize: 13, cursor: "pointer", color: iss.statusCategory === "done" ? "var(--text-faint)" : "var(--text)" }}
                       className="glass-inset-hover"
                     >
@@ -386,7 +390,7 @@ export default function ContextColumn({ sessionId, hideSummary }: { sessionId?: 
         )}
       </div>
 
-      {openIssue && id && <JiraIssueModal sessionId={id} issueKey={openIssue} onClose={() => setOpenIssue(null)} />}
+      {openIssue && id && <JiraIssueModal sessionId={id} issueKey={openIssue} startAddSubtask={openWithAddSub} onClose={() => { setOpenIssue(null); setOpenWithAddSub(false); }} />}
 
       {/* Add a checklist item — pinned below the scroll region (Tasks tab only;
           Claude's plan is read-only). */}
