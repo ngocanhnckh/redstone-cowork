@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import JiraDescriptionEditor, { type JiraDescriptionHandle } from "./JiraDescriptionEditor";
 
 type SubIssue = { key: string; summary: string; status: string; statusCategory: string; assignee: string | null; url: string };
 type Detail = {
@@ -37,10 +38,11 @@ export default function JiraIssueModal({ sessionId, issueKey, onClose, startAddS
   const [busy, setBusy] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
 
-  // Edit mode: local drafts of summary + description; null editSummary means "not editing".
+  // Edit mode: draft summary + a WYSIWYG description editor (ref → wiki markup).
   const [editing, setEditing] = useState(false);
   const [editSummary, setEditSummary] = useState("");
-  const [editDesc, setEditDesc] = useState("");
+  const [descDirty, setDescDirty] = useState(false);
+  const descRef = useRef<JiraDescriptionHandle | null>(null);
   // Add-subtask composer.
   const [addingSub, setAddingSub] = useState(false);
   const [subText, setSubText] = useState("");
@@ -85,14 +87,16 @@ export default function JiraIssueModal({ sessionId, issueKey, onClose, startAddS
   const startEdit = () => {
     if (!detail) return;
     setEditSummary(detail.summary);
-    setEditDesc(detail.description ?? "");
+    setDescDirty(false);
     setEditing(true);
   };
   const saveEdit = async () => {
     if (!detail || busy) return;
     const fields: { summary?: string; description?: string } = {};
     if (editSummary.trim() && editSummary !== detail.summary) fields.summary = editSummary.trim();
-    if (editDesc !== (detail.description ?? "")) fields.description = editDesc;
+    // Only send the description when the user actually edited it (avoids
+    // re-serializing untouched wiki markup through the HTML→markup round-trip).
+    if (descDirty && descRef.current) fields.description = await descRef.current.getMarkup();
     if (Object.keys(fields).length === 0) { setEditing(false); return; }
     setBusy(true);
     try {
@@ -195,14 +199,7 @@ export default function JiraIssueModal({ sessionId, issueKey, onClose, startAddS
                     className="reply-input"
                     style={{ width: "100%", padding: "8px 11px", fontSize: 14, marginBottom: 10, background: "rgba(0,0,0,0.22)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text)", outline: "none" }}
                   />
-                  <textarea
-                    value={editDesc}
-                    onChange={(e) => setEditDesc(e.target.value)}
-                    placeholder="Description (Jira wiki markup)…"
-                    rows={10}
-                    className="mono"
-                    style={{ width: "100%", padding: "10px 12px", fontSize: 12.5, lineHeight: 1.55, background: "rgba(0,0,0,0.22)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text)", outline: "none", resize: "vertical" }}
-                  />
+                  <JiraDescriptionEditor ref={descRef} html={detail.descriptionHtml} onDirty={() => setDescDirty(true)} />
                 </>
               ) : detail.descriptionHtml ? (
                 <div className="jira-rich" style={{ fontSize: 13, lineHeight: 1.6, color: "var(--text-soft)" }} dangerouslySetInnerHTML={{ __html: sanitize(detail.descriptionHtml) }} />
