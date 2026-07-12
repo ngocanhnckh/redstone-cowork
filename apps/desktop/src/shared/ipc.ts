@@ -80,6 +80,7 @@ export const IPC = {
   displayMediaRequest: "api:screenshare:request",
   displayMediaPick: "api:screenshare:pick",
   displayMediaCancel: "api:screenshare:cancel",
+  browserPrepPartition: "api:browser:prep-partition",
   extensionSetEnabled: "api:extensions:enabled",
   extensionRemove: "api:extensions:remove",
   vaultAvailable: "api:vault:available",

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, Notification, shell, dialog, clipboard, protocol, net, desktopCapturer, webContents as webContentsModule } from "electron";
+import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, Notification, shell, dialog, clipboard, protocol, net, desktopCapturer, session, webContents as webContentsModule, type Session } from "electron";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join, basename } from "node:path";
 import { saveConfig, loadConfig, clearConfig } from "./config";
@@ -568,6 +568,54 @@ ipcMain.handle(IPC.extensionInstallWebStore, (_e, a: { idOrUrl: string }) => ins
 let displayPickResolver: ((c: { kind: string; id: string } | null) => void) | null = null;
 ipcMain.handle(IPC.displayMediaPick, (_e, a: { kind: string; id: string }) => { displayPickResolver?.(a); return { ok: true }; });
 ipcMain.handle(IPC.displayMediaCancel, () => { displayPickResolver?.(null); return { ok: true }; });
+
+// Grant the browser permissions (camera/mic/screen-share/clipboard/fullscreen) and
+// wire the custom screen-share source picker on a session. Applied to the shared
+// persistent profile AND to each temp/incognito partition (via prepareBrowserPartition)
+// so incognito tabs can log in, use media, and screen-share just like normal tabs.
+const preppedPartitions = new Set<string>();
+function applyBrowserPerms(ses: Session): void {
+  ses.setPermissionRequestHandler((_wc, permission, cb) =>
+    cb(["media", "display-capture", "clipboard-read", "clipboard-sanitized-write", "fullscreen", "pointerLock"].includes(permission)),
+  );
+  ses.setPermissionCheckHandler(() => true);
+  ses.setDisplayMediaRequestHandler(async (_request, callback) => {
+    try {
+      const sources = await desktopCapturer.getSources({ types: ["screen", "window"], thumbnailSize: { width: 400, height: 240 } });
+      const srcMap = new Map(sources.map((s) => [s.id, s]));
+      const screens = sources.map((s) => ({ id: s.id, name: s.name, kind: s.id.startsWith("screen:") ? "screen" : "window", thumb: s.thumbnail.toDataURL() }));
+      const tabs = webContentsModule.getAllWebContents()
+        .filter((wc) => wc.getType() === "webview" && !wc.isDestroyed() && (wc.getURL() || "").startsWith("http"))
+        .map((wc) => ({ id: String(wc.id), title: (wc.getTitle() || wc.getURL() || "tab").slice(0, 90), url: wc.getURL() }));
+      const choice = await new Promise<{ kind: string; id: string } | null>((resolve) => {
+        displayPickResolver = resolve;
+        for (const w of BrowserWindow.getAllWindows()) w.webContents.send(IPC.displayMediaRequest, { screens, tabs });
+      });
+      displayPickResolver = null;
+      if (!choice) { callback({}); return; } // cancelled → deny
+      if (choice.kind === "tab") {
+        const wc = webContentsModule.fromId(Number(choice.id));
+        callback(wc && !wc.isDestroyed() ? { video: wc.mainFrame } : {});
+        return;
+      }
+      const src = srcMap.get(choice.id);
+      callback(src ? { video: src } : {});
+    } catch {
+      callback({});
+    }
+  });
+}
+// The renderer calls this when it mounts a temp/incognito tab so its (fresh,
+// non-persistent) partition gets the same browser permissions before it loads.
+ipcMain.handle(IPC.browserPrepPartition, (_e, a: { partition: string }) => {
+  try {
+    if (a?.partition && !preppedPartitions.has(a.partition)) {
+      preppedPartitions.add(a.partition);
+      applyBrowserPerms(session.fromPartition(a.partition));
+    }
+  } catch { /* older Electron — perms just stay default */ }
+  return { ok: true };
+});
 ipcMain.handle(IPC.extensionSetEnabled, (_e, a: { id: string; enabled: boolean }) => setExtensionEnabled(a.id, !!a.enabled));
 ipcMain.handle(IPC.extensionRemove, (_e, a: { id: string }) => removeExtension(a.id));
 
@@ -925,40 +973,7 @@ app.whenReady().then(async () => {
   // getDisplayMedia (screen share in Meet/Zoom/etc). macOS still needs the app to
   // have the Screen Recording permission granted in System Settings.
   try {
-    const ses = browserSession();
-    ses.setPermissionRequestHandler((_wc, permission, cb) =>
-      cb(["media", "display-capture", "clipboard-read", "clipboard-sanitized-write", "fullscreen", "pointerLock"].includes(permission)),
-    );
-    ses.setPermissionCheckHandler(() => true);
-    // Custom source picker so the user can share a specific TAB (an in-app <webview>,
-    // which the OS picker can't see), a window, or a whole screen. We gather sources,
-    // ask the renderer to show a picker, then resolve with the chosen source — a
-    // DesktopCapturerSource for screen/window, or the tab's WebFrameMain for a tab.
-    ses.setDisplayMediaRequestHandler(async (_request, callback) => {
-      try {
-        const sources = await desktopCapturer.getSources({ types: ["screen", "window"], thumbnailSize: { width: 400, height: 240 } });
-        const srcMap = new Map(sources.map((s) => [s.id, s]));
-        const screens = sources.map((s) => ({ id: s.id, name: s.name, kind: s.id.startsWith("screen:") ? "screen" : "window", thumb: s.thumbnail.toDataURL() }));
-        const tabs = webContentsModule.getAllWebContents()
-          .filter((wc) => wc.getType() === "webview" && !wc.isDestroyed() && (wc.getURL() || "").startsWith("http"))
-          .map((wc) => ({ id: String(wc.id), title: (wc.getTitle() || wc.getURL() || "tab").slice(0, 90), url: wc.getURL() }));
-        const choice = await new Promise<{ kind: string; id: string } | null>((resolve) => {
-          displayPickResolver = resolve;
-          for (const w of BrowserWindow.getAllWindows()) w.webContents.send(IPC.displayMediaRequest, { screens, tabs });
-        });
-        displayPickResolver = null;
-        if (!choice) { callback({}); return; } // cancelled → deny
-        if (choice.kind === "tab") {
-          const wc = webContentsModule.fromId(Number(choice.id));
-          callback(wc && !wc.isDestroyed() ? { video: wc.mainFrame } : {});
-          return;
-        }
-        const src = srcMap.get(choice.id);
-        callback(src ? { video: src } : {});
-      } catch {
-        callback({});
-      }
-    });
+    applyBrowserPerms(browserSession());
   } catch {
     /* older Electron / unsupported — screen share just stays unavailable */
   }

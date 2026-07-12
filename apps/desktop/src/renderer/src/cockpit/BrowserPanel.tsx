@@ -20,6 +20,12 @@ interface Props {
   /** When set, this (ephemeral) tab starts at this URL instead of the session's
    * saved preview/port — used when opening an external link in the workspace. */
   initialUrl?: string;
+  /** The webview storage partition. Defaults to the shared persistent profile;
+   * temp/incognito tabs pass a unique NON-persistent partition for isolation. */
+  partition?: string;
+  /** Incognito tab: isolated storage (see `partition`) AND no history recording,
+   * so a throwaway multi-account session leaves no trace in the address-bar typeahead. */
+  incognito?: boolean;
   /** Page zoom factor for the webview (1 = 100%). Driven from the tab row. */
   zoom?: number;
   /** Responsive preview mode — "mobile" constrains the view to a phone width so
@@ -130,7 +136,7 @@ export function normalizeAddress(raw: string): string {
   return "https://www.google.com/search?q=" + encodeURIComponent(s);
 }
 
-export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, isActive, chromeHidden, initialUrl, zoom = 1, device = "laptop", onViewport, onTitle, onUrl }: Props) {
+export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, isActive, chromeHidden, initialUrl, partition = "persist:rcw-web", incognito, zoom = 1, device = "laptop", onViewport, onTitle, onUrl }: Props) {
   // Saved override URL (a typed address); when empty the preview is port-driven.
   const [browserUrl, setBrowserUrl] = useState("");
   const [forwardPorts, setForwardPorts] = useState<number[]>([]);
@@ -307,7 +313,7 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, isAct
         setAddress(url);
         onUrlRef.current?.(url);
         // Remember visited sites for the address-bar typeahead (deduped per URL).
-        if (url !== lastRecorded.current) { lastRecorded.current = url; recordVisit(url); }
+        if (!incognito && url !== lastRecorded.current) { lastRecorded.current = url; recordVisit(url); }
       }
     };
     const onTitleEv = (e: Event) => {
@@ -325,7 +331,7 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, isAct
       // Ignore the open-in-new-tab title marker (see openTabIntercept.ts).
       if (!t.startsWith("__RCW_OPEN_TAB__::")) {
         onTitleRef.current?.(t);
-        try { updateTitle(wv.getURL(), t); } catch { /* no url yet */ }
+        if (!incognito) { try { updateTitle(wv.getURL(), t); } catch { /* no url yet */ } }
       }
     };
     wv.addEventListener("did-navigate", onNav as EventListener);
@@ -725,9 +731,10 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, isAct
           <webview
             ref={webviewRef as unknown as React.Ref<HTMLElement>}
             src={loadUrl}
-            // Shared on-disk profile so cookies / localStorage / logins persist
-            // across tabs, custom apps, and app restarts — like a normal browser.
-            partition="persist:rcw-web"
+            // Storage profile. Default = shared persistent (cookies/logins persist
+            // across tabs + restarts, like a normal browser). Incognito tabs pass a
+            // unique NON-persistent partition → isolated cookies/storage, wiped on close.
+            partition={partition}
             allowpopups
             style={device === "mobile"
               ? { width: 390, maxWidth: "100%", height: "100%", border: 0, flex: "0 0 390px", boxShadow: "0 0 0 1px var(--border), 0 12px 40px rgba(0,0,0,0.5)" }

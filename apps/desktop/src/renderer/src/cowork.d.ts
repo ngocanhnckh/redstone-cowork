@@ -159,6 +159,7 @@ declare global {
       onDisplayMediaRequest(cb: (a: { screens: Array<{ id: string; name: string; kind: string; thumb: string }>; tabs: Array<{ id: string; title: string; url: string }> }) => void): () => void;
       displayMediaPick(choice: { kind: "screen" | "window" | "tab"; id: string }): Promise<{ ok: boolean }>;
       displayMediaCancel(): Promise<{ ok: boolean }>;
+      prepareBrowserPartition(partition: string): Promise<{ ok: boolean }>;
 
       // Appearance — custom background image + macOS fullscreen-keeps-wallpaper.
       chooseBgImage(): Promise<{ ok: boolean; dataUrl?: string; error?: string }>;

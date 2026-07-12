@@ -9,9 +9,16 @@ function urlLabel(url: string): string {
   try { return new URL(url).hostname || url; } catch { return url.slice(0, 24); }
 }
 
-type Tab = { id: number; url?: string };
+type Tab = { id: number; url?: string; temp?: boolean };
 type SavedTabs = { tabs: Tab[]; active: number; seq: number };
 const TABS_KEY = "rcw.browser.tabs.v1";
+
+/** The webview storage partition for a tab. Temp/incognito tabs get a UNIQUE
+ * non-persistent partition (no `persist:` prefix) → isolated cookies/storage that
+ * are wiped when the tab (and app) closes, so several throwaway logins coexist. */
+function partitionFor(sessionId: string, tab: Tab): string {
+  return tab.temp ? `rcw-temp-${sessionId}-${tab.id}` : "persist:rcw-web";
+}
 
 /** Load a session's persisted open tabs (so reopening Redstone restores them). */
 function loadSavedTabs(sessionId: string): SavedTabs | null {
@@ -89,9 +96,12 @@ export default function MultiBrowser({ sessionId, cwd, machine }: { sessionId: s
   useEffect(() => {
     try {
       const all = JSON.parse(localStorage.getItem(TABS_KEY) || "{}") as Record<string, SavedTabs>;
+      // Temp/incognito tabs are throwaway — never persist them (their partition is
+      // wiped anyway, so restoring one would just be an empty tab).
+      const persistable = tabs.filter((t) => !t.temp);
       all[sessionId] = {
-        tabs: tabs.map((t) => (t.id === 0 ? { id: 0 } : { id: t.id, url: urlByTab[t.id] ?? t.url })),
-        active,
+        tabs: persistable.map((t) => (t.id === 0 ? { id: 0 } : { id: t.id, url: urlByTab[t.id] ?? t.url })),
+        active: tabs.find((t) => t.id === active)?.temp ? 0 : active,
         seq: seq.current,
       };
       localStorage.setItem(TABS_KEY, JSON.stringify(all));
@@ -99,6 +109,16 @@ export default function MultiBrowser({ sessionId, cwd, machine }: { sessionId: s
   }, [tabs, active, urlByTab, sessionId]);
 
   const addTab = () => { const n = ++seq.current; setTabs((t) => [...t, { id: n }]); setActive(n); };
+  // Incognito tab: fresh isolated profile (unique non-persistent partition) so the
+  // developer can be logged into a different account here than in every other tab.
+  const addTempTab = () => {
+    const n = ++seq.current;
+    const tab: Tab = { id: n, temp: true };
+    // Prime the partition's browser permissions before the webview mounts.
+    window.cowork.prepareBrowserPartition(partitionFor(sessionId, tab)).catch(() => {/* ignore */});
+    setTabs((t) => [...t, tab]);
+    setActive(n);
+  };
   const closeTab = (n: number) => {
     setTabs((t) => {
       const next = t.filter((x) => x.id !== n);
@@ -124,13 +144,21 @@ export default function MultiBrowser({ sessionId, cwd, machine }: { sessionId: s
           const url = urlByTab[tab.id] ?? tab.url;
           const title = titleByTab[tab.id];
           // Prefer the page title; fall back to the hostname, then "preview"/"tab N".
-          const label = title || (url ? urlLabel(url) : i === 0 ? "preview" : `tab ${i + 1}`);
+          const label = title || (url ? urlLabel(url) : tab.temp ? "incognito" : i === 0 ? "preview" : `tab ${i + 1}`);
           // Full title (+ url) on hover, since the label is truncated.
-          const tip = [title, url].filter(Boolean).join("\n") || label;
+          const tip = [tab.temp ? "🕶 Incognito — isolated cookies/storage" : null, title, url].filter(Boolean).join("\n") || label;
+          // Incognito tabs get a distinct violet tint so they're never confused with
+          // your logged-in profile.
+          const tint = tab.temp ? "rgb(168 130 255)" : "rgb(var(--accent))";
           return (
             <span key={tab.id} onClick={() => setActive(tab.id)} title={tip}
-              style={{ ...tabBtn, maxWidth: 180, background: on ? "rgb(var(--primary) / 0.22)" : "transparent", color: on ? "var(--text)" : "var(--text-soft)", borderColor: on ? "rgb(var(--primary-soft) / 0.4)" : "transparent" }}>
-              <span style={{ width: 5, height: 5, borderRadius: 999, background: on ? "rgb(var(--accent))" : "var(--border-strong)", flexShrink: 0 }} />
+              style={{ ...tabBtn, maxWidth: 180,
+                background: on ? (tab.temp ? "rgb(168 130 255 / 0.20)" : "rgb(var(--primary) / 0.22)") : "transparent",
+                color: on ? "var(--text)" : "var(--text-soft)",
+                borderColor: on ? (tab.temp ? "rgb(168 130 255 / 0.5)" : "rgb(var(--primary-soft) / 0.4)") : "transparent" }}>
+              {tab.temp
+                ? <span style={{ fontSize: 11, flexShrink: 0, lineHeight: 1 }}>🕶</span>
+                : <span style={{ width: 5, height: 5, borderRadius: 999, background: on ? tint : "var(--border-strong)", flexShrink: 0 }} />}
               <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
               {tabs.length > 1 && (
                 <span onClick={(e) => { e.stopPropagation(); closeTab(tab.id); }} title="Close tab" style={{ opacity: 0.55, fontSize: 12, lineHeight: 1, flexShrink: 0 }}>✕</span>
@@ -139,6 +167,7 @@ export default function MultiBrowser({ sessionId, cwd, machine }: { sessionId: s
           );
         })}
         <button onClick={addTab} title="New browser tab" style={{ ...tabBtn, background: "transparent", color: "var(--text-soft)", border: "1px dashed var(--border-strong)" }}>+ new</button>
+        <button onClick={addTempTab} title="New incognito tab — a fresh, isolated profile (separate cookies/logins) for testing another account" style={{ ...tabBtn, background: "transparent", color: "rgb(168 130 255)", border: "1px dashed rgb(168 130 255 / 0.5)" }}>🕶 incognito</button>
         <span style={{ flex: 1 }} />
         {/* Zoom controls for the active tab — the middle shows the effective viewport
             size (px the page sees, changes as you zoom); click it to reset to 100%. */}
@@ -185,6 +214,7 @@ export default function MultiBrowser({ sessionId, cwd, machine }: { sessionId: s
             <BrowserPanel
               sessionId={sessionId} cwd={cwd} machine={machine}
               ephemeral={tab.id !== 0} isActive={tab.id === active} chromeHidden={chromeHidden} initialUrl={tab.url}
+              partition={partitionFor(sessionId, tab)} incognito={tab.temp}
               zoom={zoomByTab[tab.id] ?? 1} device={deviceByTab[tab.id] ?? "laptop"}
               onViewport={(w, h) => setVpByTab((m) => (m[tab.id]?.w === w && m[tab.id]?.h === h ? m : { ...m, [tab.id]: { w, h } }))}
               onTitle={(t) => setTitleByTab((m) => (m[tab.id] === t ? m : { ...m, [tab.id]: t }))}
