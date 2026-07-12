@@ -41,6 +41,7 @@ export const IPC = {
   jiraClearBinding: "api:jira:binding:clear",
   jiraSessionIssues: "api:jira:issues",
   jiraIssueDetail: "api:jira:issue",
+  warmHost: "api:ssh:warm",
   jiraCreateIssue: "api:jira:issue:create",
   jiraUpdateIssue: "api:jira:issue:update",
   jiraCreateSubtask: "api:jira:issue:subtask:create",

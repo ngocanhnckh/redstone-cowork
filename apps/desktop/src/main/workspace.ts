@@ -200,6 +200,40 @@ export async function getSshTarget(machine: string): Promise<SshTarget> {
   }
 }
 
+// De-dupe warming so opening several panels for one host fires a single connect.
+const warming = new Map<string, number>();
+const WARM_TTL_MS = 60_000;
+
+/**
+ * Establish (and keep warm via ControlPersist) the SSH master for a remote host,
+ * in the background. Call this the moment a remote session's file/terminal/browser
+ * UI opens, so the FIRST file read doesn't pay the connection handshake — which,
+ * over the NAT relay (jump ssh + inner ssh), is several seconds and was the source
+ * of the "click a file → freeze" stall. Fire-and-forget; never throws.
+ */
+export function warmSshMaster(machine: string): void {
+  if (isLocalMachine(machine)) return;
+  const last = warming.get(machine);
+  if (last && Date.now() - last < WARM_TTL_MS) return; // already warmed recently
+  warming.set(machine, Date.now());
+  void getSshTarget(machine)
+    .then((target) => {
+      try {
+        // `true` is a no-op remote command; its only purpose is to open the
+        // ControlMaster so later channels attach instantly.
+        execFile(
+          "ssh",
+          [...sshMuxOpts(), ...target.opts, "-o", "BatchMode=yes", "-o", "ConnectTimeout=12", target.host, "true"],
+          { timeout: 20_000 },
+          () => { /* best-effort — ignore result */ },
+        );
+      } catch {
+        /* never throw from a warm-up */
+      }
+    })
+    .catch(() => { /* target resolution failed — nothing to warm */ });
+}
+
 // ---------------------------------------------------------------------------
 // Desktop-local config cache (userData/workspace-configs.json) — sessionId → config.
 // ---------------------------------------------------------------------------

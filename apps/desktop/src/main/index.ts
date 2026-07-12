@@ -3,7 +3,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join, basename } from "node:path";
 import { saveConfig, loadConfig, clearConfig } from "./config";
 import * as api from "./api";
-import { getWorkspaceConfig, saveWorkspaceConfig, getSshHost, setSshHost, isLocalMachine, setServerHosts } from "./workspace";
+import { getWorkspaceConfig, saveWorkspaceConfig, getSshHost, setSshHost, isLocalMachine, setServerHosts, warmSshMaster } from "./workspace";
 import { getHostIps } from "./host-info";
 import {
   ensureTerminal,
@@ -394,6 +394,9 @@ ipcMain.handle(IPC.workspaceIsLocal, (_e, a: { machine: string }) => {
   }
 });
 ipcMain.handle(IPC.hostIps, (_e, a: { machine: string }) => getHostIps(a.machine));
+// Warm the SSH master for a remote host when its file/terminal UI opens, so the
+// first file read doesn't pay the (relay-amplified) connection handshake.
+ipcMain.handle(IPC.warmHost, (_e, a: { machine: string }) => { warmSshMaster(a.machine); return { ok: true }; });
 
 // Passwordless SSH onboarding — main never throws; sshSetup returns a result object.
 ipcMain.handle(IPC.sshSetup, (_e, a: SshSetupArgs) => sshSetup(a));

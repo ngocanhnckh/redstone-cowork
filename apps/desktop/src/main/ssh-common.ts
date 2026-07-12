@@ -45,7 +45,10 @@ export function sshMuxOpts(): string[] {
     "ControlMaster=auto",
     "-o",
     `ControlPath=${CONTROL_PATH}`,
+    // Keep the master alive 5 min after the last channel closes so back-to-back
+    // file clicks / terminal reopens reuse the warm connection instead of paying
+    // the (relay-amplified) handshake again. Warmed on session open (warmSshMaster).
     "-o",
-    "ControlPersist=120",
+    "ControlPersist=300",
   ];
 }

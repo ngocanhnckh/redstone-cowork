@@ -38,6 +38,17 @@ function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
+/**
+ * Parse the output of the single-round-trip read script, which emits the file's
+ * byte size on the FIRST line, then the (capped) content. Splitting on the first
+ * newline is unambiguous — the size line is always `echo`'d before any content.
+ */
+export function parseSizeFramed(out: string): { size: number; body: string } {
+  const nl = out.indexOf("\n");
+  if (nl < 0) return { size: Number(out.trim()) || 0, body: "" };
+  return { size: Number(out.slice(0, nl).trim()) || 0, body: out.slice(nl + 1) };
+}
+
 function sshCapture(target: SshTarget, remoteCommand: string, encoding: "utf8" | "buffer" = "utf8"): Promise<string> {
   return new Promise((resolve, reject) => {
     execFile(
@@ -222,20 +233,29 @@ export async function readFileAt(args: Loc & { file: string }): Promise<ReadResu
       return { ok: true, encoding: "text", content: buf.toString("utf8"), size, truncated: false };
     }
 
-    // Remote.
+    // Remote — ONE round trip. A tiny remote script emits the byte size on the
+    // first line, then the content, but only when it's within the cap (so an
+    // oversized file isn't streamed just to be discarded). This halves the SSH
+    // round trips vs. the old size-probe-then-fetch and, crucially, avoids paying
+    // the relay handshake twice on a cold ControlMaster — the freeze the user hit.
     const sshTarget = await getSshTarget(machine);
-    const size = Number(await sshCapture(sshTarget, `wc -c < ${shellQuote(file)}`)) || 0;
+    const q = shellQuote(file);
+    // `emit` reads the file a second time on the REMOTE host (local, fast) — still
+    // one network round trip. `wc -c` fails (missing/no-perm) → non-zero exit → reject.
+    const framed = async (cap: number, emit: "cat" | "base64") =>
+      parseSizeFramed(await sshCapture(sshTarget, `n=$(wc -c < ${q}) || exit 1; echo "$n"; if [ "$n" -le ${cap} ]; then ${emit} < ${q}; fi`));
+
     if (isPreviewableBinary(name)) {
+      const { size, body } = await framed(MAX_BINARY_BYTES, "base64");
       if (size > MAX_BINARY_BYTES) return { ok: true, encoding: "binary", size, mime: mimeFor(name) };
-      const b64 = (await sshCapture(sshTarget, `base64 < ${shellQuote(file)}`)).replace(/\n/g, "");
-      return { ok: true, encoding: "base64", content: b64, size, mime: mimeFor(name) };
+      return { ok: true, encoding: "base64", content: body.replace(/\n/g, ""), size, mime: mimeFor(name) };
     }
+    const { size, body } = await framed(MAX_TEXT_BYTES, "cat");
     if (size > MAX_TEXT_BYTES) return { ok: true, encoding: "binary", size, mime: mimeFor(name) };
-    const content = await sshCapture(sshTarget, `cat ${shellQuote(file)}`);
-    if (looksBinary(Buffer.from(content.slice(0, 4096), "utf8"))) {
+    if (looksBinary(Buffer.from(body.slice(0, 4096), "utf8"))) {
       return { ok: true, encoding: "binary", size, mime: mimeFor(name) };
     }
-    return { ok: true, encoding: "text", content, size, truncated: false };
+    return { ok: true, encoding: "text", content: body, size, truncated: false };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }

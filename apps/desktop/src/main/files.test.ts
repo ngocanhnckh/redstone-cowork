@@ -15,12 +15,34 @@ import {
   makeDir,
   createFile,
   uploadLocalFile,
+  parseSizeFramed,
   MAX_TEXT_BYTES,
 } from "./files";
 import { existsSync } from "node:fs";
 
 // These run against the LOCAL fs branch — machine = this host's name.
 const LOCAL = os.hostname();
+
+describe("parseSizeFramed", () => {
+  it("splits the size line from the content", () => {
+    expect(parseSizeFramed("42\nhello world")).toEqual({ size: 42, body: "hello world" });
+  });
+  it("preserves newlines and a trailing newline in the content", () => {
+    expect(parseSizeFramed("7\na\nb\nc\n")).toEqual({ size: 7, body: "a\nb\nc\n" });
+  });
+  it("an empty (within-cap) file → size 0, empty body", () => {
+    expect(parseSizeFramed("0\n")).toEqual({ size: 0, body: "" });
+  });
+  it("oversized read (size only, content suppressed) → body empty", () => {
+    expect(parseSizeFramed("5000000\n")).toEqual({ size: 5000000, body: "" });
+  });
+  it("no newline at all (defensive) → whole output is the size", () => {
+    expect(parseSizeFramed("123")).toEqual({ size: 123, body: "" });
+  });
+  it("content that itself starts with digits is not mistaken for the size", () => {
+    expect(parseSizeFramed("3\n404 not found")).toEqual({ size: 3, body: "404 not found" });
+  });
+});
 
 describe("mimeFor", () => {
   it("maps known extensions", () => {

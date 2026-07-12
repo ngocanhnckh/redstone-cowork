@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useDeferredValue } from "react";
 import FileSearch from "./FileSearch";
 import { createPortal } from "react-dom";
 import Editor from "@monaco-editor/react";
@@ -148,6 +148,9 @@ export default function FilesPanel({ sessionId, cwd, machine }: Props) {
     setRead(null);
     setDrafts({});
     setTreeError(null);
+    // Warm the SSH master for a remote host now, so the first file the user opens
+    // doesn't pay the (relay-amplified) connection handshake and appear to freeze.
+    window.cowork.warmHost(machine).catch(() => {/* best-effort */});
     loadDir(cwd);
   }, [cwd, machine, loadDir]);
 
@@ -182,6 +185,11 @@ export default function FilesPanel({ sessionId, cwd, machine }: Props) {
 
   const value = openPath != null && openPath in drafts ? drafts[openPath] : original;
   const dirty = openPath != null && openPath in drafts && drafts[openPath] !== original;
+  // Rendering markdown is synchronous and O(size); a deferred copy lets React keep
+  // scrolling/input responsive while the (heavy) preview renders in the background,
+  // and a hard cap falls back to the source view so a huge doc can never freeze it.
+  const deferredValue = useDeferredValue(value);
+  const MD_PREVIEW_MAX = 300_000; // ~300 KB of markdown
 
   function onEdit(next: string | undefined) {
     if (openPath == null) return;
@@ -642,7 +650,13 @@ export default function FilesPanel({ sessionId, cwd, machine }: Props) {
                   />
                 ) : read.encoding === "text" && isMarkdown(baseName(openPath)) && mdMode === "preview" ? (
                   <div className="no-scrollbar" style={{ position: "absolute", inset: 0, overflow: "auto", padding: "20px 28px" }}>
-                    <Markdown>{value}</Markdown>
+                    {value.length > MD_PREVIEW_MAX ? (
+                      <div className="faint" style={{ fontSize: 12.5, fontStyle: "italic" }}>
+                        Large file ({humanSize(read.size)}) — rich preview is disabled to keep scrolling smooth. Switch to the source view (the ⟨⟩ toggle) to read it.
+                      </div>
+                    ) : (
+                      <Markdown>{deferredValue}</Markdown>
+                    )}
                   </div>
                 ) : read.encoding === "text" ? (
                   <Editor

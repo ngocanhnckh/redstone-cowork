@@ -122,6 +122,8 @@ contextBridge.exposeInMainWorld("cowork", {
     ipcRenderer.invoke(IPC.workspaceSetSshHost, { machine, host }),
   isLocalMachine: (machine: string): Promise<boolean> =>
     ipcRenderer.invoke(IPC.workspaceIsLocal, { machine }),
+  warmHost: (machine: string): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke(IPC.warmHost, { machine }),
   hostIps: (machine: string): Promise<{ local: string | null; public: string | null }> =>
     ipcRenderer.invoke(IPC.hostIps, { machine }),
 
