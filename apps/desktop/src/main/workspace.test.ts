@@ -125,6 +125,22 @@ describe("getSshTarget relay-vs-direct decision", () => {
     expect(second.opts[1]).toContain("ProxyCommand=ssh -i"); // now relays, not stuck on cached direct
   });
 
+  it("with DUPLICATE host records, tries every id and uses whichever has the tunnel", async () => {
+    // Real-world case: "examplehost" registered twice; only the second id has a tunnel.
+    const dupNoTunnel: ServerHost = { id: "dup-no-tunnel", machine: "buildbox", user: "dev", address: "10.0.0.5", sshPort: 22 };
+    setServerHosts([dupNoTunnel, HOST]); // HOST (host-uuid-1) is the one with a tunnel
+    const fetchTunnel = vi.fn(async (id: string) => {
+      if (id === "host-uuid-1") return COORDS;
+      throw new Error("404"); // the duplicate has no provisioned tunnel
+    });
+    __setRelayDepsForTest({ probe: async () => false, fetchTunnel, ensureRegistered: async () => true });
+    const t = await getSshTarget("buildbox");
+    expect(t.opts[1]).toContain("ProxyCommand=ssh -i"); // resolved via the id that HAS a tunnel
+    expect(t.opts[1]).toContain("-W localhost:30001");
+    expect(fetchTunnel).toHaveBeenCalledWith("dup-no-tunnel"); // tried the tunnel-less one first
+    expect(fetchTunnel).toHaveBeenCalledWith("host-uuid-1"); // then fell through to the good one
+  });
+
   it("does NOT hang when the tunnel API stalls — falls back to direct within the timeout", async () => {
     // A stalled tunnel lookup (no fetch timeout of its own) must not hang the whole
     // resolution — otherwise a port forward built on it sits at "starting" forever.

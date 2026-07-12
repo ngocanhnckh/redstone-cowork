@@ -62,15 +62,20 @@ export type ServerHost = {
   address: string | null;
   sshPort: number | null;
 };
-let serverHosts: Record<string, ServerHost> = {};
+// ALL records per machine — a machine can have DUPLICATE registrations (e.g. an
+// agent re-registered under a new id, or two agents on one box), and only ONE may
+// have provisioned a relay tunnel. We must try every candidate's id when resolving
+// the relay, or we'd pick the tunnel-less duplicate and fall back to a refused
+// direct connect. (Real case: "examplehost" had two records; only one had a tunnel.)
+let serverHosts: Record<string, ServerHost[]> = {};
 
 /** Feed the full /hosts list — builds both the string target map (for getSshHost)
  *  and the id-bearing record map (for getSshTarget's relay lookup). */
 export function setServerHosts(hosts: ServerHost[]): void {
-  const byMachine: Record<string, ServerHost> = {};
+  const byMachine: Record<string, ServerHost[]> = {};
   const targets: Record<string, string> = {};
   for (const h of hosts ?? []) {
-    byMachine[h.machine] = h;
+    (byMachine[h.machine] ??= []).push(h);
     if (h.address) targets[h.machine] = h.user ? `${h.user}@${h.address}` : h.address;
   }
   serverHosts = byMachine;
@@ -169,16 +174,16 @@ type Resolved = SshTarget & { cacheable: boolean };
 
 async function resolveSshTarget(machine: string): Promise<Resolved> {
   const host = getSshHost(machine);
-  const rec = serverHosts[machine];
-  const port = rec?.sshPort ?? DEFAULT_SSH_PORT;
+  const recs = serverHosts[machine] ?? [];
+  const port = recs.find((r) => r.sshPort != null)?.sshPort ?? DEFAULT_SSH_PORT;
 
   // 1. Direct-reachability probe. Probe REAL addresses, not the ssh string: the
   //    ssh string is often a ~/.ssh/config alias (e.g. "contabo2") that ssh can
   //    resolve but net.connect() CANNOT (net.connect ignores ssh_config). Probing
   //    the alias always fails and would wrongly trigger the relay. So we probe the
-  //    agent-reported address (authoritative) first, then the bare ssh address.
+  //    agent-reported address(es) (authoritative) first, then the bare ssh address.
   //    Reachable via EITHER → direct (ssh itself still connects via `host`).
-  const candidates = [...new Set([rec?.address, hostAddress(host)].filter((a): a is string => !!a))];
+  const candidates = [...new Set([...recs.map((r) => r.address), hostAddress(host)].filter((a): a is string => !!a))];
   for (const addr of candidates) {
     try {
       if (await probeReachable(addr, port, PROBE_TIMEOUT_MS)) {
@@ -195,16 +200,26 @@ async function resolveSshTarget(machine: string): Promise<Resolved> {
   //    string so we never hard-fail, but they are marked NOT cacheable: caching a
   //    "couldn't reach the relay" fallback would keep a NAT'd host connecting to its
   //    (refused) direct :22 for the whole TTL even after the relay becomes available.
-  if (!rec?.id) return { host, opts: [], cacheable: false };
+  const ids = [...new Set(recs.map((r) => r.id).filter((id): id is string => !!id))];
+  if (ids.length === 0) return { host, opts: [], cacheable: false };
   try {
     // Bounded so a stalled tunnel API can't hang the whole resolution (→ a forward
     // stuck at "starting" forever). On timeout/error we fall back to direct, marked
-    // NOT cacheable so the next attempt retries the relay.
+    // NOT cacheable so the next attempt retries the relay. Try EVERY candidate id:
+    // a machine with duplicate registrations may have provisioned a tunnel under
+    // only one of them, so a 404 on one id must fall through to the others.
     const opts = await withTimeout(
       (async () => {
         if (!(await ensureRegistered())) return null;
-        const coords = await fetchTunnel(rec.id!);
-        return buildRelayOpts(coords);
+        for (const id of ids) {
+          try {
+            const coords = await fetchTunnel(id);
+            return buildRelayOpts(coords);
+          } catch {
+            // this id has no tunnel (404) — try the next duplicate record's id
+          }
+        }
+        return null;
       })(),
       RELAY_RESOLVE_TIMEOUT_MS,
     );
