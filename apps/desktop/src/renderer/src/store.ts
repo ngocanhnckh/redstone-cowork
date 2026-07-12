@@ -165,8 +165,8 @@ type State = {
   recordSent: (sessionId: string, text: string) => void;
   answer: (
     decisionId: string,
-    resolution: { choice?: string | null; answers?: null; custom?: string | null }
-  ) => Promise<void>;
+    resolution: { choice?: string | null; answers?: Record<string, string | string[]> | null; custom?: string | null }
+  ) => Promise<boolean>;
   snooze: (sessionId: string, minutes: number) => Promise<void>;
   pin: (sessionId: string, pinned: boolean) => Promise<void>;
   dismissSession: (sessionId: string) => Promise<void>;
@@ -352,10 +352,10 @@ export const useStore = create<State>((set, get) => ({
 
   answer: async (
     decisionId: string,
-    resolution: { choice?: string | null; answers?: null; custom?: string | null }
-  ) => {
+    resolution: { choice?: string | null; answers?: Record<string, string | string[]> | null; custom?: string | null }
+  ): Promise<boolean> => {
+    const sessionId = get().decisions.find((d) => d.id === decisionId)?.sessionId ?? null;
     try {
-      const sessionId = get().decisions.find((d) => d.id === decisionId)?.sessionId ?? null;
       // A custom free-text reply travels back like an instruction — show it instantly.
       if (sessionId && resolution.custom) get().recordSent(sessionId, resolution.custom);
       await window.cowork.resolveDecision(decisionId, {
@@ -364,6 +364,10 @@ export const useStore = create<State>((set, get) => ({
         custom: null,
         ...resolution,
       });
+      // Optimistically drop the resolved decision so its card clears INSTANTLY —
+      // even if the follow-up refresh is slow. A dock that sat showing the options
+      // "forever" after a click (slow/failed refresh) was a real complaint.
+      set((state) => ({ decisions: state.decisions.filter((d) => d.id !== decisionId) }));
       // Refresh first, then (in Flow mode only) advance to the next session actually
       // waiting for input. Other modes — HUD / grid / history — stay put so the user
       // isn't yanked to another session after answering.
@@ -373,8 +377,12 @@ export const useStore = create<State>((set, get) => ({
         const next = sessionId ? nextWaiting(queue, decisions, sessionId) : null;
         if (next) set({ focusId: next });
       }
+      return true;
     } catch (e) {
+      // The resolve never landed — surface it so the click isn't silently lost, and
+      // leave the card in place so the user can retry (the caller re-enables its UI).
       set({ error: e instanceof Error ? e.message : String(e) });
+      return false;
     }
   },
 

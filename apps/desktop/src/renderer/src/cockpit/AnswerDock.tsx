@@ -19,6 +19,11 @@ export default function AnswerDock({ decision, working, sessionId: sessionIdProp
   const idleInputRef = useRef<HTMLTextAreaElement>(null);
   const [sent, setSent] = useState(false);
   const [idleSent, setIdleSent] = useState(false);
+  // Answering state: which option is in flight, an error if a resolve failed, and
+  // the per-question picks for a multi-question / multiSelect form.
+  const [submitting, setSubmitting] = useState(false);
+  const [submitErr, setSubmitErr] = useState<string | null>(null);
+  const [picks, setPicks] = useState<Record<string, string | string[]>>({});
   const answer = useStore((s) => s.answer);
   const snooze = useStore((s) => s.snooze);
   const setFocus = useStore((s) => s.setFocus);
@@ -34,6 +39,14 @@ export default function AnswerDock({ decision, working, sessionId: sessionIdProp
   // Slash-command suggestions for the focused session's host.
   const machine = (sessions.find((s) => s.id === (decision?.sessionId ?? idleSessionId)) ?? queue.find((s) => s.id === (decision?.sessionId ?? idleSessionId)))?.machine;
   const commands = commandsFor(caps, machine);
+
+  // Reset the answering state whenever the shown decision changes, so picks/errors
+  // from a previous question never leak into the next one.
+  useEffect(() => {
+    setPicks({});
+    setSubmitErr(null);
+    setSubmitting(false);
+  }, [decision?.id]);
 
   // Skip (Ctrl+→) and Snooze (Ctrl+S) shortcuts — only active while a decision is shown.
   useEffect(() => {
@@ -163,16 +176,49 @@ export default function AnswerDock({ decision, working, sessionId: sessionIdProp
   // input (not any assistant message), so without this the dock showed options with
   // no prompt. Fall back to the decision title (a permission prompt, or a question
   // with no structured body).
-  const questions =
-    (decision.body?.tool_input as { questions?: Array<{ question: string; multiSelect?: boolean }> } | undefined)?.questions ??
-    [];
+  type Q = { question: string; multiSelect?: boolean; options?: Array<{ label: string; description?: string }> };
+  const questions: Q[] =
+    (decision.body?.tool_input as { questions?: Q[] } | undefined)?.questions ?? [];
+
+  // A single single-select question can be answered with one click (posts {choice},
+  // which the keymap drives as digit+Enter). Anything richer — MULTIPLE questions or
+  // ANY multiSelect — needs a form that collects a complete `answers` map, otherwise
+  // the keymap can't drive the whole form and the agent hangs waiting for the final
+  // submit. (This was the "selected but never submitted all answers" bug.)
+  const needsForm = questions.length > 1 || questions.some((q) => q.multiSelect);
+
+  // Resolve the decision, showing a transient "sending…" state and surfacing a
+  // failure (instead of a card that silently sits showing options forever).
+  const submit = async (resolution: { choice?: string; answers?: Record<string, string | string[]>; custom?: string }) => {
+    if (submitting) return;
+    setSubmitErr(null);
+    setSubmitting(true);
+    const ok = await answer(decision.id, resolution);
+    // On success the decision is removed from the store → this dock unmounts, so we
+    // only need to recover on failure.
+    if (!ok) { setSubmitErr("Couldn't send your answer — check the connection and try again."); setSubmitting(false); }
+  };
+
+  const setSingle = (q: string, label: string) => setPicks((p) => ({ ...p, [q]: label }));
+  const toggleMulti = (q: string, label: string) => setPicks((p) => {
+    const cur = Array.isArray(p[q]) ? (p[q] as string[]) : [];
+    return { ...p, [q]: cur.includes(label) ? cur.filter((l) => l !== label) : [...cur, label] };
+  });
+  const isPicked = (q: string, label: string) => {
+    const v = picks[q];
+    return Array.isArray(v) ? v.includes(label) : v === label;
+  };
+  const formComplete = questions.every((q) => {
+    const v = picks[q.question];
+    return q.multiSelect ? Array.isArray(v) && v.length > 0 : typeof v === "string" && !!v;
+  });
 
   const handleSend = () => {
     const el = inputRef.current;
     const val = el?.value.trim();
     if (!val) return;
     if (decision && (decision.kind === "question" || decision.kind === "permission" || decision.kind === "mode")) {
-      answer(decision.id, { custom: val });
+      submit({ custom: val });
     } else {
       // Otherwise just queue the message (never interrupts) — only Stop aborts.
       instruct(decision!.sessionId, val);
@@ -192,62 +238,85 @@ export default function AnswerDock({ decision, working, sessionId: sessionIdProp
         backdropFilter: "blur(20px)",
       }}
     >
-      {/* The question(s) being asked — options are meaningless without them. */}
-      <div style={{ marginBottom: 12 }}>
-        {questions.length > 0 ? (
-          questions.map((q, i) => (
-            <div key={i} style={{ marginBottom: i < questions.length - 1 ? 8 : 0 }}>
+      {needsForm ? (
+        /* Multiple questions and/or multiSelect → a full form. Each question shows
+           its own options; picks are collected and submitted together as an
+           `answers` map so the keymap drives the whole form and its final submit. */
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {questions.map((q, qi) => (
+            <div key={qi}>
               <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.45, color: "var(--text)" }}>
-                {questions.length > 1 && <span className="mono faint" style={{ fontSize: 11, marginRight: 6 }}>{i + 1}.</span>}
+                <span className="mono faint" style={{ fontSize: 11, marginRight: 6 }}>{qi + 1}.</span>
                 {q.question}
               </div>
-              {q.multiSelect && (
-                <div className="mono faint" style={{ fontSize: 10, marginTop: 2 }}>select all that apply</div>
-              )}
+              {q.multiSelect && <div className="mono faint" style={{ fontSize: 10, margin: "2px 0 4px" }}>select all that apply</div>}
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 6 }}>
+                {(q.options ?? []).map((opt, oi) => {
+                  const on = isPicked(q.question, opt.label);
+                  return (
+                    <div
+                      key={oi}
+                      className={on ? "glass-inset" : "glass-inset glass-inset-hover"}
+                      onClick={() => (q.multiSelect ? toggleMulti(q.question, opt.label) : setSingle(q.question, opt.label))}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 11, padding: "10px 13px", borderRadius: 12, cursor: "pointer",
+                        background: on ? "rgba(var(--primary), 0.18)" : undefined,
+                        boxShadow: on ? "inset 0 0 0 1px rgb(var(--primary-soft) / 0.5)" : undefined,
+                      }}
+                    >
+                      <span style={{
+                        width: 16, height: 16, flexShrink: 0, borderRadius: q.multiSelect ? 4 : 999,
+                        border: `1px solid ${on ? "rgb(var(--primary-soft))" : "var(--border-strong)"}`,
+                        background: on ? "rgb(var(--primary-soft))" : "transparent",
+                        display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#fff",
+                      }}>{on ? "✓" : ""}</span>
+                      <span style={{ fontSize: 13.5, fontWeight: 500 }}>{opt.label}</span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-          ))
-        ) : (
-          <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.45, color: "var(--text)" }}>{decision.title}</div>
-        )}
-        {questions.length > 1 && (
-          <div className="mono faint" style={{ fontSize: 10.5, marginTop: 6 }}>
-            Options below answer the first question — use the reply box for the rest.
-          </div>
-        )}
-      </div>
-
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {decision.options.map((opt, i) => (
-          <div
-            key={i}
-            className={i === 0 ? "glass-inset" : "glass-inset glass-inset-hover"}
-            onClick={() => answer(decision.id, { choice: opt.label })}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 13,
-              padding: "12px 15px",
-              borderRadius: 13,
-              cursor: "pointer",
-              background: i === 0 ? `rgba(var(--primary), 0.15)` : undefined,
-              boxShadow: i === 0 ? `inset 0 0 0 1px rgb(var(--primary-soft) / 0.45)` : undefined,
-            }}
+          ))}
+          <button
+            className="glass-btn--clay"
+            disabled={!formComplete || submitting}
+            onClick={() => submit({ answers: picks })}
+            style={{ alignSelf: "flex-start", padding: "9px 20px", fontSize: 13.5, fontWeight: 600, opacity: !formComplete || submitting ? 0.55 : 1, cursor: !formComplete || submitting ? "default" : "pointer" }}
           >
-            <span
-              className="mono faint"
-              style={{
-                fontSize: 11,
-                border: "1px solid var(--border)",
-                borderRadius: 6,
-                padding: "2px 7px",
-              }}
-            >
-              {i + 1}
-            </span>
-            <span style={{ fontSize: 14, fontWeight: 500 }}>{opt.label}</span>
+            {submitting ? "sending…" : "Submit answers"}
+          </button>
+        </div>
+      ) : (
+        <>
+          {/* Single question — its prompt, then one-click options. */}
+          <div style={{ marginBottom: 12, fontSize: 14, fontWeight: 600, lineHeight: 1.45, color: "var(--text)" }}>
+            {questions[0]?.question ?? decision.title}
           </div>
-        ))}
-      </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {decision.options.map((opt, i) => (
+              <div
+                key={i}
+                className={i === 0 ? "glass-inset" : "glass-inset glass-inset-hover"}
+                onClick={() => submit({ choice: opt.label })}
+                style={{
+                  display: "flex", alignItems: "center", gap: 13, padding: "12px 15px", borderRadius: 13,
+                  cursor: submitting ? "wait" : "pointer", opacity: submitting ? 0.7 : 1,
+                  background: i === 0 ? `rgba(var(--primary), 0.15)` : undefined,
+                  boxShadow: i === 0 ? `inset 0 0 0 1px rgb(var(--primary-soft) / 0.45)` : undefined,
+                }}
+              >
+                <span className="mono faint" style={{ fontSize: 11, border: "1px solid var(--border)", borderRadius: 6, padding: "2px 7px" }}>
+                  {i + 1}
+                </span>
+                <span style={{ fontSize: 14, fontWeight: 500 }}>{opt.label}</span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+      {submitErr && (
+        <div className="mono" style={{ fontSize: 11, color: "#e0736a", marginTop: 8 }}>{submitErr}</div>
+      )}
 
       <div style={{ display: "flex", gap: 9, marginTop: 11, alignItems: "flex-end", minWidth: 0 }}>
         <SlashTextarea
