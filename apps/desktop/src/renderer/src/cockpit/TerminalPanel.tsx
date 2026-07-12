@@ -51,6 +51,24 @@ export default function TerminalPanel({
   const [error, setError] = useState<string | null>(null);
   // Bumping this re-runs the effect to (re)spawn the shell.
   const [restartKey, setRestartKey] = useState(0);
+  // Right-click menu (Copy/Paste) position + the term ref its actions operate on.
+  const termRef = useRef<Terminal | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number; hasSel: boolean } | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const doCopy = () => {
+    const sel = termRef.current?.getSelection() ?? "";
+    if (sel) { window.cowork.copyText(sel).catch(() => {}); setCopied(true); setTimeout(() => setCopied(false), 900); }
+    setMenu(null);
+  };
+  const doPaste = async () => {
+    setMenu(null);
+    try {
+      const text = await window.cowork.readClipboard();
+      if (text) window.cowork.sendTerminalInput({ id: pty, data: text });
+    } catch { /* ignore */ }
+    termRef.current?.focus();
+  };
 
   async function restart() {
     setError(null);
@@ -83,6 +101,47 @@ export default function TerminalPanel({
     const fit = new FitAddon();
     term.loadAddon(fit);
     term.open(container);
+    termRef.current = term;
+
+    // --- Copy / paste -------------------------------------------------------
+    // Inside tmux the drag-selection is fragile: tmux mouse mode eats the drag and
+    // frequent redraws wipe the visual selection. So COPY THE MOMENT a selection is
+    // made (mouseup) — we grab term.getSelection() before a redraw can clear it. Tip
+    // for the user: if tmux mouse mode is on, hold SHIFT while dragging to force a
+    // local terminal selection instead of sending mouse events to tmux.
+    const onMouseUp = () => {
+      const sel = term.getSelection();
+      if (sel && sel.trim()) { window.cowork.copyText(sel).catch(() => {}); setCopied(true); setTimeout(() => setCopied(false), 900); }
+    };
+    container.addEventListener("mouseup", onMouseUp);
+    cleanups.push(() => container.removeEventListener("mouseup", onMouseUp));
+
+    // Keyboard: Cmd+C / Ctrl+Shift+C copy the selection (plain Ctrl+C stays SIGINT);
+    // Cmd+V / Ctrl+Shift+V paste. Returning false stops xterm forwarding the key.
+    const isMac = /Mac/i.test(navigator.platform);
+    term.attachCustomKeyEventHandler((e) => {
+      if (e.type !== "keydown") return true;
+      const primary = isMac ? e.metaKey : e.ctrlKey;
+      const k = e.key.toLowerCase();
+      if (primary && k === "c") {
+        const sel = term.getSelection();
+        if (sel && (isMac || e.shiftKey)) { window.cowork.copyText(sel).catch(() => {}); return false; }
+        return true; // no selection, or plain Ctrl+C → let it through as interrupt
+      }
+      if (primary && k === "v" && (isMac || e.shiftKey)) {
+        window.cowork.readClipboard().then((t) => { if (t) window.cowork.sendTerminalInput({ id: pty, data: t }); }).catch(() => {});
+        return false;
+      }
+      return true;
+    });
+
+    // Right-click → Copy/Paste menu.
+    const onCtx = (e: MouseEvent) => {
+      e.preventDefault();
+      setMenu({ x: e.clientX, y: e.clientY, hasSel: !!term.getSelection() });
+    };
+    container.addEventListener("contextmenu", onCtx);
+    cleanups.push(() => container.removeEventListener("contextmenu", onCtx));
 
     const safeFit = () => {
       try {
@@ -158,6 +217,7 @@ export default function TerminalPanel({
         }
       }
       // Dispose xterm but DO NOT kill the pty — it persists across tab switches.
+      if (termRef.current === term) termRef.current = null;
       term.dispose();
     };
   }, [pty, cwd, machine, restartKey]);
@@ -204,19 +264,35 @@ export default function TerminalPanel({
           </div>
         </div>
       ) : null}
-      <div
-        ref={containerRef}
-        style={{
-          flex: 1,
-          minHeight: 0,
-          padding: "10px 16px 12px",
-          // Warm-ink glass instead of a flat black box; the transparent xterm bg
-          // lets this show through.
-          background: "rgb(var(--primary) / 0.04)",
-          overflow: "hidden",
-          display: error ? "none" : "block",
-        }}
-      />
+      <div style={{ flex: 1, minHeight: 0, position: "relative", display: error ? "none" : "flex" }}>
+        <div
+          ref={containerRef}
+          style={{
+            flex: 1,
+            minHeight: 0,
+            padding: "10px 16px 12px",
+            // Warm-ink glass instead of a flat black box; the transparent xterm bg
+            // lets this show through.
+            background: "rgb(var(--primary) / 0.04)",
+            overflow: "hidden",
+          }}
+        />
+        {copied && (
+          <div className="mono" style={{ position: "absolute", top: 8, right: 12, fontSize: 10.5, color: "rgb(var(--accent))", background: "color-mix(in srgb, var(--app-panel) 88%, transparent)", border: "1px solid var(--border)", borderRadius: 6, padding: "2px 8px", pointerEvents: "none" }}>✓ copied</div>
+        )}
+        {menu && (
+          <>
+            <div onClick={() => setMenu(null)} onContextMenu={(e) => { e.preventDefault(); setMenu(null); }} style={{ position: "fixed", inset: 0, zIndex: 60 }} />
+            <div
+              className="glass-menu"
+              style={{ position: "fixed", top: menu.y, left: menu.x, zIndex: 61, minWidth: 130, borderRadius: 9, border: "1px solid var(--border-strong)", boxShadow: "0 12px 34px rgba(0,0,0,0.5)", padding: 4 }}
+            >
+              <button onClick={doCopy} disabled={!menu.hasSel} className="glass-inset-hover" style={{ display: "block", width: "100%", textAlign: "left", background: "transparent", border: "1px solid transparent", borderRadius: 6, padding: "6px 10px", fontSize: 12.5, color: menu.hasSel ? "var(--text)" : "var(--text-faint)", cursor: menu.hasSel ? "pointer" : "default" }}>Copy</button>
+              <button onClick={doPaste} className="glass-inset-hover" style={{ display: "block", width: "100%", textAlign: "left", background: "transparent", border: "1px solid transparent", borderRadius: 6, padding: "6px 10px", fontSize: 12.5, color: "var(--text)", cursor: "pointer" }}>Paste</button>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }

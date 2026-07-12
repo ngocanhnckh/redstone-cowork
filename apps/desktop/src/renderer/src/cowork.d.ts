@@ -245,6 +245,7 @@ declare global {
         file: string;
       }): Promise<{ ok: boolean; canceled?: boolean; path?: string; error?: string }>;
       copyText(text: string): Promise<{ ok: boolean; error?: string }>;
+      readClipboard(): Promise<string>;
 
       // Chrome extensions (shared workspace browser session)
       extensionsList(): Promise<BrowserExtension[]>;

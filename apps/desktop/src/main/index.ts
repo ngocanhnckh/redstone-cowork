@@ -694,6 +694,9 @@ ipcMain.handle(IPC.clipboardWrite, (_e, a: { text: string }) => {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
 });
+ipcMain.handle(IPC.clipboardRead, () => {
+  try { return clipboard.readText(); } catch { return ""; }
+});
 
 // Runs inside each preview guest: swap blocking window dialogs for a non-blocking
 // toast. Idempotent per document via the __rcwDialogsPatched guard.

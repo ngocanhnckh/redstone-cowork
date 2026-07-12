@@ -118,6 +118,7 @@ export const IPC = {
   filesUpload: "api:files:upload",
   filesDownload: "api:files:download",
   clipboardWrite: "api:clipboard:write",
+  clipboardRead: "api:clipboard:read",
   llmModels: "api:llm:models",
   llmAssist: "api:llm:assist",
   llmChat: "api:llm:chat",
