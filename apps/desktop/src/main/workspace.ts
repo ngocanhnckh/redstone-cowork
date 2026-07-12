@@ -120,7 +120,23 @@ export type SshTarget = { host: string; opts: string[] };
 
 const PROBE_TTL_MS = 30_000; // cache the reachability decision briefly (git poll / forwards)
 const PROBE_TIMEOUT_MS = 2_500;
+// Bound the relay lookup (registration + tunnel-coords API calls, which have no
+// fetch timeout of their own). Without this, a stalled tunnel API would hang
+// getSshTarget indefinitely — and a port forward built on it would sit at
+// "starting" forever, never spawning ssh or reporting failure.
+const RELAY_RESOLVE_TIMEOUT_MS = 8_000;
 const DEFAULT_SSH_PORT = 22;
+
+/** Reject with a timeout if `p` doesn't settle within `ms`. */
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error("relay resolution timed out")), ms);
+    p.then(
+      (v) => { clearTimeout(t); resolve(v); },
+      (e) => { clearTimeout(t); reject(e); },
+    );
+  });
+}
 
 const probeCache = new Map<string, { at: number; target: SshTarget }>();
 
@@ -181,9 +197,19 @@ async function resolveSshTarget(machine: string): Promise<Resolved> {
   //    (refused) direct :22 for the whole TTL even after the relay becomes available.
   if (!rec?.id) return { host, opts: [], cacheable: false };
   try {
-    if (!(await ensureRegistered())) return { host, opts: [], cacheable: false };
-    const coords = await fetchTunnel(rec.id);
-    return { host, opts: buildRelayOpts(coords), cacheable: true }; // relay ready
+    // Bounded so a stalled tunnel API can't hang the whole resolution (→ a forward
+    // stuck at "starting" forever). On timeout/error we fall back to direct, marked
+    // NOT cacheable so the next attempt retries the relay.
+    const opts = await withTimeout(
+      (async () => {
+        if (!(await ensureRegistered())) return null;
+        const coords = await fetchTunnel(rec.id!);
+        return buildRelayOpts(coords);
+      })(),
+      RELAY_RESOLVE_TIMEOUT_MS,
+    );
+    if (opts) return { host, opts, cacheable: true }; // relay ready
+    return { host, opts: [], cacheable: false };
   } catch {
     return { host, opts: [], cacheable: false };
   }

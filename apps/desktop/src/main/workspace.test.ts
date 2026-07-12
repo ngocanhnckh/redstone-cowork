@@ -124,4 +124,23 @@ describe("getSshTarget relay-vs-direct decision", () => {
     const second = await getSshTarget("buildbox");
     expect(second.opts[1]).toContain("ProxyCommand=ssh -i"); // now relays, not stuck on cached direct
   });
+
+  it("does NOT hang when the tunnel API stalls — falls back to direct within the timeout", async () => {
+    // A stalled tunnel lookup (no fetch timeout of its own) must not hang the whole
+    // resolution — otherwise a port forward built on it sits at "starting" forever.
+    vi.useFakeTimers();
+    try {
+      __setRelayDepsForTest({
+        probe: async () => false, // NAT'd → would need the relay
+        fetchTunnel: () => new Promise<never>(() => {}), // never resolves (API stall)
+        ensureRegistered: async () => true,
+      });
+      const p = getSshTarget("buildbox");
+      await vi.advanceTimersByTimeAsync(9_000); // past RELAY_RESOLVE_TIMEOUT_MS
+      const t = await p;
+      expect(t).toEqual({ host: "dev@10.0.0.5", opts: [] }); // bounded fallback, not a hang
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
