@@ -266,8 +266,8 @@ contextBridge.exposeInMainWorld("cowork", {
   // Browser inspector (console + network devtools).
   registerSessionBrowser: (sessionId: string, webContentsId: number): Promise<{ ok: boolean }> =>
     ipcRenderer.invoke(IPC.sessionBrowserRegister, { sessionId, webContentsId }),
-  unregisterSessionBrowser: (sessionId: string): Promise<{ ok: boolean }> =>
-    ipcRenderer.invoke(IPC.sessionBrowserUnregister, { sessionId }),
+  unregisterSessionBrowser: (sessionId: string, webContentsId?: number): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke(IPC.sessionBrowserUnregister, { sessionId, webContentsId }),
   startDevtools: (sessionId: string): Promise<{ ok: boolean }> => ipcRenderer.invoke(IPC.devtoolsStart, { sessionId }),
   stopDevtools: (sessionId: string): Promise<{ ok: boolean }> => ipcRenderer.invoke(IPC.devtoolsStop, { sessionId }),
   getDevtoolsBody: (sessionId: string, requestId: string): Promise<{ body: string; base64Encoded: boolean } | null> =>

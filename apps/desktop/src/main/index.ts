@@ -545,8 +545,8 @@ ipcMain.handle(IPC.sessionBrowserRegister, (_e, a: { sessionId: string; webConte
   if (a?.sessionId && typeof a.webContentsId === "number") registerSessionBrowser(a.sessionId, a.webContentsId);
   return { ok: true };
 });
-ipcMain.handle(IPC.sessionBrowserUnregister, (_e, a: { sessionId: string }) => {
-  if (a?.sessionId) unregisterSessionBrowser(a.sessionId);
+ipcMain.handle(IPC.sessionBrowserUnregister, (_e, a: { sessionId: string; webContentsId?: number }) => {
+  if (a?.sessionId) unregisterSessionBrowser(a.sessionId, typeof a.webContentsId === "number" ? a.webContentsId : undefined);
   return { ok: true };
 });
 ipcMain.handle(IPC.devtoolsStart, (_e, a: { sessionId: string }) => (a?.sessionId ? startInspect(a.sessionId) : { ok: false }));

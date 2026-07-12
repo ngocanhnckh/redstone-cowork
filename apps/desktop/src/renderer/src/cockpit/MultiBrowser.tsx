@@ -184,7 +184,7 @@ export default function MultiBrowser({ sessionId, cwd, machine }: { sessionId: s
           <div key={tab.id} style={{ position: "absolute", inset: 0, display: tab.id === active ? "flex" : "none", flexDirection: "column" }}>
             <BrowserPanel
               sessionId={sessionId} cwd={cwd} machine={machine}
-              ephemeral={tab.id !== 0} chromeHidden={chromeHidden} initialUrl={tab.url}
+              ephemeral={tab.id !== 0} isActive={tab.id === active} chromeHidden={chromeHidden} initialUrl={tab.url}
               zoom={zoomByTab[tab.id] ?? 1} device={deviceByTab[tab.id] ?? "laptop"}
               onViewport={(w, h) => setVpByTab((m) => (m[tab.id]?.w === w && m[tab.id]?.h === h ? m : { ...m, [tab.id]: { w, h } }))}
               onTitle={(t) => setTitleByTab((m) => (m[tab.id] === t ? m : { ...m, [tab.id]: t }))}

@@ -170,7 +170,7 @@ declare global {
 
       // Browser inspector (console + network devtools).
       registerSessionBrowser(sessionId: string, webContentsId: number): Promise<{ ok: boolean }>;
-      unregisterSessionBrowser(sessionId: string): Promise<{ ok: boolean }>;
+      unregisterSessionBrowser(sessionId: string, webContentsId?: number): Promise<{ ok: boolean }>;
       startDevtools(sessionId: string): Promise<{ ok: boolean }>;
       stopDevtools(sessionId: string): Promise<{ ok: boolean }>;
       getDevtoolsBody(sessionId: string, requestId: string): Promise<{ body: string; base64Encoded: boolean } | null>;

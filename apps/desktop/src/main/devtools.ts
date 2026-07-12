@@ -22,12 +22,27 @@ function emit(sessionId: string, ev: Record<string, unknown>): void {
   for (const w of BrowserWindow.getAllWindows()) w.webContents.send(IPC.devtoolsEvent, { sessionId, ev });
 }
 
-/** The renderer's primary BrowserPanel reports its guest's webContents id here. */
+/** The session's ACTIVE BrowserPanel tab reports its guest's webContents id here.
+ * When the user switches tabs, the newly-visible tab re-registers with a different
+ * id — so re-point the live inspector at the now-active guest (detach + reattach)
+ * rather than staying stuck on the first tab. */
 export function registerSessionBrowser(sessionId: string, webContentsId: number): void {
+  const prev = sessionBrowsers.get(sessionId);
   sessionBrowsers.set(sessionId, webContentsId);
-  if (pending.has(sessionId) && !inspectors.has(sessionId)) attach(sessionId);
+  if (!pending.has(sessionId)) return;
+  if (prev !== webContentsId) {
+    // Active guest changed — move the inspector to it.
+    detach(sessionId);
+    attach(sessionId);
+  } else if (!inspectors.has(sessionId)) {
+    attach(sessionId);
+  }
 }
-export function unregisterSessionBrowser(sessionId: string): void {
+/** Clear a session's guest binding. Pass the reporting tab's id so a tab that has
+ * since been superseded (the user switched away) doesn't tear down the inspector
+ * that now belongs to the newly-active tab. */
+export function unregisterSessionBrowser(sessionId: string, webContentsId?: number): void {
+  if (webContentsId != null && sessionBrowsers.get(sessionId) !== webContentsId) return;
   sessionBrowsers.delete(sessionId);
   detach(sessionId); // browser closed — tear down; `pending` stays so it re-attaches on reopen
 }

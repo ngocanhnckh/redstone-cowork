@@ -11,6 +11,9 @@ interface Props {
   /** Extra tabs are ephemeral: they read the session's URL to start, but don't
    * overwrite the saved workspace config when navigated. */
   ephemeral?: boolean;
+  /** True when this is the visible tab. The active tab registers its guest as the
+   * session's inspector target, so DevTools follows the tab you're looking at. */
+  isActive?: boolean;
   /** When true, hide the connection bar + address toolbar (driven from the tab
    * row) so only the webview shows — reclaims vertical space. */
   chromeHidden?: boolean;
@@ -127,7 +130,7 @@ export function normalizeAddress(raw: string): string {
   return "https://www.google.com/search?q=" + encodeURIComponent(s);
 }
 
-export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, chromeHidden, initialUrl, zoom = 1, device = "laptop", onViewport, onTitle, onUrl }: Props) {
+export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, isActive, chromeHidden, initialUrl, zoom = 1, device = "laptop", onViewport, onTitle, onUrl }: Props) {
   // Saved override URL (a typed address); when empty the preview is port-driven.
   const [browserUrl, setBrowserUrl] = useState("");
   const [forwardPorts, setForwardPorts] = useState<number[]>([]);
@@ -259,15 +262,16 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, chrom
     };
   }, [loadUrl]);
 
-  // Report the primary browser guest's webContents id so the Inspector (DevTools)
-  // panel can attach console/network capture to it. Only the primary tab (not
-  // ephemeral extra tabs) is the session's canonical browser.
+  // Report the ACTIVE tab's guest webContents id so the Inspector (DevTools) panel
+  // attaches console/network capture to whatever tab the user is looking at — not
+  // just the first preview. Switching tabs re-registers the newly-visible guest,
+  // which re-points the live inspector at it (see devtools.ts).
   // Depends on loadUrl because the <webview> is only mounted once there's a URL;
   // re-running when it mounts (and on each navigation) ensures we capture the ref
   // and (re)register. register() runs immediately AND on dom-ready to cover both
   // "guest already created" and "not attached yet" timing.
   useEffect(() => {
-    if (ephemeral) return;
+    if (!isActive) return; // only the visible tab is the session's inspector target
     const wv = webviewRef.current;
     if (!wv) return;
     const register = () => {
@@ -278,9 +282,13 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, chrom
     wv.addEventListener("dom-ready", register as EventListener);
     return () => {
       wv.removeEventListener("dom-ready", register as EventListener);
-      window.cowork.unregisterSessionBrowser(sessionId).catch(() => {});
+      // Only clear the binding if it still points at THIS guest — the newly-active
+      // tab may have already re-registered its own (don't tear down its inspector).
+      let id: number | undefined;
+      try { id = wv.getWebContentsId(); } catch { /* guest gone */ }
+      window.cowork.unregisterSessionBrowser(sessionId, id).catch(() => {});
     };
-  }, [ephemeral, sessionId, loadUrl]);
+  }, [isActive, sessionId, loadUrl]);
 
   // Callbacks held in refs so re-renders don't churn the webview event listeners.
   const onTitleRef = useRef(onTitle);
