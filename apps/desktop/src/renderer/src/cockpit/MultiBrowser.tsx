@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import BrowserPanel from "./BrowserPanel";
+import { IconMenu, IconIncognito, IconKey, IconPuzzle, IconLaptop, IconPhone, IconPlus, IconMinus, IconEyeOff } from "./Icons";
 import ExtensionsPanel from "./ExtensionsPanel";
 import VaultPanel from "./VaultPanel";
 import { useStore } from "../store";
@@ -49,6 +50,7 @@ export default function MultiBrowser({ sessionId, cwd, machine }: { sessionId: s
   // Global extensions manager + credential vault (partition-wide, shared).
   const [extOpen, setExtOpen] = useState(false);
   const [vaultOpen, setVaultOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [zoomByTab, setZoomByTab] = useState<Record<number, number>>({});
   const [deviceByTab, setDeviceByTab] = useState<Record<number, "laptop" | "mobile">>({});
   // Effective viewport (CSS px the page sees) per tab, reported by each BrowserPanel.
@@ -135,6 +137,11 @@ export default function MultiBrowser({ sessionId, cwd, machine }: { sessionId: s
     border: "1px solid var(--border)", background: "transparent", color: "var(--text-soft)",
     borderRadius: 6, padding: "3px 7px", fontSize: 11, fontFamily: "var(--font-mono)", cursor: "pointer", lineHeight: 1.3, flexShrink: 0,
   };
+  const menuIconBtn: React.CSSProperties = {
+    width: 24, height: 24, display: "inline-flex", alignItems: "center", justifyContent: "center",
+    border: "1px solid var(--border)", background: "transparent", color: "var(--text-soft)",
+    borderRadius: 6, cursor: "pointer", flexShrink: 0,
+  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
@@ -146,7 +153,7 @@ export default function MultiBrowser({ sessionId, cwd, machine }: { sessionId: s
           // Prefer the page title; fall back to the hostname, then "preview"/"tab N".
           const label = title || (url ? urlLabel(url) : tab.temp ? "incognito" : i === 0 ? "preview" : `tab ${i + 1}`);
           // Full title (+ url) on hover, since the label is truncated.
-          const tip = [tab.temp ? "🕶 Incognito — isolated cookies/storage" : null, title, url].filter(Boolean).join("\n") || label;
+          const tip = [tab.temp ? "Incognito — isolated cookies/storage" : null, title, url].filter(Boolean).join("\n") || label;
           // Incognito tabs get a distinct violet tint so they're never confused with
           // your logged-in profile.
           const tint = tab.temp ? "rgb(168 130 255)" : "rgb(var(--accent))";
@@ -157,7 +164,7 @@ export default function MultiBrowser({ sessionId, cwd, machine }: { sessionId: s
                 color: on ? "var(--text)" : "var(--text-soft)",
                 borderColor: on ? (tab.temp ? "rgb(168 130 255 / 0.5)" : "rgb(var(--primary-soft) / 0.4)") : "transparent" }}>
               {tab.temp
-                ? <span style={{ fontSize: 11, flexShrink: 0, lineHeight: 1 }}>🕶</span>
+                ? <IconIncognito size={12} style={{ color: on ? "rgb(168 130 255)" : "var(--text-faint)" }} />
                 : <span style={{ width: 5, height: 5, borderRadius: 999, background: on ? tint : "var(--border-strong)", flexShrink: 0 }} />}
               <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
               {tabs.length > 1 && (
@@ -166,45 +173,35 @@ export default function MultiBrowser({ sessionId, cwd, machine }: { sessionId: s
             </span>
           );
         })}
-        <button onClick={addTab} title="New browser tab" style={{ ...tabBtn, background: "transparent", color: "var(--text-soft)", border: "1px dashed var(--border-strong)" }}>+ new</button>
-        <button onClick={addTempTab} title="New incognito tab — a fresh, isolated profile (separate cookies/logins) for testing another account" style={{ ...tabBtn, background: "transparent", color: "rgb(168 130 255)", border: "1px dashed rgb(168 130 255 / 0.5)" }}>🕶 incognito</button>
+        <button onClick={addTab} title="New browser tab" style={{ ...tabBtn, gap: 5, background: "transparent", color: "var(--text-soft)", border: "1px dashed var(--border-strong)" }}><IconPlus size={12} /> new</button>
+        <button onClick={addTempTab} title="New incognito tab — a fresh, isolated profile (separate cookies/logins) for testing another account" style={{ ...tabBtn, gap: 5, background: "transparent", color: "rgb(168 130 255)", border: "1px dashed rgb(168 130 255 / 0.5)" }}><IconIncognito size={13} /> incognito</button>
         <span style={{ flex: 1 }} />
-        {/* Zoom controls for the active tab — the middle shows the effective viewport
-            size (px the page sees, changes as you zoom); click it to reset to 100%. */}
-        <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
-          <button onClick={() => bumpZoom(-1)} title="Zoom out" style={ctrlBtn}>−</button>
-          <button onClick={() => setZoom(1)} title={`Effective viewport ${vp ? `${vp.w}×${vp.h}px` : ""} · zoom ${Math.round(zoom * 100)}% — click to reset`} style={{ ...ctrlBtn, minWidth: 74, textAlign: "center" }}>{vp ? `${vp.w}×${vp.h}` : `${Math.round(zoom * 100)}%`}</button>
-          <button onClick={() => bumpZoom(1)} title="Zoom in" style={ctrlBtn}>+</button>
+        {/* All secondary controls collapse into one menu to save toolbar space. */}
+        <div style={{ position: "relative", flexShrink: 0 }}>
+          <button onClick={() => setMenuOpen((v) => !v)} title="Browser tools" aria-expanded={menuOpen}
+            style={{ ...ctrlBtn, display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 7px", background: menuOpen ? "rgb(var(--primary) / 0.18)" : "transparent", color: menuOpen ? "var(--text)" : "var(--text-soft)" }}>
+            <IconMenu size={15} />
+          </button>
+          {menuOpen && (
+            <>
+              {/* click-away backdrop */}
+              <div onClick={() => setMenuOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 40 }} />
+              <div className="glass-menu" style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 41, minWidth: 210, borderRadius: 11, border: "1px solid var(--border-strong)", boxShadow: "0 16px 44px rgba(0,0,0,0.55)", padding: 6, display: "flex", flexDirection: "column", gap: 2 }}>
+                {/* Zoom row */}
+                <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 8px" }}>
+                  <span className="mono faint" style={{ fontSize: 11, flex: 1 }}>Zoom {vp ? `· ${vp.w}×${vp.h}` : ""}</span>
+                  <button onClick={() => bumpZoom(-1)} title="Zoom out" style={menuIconBtn}><IconMinus size={13} /></button>
+                  <button onClick={() => setZoom(1)} title="Reset to 100%" style={{ ...menuIconBtn, width: "auto", padding: "0 8px", fontFamily: "var(--font-mono)", fontSize: 11 }}>{Math.round(zoom * 100)}%</button>
+                  <button onClick={() => bumpZoom(1)} title="Zoom in" style={menuIconBtn}><IconPlus size={13} /></button>
+                </div>
+                <MenuItem icon={device === "mobile" ? <IconLaptop size={15} /> : <IconPhone size={15} />} label={device === "mobile" ? "Switch to laptop view" : "Switch to mobile view"} onClick={() => { toggleDevice(); }} />
+                <MenuItem icon={<IconKey size={15} />} label="Passwords & vault" onClick={() => { setVaultOpen(true); setMenuOpen(false); }} />
+                <MenuItem icon={<IconPuzzle size={15} />} label="Extensions" onClick={() => { setExtOpen(true); setMenuOpen(false); }} />
+                <MenuItem icon={<IconEyeOff size={15} />} label={chromeHidden ? "Show address bar" : "Hide address bar"} onClick={() => { toggleChrome(); setMenuOpen(false); }} />
+              </div>
+            </>
+          )}
         </div>
-        {/* Responsive device switch (laptop ⇄ mobile) */}
-        <button
-          onClick={toggleDevice}
-          title={device === "mobile" ? "Mobile view — click for laptop" : "Laptop view — click for mobile"}
-          style={{ ...ctrlBtn, background: device === "mobile" ? "rgb(var(--primary) / 0.22)" : "transparent", color: device === "mobile" ? "var(--text)" : "var(--text-soft)" }}
-        >
-          {device === "mobile" ? "📱 mobile" : "🖥 laptop"}
-        </button>
-        <button
-          onClick={() => setVaultOpen(true)}
-          title="Passwords & vault"
-          style={{ ...ctrlBtn, fontSize: 13, padding: "3px 8px" }}
-        >
-          🔑
-        </button>
-        <button
-          onClick={() => setExtOpen(true)}
-          title="Browser extensions"
-          style={{ ...ctrlBtn, fontSize: 13, padding: "3px 8px" }}
-        >
-          🧩
-        </button>
-        <button
-          onClick={toggleChrome}
-          title={chromeHidden ? "Show address bar & connection" : "Hide address bar & connection (tabs only)"}
-          style={{ ...tabBtn, background: "transparent", color: "var(--text-soft)", border: "1px solid var(--border)", flexShrink: 0 }}
-        >
-          {chromeHidden ? "▾ bar" : "▴ bar"}
-        </button>
       </div>
       {extOpen && <ExtensionsPanel onClose={() => setExtOpen(false)} />}
       {vaultOpen && <VaultPanel onClose={() => setVaultOpen(false)} />}
@@ -224,5 +221,23 @@ export default function MultiBrowser({ sessionId, cwd, machine }: { sessionId: s
         ))}
       </div>
     </div>
+  );
+}
+
+/** A row in the browser tools dropdown: leading icon + label, full-width hover. */
+function MenuItem({ icon, label, onClick }: { icon: React.ReactNode; label: string; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="glass-inset-hover"
+      style={{
+        display: "flex", alignItems: "center", gap: 10, padding: "7px 9px", borderRadius: 8,
+        background: "transparent", border: "1px solid transparent", color: "var(--text)",
+        fontSize: 12.5, cursor: "pointer", textAlign: "left", width: "100%",
+      }}
+    >
+      <span style={{ color: "var(--text-soft)", display: "inline-flex" }}>{icon}</span>
+      {label}
+    </button>
   );
 }
