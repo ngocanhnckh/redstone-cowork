@@ -57,6 +57,10 @@ const fmtDur = (ms: number): string => {
   return h > 0 ? `${h}h ${m % 60}m` : `${m}m`;
 };
 const projectName = (cwd: string): string => cwd.split("/").filter(Boolean).pop() ?? cwd;
+// The host tmux session name for a wrapper-launched session (`rcw-<wrapperId>`,
+// e.g. rcw-4e59c7ee) — what you'd `tmux attach -t` on the host. Null when the
+// session wasn't launched via `redstone claude` (no wrapper → no rcw tmux session).
+const tmuxName = (wrapperId: string | null | undefined): string | null => (wrapperId ? `rcw-${wrapperId}` : null);
 
 // ---------------------------------------------------------------------------
 // small primitives
@@ -1347,7 +1351,10 @@ function HudConsole() {
     ...(wins.sessIds ?? []).map((wid) => {
       const sid = sessIdOf(wid);
       const s = sessions.find((x) => x.id === sid) ?? queue.find((x) => x.id === sid);
-      const title = s ? `${projectName(s.cwd)} · ${s.gitBranch || "#" + sid.slice(0, 4)}` : `session ${sid.slice(0, 4)}`;
+      const tmux = s ? tmuxName(s.wrapperId) : null;
+      const title = s
+        ? `${projectName(s.cwd)} · ${tmux ?? s.gitBranch ?? "#" + sid.slice(0, 4)}`
+        : `session ${sid.slice(0, 4)}`;
       return { id: wid, title, onClose: () => closeSessionWindow(wid) };
     }),
     ...apps
@@ -1368,6 +1375,16 @@ function HudConsole() {
           <span className="hud-chip" style={{ display: "inline-flex", alignItems: "baseline", gap: 8, minWidth: 0 }}>
             <span className="display" style={{ fontSize: 16 }}>{projectName(session.cwd)}</span>
             <span className="mono faint" style={{ fontSize: 10 }}>{session.machine} · {session.gitBranch ?? "no-branch"}</span>
+            {tmuxName(session.wrapperId) && (
+              <span
+                className="mono"
+                title={`tmux session on ${session.machine} — attach with:  tmux attach -t ${tmuxName(session.wrapperId)}`}
+                onClick={() => window.cowork.copyText(`tmux attach -t ${tmuxName(session.wrapperId)}`).catch(() => {})}
+                style={{ fontSize: 10, color: "rgb(var(--primary-soft))", cursor: "copy", border: "1px solid var(--border)", borderRadius: 5, padding: "1px 6px" }}
+              >
+                ⧉ {tmuxName(session.wrapperId)}
+              </span>
+            )}
           </span>
         )}
         <span style={{ flex: 1 }} />
