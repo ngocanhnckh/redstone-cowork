@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { SessionView, Decision, Host, DiscoveredSession, CapsHostView } from "./types";
 import { pickFocus, nextWaiting } from "./autoAdvance";
+import { bindingsWithDefaults, saveBindings, DEFAULT_BINDINGS } from "./cockpit/keybindings";
 
 /**
  * A reply shown instantly in the timeline before the host echoes it back. We
@@ -158,7 +159,14 @@ type State = {
   toggleAssist: () => void;
   toggleSettings: () => void;
   setFocus: (id: string) => void;
+  /** Move focus to the next (+1) / previous (-1) session — drives the Ctrl+Tab
+   * session switcher (HUD + everywhere). Cycles the full connected-session list. */
+  cycleFocus: (dir: 1 | -1) => void;
   setMode: (mode: "flow" | "grid" | "history" | "hud") => void;
+  /** User-customizable keyboard shortcuts (action id → accelerator). */
+  keybindings: Record<string, string>;
+  setKeybinding: (id: string, accel: string) => void;
+  resetKeybindings: () => void;
   fetchInventory: () => Promise<void>;
   fetchCaps: () => Promise<void>;
   toggleCaps: () => void;
@@ -308,6 +316,28 @@ export const useStore = create<State>((set, get) => ({
 
   setFocus: (id: string) => {
     set({ focusId: id });
+  },
+
+  cycleFocus: (dir) => {
+    const { sessions, queue, focusId } = get();
+    // Cycle the full connected-session list (fall back to the waiting queue).
+    const list = sessions.length ? sessions : queue;
+    if (list.length === 0) return;
+    const idx = list.findIndex((s) => s.id === focusId);
+    const next = list[(((idx < 0 ? 0 : idx) + dir) % list.length + list.length) % list.length];
+    if (next) set({ focusId: next.id });
+  },
+
+  keybindings: bindingsWithDefaults(),
+  setKeybinding: (id, accel) =>
+    set((s) => {
+      const keybindings = { ...s.keybindings, [id]: accel };
+      saveBindings(keybindings as Record<import("./cockpit/keybindings").ActionId, string>);
+      return { keybindings };
+    }),
+  resetKeybindings: () => {
+    saveBindings(DEFAULT_BINDINGS);
+    set({ keybindings: { ...DEFAULT_BINDINGS } });
   },
 
   setMode: (mode: "flow" | "grid" | "history" | "hud") => {

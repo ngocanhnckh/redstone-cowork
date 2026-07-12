@@ -9,6 +9,7 @@ import AgentGrid from "./AgentGrid";
 import AllSessions from "./AllSessions";
 import Hud from "./Hud";
 import BootScreen from "./BootScreen";
+import { useKeybindings } from "./useKeybindings";
 import AssistPanel from "./AssistPanel";
 import SettingsPanel from "./SettingsPanel";
 import CapsModal from "./CapsModal";
@@ -27,7 +28,6 @@ export default function Cockpit() {
   const focusId = useStore((s) => s.focusId);
   const setActiveTab = useStore((s) => s.setActiveTab);
   const openUrlInBrowser = useStore((s) => s.openUrlInBrowser);
-  const activeTabMap = useStore((s) => s.activeTab);
   const contextCollapsed = useStore((s) => s.contextCollapsed);
   const toggleContext = useStore((s) => s.toggleContext);
   const toggleAssist = useStore((s) => s.toggleAssist);
@@ -95,44 +95,9 @@ export default function Cockpit() {
     return () => document.documentElement.classList.remove("rcw-hud-clear");
   }, [mode, appr.hudClear]);
 
-  // Workspace-tab shortcuts: Ctrl+1/2/3/4 jump, Ctrl+Tab / Ctrl+Shift+Tab cycle.
-  useEffect(() => {
-    const ORDER = ["chat", "terminal", "browser", "ports", "files"] as const;
-    const onKey = (e: KeyboardEvent) => {
-      if (!e.ctrlKey || e.metaKey || e.altKey) return;
-      const id = detailId ?? focusId;
-      if (!id) return;
-
-      if (e.key === "1" || e.key === "2" || e.key === "3" || e.key === "4" || e.key === "5") {
-        e.preventDefault();
-        setActiveTab(id, ORDER[Number(e.key) - 1]);
-        return;
-      }
-      if (e.key === "Tab") {
-        e.preventDefault();
-        const cur = activeTabMap[id] ?? "chat";
-        const idx = ORDER.indexOf(cur);
-        const next = e.shiftKey
-          ? ORDER[(idx - 1 + ORDER.length) % ORDER.length]
-          : ORDER[(idx + 1) % ORDER.length];
-        setActiveTab(id, next);
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [detailId, focusId, activeTabMap, setActiveTab]);
-
-  // ⌃J toggles the LLM assistant slide-over.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.ctrlKey && !e.metaKey && !e.altKey && (e.key === "j" || e.key === "J")) {
-        e.preventDefault();
-        toggleAssist();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [toggleAssist]);
+  // All in-app shortcuts (session cycle, assistant toggle, virtual-app tabs) are
+  // handled by the customizable keybindings dispatcher — rebindable in Settings.
+  useKeybindings();
 
   const seg = (m: "flow" | "grid" | "history" | "hud", label: string) => (
     <button

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useStore } from "../store";
 import AccessKeysManager from "./AccessKeysManager";
 import ClaudeConfigsManager from "./ClaudeConfigsManager";
+import { ACTIONS, displayAccel, accelFromEvent, actionForAccel, type ActionId } from "./keybindings";
 import {
   type Appearance,
   loadAppearance,
@@ -410,10 +411,83 @@ export default function SettingsPanel() {
           )}
         </div>
 
+        <KeyboardShortcuts />
+
         <ClaudeConfigsManager />
 
         <AccessKeysManager />
       </div>
+    </div>
+  );
+}
+
+/** Rebindable keyboard-shortcut list. Click a binding to record a new key combo;
+ * the store persists it and the live dispatcher (useKeybindings) picks it up. */
+function KeyboardShortcuts() {
+  const keybindings = useStore((s) => s.keybindings) as Record<ActionId, string>;
+  const setKeybinding = useStore((s) => s.setKeybinding);
+  const resetKeybindings = useStore((s) => s.resetKeybindings);
+  const [recording, setRecording] = useState<ActionId | null>(null);
+
+  // While recording, the NEXT key combo (ignoring bare modifiers) becomes the binding.
+  useEffect(() => {
+    if (!recording) return;
+    const onKey = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.key === "Escape") { setRecording(null); return; } // cancel
+      const accel = accelFromEvent(e);
+      if (!accel) return; // waiting for a non-modifier key
+      setKeybinding(recording, accel);
+      setRecording(null);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [recording, setKeybinding]);
+
+  const groups = [...new Set(ACTIONS.map((a) => a.group))];
+
+  return (
+    <div style={{ marginTop: 24, paddingTop: 18, borderTop: "1px solid var(--border)" }}>
+      <span className="kicker">Keyboard shortcuts</span>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+        <h2 className="display" style={{ fontSize: 20, margin: "2px 0 4px" }}>Shortcuts</h2>
+        <span style={{ flex: 1 }} />
+        <button onClick={resetKeybindings} className="mono faint" style={{ background: "transparent", border: "1px solid var(--border)", borderRadius: 7, padding: "3px 9px", fontSize: 11, color: "var(--text-soft)", cursor: "pointer" }}>reset to defaults</button>
+      </div>
+      <p className="faint" style={{ fontSize: 11.5, margin: "0 2px 14px", lineHeight: 1.5 }}>
+        Click a shortcut, then press the key combo you want (Esc cancels). Ctrl+Tab / Ctrl+Shift+Tab switch sessions; Ctrl+1–5 jump to a virtual app of the focused session.
+      </p>
+
+      {groups.map((group) => (
+        <div key={group} style={{ marginBottom: 12 }}>
+          <div className="mono faint" style={{ fontSize: 9.5, letterSpacing: "0.14em", textTransform: "uppercase", margin: "6px 2px 6px" }}>{group}</div>
+          {ACTIONS.filter((a) => a.group === group).map((a) => {
+            const accel = keybindings[a.id] ?? a.default;
+            // Flag a combo bound to more than one action (last-writer wins at dispatch).
+            const conflict = actionForAccel(keybindings, accel) !== a.id;
+            const rec = recording === a.id;
+            return (
+              <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "6px 2px" }}>
+                <span style={{ flex: 1, fontSize: 13 }}>{a.label}</span>
+                {conflict && !rec && <span title="This combo is also bound to another action" style={{ fontSize: 11, color: "#e6b450" }}>⚠ conflict</span>}
+                <button
+                  onClick={() => setRecording(rec ? null : a.id)}
+                  className="mono"
+                  style={{
+                    minWidth: 96, textAlign: "center", padding: "5px 12px", fontSize: 12, cursor: "pointer",
+                    borderRadius: 8, border: `1px solid ${rec ? "rgb(var(--primary-soft))" : "var(--border-strong)"}`,
+                    background: rec ? "rgb(var(--primary) / 0.22)" : "rgba(255,255,255,0.03)",
+                    color: rec ? "var(--text)" : "var(--text-soft)",
+                  }}
+                >
+                  {rec ? "press keys…" : displayAccel(accel)}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      ))}
     </div>
   );
 }
