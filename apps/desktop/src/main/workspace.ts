@@ -147,7 +147,11 @@ function hostAddress(host: string): string {
   return at >= 0 ? host.slice(at + 1) : host;
 }
 
-async function resolveSshTarget(machine: string): Promise<SshTarget> {
+// A resolution plus whether it's a CONFIDENT answer (safe to cache) versus a
+// transient fail-safe fallback (must NOT be cached — see getSshTarget).
+type Resolved = SshTarget & { cacheable: boolean };
+
+async function resolveSshTarget(machine: string): Promise<Resolved> {
   const host = getSshHost(machine);
   const rec = serverHosts[machine];
   const port = rec?.sshPort ?? DEFAULT_SSH_PORT;
@@ -162,22 +166,26 @@ async function resolveSshTarget(machine: string): Promise<SshTarget> {
   for (const addr of candidates) {
     try {
       if (await probeReachable(addr, port, PROBE_TIMEOUT_MS)) {
-        return { host, opts: [] };
+        return { host, opts: [], cacheable: true }; // confidently reachable directly
       }
     } catch {
       // probe threw → try the next candidate, else fall through to relay
     }
   }
 
-  // 2. Unreachable directly. Relay needs the server-known hostId; without it we
-  //    can only fall back to the direct string (fail-safe, current behavior).
-  if (!rec?.id) return { host, opts: [] };
+  // 2. Unreachable directly → relay. A missing hostId or a failed relay lookup is
+  //    a TRANSIENT condition — host records not synced yet, jump key not registered
+  //    yet, or the tunnel fetch raced app startup. These fall back to the direct
+  //    string so we never hard-fail, but they are marked NOT cacheable: caching a
+  //    "couldn't reach the relay" fallback would keep a NAT'd host connecting to its
+  //    (refused) direct :22 for the whole TTL even after the relay becomes available.
+  if (!rec?.id) return { host, opts: [], cacheable: false };
   try {
-    if (!(await ensureRegistered())) return { host, opts: [] };
+    if (!(await ensureRegistered())) return { host, opts: [], cacheable: false };
     const coords = await fetchTunnel(rec.id);
-    return { host, opts: buildRelayOpts(coords) };
+    return { host, opts: buildRelayOpts(coords), cacheable: true }; // relay ready
   } catch {
-    return { host, opts: [] };
+    return { host, opts: [], cacheable: false };
   }
 }
 
@@ -191,8 +199,13 @@ export async function getSshTarget(machine: string): Promise<SshTarget> {
   try {
     const cached = probeCache.get(machine);
     if (cached && Date.now() - cached.at < PROBE_TTL_MS) return cached.target;
-    const target = await resolveSshTarget(machine);
-    probeCache.set(machine, { at: Date.now(), target });
+    const resolved = await resolveSshTarget(machine);
+    const target: SshTarget = { host: resolved.host, opts: resolved.opts };
+    // Only cache a CONFIDENT resolution (direct-reachable or relay-built). A
+    // transient fail-safe fallback is left uncached so the very next call retries
+    // and picks up the relay once records/registration are ready — otherwise a warm
+    // that raced app startup would pin a NAT'd host to a refused direct connect.
+    if (resolved.cacheable) probeCache.set(machine, { at: Date.now(), target });
     return target;
   } catch {
     // absolute last resort — never break a session

@@ -108,4 +108,20 @@ describe("getSshTarget relay-vs-direct decision", () => {
     await getSshTarget("buildbox");
     expect(probe).toHaveBeenCalledTimes(1);
   });
+
+  it("does NOT cache a transient relay-unavailable fallback — the next call picks up the relay", async () => {
+    // First call: NAT'd (probe false) but the jump key isn't registered yet → direct
+    // fallback. If that were cached, the host would be pinned to its refused direct
+    // :22 for the whole TTL. It must be re-resolved once registration is ready.
+    let registered = false;
+    const fetchTunnel = vi.fn().mockResolvedValue(COORDS);
+    __setRelayDepsForTest({ probe: async () => false, fetchTunnel, ensureRegistered: async () => registered });
+    const first = await getSshTarget("buildbox");
+    expect(first).toEqual({ host: "dev@10.0.0.5", opts: [] }); // fallback, no relay yet
+    expect(fetchTunnel).not.toHaveBeenCalled();
+
+    registered = true; // registration completes (records synced, key posted)
+    const second = await getSshTarget("buildbox");
+    expect(second.opts[1]).toContain("ProxyCommand=ssh -i"); // now relays, not stuck on cached direct
+  });
 });
