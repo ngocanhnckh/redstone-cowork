@@ -12,7 +12,7 @@ import { bindingsWithDefaults, saveBindings, DEFAULT_BINDINGS } from "./cockpit/
  * would prune the bubble the instant Claude speaks — before the user's message
  * lands — making it vanish. Robust to the host rewriting the text (chunk/trim).
  */
-export type PendingSend = { text: string; baseUsers: number; ts: number };
+export type PendingSend = { text: string; baseUsers: number; ts: number; answerAtSend: string | null };
 
 /** Safety net: drop an un-incorporated optimistic send after this long (ms). A
  * message can sit queued in Claude's input while a long turn finishes (multi-minute
@@ -66,6 +66,39 @@ export function consumeFinishedPending(
   for (const id of Object.keys(next)) {
     if (prevWorking[id] === true && nowWorking[id] === false && next[id]?.length) {
       const [, ...rest] = next[id];
+      if (rest.length) next[id] = rest;
+      else delete next[id];
+    }
+  }
+  return next;
+}
+
+/**
+ * Retire the oldest optimistic send for a session that is IDLE (`working:false`) and
+ * whose assistant prose (`latestAnswer`) has advanced since the send. That's a
+ * definitive "your message was processed and Claude is done" signal that needs
+ * neither the working true→false EDGE (which a poll can miss entirely on a fast turn)
+ * NOR the transcript user-count (which can't grow when a huge turn pushes the prompt
+ * out of the transcript tail). Without this, the "working…" loader on a giant session
+ * could sit for up to the 10-min TTL after the reply already arrived. One retirement
+ * per pass (oldest first), matching consumeFinishedPending, so a genuinely-queued
+ * later message isn't dropped early.
+ */
+export function consumeAnsweredPending(
+  pending: Record<string, PendingSend[]>,
+  sessions: SessionView[],
+  queue: SessionView[]
+): Record<string, PendingSend[]> {
+  const next: Record<string, PendingSend[]> = { ...pending };
+  for (const id of Object.keys(next)) {
+    const s = sessions.find((x) => x.id === id) ?? queue.find((x) => x.id === id);
+    if (!s || s.working) continue; // still working → keep the loader
+    const list = next[id];
+    if (!list?.length) continue;
+    // latestAnswer changed since the send → Claude spoke after we queued it, and it's
+    // now idle, so the message has been handled.
+    if (s.latestAnswer != null && s.latestAnswer !== list[0].answerAtSend) {
+      const [, ...rest] = list;
       if (rest.length) next[id] = rest;
       else delete next[id];
     }
@@ -284,7 +317,7 @@ export const useStore = create<State>((set, get) => ({
         sessions: s,
         decisions: d,
         focusId: pickFocus(q, s, state.focusId),
-        pending: prunePending(consumeFinishedPending(state.pending, lastWorking, nowWorking), s, q, Date.now()),
+        pending: prunePending(consumeAnsweredPending(consumeFinishedPending(state.pending, lastWorking, nowWorking), s, q), s, q, Date.now()),
         workingStale,
         error: null,
         hasLoaded: true,
@@ -305,10 +338,14 @@ export const useStore = create<State>((set, get) => ({
       // Snapshot the user-message count + already-queued sends, so multiple quick
       // sends each clear in order as the host records them one at a time.
       const baseUsers = userMsgCount(state.sessions, state.queue, sessionId) + existing.length;
+      // Snapshot the current assistant prose so we can detect when Claude has
+      // replied since this send (a fast-retire signal for giant sessions).
+      const sess = state.sessions.find((x) => x.id === sessionId) ?? state.queue.find((x) => x.id === sessionId);
+      const answerAtSend = sess?.latestAnswer ?? null;
       return {
         pending: {
           ...state.pending,
-          [sessionId]: [...existing, { text: t, baseUsers, ts: Date.now() }],
+          [sessionId]: [...existing, { text: t, baseUsers, ts: Date.now(), answerAtSend }],
         },
       };
     });
