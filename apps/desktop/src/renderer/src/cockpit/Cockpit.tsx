@@ -10,6 +10,7 @@ import AllSessions from "./AllSessions";
 import Hud from "./Hud";
 import BootScreen from "./BootScreen";
 import { useKeybindings } from "./useKeybindings";
+import SessionSwitcher from "./SessionSwitcher";
 import AssistPanel from "./AssistPanel";
 import SettingsPanel from "./SettingsPanel";
 import CapsModal from "./CapsModal";
@@ -343,6 +344,7 @@ export default function Cockpit() {
       <AssistPanel />
       <SettingsPanel />
       <CapsModal />
+      <SessionSwitcher />
     </div>
   );
 }

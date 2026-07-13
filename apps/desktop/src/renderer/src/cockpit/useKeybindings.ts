@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useStore } from "../store";
 import { accelFromEvent, actionForAccel, type ActionId } from "./keybindings";
 
@@ -9,29 +9,81 @@ const TAB_FOR: Partial<Record<ActionId, "chat" | "terminal" | "browser" | "ports
   "tab.ports": "ports",
   "tab.files": "files",
 };
+// HUD uses its own window keys ("term" not "terminal"); the rest match.
+const HUD_KEY: Record<string, string> = { chat: "chat", terminal: "term", browser: "browser", files: "files", ports: "ports" };
+
+const HOLD_KEY: Record<string, string> = { Ctrl: "Control", Meta: "Meta", Alt: "Alt" };
+/** The KeyboardEvent.key of the "hold" modifier in an accelerator (ignoring Shift,
+ * which is the direction modifier), e.g. "Ctrl+Tab" → "Control". null if bare. */
+function holdModifier(accel: string): string | null {
+  for (const part of accel.split("+")) if (HOLD_KEY[part]) return HOLD_KEY[part];
+  return null;
+}
 
 /**
- * Global keyboard-shortcut dispatcher. Turns a keydown into a bound action —
- * cycling sessions (Ctrl+Tab), toggling the assistant, or focusing a virtual-app
- * tab of the focused session. Bindings are user-editable (store.keybindings) and
- * re-read live when the rebind panel changes them.
+ * Global keyboard-shortcut dispatcher. Cycling sessions opens an Alt-Tab-style
+ * switcher that stays up while the modifier is held and commits on release; the
+ * assistant toggle and the virtual-app tab shortcuts (Flow/Grid via activeTab, HUD
+ * via the rcw-open-app bridge) fire immediately. Bindings are user-editable and
+ * re-read live from the store.
  */
 export function useKeybindings(): void {
   const keybindings = useStore((s) => s.keybindings);
+  // Which modifier is holding the switcher open (so we know when it's released).
+  const holdKeyRef = useRef<string | null>(null);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      const st = useStore.getState();
+      // Escape closes an open switcher without changing focus.
+      if (st.switcher && e.key === "Escape") { e.preventDefault(); st.cancelSwitcher(); holdKeyRef.current = null; return; }
+
       const accel = accelFromEvent(e);
       if (!accel) return;
       const action = actionForAccel(keybindings as Record<ActionId, string>, accel);
       if (!action) return;
-      const st = useStore.getState();
-      if (action === "session.next") { e.preventDefault(); st.cycleFocus(1); return; }
-      if (action === "session.prev") { e.preventDefault(); st.cycleFocus(-1); return; }
+
+      if (action === "session.next" || action === "session.prev") {
+        e.preventDefault();
+        const dir = action === "session.next" ? 1 : -1;
+        const hold = holdModifier(keybindings[action] ?? "");
+        // No hold modifier (bare-key binding) → just cycle immediately, no overlay.
+        if (!hold) { st.cycleFocus(dir); return; }
+        if (st.switcher) st.moveSwitcher(dir);
+        else { st.openSwitcher(dir); holdKeyRef.current = hold; }
+        return;
+      }
       if (action === "assistant.toggle") { e.preventDefault(); st.toggleAssist(); return; }
+
       const tab = TAB_FOR[action];
-      if (tab && st.focusId) { e.preventDefault(); st.setActiveTab(st.focusId, tab); }
+      if (tab) {
+        e.preventDefault();
+        if (st.mode === "hud") window.dispatchEvent(new CustomEvent("rcw-open-app", { detail: { key: HUD_KEY[tab] } }));
+        else if (st.focusId) st.setActiveTab(st.focusId, tab);
+      }
     };
+
+    // Release the hold modifier → commit the switcher to the highlighted session.
+    const onKeyUp = (e: KeyboardEvent) => {
+      const st = useStore.getState();
+      if (st.switcher && holdKeyRef.current && e.key === holdKeyRef.current) {
+        st.commitSwitcher();
+        holdKeyRef.current = null;
+      }
+    };
+    // Losing window focus mid-switch: commit to whatever's highlighted (don't wedge).
+    const onBlur = () => {
+      const st = useStore.getState();
+      if (st.switcher) { st.commitSwitcher(); holdKeyRef.current = null; }
+    };
+
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("keyup", onKeyUp);
+    window.addEventListener("blur", onBlur);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("keyup", onKeyUp);
+      window.removeEventListener("blur", onBlur);
+    };
   }, [keybindings]);
 }

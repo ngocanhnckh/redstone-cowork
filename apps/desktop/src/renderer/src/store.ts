@@ -195,6 +195,14 @@ type State = {
   /** Move focus to the next (+1) / previous (-1) session — drives the Ctrl+Tab
    * session switcher (HUD + everywhere). Cycles the full connected-session list. */
   cycleFocus: (dir: 1 | -1) => void;
+  /** Alt-Tab-style session switcher overlay: `ids` is the snapshotted session order
+   * at open time (stable while you hold the modifier), `index` is the highlighted one.
+   * null when the overlay is closed. */
+  switcher: { ids: string[]; index: number } | null;
+  openSwitcher: (dir: 1 | -1) => void;
+  moveSwitcher: (dir: 1 | -1) => void;
+  commitSwitcher: () => void;
+  cancelSwitcher: () => void;
   setMode: (mode: "flow" | "grid" | "history" | "hud") => void;
   /** User-customizable keyboard shortcuts (action id → accelerator). */
   keybindings: Record<string, string>;
@@ -364,6 +372,28 @@ export const useStore = create<State>((set, get) => ({
     const next = list[(((idx < 0 ? 0 : idx) + dir) % list.length + list.length) % list.length];
     if (next) set({ focusId: next.id });
   },
+
+  switcher: null,
+  openSwitcher: (dir) => {
+    const { sessions, queue, focusId } = get();
+    const list = sessions.length ? sessions : queue;
+    if (list.length === 0) return;
+    const ids = list.map((s) => s.id);
+    const cur = ids.indexOf(focusId ?? "");
+    const index = (((cur < 0 ? 0 : cur) + dir) % ids.length + ids.length) % ids.length;
+    set({ switcher: { ids, index } });
+  },
+  moveSwitcher: (dir) =>
+    set((s) => (s.switcher ? { switcher: { ...s.switcher, index: ((s.switcher.index + dir) % s.switcher.ids.length + s.switcher.ids.length) % s.switcher.ids.length } } : {})),
+  commitSwitcher: () => {
+    const sw = get().switcher;
+    if (sw) {
+      const id = sw.ids[sw.index];
+      if (id) set({ focusId: id });
+    }
+    set({ switcher: null });
+  },
+  cancelSwitcher: () => set({ switcher: null }),
 
   keybindings: bindingsWithDefaults(),
   setKeybinding: (id, accel) =>

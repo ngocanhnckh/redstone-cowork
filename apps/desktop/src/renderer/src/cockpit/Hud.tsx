@@ -1291,6 +1291,20 @@ function HudConsole() {
       return { ...w, z: [...w.z.filter((k) => k !== wid), wid] };
     });
   };
+  // Bridge: the global keyboard shortcuts (Ctrl+1..5) live in Cockpit and can't call
+  // this component's openApp directly, so they dispatch `rcw-open-app` and we open the
+  // matching HUD window here — making the virtual-app shortcuts work in HUD too.
+  const openAppRef = useRef(openApp);
+  openAppRef.current = openApp;
+  useEffect(() => {
+    const onOpen = (e: Event) => {
+      const key = (e as CustomEvent<{ key?: string }>).detail?.key;
+      if (typeof key === "string") openAppRef.current(key);
+    };
+    window.addEventListener("rcw-open-app", onOpen as EventListener);
+    return () => window.removeEventListener("rcw-open-app", onOpen as EventListener);
+  }, []);
+
   const closeAppWindow = (wid: string) => setWins((w) => {
     const nextWins = { ...w.wins };
     delete nextWins[wid];
