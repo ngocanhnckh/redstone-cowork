@@ -115,6 +115,7 @@ export default function FilesPanel({ sessionId, cwd, machine }: Props) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const editorRef = useRef<any>(null);
   const pendingReveal = useRef<number | null>(null);
+  const treeScrollRef = useRef<HTMLDivElement>(null);
 
   const loadDir = useCallback(
     async (dir: string) => {
@@ -320,17 +321,21 @@ export default function FilesPanel({ sessionId, cwd, machine }: Props) {
     return () => clearTimeout(t);
   }, [autoSave, drafts, openPath, original, read, save]);
 
-  // Dismiss the context menu on any outside click / scroll / Escape.
+  // Dismiss the context menu on an outside click, Escape, or scrolling the file tree.
+  // The scroll listener is scoped to the tree container (NOT a global capture) — the
+  // app has constantly-scrolling panels (chat stream, terminal, telemetry) that would
+  // otherwise slam the menu shut a moment after it opened.
   useEffect(() => {
     if (!menu) return;
     const close = () => setMenu(null);
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setMenu(null);
+    const tree = treeScrollRef.current;
     window.addEventListener("click", close);
-    window.addEventListener("scroll", close, true);
+    tree?.addEventListener("scroll", close);
     window.addEventListener("keydown", onKey);
     return () => {
       window.removeEventListener("click", close);
-      window.removeEventListener("scroll", close, true);
+      tree?.removeEventListener("scroll", close);
       window.removeEventListener("keydown", onKey);
     };
   }, [menu]);
@@ -436,6 +441,7 @@ export default function FilesPanel({ sessionId, cwd, machine }: Props) {
       <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
         {/* File tree — or project-wide search when toggled (⌘⇧F) */}
         <div
+          ref={treeScrollRef}
           className="no-scrollbar"
           onContextMenu={searchOpen ? undefined : (e) => openMenu(e, { kind: "root", path: cwd, parent: cwd })}
           style={{
