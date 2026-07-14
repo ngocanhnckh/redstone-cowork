@@ -83,6 +83,7 @@ export const IPC = {
   browserPrepPartition: "api:browser:prep-partition",
   browserOpenWindow: "api:browser:open-window",
   guestKey: "api:guest:key",
+  keybindingsSync: "api:keybindings:sync",
   extensionSetEnabled: "api:extensions:enabled",
   extensionRemove: "api:extensions:remove",
   vaultAvailable: "api:vault:available",

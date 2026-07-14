@@ -249,12 +249,15 @@ contextBridge.exposeInMainWorld("cowork", {
     ipcRenderer.invoke(IPC.browserPrepPartition, { partition }),
   openBrowserWindow: (url: string, partition?: string): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke(IPC.browserOpenWindow, { url, partition }),
-  // Keydowns forwarded from a focused <webview> guest (so shortcuts work over pages).
-  onGuestKey: (cb: (k: { key: string; ctrl: boolean; meta: boolean; alt: boolean; shift: boolean }) => void): (() => void) => {
-    const handler = (_e: unknown, k: { key: string; ctrl: boolean; meta: boolean; alt: boolean; shift: boolean }) => cb(k);
+  // Key events captured in main (main window + guests) and forwarded to the shortcut
+  // dispatcher, so shortcuts fire regardless of which panel/editor/page has focus.
+  onGuestKey: (cb: (k: { type: "keyDown" | "keyUp"; key: string; ctrl: boolean; meta: boolean; alt: boolean; shift: boolean }) => void): (() => void) => {
+    const handler = (_e: unknown, k: { type: "keyDown" | "keyUp"; key: string; ctrl: boolean; meta: boolean; alt: boolean; shift: boolean }) => cb(k);
     ipcRenderer.on(IPC.guestKey, handler);
     return () => ipcRenderer.removeListener(IPC.guestKey, handler);
   },
+  // Tell main which accelerators are bound, so it can preventDefault them at the input layer.
+  syncKeybindings: (accels: string[]): Promise<{ ok: boolean }> => ipcRenderer.invoke(IPC.keybindingsSync, { accels }),
   // Main forwards Cmd/Ctrl+F (and Esc) from a focused browser <webview> guest so
   // the owning panel can open/close its in-page find bar. `guestId` is the guest's
   // webContents id, matched against the webview's getWebContentsId().

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useStore } from "../store";
-import { accelFromEvent, accelFromParts, actionForAccel, type ActionId } from "./keybindings";
+import { accelFromParts, actionForAccel, type ActionId } from "./keybindings";
 
 const TAB_FOR: Partial<Record<ActionId, "chat" | "terminal" | "browser" | "ports" | "files">> = {
   "tab.chat": "chat",
@@ -46,67 +46,49 @@ export function useKeybindings(): void {
   // Which modifier is holding the switcher open (so we know when it's released).
   const holdKeyRef = useRef<string | null>(null);
 
-  // Shortcuts pressed while a <webview> guest has focus are forwarded from main
-  // (keydown doesn't bubble out of a guest). We can't observe the modifier RELEASE
-  // for a guest, so session cycling here is immediate (no hold-open switcher).
+  // Tell main which accelerators are bound so it can preventDefault them (and keep it
+  // in sync when the user rebinds).
   useEffect(() => {
-    const off = window.cowork.onGuestKey((k) => {
-      const accel = accelFromParts({ key: k.key, ctrl: k.ctrl, alt: k.alt, shift: k.shift, meta: k.meta });
-      if (!accel) return;
-      const action = actionForAccel(useStore.getState().keybindings as Record<ActionId, string>, accel);
-      if (!action) return;
-      if (action === "session.next") { useStore.getState().cycleFocus(1); return; }
-      if (action === "session.prev") { useStore.getState().cycleFocus(-1); return; }
-      runSimpleAction(action);
-    });
-    return off;
+    window.cowork.syncKeybindings(Object.values(keybindings)).catch(() => {});
   }, [keybindings]);
 
+  // The SOLE dispatcher: keys are captured in main (main window + every webview guest)
+  // and forwarded here, so a shortcut fires no matter what has focus — a text field,
+  // Monaco, the terminal, or a web page. keyDown drives actions + opens/moves the
+  // session switcher; the hold-modifier keyUp commits it.
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
+    const off = window.cowork.onGuestKey((k) => {
       const st = useStore.getState();
-      // Escape closes an open switcher without changing focus.
-      if (st.switcher && e.key === "Escape") { e.preventDefault(); st.cancelSwitcher(); holdKeyRef.current = null; return; }
-
-      const accel = accelFromEvent(e);
+      if (k.type === "keyUp") {
+        if (st.switcher && holdKeyRef.current && k.key === holdKeyRef.current) { st.commitSwitcher(); holdKeyRef.current = null; }
+        return;
+      }
+      // keyDown
+      if (st.switcher && k.key === "Escape") { st.cancelSwitcher(); holdKeyRef.current = null; return; }
+      const accel = accelFromParts({ key: k.key, ctrl: k.ctrl, alt: k.alt, shift: k.shift, meta: k.meta });
       if (!accel) return;
-      const action = actionForAccel(keybindings as Record<ActionId, string>, accel);
+      const action = actionForAccel(st.keybindings as Record<ActionId, string>, accel);
       if (!action) return;
-
       if (action === "session.next" || action === "session.prev") {
-        e.preventDefault();
         const dir = action === "session.next" ? 1 : -1;
-        const hold = holdModifier(keybindings[action] ?? "");
-        // No hold modifier (bare-key binding) → just cycle immediately, no overlay.
+        const hold = holdModifier(st.keybindings[action] ?? "");
         if (!hold) { st.cycleFocus(dir); return; }
         if (st.switcher) st.moveSwitcher(dir);
         else { st.openSwitcher(dir); holdKeyRef.current = hold; }
         return;
       }
-      if (action === "assistant.toggle" || TAB_FOR[action]) { e.preventDefault(); runSimpleAction(action); }
-    };
+      runSimpleAction(action);
+    });
+    return off;
+  }, []);
 
-    // Release the hold modifier → commit the switcher to the highlighted session.
-    const onKeyUp = (e: KeyboardEvent) => {
-      const st = useStore.getState();
-      if (st.switcher && holdKeyRef.current && e.key === holdKeyRef.current) {
-        st.commitSwitcher();
-        holdKeyRef.current = null;
-      }
-    };
-    // Losing window focus mid-switch: commit to whatever's highlighted (don't wedge).
+  // Losing OS focus mid-switch: commit to whatever's highlighted (don't wedge open).
+  useEffect(() => {
     const onBlur = () => {
       const st = useStore.getState();
       if (st.switcher) { st.commitSwitcher(); holdKeyRef.current = null; }
     };
-
-    window.addEventListener("keydown", onKey);
-    window.addEventListener("keyup", onKeyUp);
     window.addEventListener("blur", onBlur);
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      window.removeEventListener("keyup", onKeyUp);
-      window.removeEventListener("blur", onBlur);
-    };
-  }, [keybindings]);
+    return () => window.removeEventListener("blur", onBlur);
+  }, []);
 }

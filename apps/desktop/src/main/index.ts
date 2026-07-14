@@ -194,6 +194,13 @@ function createWindow(): void {
 
   win.on("ready-to-show", () => win.show());
 
+  // This is the cockpit window that runs the shortcut dispatcher; capture its keys at
+  // the input layer so shortcuts fire no matter which panel/editor has focus.
+  const wc = win.webContents;
+  mainWinWC = wc;
+  wc.on("before-input-event", forwardShortcut);
+  win.on("closed", () => { if (mainWinWC === wc) mainWinWC = null; });
+
   // Links in the chat/markdown must NOT navigate the app away. Open http(s) links
   // to a different origin in the user's real browser; deny popups likewise.
   const appOrigin = (): string => {
@@ -565,6 +572,49 @@ ipcMain.handle(IPC.extensionInstallWebStore, (_e, a: { idOrUrl: string }) => ins
 
 // Screen-share source picker: the renderer resolves the pending getDisplayMedia
 // request with the user's chosen source (or null to cancel).
+// ---- Keyboard shortcut capture (before-input-event) ----------------------------
+// App shortcuts must fire wherever focus is — a text input, the Monaco editor, the
+// xterm terminal, or inside a <webview> page. DOM keydown doesn't reliably bubble out
+// of all of those, so we intercept at Chromium's input layer (before-input-event) on
+// BOTH the main window and every guest, and forward the key to the cockpit renderer's
+// dispatcher (see useKeybindings). Combos that the user has actually BOUND are also
+// preventDefault'd here so they don't leak into the focused element (e.g. Ctrl+Tab
+// won't move focus). `boundAccels` is synced from the renderer.
+let mainWinWC: import("electron").WebContents | null = null;
+let boundAccels = new Set<string>();
+const MODIFIER_KEYS = new Set(["Control", "Shift", "Alt", "Meta", "CapsLock"]);
+function accelOf(input: Electron.Input): string | null {
+  if (MODIFIER_KEYS.has(input.key)) return null;
+  const parts: string[] = [];
+  if (input.control) parts.push("Ctrl");
+  if (input.alt) parts.push("Alt");
+  if (input.shift) parts.push("Shift");
+  if (input.meta) parts.push("Meta");
+  let key = input.key;
+  if (key === " ") key = "Space";
+  else if (key.length === 1) key = key.toUpperCase();
+  parts.push(key);
+  return parts.join("+");
+}
+function forwardShortcut(event: Electron.Event, input: Electron.Input): void {
+  if (!mainWinWC || mainWinWC.isDestroyed()) return;
+  if (input.type === "keyUp") {
+    // Only modifier releases matter (they commit the hold-to-switch overlay).
+    if (input.key === "Control" || input.key === "Meta" || input.key === "Alt")
+      mainWinWC.send(IPC.guestKey, { type: "keyUp", key: input.key, ctrl: false, meta: false, alt: false, shift: false });
+    return;
+  }
+  const combo = input.control || input.meta || input.alt;
+  if (combo) {
+    const accel = accelOf(input);
+    if (accel && boundAccels.has(accel)) event.preventDefault(); // owned shortcut → don't leak to the focused element
+    mainWinWC.send(IPC.guestKey, { type: "keyDown", key: input.key, ctrl: !!input.control, meta: !!input.meta, alt: !!input.alt, shift: !!input.shift });
+  } else if (input.key === "Escape") {
+    mainWinWC.send(IPC.guestKey, { type: "keyDown", key: "Escape", ctrl: false, meta: false, alt: false, shift: false });
+  }
+}
+ipcMain.handle(IPC.keybindingsSync, (_e, a: { accels: string[] }) => { boundAccels = new Set(a?.accels ?? []); return { ok: true }; });
+
 let displayPickResolver: ((c: { kind: string; id: string } | null) => void) | null = null;
 ipcMain.handle(IPC.displayMediaPick, (_e, a: { kind: string; id: string }) => { displayPickResolver?.(a); return { ok: true }; });
 ipcMain.handle(IPC.displayMediaCancel, () => { displayPickResolver?.(null); return { ok: true }; });
@@ -812,19 +862,9 @@ const NAV_KEYS_JS = `(() => {
 // handled from the renderer.
 app.on("web-contents-created", (_e, contents) => {
   if (contents.getType() !== "webview") return;
-
   // A <webview> guest swallows keydown — it never bubbles to the host window — so
-  // app keyboard shortcuts would silently die while a web page has focus. Forward
-  // modifier-combo keydowns from the guest to its HOST window's renderer, where the
-  // keybinding dispatcher matches + acts on them (see useKeybindings). Only combos
-  // (Ctrl/Cmd/Alt) are forwarded, and we never preventDefault, so ordinary in-page
-  // keys (typing, Ctrl+C copy, etc.) are untouched.
-  contents.on("before-input-event", (_ev, input) => {
-    if (input.type !== "keyDown") return;
-    if (!(input.control || input.meta || input.alt)) return;
-    const host = (contents as unknown as { hostWebContents?: import("electron").WebContents }).hostWebContents;
-    host?.send(IPC.guestKey, { key: input.key, ctrl: !!input.control, meta: !!input.meta, alt: !!input.alt, shift: !!input.shift });
-  });
+  // forward its keys to the cockpit renderer's shortcut dispatcher too.
+  contents.on("before-input-event", forwardShortcut);
 
   // Custom-app guests stay pinned to their own domain. A top-level navigation or
   // a popup (target=_blank / window.open) that leaves the app's site is cancelled
