@@ -323,8 +323,12 @@ function sshExec(target: SshTarget, remoteCommand: string, stdin?: string): Prom
       { timeout: SSH_TIMEOUT_MS },
       (err) => (err ? reject(err) : resolve())
     );
+    child.on("error", reject);
     if (stdin !== undefined) {
-      child.stdin?.end(stdin);
+      // Swallow EPIPE etc. on the stdin pipe (remote closed early) so it can't become
+      // an uncaught exception that crashes the app; the callback rejects with the cause.
+      child.stdin?.on("error", () => { /* handled via the execFile callback */ });
+      try { child.stdin?.end(stdin); } catch { /* pipe already gone */ }
     }
   });
 }

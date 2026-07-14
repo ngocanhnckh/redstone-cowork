@@ -68,7 +68,20 @@ function sshWrite(target: SshTarget, remoteCommand: string, stdin: string | Buff
       { timeout: SSH_TIMEOUT_MS },
       (err) => (err ? reject(err) : resolve())
     );
-    child.stdin?.end(stdin);
+    // A spawn failure (ssh missing, etc.) also surfaces here.
+    child.on("error", reject);
+    // CRITICAL: swallow errors on the stdin stream. When ssh (or the remote command)
+    // closes the pipe before we finish writing — a dropped connection, the remote
+    // `cat`/`base64 -d` exiting early — end()/write() emits EPIPE on child.stdin. With
+    // no handler that becomes an UNCAUGHT exception that crashes the whole app. The
+    // execFile callback above still rejects with the real cause, so the upload fails
+    // cleanly instead.
+    child.stdin?.on("error", () => { /* handled via the execFile callback / timeout */ });
+    try {
+      child.stdin?.end(stdin);
+    } catch {
+      /* pipe already gone — the callback rejects with the underlying error */
+    }
   });
 }
 
@@ -285,6 +298,7 @@ export async function downloadFileTo(args: Loc & { file: string; dest: string })
       let err = "";
       child.stderr.on("data", (d) => { err += String(d); });
       child.on("error", reject);
+      child.stdout.on("error", reject); // don't let a pipe error crash the process
       child.stdout.pipe(out);
       out.on("finish", () => (child.exitCode === 0 || child.exitCode === null ? resolve() : reject(new Error(err.trim() || `ssh exit ${child.exitCode}`))));
       child.on("close", (code) => { if (code !== 0) { out.destroy(); reject(new Error(err.trim() || `ssh exit ${code}`)); } });
