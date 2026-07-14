@@ -813,6 +813,19 @@ const NAV_KEYS_JS = `(() => {
 app.on("web-contents-created", (_e, contents) => {
   if (contents.getType() !== "webview") return;
 
+  // A <webview> guest swallows keydown — it never bubbles to the host window — so
+  // app keyboard shortcuts would silently die while a web page has focus. Forward
+  // modifier-combo keydowns from the guest to its HOST window's renderer, where the
+  // keybinding dispatcher matches + acts on them (see useKeybindings). Only combos
+  // (Ctrl/Cmd/Alt) are forwarded, and we never preventDefault, so ordinary in-page
+  // keys (typing, Ctrl+C copy, etc.) are untouched.
+  contents.on("before-input-event", (_ev, input) => {
+    if (input.type !== "keyDown") return;
+    if (!(input.control || input.meta || input.alt)) return;
+    const host = (contents as unknown as { hostWebContents?: import("electron").WebContents }).hostWebContents;
+    host?.send(IPC.guestKey, { key: input.key, ctrl: !!input.control, meta: !!input.meta, alt: !!input.alt, shift: !!input.shift });
+  });
+
   // Custom-app guests stay pinned to their own domain. A top-level navigation or
   // a popup (target=_blank / window.open) that leaves the app's site is cancelled
   // and opened in the session's in-app workspace browser as a new tab (never the

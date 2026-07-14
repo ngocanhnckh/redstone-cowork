@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useStore } from "../store";
-import { accelFromEvent, actionForAccel, type ActionId } from "./keybindings";
+import { accelFromEvent, accelFromParts, actionForAccel, type ActionId } from "./keybindings";
 
 const TAB_FOR: Partial<Record<ActionId, "chat" | "terminal" | "browser" | "ports" | "files">> = {
   "tab.chat": "chat",
@@ -27,10 +27,40 @@ function holdModifier(accel: string): string | null {
  * via the rcw-open-app bridge) fire immediately. Bindings are user-editable and
  * re-read live from the store.
  */
+// The assistant-toggle / virtual-app-tab actions (everything except the hold-based
+// session switcher). Shared by the DOM keydown path and the forwarded-guest-key path.
+function runSimpleAction(action: ActionId): boolean {
+  const st = useStore.getState();
+  if (action === "assistant.toggle") { st.toggleAssist(); return true; }
+  const tab = TAB_FOR[action];
+  if (tab) {
+    if (st.mode === "hud") window.dispatchEvent(new CustomEvent("rcw-open-app", { detail: { key: HUD_KEY[tab] } }));
+    else if (st.focusId) st.setActiveTab(st.focusId, tab);
+    return true;
+  }
+  return false;
+}
+
 export function useKeybindings(): void {
   const keybindings = useStore((s) => s.keybindings);
   // Which modifier is holding the switcher open (so we know when it's released).
   const holdKeyRef = useRef<string | null>(null);
+
+  // Shortcuts pressed while a <webview> guest has focus are forwarded from main
+  // (keydown doesn't bubble out of a guest). We can't observe the modifier RELEASE
+  // for a guest, so session cycling here is immediate (no hold-open switcher).
+  useEffect(() => {
+    const off = window.cowork.onGuestKey((k) => {
+      const accel = accelFromParts({ key: k.key, ctrl: k.ctrl, alt: k.alt, shift: k.shift, meta: k.meta });
+      if (!accel) return;
+      const action = actionForAccel(useStore.getState().keybindings as Record<ActionId, string>, accel);
+      if (!action) return;
+      if (action === "session.next") { useStore.getState().cycleFocus(1); return; }
+      if (action === "session.prev") { useStore.getState().cycleFocus(-1); return; }
+      runSimpleAction(action);
+    });
+    return off;
+  }, [keybindings]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -53,14 +83,7 @@ export function useKeybindings(): void {
         else { st.openSwitcher(dir); holdKeyRef.current = hold; }
         return;
       }
-      if (action === "assistant.toggle") { e.preventDefault(); st.toggleAssist(); return; }
-
-      const tab = TAB_FOR[action];
-      if (tab) {
-        e.preventDefault();
-        if (st.mode === "hud") window.dispatchEvent(new CustomEvent("rcw-open-app", { detail: { key: HUD_KEY[tab] } }));
-        else if (st.focusId) st.setActiveTab(st.focusId, tab);
-      }
+      if (action === "assistant.toggle" || TAB_FOR[action]) { e.preventDefault(); runSimpleAction(action); }
     };
 
     // Release the hold modifier → commit the switcher to the highlighted session.

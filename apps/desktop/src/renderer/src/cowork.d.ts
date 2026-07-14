@@ -161,6 +161,7 @@ declare global {
       displayMediaCancel(): Promise<{ ok: boolean }>;
       prepareBrowserPartition(partition: string): Promise<{ ok: boolean }>;
       openBrowserWindow(url: string, partition?: string): Promise<{ ok: boolean; error?: string }>;
+      onGuestKey(cb: (k: { key: string; ctrl: boolean; meta: boolean; alt: boolean; shift: boolean }) => void): () => void;
 
       // Appearance — custom background image + macOS fullscreen-keeps-wallpaper.
       chooseBgImage(): Promise<{ ok: boolean; dataUrl?: string; error?: string }>;

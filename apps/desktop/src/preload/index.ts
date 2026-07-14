@@ -249,6 +249,12 @@ contextBridge.exposeInMainWorld("cowork", {
     ipcRenderer.invoke(IPC.browserPrepPartition, { partition }),
   openBrowserWindow: (url: string, partition?: string): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke(IPC.browserOpenWindow, { url, partition }),
+  // Keydowns forwarded from a focused <webview> guest (so shortcuts work over pages).
+  onGuestKey: (cb: (k: { key: string; ctrl: boolean; meta: boolean; alt: boolean; shift: boolean }) => void): (() => void) => {
+    const handler = (_e: unknown, k: { key: string; ctrl: boolean; meta: boolean; alt: boolean; shift: boolean }) => cb(k);
+    ipcRenderer.on(IPC.guestKey, handler);
+    return () => ipcRenderer.removeListener(IPC.guestKey, handler);
+  },
   // Main forwards Cmd/Ctrl+F (and Esc) from a focused browser <webview> guest so
   // the owning panel can open/close its in-page find bar. `guestId` is the guest's
   // webContents id, matched against the webview's getWebContentsId().

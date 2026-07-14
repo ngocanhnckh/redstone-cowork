@@ -31,20 +31,29 @@ export const ACTIONS: ActionDef[] = [
 const STORAGE_KEY = "rcw.keybindings.v1";
 const MOD_KEYS = new Set(["Control", "Shift", "Alt", "Meta", "CapsLock"]);
 
-/** Canonical accelerator string for a keydown, or null for a bare modifier press. */
-export function accelFromEvent(e: KeyboardEvent): string | null {
-  if (MOD_KEYS.has(e.key)) return null;
+export type AccelParts = { key: string; ctrl?: boolean; alt?: boolean; shift?: boolean; meta?: boolean };
+
+/** Canonical accelerator string from raw parts, or null for a bare modifier press.
+ * Shared by DOM keydowns AND main-forwarded guest keys (before-input-event), so a
+ * shortcut pressed while a <webview> has focus resolves identically. */
+export function accelFromParts(p: AccelParts): string | null {
+  if (MOD_KEYS.has(p.key)) return null;
   const parts: string[] = [];
-  if (e.ctrlKey) parts.push("Ctrl");
-  if (e.altKey) parts.push("Alt");
-  if (e.shiftKey) parts.push("Shift");
-  if (e.metaKey) parts.push("Meta");
-  let key = e.key;
+  if (p.ctrl) parts.push("Ctrl");
+  if (p.alt) parts.push("Alt");
+  if (p.shift) parts.push("Shift");
+  if (p.meta) parts.push("Meta");
+  let key = p.key;
   if (key === " ") key = "Space";
   else if (key.length === 1) key = key.toUpperCase();
   // Named keys (Tab, Enter, ArrowUp, Escape, F1…) come through as-is.
   parts.push(key);
   return parts.join("+");
+}
+
+/** Canonical accelerator string for a DOM keydown, or null for a bare modifier. */
+export function accelFromEvent(e: KeyboardEvent): string | null {
+  return accelFromParts({ key: e.key, ctrl: e.ctrlKey, alt: e.altKey, shift: e.shiftKey, meta: e.metaKey });
 }
 
 const IS_MAC = typeof navigator !== "undefined" && /Mac/i.test(navigator.platform);
