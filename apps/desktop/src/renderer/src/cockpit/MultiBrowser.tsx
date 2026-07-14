@@ -13,6 +13,8 @@ function urlLabel(url: string): string {
 type Tab = { id: number; url?: string; temp?: boolean };
 type SavedTabs = { tabs: Tab[]; active: number; seq: number };
 const TABS_KEY = "rcw.browser.tabs.v1";
+// Width of the docked strip the tools menu opens into (the webview shrinks by this).
+const MENU_STRIP = 240;
 
 /** The webview storage partition for a tab. Temp/incognito tabs get a UNIQUE
  * non-persistent partition (no `persist:` prefix) → isolated cookies/storage that
@@ -51,6 +53,13 @@ export default function MultiBrowser({ sessionId, cwd, machine }: { sessionId: s
   const [extOpen, setExtOpen] = useState(false);
   const [vaultOpen, setVaultOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  // Esc closes the tools menu (there's no DOM click-away over a native webview).
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setMenuOpen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [menuOpen]);
   const [zoomByTab, setZoomByTab] = useState<Record<number, number>>({});
   const [deviceByTab, setDeviceByTab] = useState<Record<number, "laptop" | "mobile">>({});
   // Effective viewport (CSS px the page sees) per tab, reported by each BrowserPanel.
@@ -190,9 +199,13 @@ export default function MultiBrowser({ sessionId, cwd, machine }: { sessionId: s
       {/* While the menu is open the active webview is hidden (visibility:hidden — the
           ONLY way to stop the native guest layer painting over our DOM menu). The
           menu + backdrop force visibility:visible so they show over the blanked area. */}
-      <div style={{ flex: 1, minHeight: 0, position: "relative", visibility: menuOpen ? "hidden" : "visible" }}>
+      {/* When the menu is open we SHRINK the webview to open a side strip for it (a
+          docked-panel pattern) rather than hiding the page — an Electron <webview>
+          paints above all DOM, so the page has to physically not cover the menu. This
+          keeps the page visible so zoom / device changes preview live. */}
+      <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
         {tabs.map((tab) => (
-          <div key={tab.id} style={{ position: "absolute", inset: 0, display: tab.id === active ? "flex" : "none", flexDirection: "column" }}>
+          <div key={tab.id} style={{ position: "absolute", top: 0, left: 0, bottom: 0, right: menuOpen ? MENU_STRIP : 0, display: tab.id === active ? "flex" : "none", flexDirection: "column" }}>
             <BrowserPanel
               sessionId={sessionId} cwd={cwd} machine={machine}
               ephemeral={tab.id !== 0} isActive={tab.id === active} chromeHidden={chromeHidden} initialUrl={tab.url}
@@ -205,9 +218,8 @@ export default function MultiBrowser({ sessionId, cwd, machine }: { sessionId: s
           </div>
         ))}
         {menuOpen && (
-          <>
-            <div onClick={() => setMenuOpen(false)} style={{ position: "absolute", inset: 0, zIndex: 40, visibility: "visible" }} />
-            <div className="glass-menu" style={{ position: "absolute", top: 8, right: 12, zIndex: 41, visibility: "visible", minWidth: 216, borderRadius: 11, border: "1px solid var(--border-strong)", boxShadow: "0 16px 44px rgba(0,0,0,0.55)", padding: 6, display: "flex", flexDirection: "column", gap: 2 }}>
+          <div style={{ position: "absolute", top: 0, right: 0, bottom: 0, width: MENU_STRIP, background: "color-mix(in srgb, var(--app-panel) 92%, transparent)", borderLeft: "1px solid var(--border)", zIndex: 41, padding: 8 }}>
+            <div className="glass-menu" style={{ borderRadius: 11, border: "1px solid var(--border-strong)", boxShadow: "0 16px 44px rgba(0,0,0,0.5)", padding: 6, display: "flex", flexDirection: "column", gap: 2 }}>
               {/* Zoom row */}
               <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 8px" }}>
                 <span className="mono faint" style={{ fontSize: 11, flex: 1 }}>Zoom {vp ? `· ${vp.w}×${vp.h}` : ""}</span>
@@ -221,7 +233,8 @@ export default function MultiBrowser({ sessionId, cwd, machine }: { sessionId: s
               <MenuItem icon={<IconPuzzle size={15} />} label="Extensions" onClick={() => { setExtOpen(true); setMenuOpen(false); }} />
               <MenuItem icon={<IconEyeOff size={15} />} label={chromeHidden ? "Show address bar" : "Hide address bar"} onClick={() => { toggleChrome(); setMenuOpen(false); }} />
             </div>
-          </>
+            <button onClick={() => setMenuOpen(false)} className="mono faint" style={{ marginTop: 8, width: "100%", background: "transparent", border: "1px solid var(--border)", borderRadius: 8, padding: "5px 0", fontSize: 10.5, color: "var(--text-soft)", cursor: "pointer" }}>close ✕</button>
+          </div>
         )}
       </div>
     </div>
