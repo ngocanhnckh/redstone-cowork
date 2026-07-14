@@ -34,7 +34,7 @@ function runSimpleAction(action: ActionId): boolean {
   if (action === "assistant.toggle") { st.toggleAssist(); return true; }
   const tab = TAB_FOR[action];
   if (tab) {
-    if (st.mode === "hud") window.dispatchEvent(new CustomEvent("rcw-open-app", { detail: { key: HUD_KEY[tab] } }));
+    if (st.mode === "hud") st.requestHudApp(HUD_KEY[tab]);
     else if (st.focusId) st.setActiveTab(st.focusId, tab);
     return true;
   }

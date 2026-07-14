@@ -1291,19 +1291,33 @@ function HudConsole() {
       return { ...w, z: [...w.z.filter((k) => k !== wid), wid] };
     });
   };
-  // Bridge: the global keyboard shortcuts (Ctrl+1..5) live in Cockpit and can't call
-  // this component's openApp directly, so they dispatch `rcw-open-app` and we open the
-  // matching HUD window here — making the virtual-app shortcuts work in HUD too.
-  const openAppRef = useRef(openApp);
-  openAppRef.current = openApp;
+  // Reveal (open OR raise, never minimize) a HUD app window — used by the keyboard
+  // shortcuts, which should always SHOW the app, unlike a dock click which toggles.
+  const revealApp = (appId: string) => {
+    const wid = appWinId(appId);
+    setLayout("windows");
+    setWins((w) => {
+      const cur = w.wins[wid];
+      if (!cur) {
+        const rect = canvasRef.current?.getBoundingClientRect();
+        let ws = { ...DEFAULT_APP_WIN };
+        if (rect && rect.width > 0 && rect.height > 0) ws = clampWin(ws, rect.width, rect.height);
+        return { ...w, wins: { ...w.wins, [wid]: ws }, z: [...w.z.filter((k) => k !== wid), wid] };
+      }
+      // Un-minimize (if needed) and raise to front — never toggle it closed.
+      return { ...w, wins: { ...w.wins, [wid]: { ...cur, min: false } }, z: [...w.z.filter((k) => k !== wid), wid] };
+    });
+  };
+  // The global keyboard shortcuts (Ctrl+1..5) live in Cockpit; they signal via the
+  // store (hudAppRequest), which we consume here to reveal the matching HUD window.
+  const hudAppRequest = useStore((s) => s.hudAppRequest);
+  const lastHudReq = useRef(0);
   useEffect(() => {
-    const onOpen = (e: Event) => {
-      const key = (e as CustomEvent<{ key?: string }>).detail?.key;
-      if (typeof key === "string") openAppRef.current(key);
-    };
-    window.addEventListener("rcw-open-app", onOpen as EventListener);
-    return () => window.removeEventListener("rcw-open-app", onOpen as EventListener);
-  }, []);
+    if (!hudAppRequest || hudAppRequest.nonce === lastHudReq.current) return;
+    lastHudReq.current = hudAppRequest.nonce;
+    revealApp(hudAppRequest.key);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hudAppRequest]);
 
   const closeAppWindow = (wid: string) => setWins((w) => {
     const nextWins = { ...w.wins };

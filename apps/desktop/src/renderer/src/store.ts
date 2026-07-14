@@ -168,6 +168,10 @@ type State = {
   // A one-shot request to open a URL in a session's in-app browser (a new tab). The
   // session's MultiBrowser opens+activates a tab; the HUD reveals the browser window.
   pendingBrowserOpen: { sessionId: string; url: string; nonce: number } | null;
+  // A one-shot request to reveal a HUD virtual-app window (chat/term/browser/…) —
+  // fired by the keyboard shortcuts (Ctrl+1..5). Nonce so each press fires once.
+  hudAppRequest: { key: string; nonce: number } | null;
+  requestHudApp: (key: string) => void;
   // A one-shot request to pop a session's chat into its own floating HUD window
   // (for side-by-side work on multiple sessions in the same folder). The HUD reacts
   // by creating/revealing a `sess:<id>` window; switches to HUD mode if needed.
@@ -249,6 +253,8 @@ export const useStore = create<State>((set, get) => ({
   activeTab: {},
   openBrowsers: [],
   pendingBrowserOpen: null,
+  hudAppRequest: null,
+  requestHudApp: (key) => set((state) => ({ hudAppRequest: { key, nonce: (state.hudAppRequest?.nonce ?? 0) + 1 } })),
   pendingSessionWindow: null,
   openTerminals: [],
   contextCollapsed: false,
