@@ -160,6 +160,7 @@ declare global {
       displayMediaPick(choice: { kind: "screen" | "window" | "tab"; id: string }): Promise<{ ok: boolean }>;
       displayMediaCancel(): Promise<{ ok: boolean }>;
       prepareBrowserPartition(partition: string): Promise<{ ok: boolean }>;
+      openBrowserWindow(url: string, partition?: string): Promise<{ ok: boolean; error?: string }>;
 
       // Appearance — custom background image + macOS fullscreen-keeps-wallpaper.
       chooseBgImage(): Promise<{ ok: boolean; dataUrl?: string; error?: string }>;

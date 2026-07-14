@@ -70,3 +70,8 @@ export const IconEyeOff = (p: IconProps) => (
 export const IconRefresh = (p: IconProps) => (
   <Svg {...p}><path d="M13 3.5 v3 h-3" /><path d="M12.5 8 a4.6 4.6 0 1 1-1.3-3.2 L13 6.5" /></Svg>
 );
+
+// Open in new window — a window frame with an arrow leaving it.
+export const IconExternal = (p: IconProps) => (
+  <Svg {...p}><path d="M8 3 H3.5 A1 1 0 0 0 2.5 4 v8 a1 1 0 0 0 1 1 h8 a1 1 0 0 0 1-1 V8" /><path d="M9.5 2.5 H13.5 V6.5" /><path d="M13.5 2.5 L7.5 8.5" /></Svg>
+);

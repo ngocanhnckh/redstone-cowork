@@ -573,6 +573,47 @@ ipcMain.handle(IPC.displayMediaCancel, () => { displayPickResolver?.(null); retu
 // wire the custom screen-share source picker on a session. Applied to the shared
 // persistent profile AND to each temp/incognito partition (via prepareBrowserPartition)
 // so incognito tabs can log in, use media, and screen-share just like normal tabs.
+/** A minimal self-contained browser shell (address bar + back/forward/reload + a
+ * <webview>) for the pop-out "Open in new window". No template placeholders that
+ * could break on quotes: the partition is attribute-safe and the start URL is
+ * injected as a JSON literal. Regex is avoided in the inline script to dodge
+ * template-escaping pitfalls. */
+function browserWindowHtml(partition: string, startUrl: string): string {
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Redstone Browser</title><style>
+    html,body{margin:0;height:100%;background:#15110d;color:#f0ece1;font-family:ui-monospace,Menlo,monospace;overflow:hidden}
+    #bar{display:flex;gap:6px;align-items:center;padding:8px 10px;height:28px;border-bottom:1px solid #3a3228;box-sizing:border-box}
+    #bar button{background:transparent;border:1px solid #3a3228;color:#cfc6b6;border-radius:6px;padding:3px 9px;cursor:pointer;font-size:13px;line-height:1}
+    #addr{flex:1;min-width:0;background:rgba(255,255,255,.05);border:1px solid #3a3228;color:#f0ece1;border-radius:8px;padding:6px 11px;outline:none;font-size:12px}
+    webview{position:absolute;left:0;right:0;top:45px;bottom:0;width:100%}
+  </style></head><body>
+    <div id="bar">
+      <button id="back" title="Back">&#9664;</button>
+      <button id="fwd" title="Forward">&#9654;</button>
+      <button id="rl" title="Reload">&#8635;</button>
+      <input id="addr" placeholder="Search or type a URL" spellcheck="false"/>
+    </div>
+    <webview id="wv" partition="${partition}" allowpopups></webview>
+    <script>
+      var wv=document.getElementById('wv'), addr=document.getElementById('addr');
+      var START=${JSON.stringify(startUrl)};
+      function norm(s){s=(s||'').trim(); if(!s)return ''; if(s.indexOf('://')>0)return s;
+        var local=/^(localhost|127\\.|10\\.|192\\.168\\.)/.test(s);
+        if(s.indexOf(' ')<0 && s.indexOf('.')>0)return (local?'http://':'https://')+s;
+        if(local)return 'http://'+s;
+        return 'https://www.google.com/search?q='+encodeURIComponent(s);}
+      addr.addEventListener('keydown',function(e){if(e.key==='Enter'){var u=norm(addr.value); if(u)wv.loadURL(u);}});
+      document.getElementById('back').onclick=function(){if(wv.canGoBack())wv.goBack();};
+      document.getElementById('fwd').onclick=function(){if(wv.canGoForward())wv.goForward();};
+      document.getElementById('rl').onclick=function(){wv.reload();};
+      function sync(e){if(e&&e.url)addr.value=e.url;}
+      wv.addEventListener('did-navigate',sync);
+      wv.addEventListener('did-navigate-in-page',sync);
+      wv.addEventListener('page-title-updated',function(e){document.title=e.title||'Redstone Browser';});
+      wv.src=START; addr.value=(START==='about:blank'?'':START);
+    </script>
+  </body></html>`;
+}
+
 const preppedPartitions = new Set<string>();
 function applyBrowserPerms(ses: Session): void {
   ses.setPermissionRequestHandler((_wc, permission, cb) =>
@@ -615,6 +656,29 @@ ipcMain.handle(IPC.browserPrepPartition, (_e, a: { partition: string }) => {
     }
   } catch { /* older Electron — perms just stay default */ }
   return { ok: true };
+});
+// Open a standalone second browser window (its own back/forward/reload + address
+// bar) that SHARES the workspace browser session (same partition → same cookies /
+// logins), so you can view two pages side by side in the same workspace. The window
+// hosts a <webview> on the given partition; permissions are applied to that session.
+ipcMain.handle(IPC.browserOpenWindow, (_e, a: { url?: string; partition?: string }) => {
+  try {
+    const partition = a?.partition || "persist:rcw-web";
+    try { applyBrowserPerms(session.fromPartition(partition)); } catch { /* best-effort */ }
+    const start = a?.url && /^https?:\/\//i.test(a.url) ? a.url : "about:blank";
+    const win = new BrowserWindow({
+      width: 1180,
+      height: 820,
+      title: "Redstone Browser",
+      backgroundColor: "#15110d",
+      webPreferences: { webviewTag: true, sandbox: true },
+    });
+    win.setMenuBarVisibility(false);
+    win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(browserWindowHtml(partition, start))}`);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
 });
 ipcMain.handle(IPC.extensionSetEnabled, (_e, a: { id: string; enabled: boolean }) => setExtensionEnabled(a.id, !!a.enabled));
 ipcMain.handle(IPC.extensionRemove, (_e, a: { id: string }) => removeExtension(a.id));

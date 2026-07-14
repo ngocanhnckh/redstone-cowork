@@ -247,6 +247,8 @@ contextBridge.exposeInMainWorld("cowork", {
   displayMediaCancel: (): Promise<{ ok: boolean }> => ipcRenderer.invoke(IPC.displayMediaCancel),
   prepareBrowserPartition: (partition: string): Promise<{ ok: boolean }> =>
     ipcRenderer.invoke(IPC.browserPrepPartition, { partition }),
+  openBrowserWindow: (url: string, partition?: string): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke(IPC.browserOpenWindow, { url, partition }),
   // Main forwards Cmd/Ctrl+F (and Esc) from a focused browser <webview> guest so
   // the owning panel can open/close its in-page find bar. `guestId` is the guest's
   // webContents id, matched against the webview's getWebContentsId().
