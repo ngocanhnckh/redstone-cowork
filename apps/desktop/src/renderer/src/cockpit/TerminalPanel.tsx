@@ -97,6 +97,12 @@ export default function TerminalPanel({
       allowTransparency: true, // let the warm-ink panel show through the terminal bg
       theme: THEME,
       scrollback: 5000,
+      // Let ⌥(Option)+drag force a LOCAL selection even when the app (tmux with mouse
+      // mode on) is capturing the mouse — on macOS xterm ignores Shift for this, so
+      // without this option you simply can't select over tmux mouse mode. On non-Mac,
+      // Shift+drag already works. Selecting copies on mouseup (see below).
+      macOptionClickForcesSelection: true,
+      rightClickSelectsWord: false,
     });
     const fit = new FitAddon();
     term.loadAddon(fit);
@@ -106,9 +112,10 @@ export default function TerminalPanel({
     // --- Copy / paste -------------------------------------------------------
     // Inside tmux the drag-selection is fragile: tmux mouse mode eats the drag and
     // frequent redraws wipe the visual selection. So COPY THE MOMENT a selection is
-    // made (mouseup) — we grab term.getSelection() before a redraw can clear it. Tip
-    // for the user: if tmux mouse mode is on, hold SHIFT while dragging to force a
-    // local terminal selection instead of sending mouse events to tmux.
+    // made (mouseup) — we grab term.getSelection() before a redraw can clear it. To
+    // select OVER tmux mouse mode: hold ⌥Option (macOptionClickForcesSelection above)
+    // on macOS, or Shift on Windows/Linux, while dragging. Plain drag works when tmux
+    // mouse mode is off.
     const onMouseUp = () => {
       const sel = term.getSelection();
       if (sel && sel.trim()) { window.cowork.copyText(sel).catch(() => {}); setCopied(true); setTimeout(() => setCopied(false), 900); }
