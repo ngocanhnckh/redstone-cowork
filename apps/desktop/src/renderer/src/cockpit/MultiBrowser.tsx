@@ -13,8 +13,6 @@ function urlLabel(url: string): string {
 type Tab = { id: number; url?: string; temp?: boolean };
 type SavedTabs = { tabs: Tab[]; active: number; seq: number };
 const TABS_KEY = "rcw.browser.tabs.v1";
-// Width of the docked strip the tools menu opens into (the webview shrinks by this).
-const MENU_STRIP = 240;
 
 /** The webview storage partition for a tab. Temp/incognito tabs get a UNIQUE
  * non-persistent partition (no `persist:` prefix) → isolated cookies/storage that
@@ -185,10 +183,18 @@ export default function MultiBrowser({ sessionId, cwd, machine }: { sessionId: s
         <button onClick={addTab} title="New browser tab" style={{ ...tabBtn, gap: 5, background: "transparent", color: "var(--text-soft)", border: "1px dashed var(--border-strong)" }}><IconPlus size={12} /> new</button>
         <button onClick={addTempTab} title="New incognito tab — a fresh, isolated profile (separate cookies/logins) for testing another account" style={{ ...tabBtn, gap: 5, background: "transparent", color: "rgb(168 130 255)", border: "1px dashed rgb(168 130 255 / 0.5)" }}><IconIncognito size={13} /> incognito</button>
         <span style={{ flex: 1 }} />
-        {/* All secondary controls collapse into one menu to save toolbar space. The
-            dropdown itself renders down in the webview area (below) — an Electron
-            <webview> paints as a native layer ABOVE all DOM, so a normal dropdown
-            here would be hidden behind the page regardless of z-index. */}
+        {/* Zoom lives in the toolbar (not the menu) so it previews live on the page —
+            the tools menu hides the webview while open, which would otherwise stop you
+            seeing the zoom change. */}
+        <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
+          <button onClick={() => bumpZoom(-1)} title="Zoom out" style={{ ...menuIconBtn }}><IconMinus size={12} /></button>
+          <button onClick={() => setZoom(1)} title={`${Math.round(zoom * 100)}%${vp ? ` · ${vp.w}×${vp.h}` : ""} — click to reset`} style={{ ...ctrlBtn, minWidth: 46, textAlign: "center" }}>{Math.round(zoom * 100)}%</button>
+          <button onClick={() => bumpZoom(1)} title="Zoom in" style={{ ...menuIconBtn }}><IconPlus size={12} /></button>
+        </div>
+        {/* Remaining secondary controls collapse into one menu. The dropdown OVERLAPS
+            the page (webview hidden while open) — an Electron <webview> paints above all
+            DOM, so it can't sit under a normal z-indexed dropdown. Hiding preserves the
+            webview's SIZE, so the page's width/responsive layout stays accurate. */}
         <button onClick={() => setMenuOpen((v) => !v)} title="Browser tools" aria-expanded={menuOpen}
           style={{ ...ctrlBtn, flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 7px", background: menuOpen ? "rgb(var(--primary) / 0.18)" : "transparent", color: menuOpen ? "var(--text)" : "var(--text-soft)" }}>
           <IconMenu size={15} />
@@ -196,16 +202,14 @@ export default function MultiBrowser({ sessionId, cwd, machine }: { sessionId: s
       </div>
       {extOpen && <ExtensionsPanel onClose={() => setExtOpen(false)} />}
       {vaultOpen && <VaultPanel onClose={() => setVaultOpen(false)} />}
-      {/* While the menu is open the active webview is hidden (visibility:hidden — the
-          ONLY way to stop the native guest layer painting over our DOM menu). The
-          menu + backdrop force visibility:visible so they show over the blanked area. */}
-      {/* When the menu is open we SHRINK the webview to open a side strip for it (a
-          docked-panel pattern) rather than hiding the page — an Electron <webview>
-          paints above all DOM, so the page has to physically not cover the menu. This
-          keeps the page visible so zoom / device changes preview live. */}
-      <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
+      {/* The menu OVERLAPS the page: an Electron <webview> paints above all DOM, so
+          while the menu is open we hide the active webview (visibility:hidden). That
+          hides the paint but PRESERVES the webview's size — so the page's width /
+          responsive (email) layout is unchanged; it's overlapped, not pushed. The menu
+          (visibility:visible) shows over the blanked area. */}
+      <div style={{ flex: 1, minHeight: 0, position: "relative", visibility: menuOpen ? "hidden" : "visible" }}>
         {tabs.map((tab) => (
-          <div key={tab.id} style={{ position: "absolute", top: 0, left: 0, bottom: 0, right: menuOpen ? MENU_STRIP : 0, display: tab.id === active ? "flex" : "none", flexDirection: "column" }}>
+          <div key={tab.id} style={{ position: "absolute", inset: 0, display: tab.id === active ? "flex" : "none", flexDirection: "column" }}>
             <BrowserPanel
               sessionId={sessionId} cwd={cwd} machine={machine}
               ephemeral={tab.id !== 0} isActive={tab.id === active} chromeHidden={chromeHidden} initialUrl={tab.url}
@@ -218,22 +222,12 @@ export default function MultiBrowser({ sessionId, cwd, machine }: { sessionId: s
           </div>
         ))}
         {menuOpen && (
-          <div style={{ position: "absolute", top: 0, right: 0, bottom: 0, width: MENU_STRIP, background: "color-mix(in srgb, var(--app-panel) 92%, transparent)", borderLeft: "1px solid var(--border)", zIndex: 41, padding: 8 }}>
-            <div className="glass-menu" style={{ borderRadius: 11, border: "1px solid var(--border-strong)", boxShadow: "0 16px 44px rgba(0,0,0,0.5)", padding: 6, display: "flex", flexDirection: "column", gap: 2 }}>
-              {/* Zoom row */}
-              <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 8px" }}>
-                <span className="mono faint" style={{ fontSize: 11, flex: 1 }}>Zoom {vp ? `· ${vp.w}×${vp.h}` : ""}</span>
-                <button onClick={() => bumpZoom(-1)} title="Zoom out" style={menuIconBtn}><IconMinus size={13} /></button>
-                <button onClick={() => setZoom(1)} title="Reset to 100%" style={{ ...menuIconBtn, width: "auto", padding: "0 8px", fontFamily: "var(--font-mono)", fontSize: 11 }}>{Math.round(zoom * 100)}%</button>
-                <button onClick={() => bumpZoom(1)} title="Zoom in" style={menuIconBtn}><IconPlus size={13} /></button>
-              </div>
-              <MenuItem icon={<IconExternal size={15} />} label="Open in new window" onClick={() => { const url = urlByTab[active] ?? tabs.find((t) => t.id === active)?.url ?? ""; window.cowork.openBrowserWindow(url, partitionFor(sessionId, tabs.find((t) => t.id === active) ?? { id: active })).catch(() => {}); setMenuOpen(false); }} />
-              <MenuItem icon={device === "mobile" ? <IconLaptop size={15} /> : <IconPhone size={15} />} label={device === "mobile" ? "Switch to laptop view" : "Switch to mobile view"} onClick={() => { toggleDevice(); }} />
-              <MenuItem icon={<IconKey size={15} />} label="Passwords & vault" onClick={() => { setVaultOpen(true); setMenuOpen(false); }} />
-              <MenuItem icon={<IconPuzzle size={15} />} label="Extensions" onClick={() => { setExtOpen(true); setMenuOpen(false); }} />
-              <MenuItem icon={<IconEyeOff size={15} />} label={chromeHidden ? "Show address bar" : "Hide address bar"} onClick={() => { toggleChrome(); setMenuOpen(false); }} />
-            </div>
-            <button onClick={() => setMenuOpen(false)} className="mono faint" style={{ marginTop: 8, width: "100%", background: "transparent", border: "1px solid var(--border)", borderRadius: 8, padding: "5px 0", fontSize: 10.5, color: "var(--text-soft)", cursor: "pointer" }}>close ✕</button>
+          <div className="glass-menu" style={{ position: "absolute", top: 8, right: 12, zIndex: 41, visibility: "visible", minWidth: 216, borderRadius: 11, border: "1px solid var(--border-strong)", boxShadow: "0 16px 44px rgba(0,0,0,0.55)", padding: 6, display: "flex", flexDirection: "column", gap: 2 }}>
+            <MenuItem icon={<IconExternal size={15} />} label="Open in new window" onClick={() => { const url = urlByTab[active] ?? tabs.find((t) => t.id === active)?.url ?? ""; window.cowork.openBrowserWindow(url, partitionFor(sessionId, tabs.find((t) => t.id === active) ?? { id: active })).catch(() => {}); setMenuOpen(false); }} />
+            <MenuItem icon={device === "mobile" ? <IconLaptop size={15} /> : <IconPhone size={15} />} label={device === "mobile" ? "Switch to laptop view" : "Switch to mobile view"} onClick={() => { toggleDevice(); setMenuOpen(false); }} />
+            <MenuItem icon={<IconKey size={15} />} label="Passwords & vault" onClick={() => { setVaultOpen(true); setMenuOpen(false); }} />
+            <MenuItem icon={<IconPuzzle size={15} />} label="Extensions" onClick={() => { setExtOpen(true); setMenuOpen(false); }} />
+            <MenuItem icon={<IconEyeOff size={15} />} label={chromeHidden ? "Show address bar" : "Hide address bar"} onClick={() => { toggleChrome(); setMenuOpen(false); }} />
           </div>
         )}
       </div>
