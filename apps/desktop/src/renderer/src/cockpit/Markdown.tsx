@@ -69,11 +69,21 @@ const components: Components = {
   },
 };
 
+// Above this, parsing markdown into a React tree gets heavy enough to stutter the
+// single renderer thread — so we render it as plain text instead. Real chat messages
+// are capped far below this; only pathological content (a huge pasted blob / file)
+// trips it, and a frozen app is worse than unformatted text.
+const MD_MAX = 80_000;
+
 // Renders Claude's markdown output (headings, lists, bold, inline + fenced code,
 // tables via GFM) styled to the liquid-glass theme via the `.md` CSS class.
 // react-markdown does not render raw HTML by default, so this is XSS-safe.
 // Fenced ```diff blocks get per-line +/- coloring.
 export default function Markdown({ children }: { children: string }) {
+  if (children && children.length > MD_MAX) {
+    // Defensive: never let one giant blob block the whole UI. Show it as plain text.
+    return <pre className="md" style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", margin: 0 }}>{children}</pre>;
+  }
   return (
     <div className="md">
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
