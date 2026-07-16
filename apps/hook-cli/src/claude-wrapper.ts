@@ -67,6 +67,9 @@ export function buildTmuxCommands(
     ["new-session", "-d", "-s", session, "-c", cwd, claudeCmd],
     // 1: hide the status bar
     ["set-option", "-t", session, "status", "off"],
+    // 1b: emit OSC 52 on yank so copying in tmux copy-mode reaches the cockpit
+    // terminal's local clipboard (xterm handles OSC 52 → system clipboard).
+    ["set-option", "-t", session, "set-clipboard", "on"],
     // 2: hidden poll window
     ["new-window", "-d", "-t", session, pollCmd],
     // 3: attach to the claude window (foreground)

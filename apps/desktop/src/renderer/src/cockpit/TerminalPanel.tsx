@@ -109,6 +109,26 @@ export default function TerminalPanel({
     term.open(container);
     termRef.current = term;
 
+    // --- OSC 52 clipboard ---------------------------------------------------
+    // THE reliable way to copy out of tmux: in copy-mode (aka "cursor mode") you
+    // select + yank, and tmux (with `set-clipboard on`) emits an OSC 52 escape
+    // sequence carrying the text through the terminal. xterm doesn't handle OSC 52
+    // by default, so the yank went nowhere — this routes it to the LOCAL clipboard.
+    // Works regardless of mouse mode / redraws, because it's the app telling us what
+    // to copy rather than us scraping a screen selection.
+    const flashCopied = () => { setCopied(true); setTimeout(() => setCopied(false), 900); };
+    term.parser.registerOscHandler(52, (data: string) => {
+      const semi = data.indexOf(";");
+      const payload = semi >= 0 ? data.slice(semi + 1) : data; // "c;<base64>" → <base64>
+      if (!payload || payload === "?") return true; // clipboard READ request — ignore
+      try {
+        const bin = atob(payload);
+        const text = new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0)));
+        if (text) { window.cowork.copyText(text).catch(() => {}); flashCopied(); }
+      } catch { /* malformed base64 — ignore */ }
+      return true;
+    });
+
     // --- Copy / paste -------------------------------------------------------
     // Inside tmux the drag-selection is fragile: tmux mouse mode eats the drag and
     // frequent redraws wipe the visual selection. So COPY THE MOMENT a selection is
