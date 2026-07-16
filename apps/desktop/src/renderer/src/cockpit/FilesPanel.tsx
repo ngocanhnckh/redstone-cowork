@@ -116,6 +116,10 @@ export default function FilesPanel({ sessionId, cwd, machine }: Props) {
   const editorRef = useRef<any>(null);
   const pendingReveal = useRef<number | null>(null);
   const treeScrollRef = useRef<HTMLDivElement>(null);
+  // Dirs the user chose to render in full (past the per-dir cap). Big folders like
+  // node_modules would otherwise emit thousands of DOM rows and freeze the app.
+  const [showAll, setShowAll] = useState<Set<string>>(new Set());
+  const revealAllInDir = useCallback((dir: string) => setShowAll((s) => new Set(s).add(dir)), []);
 
   const loadDir = useCallback(
     async (dir: string) => {
@@ -494,6 +498,8 @@ export default function FilesPanel({ sessionId, cwd, machine }: Props) {
                 onToggleDir={toggleDir}
                 onOpenFile={openFile}
                 onContextMenu={openMenu}
+                showAll={showAll}
+                onShowAll={revealAllInDir}
               />
             </>
           )}
@@ -934,19 +940,28 @@ interface TreeProps {
   onToggleDir: (dir: string) => void;
   onOpenFile: (path: string) => void;
   onContextMenu: (e: React.MouseEvent, target: MenuTarget) => void;
+  showAll: Set<string>;
+  onShowAll: (dir: string) => void;
 }
 
+// Cap rows rendered per directory. A folder with thousands of entries (node_modules,
+// build output) would otherwise mount thousands of DOM nodes at once — freezing the
+// app on expand and making the whole tree scroll laggy. The rest render on demand.
+const DIR_ROW_CAP = 300;
+
 function Tree(props: TreeProps) {
-  const { dir, depth, tree, expanded, loadingDirs, openPath, drafts, onToggleDir, onOpenFile, onContextMenu } = props;
+  const { dir, depth, tree, expanded, loadingDirs, openPath, drafts, onToggleDir, onOpenFile, onContextMenu, showAll, onShowAll } = props;
   const entries = tree[dir];
   if (!entries) {
     return loadingDirs.has(dir) ? (
       <Row depth={depth} muted>…</Row>
     ) : null;
   }
+  const capped = !showAll.has(dir) && entries.length > DIR_ROW_CAP;
+  const shown = capped ? entries.slice(0, DIR_ROW_CAP) : entries;
   return (
     <>
-      {entries.map((e) =>
+      {shown.map((e) =>
         e.kind === "dir" ? (
           <div key={e.path}>
             <Row
@@ -976,6 +991,14 @@ function Tree(props: TreeProps) {
             {e.path in drafts && <span style={{ color: "rgb(var(--accent))", marginLeft: "auto", flexShrink: 0 }}>●</span>}
           </Row>
         )
+      )}
+      {capped && (
+        <Row depth={depth} onClick={() => onShowAll(dir)}>
+          <span style={{ width: 12, display: "inline-block" }} />
+          <span style={{ color: "var(--text-faint)", fontStyle: "italic" }}>
+            … {entries.length - DIR_ROW_CAP} more — show all
+          </span>
+        </Row>
       )}
     </>
   );
