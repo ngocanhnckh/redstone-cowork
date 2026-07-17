@@ -91,6 +91,10 @@ services:
     environment:
       API_INTERNAL_URL: http://api:3001
       INSTANCE_TOKEN: ${INSTANCE_TOKEN}
+      # Next.js standalone binds to $HOSTNAME; Docker defaults it to the container id,
+      # which the container can fail to resolve (getaddrinfo EAI_AGAIN → crash-loop).
+      # Pin to all-interfaces so the server always binds regardless of DNS.
+      HOSTNAME: 0.0.0.0
     ports:
       - "${WEB_PORT:-47100}:3000"
     depends_on:
