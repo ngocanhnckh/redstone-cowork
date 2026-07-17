@@ -146,6 +146,23 @@ function formatEditTool(block: ContentBlock): string | null {
  * long the session has run. Never throws — callers run inside the hook handler,
  * which must never break the user's session.
  */
+// Hard ceiling on the transcript payload we POST on every hook event. Even 150 capped
+// messages can add up to ~1 MB, which flooded the API with 413 PayloadTooLarge on big
+// sessions. Keep the NEWEST messages under this budget (the cockpit shows a rolling
+// window anyway); always keep at least the most recent message.
+const MAX_TRANSCRIPT_BYTES = 400 * 1024;
+function capMessages(msgs: TranscriptMessage[]): TranscriptMessage[] {
+  let total = 0;
+  const kept: TranscriptMessage[] = [];
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    const size = Buffer.byteLength(msgs[i].text, "utf8") + 16; // + small per-message overhead
+    if (kept.length && total + size > MAX_TRANSCRIPT_BYTES) break;
+    total += size;
+    kept.unshift(msgs[i]);
+  }
+  return kept;
+}
+
 /** Recent user prompts + assistant prose from the transcript tail, oldest→newest,
  * capped at `limit` (the cockpit's scroll-back window — posted on every hook event,
  * so it's a rolling window of the tail, not the full on-disk history). */
@@ -216,7 +233,7 @@ export function readRecentMessages(path: string | null | undefined, limit = 150)
       const cap = role === "assistant" ? MAX_ASSISTANT_CHARS : MAX_SUMMARY_CHARS;
       out.push({ role: role as "user" | "assistant", text: text.slice(0, cap) });
     }
-    return out.slice(-limit);
+    return capMessages(out.slice(-limit));
   } catch {
     return [];
   } finally {

@@ -266,4 +266,19 @@ describe("readRecentMessages", () => {
     ]);
     expect(readRecentMessages(path)).toHaveLength(0);
   });
+
+  it("bounds the total payload size (drops oldest messages past ~400KB, keeps newest)", () => {
+    // Many big assistant messages — the full set would blow past the API body limit.
+    const big = "x".repeat(5000);
+    const lines = Array.from({ length: 150 }, (_, i) => ({
+      type: "assistant", message: { role: "assistant", content: [{ type: "text", text: `msg${i} ${big}` }] },
+    }));
+    const path = writeJsonl(lines);
+    const out = readRecentMessages(path);
+    const bytes = out.reduce((n, m) => n + Buffer.byteLength(m.text, "utf8"), 0);
+    expect(bytes).toBeLessThanOrEqual(420 * 1024); // under the ~400KB cap (+overhead)
+    expect(out.length).toBeGreaterThan(0);
+    // The kept window is the NEWEST messages.
+    expect(out[out.length - 1].text.startsWith("msg149")).toBe(true);
+  });
 });
