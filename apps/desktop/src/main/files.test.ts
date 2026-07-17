@@ -121,6 +121,20 @@ describe("local fs operations", () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
+  it("reads an Office file (docx/xlsx) as base64 so the viewer can preview it", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "rcw-files-"));
+    // Office files are ZIP archives (start with 'PK\x03\x04'); the exact bytes don't
+    // matter here — the point is it must NOT be sniffed as an un-previewable binary.
+    const bytes = Buffer.from("PK\x03\x04sheet-content-here", "binary");
+    for (const name of ["report.xlsx", "memo.docx", "deck.pptx"]) {
+      writeFileSync(join(dir, name), bytes);
+      const res = await readFileAt({ cwd: dir, machine: LOCAL, file: join(dir, name) });
+      expect(res.ok).toBe(true);
+      expect(res).toMatchObject({ encoding: "base64" });
+    }
+    rmSync(dir, { recursive: true, force: true });
+  });
+
   it("refuses an oversized text file as binary", async () => {
     const dir = mkdtempSync(join(tmpdir(), "rcw-files-"));
     writeFileSync(join(dir, "big.txt"), "x".repeat(MAX_TEXT_BYTES + 1));

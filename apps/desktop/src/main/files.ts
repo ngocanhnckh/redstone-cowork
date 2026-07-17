@@ -146,10 +146,17 @@ export function mimeFor(name: string): string {
   return map[ext] ?? "application/octet-stream";
 }
 
-/** Extensions we preview as images / pdf rather than open in the text editor. */
+/** Office documents we preview via the OfficeViewer (parsed client-side from base64).
+ * Kept in sync with isOfficeFile() in OfficeViewer.tsx. */
+const OFFICE_RE = /\.(xlsx|xlsm|xls|docx|pptx)$/i;
+
+/** Extensions read as base64 (not opened in the text editor) so the renderer can
+ * preview them: images, PDFs, and Office documents (Word/Excel/PowerPoint). Without
+ * this an Office file is sniffed as binary and returned with no content — the viewer
+ * then shows "not previewable". */
 export function isPreviewableBinary(name: string): boolean {
   const mime = mimeFor(name);
-  return mime.startsWith("image/") || mime === "application/pdf";
+  return mime.startsWith("image/") || mime === "application/pdf" || OFFICE_RE.test(name);
 }
 
 /**
