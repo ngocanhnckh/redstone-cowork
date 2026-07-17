@@ -530,6 +530,18 @@ function openInWorkspaceBrowser(url: string): void {
   for (const w of BrowserWindow.getAllWindows()) w.webContents.send(IPC.openInWorkspaceBrowser, { url });
 }
 
+/** Parse a window.open() features string ("width=500,height=600,left=…") into a
+ * subset of BrowserWindow sizing options, so a genuine popup (OAuth/login/pay
+ * window) opens at roughly the size the site asked for. Missing → sensible default. */
+function popupWindowOptions(features: string): { width: number; height: number } {
+  const get = (k: string): number | undefined => {
+    const m = new RegExp(`(?:^|[ ,])${k}\\s*=\\s*(\\d+)`, "i").exec(features || "");
+    return m ? Number(m[1]) : undefined;
+  };
+  const clamp = (n: number | undefined, def: number) => Math.min(1600, Math.max(320, n ?? def));
+  return { width: clamp(get("width") ?? get("innerWidth"), 520), height: clamp(get("height") ?? get("innerHeight"), 640) };
+}
+
 ipcMain.handle(IPC.appGuestRegister, (_e, a: { webContentsId: number; homeUrl: string }) => {
   if (typeof a?.webContentsId === "number" && a.homeUrl) appGuestHomes.set(a.webContentsId, a.homeUrl);
   return { ok: true };
@@ -877,15 +889,40 @@ app.on("web-contents-created", (_e, contents) => {
     ev.preventDefault();
     openInWorkspaceBrowser(url);
   });
-  contents.setWindowOpenHandler(({ url }) => {
-    // A link/script asked for a NEW window/tab (target=_blank, window.open). Never
-    // let Electron spawn the native popup — for a <webview> guest it isn't attached
-    // to any element, so it just shows nothing (the "new tab doesn't work" bug).
-    // Instead open http(s) URLs as a new tab in the session's in-app workspace
-    // browser (both the Browser app and custom apps), and hand other schemes
-    // (mailto:, tel:, …) to the OS.
-    if (/^https?:\/\//i.test(url)) openInWorkspaceBrowser(url);
-    else if (url) shell.openExternal(url).catch(() => {/* ignore */});
+  contents.setWindowOpenHandler(({ url, disposition, features }) => {
+    // A link/script asked for a NEW window/tab. Two cases, handled differently:
+    //
+    // 1. A GENUINE POPUP — window.open() with a target size / new-window disposition,
+    //    e.g. "Sign in with Google", an OAuth consent, or a payment window. These
+    //    NEED a real top-level window that keeps `window.opener` intact and shares
+    //    the guest's session (same cookies/login) so the popup can postMessage its
+    //    result back and self.close(). So we ALLOW it as a real popup window.
+    // 2. A PLAIN NEW TAB — a target=_blank link click, middle-click, or bare
+    //    window.open with no features. There is no opener contract to preserve, so
+    //    we open it as a new tab in the session's in-app workspace browser (never a
+    //    detached native window, never the OS browser).
+    //
+    // Non-http(s) schemes (mailto:, tel:, …) always go to the OS.
+    if (url && !/^https?:\/\//i.test(url)) {
+      shell.openExternal(url).catch(() => {/* ignore */});
+      return { action: "deny" };
+    }
+    const isPopup = disposition === "new-window" || (!!features && /\b(width|height|left|top)\b/i.test(features));
+    if (isPopup) {
+      const { width, height } = popupWindowOptions(features);
+      return {
+        action: "allow",
+        overrideBrowserWindowOptions: {
+          width, height,
+          title: "Redstone",
+          backgroundColor: "#15110d",
+          autoHideMenuBar: true,
+          minimizable: false,
+          maximizable: false,
+        },
+      };
+    }
+    if (url) openInWorkspaceBrowser(url);
     return { action: "deny" };
   });
   contents.once("destroyed", () => appGuestHomes.delete(contents.id));
