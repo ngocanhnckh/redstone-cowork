@@ -357,7 +357,7 @@ export default function ContextColumn({ sessionId, hideSummary }: { sessionId?: 
                       key={iss.key}
                       onClick={() => { setOpenWithAddSub(false); setOpenIssue(iss.key); }}
                       onContextMenu={(e) => { e.preventDefault(); setOpenWithAddSub(true); setOpenIssue(iss.key); }}
-                      title={`${iss.status}${iss.assignee ? " · " + iss.assignee : ""} — click for details · right-click to add a subtask`}
+                      title={`${iss.key}  ${iss.summary}\n${iss.status}${iss.assignee ? " · " + iss.assignee : ""} — click for details · right-click to add a subtask`}
                       style={{ display: "flex", alignItems: "center", gap: 9, padding: "8px 9px", borderRadius: 9, fontSize: 13, cursor: "pointer", color: iss.statusCategory === "done" ? "var(--text-faint)" : "var(--text)" }}
                       className="glass-inset-hover"
                     >
