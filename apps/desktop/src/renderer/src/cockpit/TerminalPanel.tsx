@@ -143,8 +143,11 @@ export default function TerminalPanel({
     container.addEventListener("mouseup", onMouseUp);
     cleanups.push(() => container.removeEventListener("mouseup", onMouseUp));
 
-    // Keyboard: Cmd+C / Ctrl+Shift+C copy the selection (plain Ctrl+C stays SIGINT);
-    // Cmd+V / Ctrl+Shift+V paste. Returning false stops xterm forwarding the key.
+    // Keyboard: Cmd+C / Ctrl+Shift+C copy the selection (plain Ctrl+C stays SIGINT).
+    // NOTE: we deliberately do NOT handle paste here — xterm pastes natively via the
+    // browser 'paste' event on its textarea, so handling Cmd+V ourselves too made it
+    // paste TWICE. Native paste covers Cmd+V / Ctrl+Shift+V; the right-click menu
+    // covers the explicit case.
     const isMac = /Mac/i.test(navigator.platform);
     term.attachCustomKeyEventHandler((e) => {
       if (e.type !== "keydown") return true;
@@ -154,10 +157,6 @@ export default function TerminalPanel({
         const sel = term.getSelection();
         if (sel && (isMac || e.shiftKey)) { window.cowork.copyText(sel).catch(() => {}); return false; }
         return true; // no selection, or plain Ctrl+C → let it through as interrupt
-      }
-      if (primary && k === "v" && (isMac || e.shiftKey)) {
-        window.cowork.readClipboard().then((t) => { if (t) window.cowork.sendTerminalInput({ id: pty, data: t }); }).catch(() => {});
-        return false;
       }
       return true;
     });
