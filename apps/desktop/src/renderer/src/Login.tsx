@@ -57,7 +57,12 @@ export default function Login({ onConnected }: LoginProps) {
       if (mode === "redstone") {
         const r = await window.cowork.redstoneLogin(serverUrl.trim(), username.trim(), password);
         if (r.ok) return onConnected();
-        setError(r.error ?? "Sign-in failed.");
+        // A server_error / 5xx usually means the Redstone identity provider is down or
+        // misconfigured (not your credentials) — nudge to the working Personal path.
+        const msg = r.error ?? "Sign-in failed.";
+        setError(/server[_ ]?error|unexpected|500|502|503|504/i.test(msg)
+          ? `${msg} — the Redstone sign-in service looks unavailable. Use the “Personal” tab with your instance token instead.`
+          : msg);
       } else {
         await window.cowork.saveConfig(serverUrl.trim(), token.trim());
         onConnected();
