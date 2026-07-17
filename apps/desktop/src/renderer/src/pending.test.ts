@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { consumeFinishedPending, consumeAnsweredPending, type PendingSend } from "./store";
-import type { SessionView } from "./types";
+import { consumeFinishedPending, consumeAnsweredPending, computeUndelivered, type PendingSend } from "./store";
+import type { SessionView, Decision } from "./types";
 
 const send = (text: string, ts = 1, answerAtSend: string | null = null): PendingSend => ({ text, baseUsers: 0, ts, answerAtSend });
 
@@ -71,5 +71,33 @@ describe("consumeAnsweredPending", () => {
     const pending = { s1: [send("first", 1, "old"), send("second", 2, "old")] };
     const sessions = [sess("s1", { working: false, latestAnswer: "new" })];
     expect(consumeAnsweredPending(pending, sessions, []).s1.map((p) => p.text)).toEqual(["second"]);
+  });
+});
+
+describe("computeUndelivered", () => {
+  const NOW = 1_000_000;
+  const OLD = NOW - 40_000; // older than STALE_SEND_MS (30s)
+  it("flags an old, un-incorporated send while the session is idle", () => {
+    const pending = { s1: [send("hi there", OLD)] };
+    const sessions = [sess("s1", { working: false })];
+    expect(computeUndelivered(pending, sessions, [], [], NOW)).toEqual({ s1: "hi there" });
+  });
+  it("does NOT flag while the session is working (may be processing it)", () => {
+    const pending = { s1: [send("hi", OLD)] };
+    expect(computeUndelivered(pending, [sess("s1", { working: true })], [], [], NOW)).toEqual({});
+  });
+  it("does NOT flag a recent send (give it time to land)", () => {
+    const pending = { s1: [send("hi", NOW - 5_000)] };
+    expect(computeUndelivered(pending, [sess("s1", { working: false })], [], [], NOW)).toEqual({});
+  });
+  it("does NOT flag when the session is blocked on a question", () => {
+    const pending = { s1: [send("hi", OLD)] };
+    const decisions = [{ sessionId: "s1", kind: "question" } as unknown as Decision];
+    expect(computeUndelivered(pending, [sess("s1", { working: false })], [], decisions, NOW)).toEqual({});
+  });
+  it("does NOT flag once the transcript incorporated it (user count grew past baseUsers)", () => {
+    const pending = { s1: [send("hi", OLD)] };
+    const sessions = [sess("s1", { working: false, transcript: [{ role: "user", text: "hi" }] as SessionView["transcript"] })];
+    expect(computeUndelivered(pending, sessions, [], [], NOW)).toEqual({});
   });
 });

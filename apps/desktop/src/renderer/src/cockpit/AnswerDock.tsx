@@ -32,6 +32,9 @@ export default function AnswerDock({ decision, working, sessionId: sessionIdProp
   const decisions = useStore((s) => s.decisions);
   const instruct = useStore((s) => s.instruct);
   const interrupt = useStore((s) => s.interrupt);
+  const undeliveredSends = useStore((s) => s.undeliveredSends);
+  const retrySend = useStore((s) => s.retrySend);
+  const [sendErr, setSendErr] = useState<string | null>(null);
   const sessions = useStore((s) => s.sessions);
   const caps = useStore((s) => s.caps);
   const mode = useStore((s) => s.mode);
@@ -99,16 +102,18 @@ export default function AnswerDock({ decision, working, sessionId: sessionIdProp
     // No pending decision. While Claude works, this dock redirects it — sending
     // interrupts (Esc) the current turn then types the new instruction; a bare
     // Stop just aborts. When idle, it's a normal free-text instruction + Acknowledge.
-    const submitIdle = () => {
+    const undelivered = idleSessionId ? undeliveredSends[idleSessionId] : undefined;
+    const submitIdle = async () => {
       const el = idleInputRef.current;
       const val = el?.value.trim();
       if (!val || !idleSessionId) return;
-      // Send never interrupts — it just queues the message, exactly like typing in
-      // Claude Code during a turn. Only the Stop button aborts (see below).
-      instruct(idleSessionId, val);
+      setSendErr(null);
+      // Clear the box optimistically, but if the API call fails, PUT THE TEXT BACK so
+      // it's never lost — the user can just press send again.
       if (el) { el.value = ""; el.style.height = "auto"; }
-      setIdleSent(true);
-      setTimeout(() => setIdleSent(false), 1800);
+      const ok = await instruct(idleSessionId, val);
+      if (ok) { setIdleSent(true); setTimeout(() => setIdleSent(false), 1800); }
+      else if (el) { el.value = val; autoGrow(el); setSendErr("Couldn't send — press ⌅ to retry."); }
     };
     return (
       <div
@@ -120,6 +125,15 @@ export default function AnswerDock({ decision, working, sessionId: sessionIdProp
           backdropFilter: "blur(20px)",
         }}
       >
+        {undelivered && (
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, padding: "8px 12px", borderRadius: 10, border: "1px solid #e6b45055", background: "rgba(230,180,80,0.1)" }}>
+            <span style={{ fontSize: 12.5, color: "var(--text)", flex: 1, minWidth: 0 }}>
+              <b style={{ color: "#e6b450" }}>⚠ Your last message may not have reached the session.</b>{" "}
+              <span className="faint" style={{ overflowWrap: "anywhere" }}>“{undelivered.slice(0, 80)}{undelivered.length > 80 ? "…" : ""}”</span>
+            </span>
+            <button onClick={() => idleSessionId && retrySend(idleSessionId, undelivered)} className="glass-btn--clay" style={{ padding: "5px 13px", fontSize: 12, fontWeight: 600, flexShrink: 0 }}>Resend</button>
+          </div>
+        )}
         <div style={{ display: "flex", gap: 9, marginBottom: 10, alignItems: "flex-end", minWidth: 0 }}>
           <SlashTextarea
             ref={idleInputRef}
@@ -139,6 +153,9 @@ export default function AnswerDock({ decision, working, sessionId: sessionIdProp
         </div>
         {idleSent && (
           <span className="mono" style={{ display: "block", fontSize: 11, color: "rgb(var(--accent))", marginBottom: 6 }}>✓ sent</span>
+        )}
+        {sendErr && (
+          <span className="mono" style={{ display: "block", fontSize: 11, color: "#e0736a", marginBottom: 6 }}>{sendErr}</span>
         )}
         {working ? (
           <button
@@ -241,8 +258,11 @@ export default function AnswerDock({ decision, working, sessionId: sessionIdProp
       {needsForm ? (
         /* Multiple questions and/or multiSelect → a full form. Each question shows
            its own options; picks are collected and submitted together as an
-           `answers` map so the keymap drives the whole form and its final submit. */
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+           `answers` map so the keymap drives the whole form and its final submit.
+           The questions scroll (capped height) so a long form never crops the Submit
+           button off-screen — you can always scroll + submit without resizing. */
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div className="no-scrollbar" style={{ display: "flex", flexDirection: "column", gap: 14, maxHeight: "42vh", overflowY: "auto", paddingRight: 2 }}>
           {questions.map((q, qi) => (
             <div key={qi}>
               <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.45, color: "var(--text)" }}>
@@ -277,22 +297,23 @@ export default function AnswerDock({ decision, working, sessionId: sessionIdProp
               </div>
             </div>
           ))}
+          </div>
           <button
             className="glass-btn--clay"
             disabled={!formComplete || submitting}
             onClick={() => submit({ answers: picks })}
             style={{ alignSelf: "flex-start", padding: "9px 20px", fontSize: 13.5, fontWeight: 600, opacity: !formComplete || submitting ? 0.55 : 1, cursor: !formComplete || submitting ? "default" : "pointer" }}
           >
-            {submitting ? "sending…" : "Submit answers"}
+            {submitting ? "sending…" : formComplete ? "Submit answers" : "Answer all to submit"}
           </button>
         </div>
       ) : (
         <>
-          {/* Single question — its prompt, then one-click options. */}
+          {/* Single question — its prompt, then one-click options (scroll if many). */}
           <div style={{ marginBottom: 12, fontSize: 14, fontWeight: 600, lineHeight: 1.45, color: "var(--text)" }}>
             {questions[0]?.question ?? decision.title}
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <div className="no-scrollbar" style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: "42vh", overflowY: "auto", paddingRight: 2 }}>
             {decision.options.map((opt, i) => (
               <div
                 key={i}

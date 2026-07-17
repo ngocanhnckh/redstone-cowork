@@ -106,6 +106,37 @@ export function consumeAnsweredPending(
   return next;
 }
 
+/**
+ * Sends that were accepted by the API but look like they were never DELIVERED to the
+ * host (typed into the session) — the oldest pending send for a session that has sat
+ * un-incorporated for STALE_SEND_MS while the session is IDLE and not blocked on a
+ * question. That combination means the host should have picked it up but didn't (dead
+ * poller/hooks, or a mid-turn race dropped the keystrokes). Returns sessionId → the
+ * undelivered text so the UI can offer a one-click resend instead of losing it.
+ */
+const STALE_SEND_MS = 30_000;
+export function computeUndelivered(
+  pending: Record<string, PendingSend[]>,
+  sessions: SessionView[],
+  queue: SessionView[],
+  decisions: Decision[],
+  now: number
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [id, list] of Object.entries(pending)) {
+    const oldest = list[0];
+    if (!oldest || now - oldest.ts < STALE_SEND_MS) continue; // give it time to land
+    const s = sessions.find((x) => x.id === id) ?? queue.find((x) => x.id === id);
+    if (!s || s.working) continue; // still working → it may be processing the queue
+    // Blocked on a question/permission → input is captured by that prompt, not dropped.
+    if (decisions.some((d) => d.sessionId === id && (d.kind === "question" || d.kind === "permission"))) continue;
+    // Already incorporated (host typed it, transcript grew) → not undelivered.
+    if (userMsgCount(sessions, queue, id) > oldest.baseUsers) continue;
+    out[id] = oldest.text;
+  }
+  return out;
+}
+
 /** Last-seen server `working` flag per session — module-level bookkeeping so
  * refresh() can detect the true→false edge (a turn ending) between polls. */
 let lastWorking: Record<string, boolean> = {};
@@ -162,6 +193,8 @@ type State = {
   caps: CapsHostView[]; // installed skills + slash commands per host
   capsOpen: boolean; // the skills/commands browser modal
   pending: Record<string, PendingSend[]>; // sessionId → optimistic sends, shown instantly
+  undeliveredSends: Record<string, string>; // sessionId → text of a send that looks undelivered (offer resend)
+  retrySend: (sessionId: string, text: string) => Promise<void>;
   workingStale: Record<string, boolean>; // sessionId → server `working` is stuck (no output for a while); UI treats as idle
   activeTab: Record<string, "chat" | "terminal" | "browser" | "ports" | "files">; // sessionId → active workspace tab
   openBrowsers: string[]; // sessionIds whose browser tab was opened — kept alive (see BrowserStack)
@@ -227,7 +260,7 @@ type State = {
   snooze: (sessionId: string, minutes: number) => Promise<void>;
   pin: (sessionId: string, pinned: boolean) => Promise<void>;
   dismissSession: (sessionId: string) => Promise<void>;
-  instruct: (sessionId: string, text: string) => Promise<void>;
+  instruct: (sessionId: string, text: string) => Promise<boolean>;
   interrupt: (sessionId: string, text?: string) => Promise<void>;
   switchMode: (sessionId: string, mode: string) => Promise<void>;
   addUserTodo: (sessionId: string, text: string) => Promise<void>;
@@ -249,6 +282,7 @@ export const useStore = create<State>((set, get) => ({
   caps: [],
   capsOpen: false,
   pending: {},
+  undeliveredSends: {},
   workingStale: {},
   activeTab: {},
   openBrowsers: [],
@@ -326,16 +360,21 @@ export const useStore = create<State>((set, get) => ({
       const nowWorking: Record<string, boolean> = {};
       for (const sv of [...q, ...s]) nowWorking[sv.id] = !!sv.working;
       const workingStale = computeStaleWorking([s, q], Date.now());
-      set((state) => ({
-        queue: q,
-        sessions: s,
-        decisions: d,
-        focusId: pickFocus(q, s, state.focusId),
-        pending: prunePending(consumeAnsweredPending(consumeFinishedPending(state.pending, lastWorking, nowWorking), s, q), s, q, Date.now()),
-        workingStale,
-        error: null,
-        hasLoaded: true,
-      }));
+      set((state) => {
+        const now = Date.now();
+        const newPending = prunePending(consumeAnsweredPending(consumeFinishedPending(state.pending, lastWorking, nowWorking), s, q), s, q, now);
+        return {
+          queue: q,
+          sessions: s,
+          decisions: d,
+          focusId: pickFocus(q, s, state.focusId),
+          pending: newPending,
+          undeliveredSends: computeUndelivered(newPending, s, q, d, now),
+          workingStale,
+          error: null,
+          hasLoaded: true,
+        };
+      });
       lastWorking = nowWorking;
     } catch (e) {
       // Keep any previously-loaded sessions on a transient blip, but record the
@@ -543,6 +582,25 @@ export const useStore = create<State>((set, get) => ({
         const next = nextWaiting(queue, decisions, sessionId);
         if (next) set({ focusId: next });
       }
+      return true;
+    } catch (e) { set({ error: e instanceof Error ? e.message : String(e) }); return false; }
+  },
+
+  // Re-deliver a send that looks undelivered. The optimistic bubble already exists, so
+  // this doesn't record a new one — it just re-posts the instruction and resets the
+  // send's timer so it isn't immediately re-flagged.
+  retrySend: async (sessionId, text) => {
+    try {
+      await window.cowork.instruct(sessionId, text);
+      set((state) => {
+        const list = state.pending[sessionId];
+        const bumped = list?.length
+          ? { ...state.pending, [sessionId]: list.map((p, i) => (i === 0 ? { ...p, ts: Date.now() } : p)) }
+          : state.pending;
+        const { [sessionId]: _drop, ...rest } = state.undeliveredSends;
+        return { pending: bumped, undeliveredSends: rest };
+      });
+      await get().refresh();
     } catch (e) { set({ error: e instanceof Error ? e.message : String(e) }); }
   },
 
