@@ -188,7 +188,7 @@ export default function MultiBrowser({ sessionId, cwd, machine }: { sessionId: s
             seeing the zoom change. */}
         <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
           <button onClick={() => bumpZoom(-1)} title="Zoom out" style={{ ...menuIconBtn }}><IconMinus size={12} /></button>
-          <button onClick={() => setZoom(1)} title={`${Math.round(zoom * 100)}%${vp ? ` · ${vp.w}×${vp.h}` : ""} — click to reset`} style={{ ...ctrlBtn, minWidth: 46, textAlign: "center" }}>{Math.round(zoom * 100)}%</button>
+          <button onClick={() => setZoom(1)} title={`Effective viewport ${vp ? `${vp.w}×${vp.h}px` : ""} · zoom ${Math.round(zoom * 100)}% — click to reset`} style={{ ...ctrlBtn, minWidth: 74, textAlign: "center" }}>{vp ? `${vp.w}×${vp.h}` : `${Math.round(zoom * 100)}%`}</button>
           <button onClick={() => bumpZoom(1)} title="Zoom in" style={{ ...menuIconBtn }}><IconPlus size={12} /></button>
         </div>
         {/* Remaining secondary controls collapse into one menu. The dropdown OVERLAPS
