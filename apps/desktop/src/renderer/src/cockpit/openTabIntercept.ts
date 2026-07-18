@@ -4,9 +4,12 @@
 // window.open / target=_blank so a click does nothing).
 //
 // We inject a click interceptor into the guest that, on a new-tab intent
-// (target=_blank, middle-click, or ⌘/Ctrl-click), signals the URL back via a
-// distinctive document.title marker — the one channel a preload-less guest has.
-// The host webview element fires `page-title-updated`, which we catch here.
+// (target=_blank, middle-click, or ⌘/Ctrl-click), signals the URL back over the
+// guest's console — the one channel a preload-less guest has that the host receives
+// verbatim and per-message. (We previously used a document.title marker, but
+// Chromium debounces title-change notifications: setting the title and reverting it
+// in the same frame often emits ONLY the reverted title, so the marker was dropped
+// and the tab never opened.) The host webview fires `console-message`, caught here.
 
 export const OPEN_TAB_MARK = "__RCW_OPEN_TAB__::";
 
@@ -18,9 +21,7 @@ export const OPEN_TAB_JS = `(() => {
       if (!raw) return;
       const abs = new URL(raw, location.href).href;
       if (!/^https?:/i.test(abs)) return;
-      const prev = document.title;
-      document.title = MARK + abs;
-      setTimeout(() => { try { document.title = prev; } catch (e) {} }, 0);
+      console.log(MARK + abs);
     } catch (e) {}
   };
   document.addEventListener('click', (e) => {
@@ -42,24 +43,24 @@ type WV = HTMLElement & { executeJavaScript(code: string): Promise<unknown> };
 
 /**
  * Wire new-tab interception onto a <webview>: (re)inject the interceptor on every
- * document, and translate the title-marker signal into `onUrl(url)`. Returns a
+ * document, and translate the console-marker signal into `onUrl(url)`. Returns a
  * cleanup fn. Safe to call once the element is mounted.
  */
 export function wireOpenTab(wv: WV, onUrl: (url: string) => void): () => void {
   const inject = () => { try { void wv.executeJavaScript(OPEN_TAB_JS); } catch { /* not ready */ } };
-  const onTitle = (e: Event) => {
-    const title = (e as unknown as { title?: string }).title;
-    if (typeof title === "string" && title.startsWith(OPEN_TAB_MARK)) onUrl(title.slice(OPEN_TAB_MARK.length));
+  const onConsole = (e: Event) => {
+    const msg = (e as unknown as { message?: string }).message;
+    if (typeof msg === "string" && msg.startsWith(OPEN_TAB_MARK)) onUrl(msg.slice(OPEN_TAB_MARK.length));
   };
   inject();
   wv.addEventListener("dom-ready", inject as EventListener);
   wv.addEventListener("did-navigate", inject as EventListener);
   wv.addEventListener("did-navigate-in-page", inject as EventListener);
-  wv.addEventListener("page-title-updated", onTitle as EventListener);
+  wv.addEventListener("console-message", onConsole as EventListener);
   return () => {
     wv.removeEventListener("dom-ready", inject as EventListener);
     wv.removeEventListener("did-navigate", inject as EventListener);
     wv.removeEventListener("did-navigate-in-page", inject as EventListener);
-    wv.removeEventListener("page-title-updated", onTitle as EventListener);
+    wv.removeEventListener("console-message", onConsole as EventListener);
   };
 }
