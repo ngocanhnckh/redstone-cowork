@@ -1383,6 +1383,39 @@ function HudConsole() {
     }
   };
 
+  // ── Mount gating ───────────────────────────────────────────────────────────
+  // The shells are always rendered (the dock, titlebars and geometry depend on
+  // them) but their CONTENT is not always worth mounting: several panels are
+  // <webview>-backed (custom apps, the browser layer) and every live guest costs a
+  // Chromium renderer + a slice of the GPU's tile budget. We gate conservatively:
+  //
+  //  - a panel that can NEVER be shown in the current layout is not mounted at all
+  //    (in grid mode that's everything without a grid area — custom apps, DevTools,
+  //    Docker logs, notes, tasks, settings);
+  //  - a panel that has never been shown in this layout is not mounted (so a
+  //    window minimised since startup costs nothing);
+  //  - once shown, most panels stay mounted through minimise, because users expect
+  //    their live state to survive: chat streams, terminals (PTYs + scrollback),
+  //    the browser layer (which does its own Chrome-style discarding internally,
+  //    see tabDiscard.ts), notes (unsaved edits) and custom apps (logged-in pages).
+  //  - the exceptions below are cheap, stateless, re-derived-on-mount panels, so
+  //    they are unmounted whenever hidden.
+  // Exception to all of the above: the three keep-alive singletons stay mounted
+  // unconditionally. A grid template need not give `term` an area, and unmounting
+  // it there would kill running shells; the browser layer manages its own guests.
+  const ALWAYS_MOUNTED = ["chat", "term", "browser"];
+  const DISPOSABLE_WHEN_HIDDEN = ["files", "tasks", "ports", "devtools"];
+  const shownOnce = useRef<Set<string>>(new Set());
+  const shouldMountChild = (id: string, area?: string): boolean => {
+    if (ALWAYS_MOUNTED.includes(id)) return true;
+    const canEverShow = !grid || !!area;
+    if (!canEverShow) return false;
+    const shown = grid ? !!area : !wins.wins[id]?.min;
+    if (shown) { shownOnce.current.add(id); return true; }
+    if (DISPOSABLE_WHEN_HIDDEN.includes(id)) return false;
+    return shownOnce.current.has(id);
+  };
+
   // All windows to render: fixed singletons + dynamic Docker Log windows + open
   // custom-app windows (only those with geometry for this session). Grid areas
   // apply only to the four grid panels; everything else is windows-mode only.
@@ -1557,7 +1590,7 @@ function HudConsole() {
             onMinimize={() => patchWin(p.id, { min: true })}
             onClose={p.onClose}
           >
-            {childFor(p.id)}
+            {shouldMountChild(p.id, p.area) ? childFor(p.id) : null}
           </PanelShell>
         ))}
 
@@ -1728,10 +1761,21 @@ export default function Hud() {
   const [tele, setTele] = useState<HostTelemetryView[]>([]);
   useEffect(() => {
     let alive = true;
-    const load = () => window.cowork.getTelemetry().then((t) => { if (alive) setTele(t); }).catch(() => {});
+    // Skip the round trip while the window is hidden — nobody can read the gauges,
+    // and a 3s poll that never sleeps is a real battery cost. Refresh immediately
+    // on becoming visible again so the values aren't stale when you look at them.
+    const load = () => {
+      if (!alive || document.hidden) return;
+      window.cowork.getTelemetry().then((t) => { if (alive) setTele(t); }).catch(() => {});
+    };
     load();
     const timer = setInterval(load, 3000);
-    return () => { alive = false; clearInterval(timer); };
+    document.addEventListener("visibilitychange", load);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", load);
+    };
   }, []);
 
   // HUD = QueueRail (session switching) + a 3-pane console (chat / terminal /

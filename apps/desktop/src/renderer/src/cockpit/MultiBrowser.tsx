@@ -4,6 +4,10 @@ import { IconMenu, IconIncognito, IconKey, IconPuzzle, IconLaptop, IconPhone, Ic
 import ExtensionsPanel from "./ExtensionsPanel";
 import VaultPanel from "./VaultPanel";
 import { useStore } from "../store";
+import { tabsToDiscard } from "./tabDiscard";
+
+/** How often we re-evaluate which hidden tabs have aged past the grace period. */
+const DISCARD_SWEEP_MS = 15_000;
 
 /** Short label for a URL tab: its hostname, or a truncated string as a fallback. */
 function urlLabel(url: string): string {
@@ -32,12 +36,17 @@ function loadSavedTabs(sessionId: string): SavedTabs | null {
 }
 
 /**
- * A tabbed set of browser previews for one session — like Chrome tabs. Each tab is
- * its own <webview>, all kept mounted and toggled with `display` so switching tabs
- * never reloads a page. Tab 0 is the session's primary preview (persists the saved
- * URL/port config); extra tabs are ephemeral (navigate freely, don't overwrite it).
+ * A tabbed set of browser previews for one session — like Chrome tabs. The active
+ * tab of a visible browser stays mounted and is toggled with `display` so switching
+ * back and forth never reloads it; tabs hidden for a while (or pushed out by the
+ * LRU cap) are DISCARDED — their <webview> unmounts so the guest process and its
+ * GPU tiles are freed — and reload from their last URL when clicked, like Chrome.
+ * Tab 0 is the session's primary preview (persists the saved URL/port config);
+ * extra tabs are ephemeral (navigate freely, don't overwrite it).
+ *
+ * `visible` = this session's browser layer is the one actually on screen.
  */
-export default function MultiBrowser({ sessionId, cwd, machine }: { sessionId: string; cwd: string; machine: string }) {
+export default function MultiBrowser({ sessionId, cwd, machine, visible }: { sessionId: string; cwd: string; machine: string; visible: boolean }) {
   // Restore this session's tabs from a previous run (Redstone remembers them).
   const saved = useRef(loadSavedTabs(sessionId)).current;
   const seq = useRef(saved?.seq ?? 0);
@@ -66,6 +75,43 @@ export default function MultiBrowser({ sessionId, cwd, machine }: { sessionId: s
   // label; url → persistence so a tab restores to where you left it).
   const [titleByTab, setTitleByTab] = useState<Record<number, string>>({});
   const [urlByTab, setUrlByTab] = useState<Record<number, string>>({});
+  // ── Chrome-style discarding ────────────────────────────────────────────────
+  // `lastLiveAt[id]` = the last moment that tab was the on-screen one. The effect
+  // below stamps it while a tab is live AND on the way out, so for a hidden tab it
+  // reads as "hidden since". `discarded` holds the ids whose <webview> is unmounted.
+  const lastLiveAt = useRef<Record<number, number>>({});
+  const [discarded, setDiscarded] = useState<number[]>([]);
+  useEffect(() => {
+    if (!visible) return;
+    lastLiveAt.current[active] = Date.now();
+    return () => { lastLiveAt.current[active] = Date.now(); };
+  }, [visible, active]);
+  // The sweep runs on every visibility/active change too, so a discarded tab is
+  // re-mounted the instant it becomes live again (it is never a discard candidate).
+  useEffect(() => {
+    const sweep = () => {
+      const drop = tabsToDiscard({ tabs, activeId: active, visible, lastLiveAt: lastLiveAt.current, now: Date.now() });
+      setDiscarded((prev) => (prev.length === drop.length && drop.every((id) => prev.includes(id)) ? prev : drop));
+      // Freeze each newly discarded tab's live URL onto the tab itself, so the
+      // re-mount (and localStorage) restores it where the user left off.
+      if (drop.length) {
+        setTabs((t) => {
+          let changed = false;
+          const next = t.map((tab) => {
+            const u = urlByTab[tab.id];
+            if (!drop.includes(tab.id) || !u || tab.url === u) return tab;
+            changed = true;
+            return { ...tab, url: u };
+          });
+          return changed ? next : t;
+        });
+      }
+    };
+    sweep();
+    const h = setInterval(sweep, DISCARD_SWEEP_MS);
+    return () => clearInterval(h);
+  }, [tabs, active, visible, urlByTab]);
+
   const zoom = zoomByTab[active] ?? 1;
   const device = deviceByTab[active] ?? "laptop";
   const vp = vpByTab[active];
@@ -160,7 +206,10 @@ export default function MultiBrowser({ sessionId, cwd, machine }: { sessionId: s
           // Prefer the page title; fall back to the hostname, then "preview"/"tab N".
           const label = title || (url ? urlLabel(url) : tab.temp ? "incognito" : i === 0 ? "preview" : `tab ${i + 1}`);
           // Full title (+ url) on hover, since the label is truncated.
-          const tip = [tab.temp ? "Incognito — isolated cookies/storage" : null, title, url].filter(Boolean).join("\n") || label;
+          // A discarded tab has no live page (freed to save memory) — dim it so the
+          // reload on click isn't a surprise.
+          const asleep = discarded.includes(tab.id);
+          const tip = [tab.temp ? "Incognito — isolated cookies/storage" : null, asleep ? "Discarded to save memory — click to reload" : null, title, url].filter(Boolean).join("\n") || label;
           // Incognito tabs get a distinct violet tint so they're never confused with
           // your logged-in profile.
           const tint = tab.temp ? "rgb(168 130 255)" : "rgb(var(--accent))";
@@ -173,7 +222,7 @@ export default function MultiBrowser({ sessionId, cwd, machine }: { sessionId: s
               {tab.temp
                 ? <IconIncognito size={12} style={{ color: on ? "rgb(168 130 255)" : "var(--text-faint)" }} />
                 : <span style={{ width: 5, height: 5, borderRadius: 999, background: on ? tint : "var(--border-strong)", flexShrink: 0 }} />}
-              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", opacity: asleep ? 0.5 : 1 }}>{label}</span>
               {tabs.length > 1 && (
                 <span onClick={(e) => { e.stopPropagation(); closeTab(tab.id); }} title="Close tab" style={{ opacity: 0.55, fontSize: 12, lineHeight: 1, flexShrink: 0 }}>✕</span>
               )}
@@ -208,7 +257,7 @@ export default function MultiBrowser({ sessionId, cwd, machine }: { sessionId: s
           responsive (email) layout is unchanged; it's overlapped, not pushed. The menu
           (visibility:visible) shows over the blanked area. */}
       <div style={{ flex: 1, minHeight: 0, position: "relative", visibility: menuOpen ? "hidden" : "visible" }}>
-        {tabs.map((tab) => (
+        {tabs.filter((tab) => !discarded.includes(tab.id)).map((tab) => (
           <div key={tab.id} style={{ position: "absolute", inset: 0, display: tab.id === active ? "flex" : "none", flexDirection: "column" }}>
             <BrowserPanel
               sessionId={sessionId} cwd={cwd} machine={machine}
