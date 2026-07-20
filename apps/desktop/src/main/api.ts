@@ -454,17 +454,25 @@ export function parseSseBlock(
 }
 
 export function startStream(
-  onEvent: (e: { type: string; payload: unknown }) => void
+  onEvent: (e: { type: string; payload: unknown }) => void,
+  // Optional gate from the caller (main/index.ts) so this framework-free module
+  // stays importable in tests — used to skip polling when no window is visible.
+  shouldPoll?: () => boolean
 ): () => void {
   let stopped = false;
   let backoff = 1000;
   const backoffSteps = [1000, 2000, 5000];
   let backoffIdx = 0;
   let activeReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+  let connected = false;
 
-  // Poll fallback every 3000ms
+  // Poll fallback every 3000ms — ONLY while the SSE stream is down (and a window
+  // is actually visible). A healthy stream already pushes every change, so
+  // ticking regardless just burned a full app refresh every 3s forever.
   const pollInterval = setInterval(() => {
-    if (!stopped) onEvent({ type: "poll.tick", payload: null });
+    if (stopped || connected) return;
+    if (shouldPoll && !shouldPoll()) return;
+    onEvent({ type: "poll.tick", payload: null });
   }, 3000);
 
   async function connect(): Promise<void> {
@@ -479,6 +487,11 @@ export function startStream(
       // Reset backoff on successful connection
       backoffIdx = 0;
       backoff = backoffSteps[0];
+
+      // (Re)connected: mark healthy and force one immediate refresh so the UI
+      // isn't stale after a gap in the stream.
+      connected = true;
+      onEvent({ type: "poll.tick", payload: null });
 
       const reader = res.body.getReader();
       activeReader = reader;
@@ -500,6 +513,7 @@ export function startStream(
     } catch {
       // ignore errors, reconnect below
     } finally {
+      connected = false;
       activeReader = null;
     }
 

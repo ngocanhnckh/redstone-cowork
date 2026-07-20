@@ -86,10 +86,28 @@ function Sparkline({ data, max, height = 34, color = "rgb(var(--primary-soft))",
   );
 }
 
+/**
+ * A rAF ticker that pauses while the document is hidden — decorative animations
+ * have no business burning CPU/GPU (and battery) behind a minimized window.
+ */
+function useAnimationTick(step: number): number {
+  const [t, setT] = useState(0);
+  useEffect(() => {
+    let raf = 0;
+    const loop = () => { setT((x) => x + step); raf = requestAnimationFrame(loop); };
+    const start = () => { if (!raf) raf = requestAnimationFrame(loop); };
+    const stop = () => { if (raf) cancelAnimationFrame(raf); raf = 0; };
+    const onVis = () => { if (document.hidden) stop(); else start(); };
+    if (!document.hidden) start();
+    document.addEventListener("visibilitychange", onVis);
+    return () => { stop(); document.removeEventListener("visibilitychange", onVis); };
+  }, [step]);
+  return t;
+}
+
 /** A decorative animated wave sparkline (used for ambient widgets / skeletons). */
 function WaveLine({ color = "rgb(var(--primary-soft))", height = 40, phase = 0 }: { color?: string; height?: number; phase?: number }) {
-  const [t, setT] = useState(0);
-  useEffect(() => { let raf = 0; const loop = () => { setT((x) => x + 0.03); raf = requestAnimationFrame(loop); }; raf = requestAnimationFrame(loop); return () => cancelAnimationFrame(raf); }, []);
+  const t = useAnimationTick(0.03);
   const W = 100, H = height;
   const pts = Array.from({ length: 41 }, (_, i) => {
     const x = (i / 40) * W;
@@ -149,8 +167,7 @@ function Decode({ text, className, style }: { text: string; className?: string; 
  * dimming as it swings around the back.
  */
 function RotatingGlobe({ geo, size = 150 }: { geo: { lat: number; long: number; city: string | null } | null; size?: number }) {
-  const [t, setT] = useState(0);
-  useEffect(() => { let raf = 0; const loop = () => { setT((x) => x + 0.012); raf = requestAnimationFrame(loop); }; raf = requestAnimationFrame(loop); return () => cancelAnimationFrame(raf); }, []);
+  const t = useAnimationTick(0.012);
   const R = size / 2 - 4, cx = size / 2, cy = size / 2;
   const MERIDIANS = 6;
   // Marker: its longitude sweeps with rotation; sin(lon-t) < 0 ⇒ on the far side.
@@ -1699,6 +1716,15 @@ const loadRightWidth = (): number => {
 const maxRightWidth = (hudWidth: number): number => Math.max(RIGHT_MIN, Math.min(RIGHT_MAX_ABS, hudWidth * 0.4));
 
 export default function Hud() {
+  // Single global switch: while the window is hidden/minimized, mark the body so
+  // every infinite CSS animation in the HUD parks (see `.rcw-hidden` rules below).
+  useEffect(() => {
+    const apply = () => document.body.classList.toggle("rcw-hidden", document.hidden);
+    apply();
+    document.addEventListener("visibilitychange", apply);
+    return () => { document.removeEventListener("visibilitychange", apply); document.body.classList.remove("rcw-hidden"); };
+  }, []);
+
   const [tele, setTele] = useState<HostTelemetryView[]>([]);
   useEffect(() => {
     let alive = true;
@@ -1801,6 +1827,16 @@ function HudStyles() {
       .hud-seg { background: var(--border); transition: background .3s; }
       .hud-seg-lit { background: rgb(var(--accent)); animation: hud-seg 1.6s ease-in-out infinite; }
       @keyframes hud-seg { 0%,100% { opacity:.55;} 50% { opacity:1;} }
+      /* Park every infinite decorative animation while the window is hidden or
+         minimized — otherwise the full-viewport .hud-grid pan alone keeps the
+         compositor repainting tiles forever. Toggled from Hud's visibilitychange. */
+      body.rcw-hidden .hud-grid,
+      body.rcw-hidden .hud-scan,
+      body.rcw-hidden .hud-float,
+      body.rcw-hidden .hud-panel-shimmer,
+      body.rcw-hidden .hud-blink,
+      body.rcw-hidden .hud-pulse,
+      body.rcw-hidden .hud-seg-lit { animation-play-state: paused !important; }
       .hud-corner { position:absolute; top:0; right:0; width:16px; height:16px; pointer-events:none;
         border-top:1px solid rgb(var(--primary-soft) / 0.5); border-right:1px solid rgb(var(--primary-soft) / 0.5);
         border-top-right-radius:14px; }
