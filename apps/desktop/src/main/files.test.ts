@@ -16,6 +16,10 @@ import {
   createFile,
   uploadLocalFile,
   parseSizeFramed,
+  parseFindList,
+  remoteListCmd,
+  parseGrepLine,
+  searchFilesStream,
   MAX_TEXT_BYTES,
 } from "./files";
 import { existsSync } from "node:fs";
@@ -41,6 +45,135 @@ describe("parseSizeFramed", () => {
   });
   it("content that itself starts with digits is not mistaken for the size", () => {
     expect(parseSizeFramed("3\n404 not found")).toEqual({ size: 3, body: "404 not found" });
+  });
+});
+
+describe("parseFindList", () => {
+  it("parses type, size and name into absolute paths", () => {
+    const out = "d\t4096\tsrc\nf\t1016\t.gitignore\n";
+    expect(parseFindList(out, "/home/me/proj")).toEqual([
+      { name: "src", path: "/home/me/proj/src", kind: "dir", size: 4096 },
+      { name: ".gitignore", path: "/home/me/proj/.gitignore", kind: "file", size: 1016 },
+    ]);
+  });
+
+  it("lists a BROKEN symlink (type l) as a file instead of dropping the listing", () => {
+    // Regression: the old shell loop ran `wc -c < node_modules` on a dangling
+    // link, which failed the redirect and leaked a bash error to stderr.
+    const entries = parseFindList("l\t31\tnode_modules\n", "/p");
+    expect(entries).toEqual([{ name: "node_modules", path: "/p/node_modules", kind: "file", size: 31 }]);
+  });
+
+  it("keeps tabs that are part of a filename", () => {
+    expect(parseFindList("f\t5\tweird\tname\n", "/p")[0].name).toBe("weird\tname");
+  });
+
+  it("normalises a trailing slash on the parent dir", () => {
+    expect(parseFindList("d\t0\ta\n", "/p/")[0].path).toBe("/p/a");
+  });
+
+  it("skips blank lines, malformed rows and dot entries", () => {
+    expect(parseFindList("\ngarbage\nd\t0\t.\nd\t0\t..\nf\t1\tok\n", "/p")).toEqual([
+      { name: "ok", path: "/p/ok", kind: "file", size: 1 },
+    ]);
+  });
+});
+
+describe("remoteListCmd", () => {
+  it("single-quotes the directory, so spaces and quotes can't break out", () => {
+    expect(remoteListCmd("/tmp/a b")).toContain("cd '/tmp/a b'");
+    expect(remoteListCmd("/tmp/it's")).toContain(`'/tmp/it'\\''s'`);
+  });
+  it("uses one find exec with a python3 fallback — never a per-entry subprocess", () => {
+    const cmd = remoteListCmd("/p");
+    expect(cmd).toContain("find -L . -maxdepth 1 -mindepth 1 -printf");
+    expect(cmd).toContain("python3 -c");
+    expect(cmd).not.toContain("wc -c");
+  });
+});
+
+describe("parseGrepLine", () => {
+  it("splits path:line:text", () => {
+    expect(parseGrepLine("/p/a.ts:12:const x = 1")).toEqual({ path: "/p/a.ts", line: 12, text: "const x = 1" });
+  });
+  it("handles colons inside the matched text", () => {
+    expect(parseGrepLine("/p/a.ts:3:{ a: 1 }")).toEqual({ path: "/p/a.ts", line: 3, text: "{ a: 1 }" });
+  });
+  it("returns null for a line with no line-number field", () => {
+    expect(parseGrepLine("Binary file /p/x matches")).toBeNull();
+  });
+  it("caps very long lines so one minified file can't flood the UI", () => {
+    expect(parseGrepLine(`/p/a.js:1:${"x".repeat(1000)}`)!.text).toHaveLength(400);
+  });
+});
+
+describe("searchFilesStream (local)", () => {
+  const mk = () => {
+    const dir = mkdtempSync(join(tmpdir(), "rcw-search-"));
+    mkdirSync(join(dir, "sub"));
+    writeFileSync(join(dir, "a.txt"), "alpha needle\nbeta\n");
+    writeFileSync(join(dir, "sub", "b.txt"), "gamma\nneedle again\n");
+    return dir;
+  };
+
+  const run = (dir: string, opts: Record<string, unknown> = {}) =>
+    new Promise<{ matches: Array<{ path: string; line: number }>; res: { truncated: boolean; error?: string } }>(
+      (resolve) => {
+        const matches: Array<{ path: string; line: number }> = [];
+        void searchFilesStream(
+          { cwd: dir, machine: LOCAL, query: "needle", ...opts },
+          (b) => matches.push(...b),
+          (res) => resolve({ matches, res })
+        );
+      }
+    );
+
+  it("streams matches from every file under cwd", async () => {
+    const dir = mk();
+    try {
+      const { matches, res } = await run(dir);
+      expect(res.error).toBeUndefined();
+      expect(matches).toHaveLength(2);
+      expect(matches.map((m) => m.line).sort()).toEqual([1, 2]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("reports truncated once maxResults is reached", async () => {
+    const dir = mk();
+    try {
+      const { matches, res } = await run(dir, { maxResults: 1 });
+      expect(matches).toHaveLength(1);
+      expect(res.truncated).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("completes immediately on an empty query without spawning anything", async () => {
+    const { matches, res } = await run(".", { query: "   " });
+    expect(matches).toEqual([]);
+    expect(res).toEqual({ truncated: false });
+  });
+
+  it("cancel() suppresses the done callback", async () => {
+    const dir = mk();
+    try {
+      let done = false;
+      const h = await searchFilesStream(
+        { cwd: dir, machine: LOCAL, query: "needle" },
+        () => {},
+        () => {
+          done = true;
+        }
+      );
+      h.cancel();
+      await new Promise((r) => setTimeout(r, 300));
+      expect(done).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

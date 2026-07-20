@@ -315,6 +315,48 @@ contextBridge.exposeInMainWorld("cowork", {
     | { ok: true; matches: Array<{ path: string; line: number; text: string }>; truncated: boolean }
     | { ok: false; error: string }
   > => ipcRenderer.invoke(IPC.filesSearch, a),
+  /**
+   * Streaming search. Calls `onBatch` as matches arrive and `onDone` once at the
+   * end; returns a cancel fn. Prefer this over `searchFiles` in the UI — results
+   * appear progressively instead of after the entire tree has been scanned.
+   */
+  searchFilesStream: (
+    a: {
+      cwd: string;
+      machine: string;
+      query: string;
+      caseSensitive?: boolean;
+      regex?: boolean;
+      maxResults?: number;
+    },
+    onBatch: (matches: Array<{ path: string; line: number; text: string }>) => void,
+    onDone: (r: { truncated: boolean; error?: string }) => void
+  ): (() => void) => {
+    const searchId = `s${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const listener = (
+      _e: unknown,
+      p: {
+        searchId: string;
+        matches?: Array<{ path: string; line: number; text: string }>;
+        done?: boolean;
+        truncated?: boolean;
+        error?: string;
+      }
+    ) => {
+      if (p.searchId !== searchId) return; // another panel's search
+      if (p.matches?.length) onBatch(p.matches);
+      if (p.done) {
+        ipcRenderer.removeListener(IPC.filesSearchEvent, listener);
+        onDone({ truncated: !!p.truncated, error: p.error });
+      }
+    };
+    ipcRenderer.on(IPC.filesSearchEvent, listener);
+    void ipcRenderer.invoke(IPC.filesSearchStart, { ...a, searchId });
+    return () => {
+      ipcRenderer.removeListener(IPC.filesSearchEvent, listener);
+      void ipcRenderer.invoke(IPC.filesSearchCancel, { searchId });
+    };
+  },
   readFile: (a: {
     cwd: string;
     machine: string;

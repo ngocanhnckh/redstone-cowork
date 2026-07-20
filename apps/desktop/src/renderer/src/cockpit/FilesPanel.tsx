@@ -43,6 +43,90 @@ type MenuTarget =
   | { kind: "file" | "dir"; path: string; parent: string }
   | { kind: "root"; path: string; parent: string };
 
+/* ── Directory listing cache ──────────────────────────────────────────────────
+ * Lives at module scope, NOT in component state or a ref: the panel is mounted
+ * conditionally by the HUD / FocusStage, so it unmounts on every tab switch —
+ * anything component-local would be thrown away and each re-expand would spin
+ * again. Keyed by `${machine} ${dir}` so two hosts never share a listing.
+ */
+const dirCache = new Map<string, DirEntry[]>();
+/** In-flight listFiles calls, so a prefetch and a user expand share one request. */
+const dirInflight = new Map<string, Promise<DirResult>>();
+
+type DirResult = { ok: true; entries: DirEntry[] } | { ok: false; error: string };
+
+const dirKey = (machine: string, dir: string): string => `${machine} ${dir}`;
+
+/** Identical listings? Compared by name+kind+size so an unchanged dir re-renders nothing. */
+function sameEntries(a: DirEntry[], b: DirEntry[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i].name !== b[i].name || a[i].kind !== b[i].kind || a[i].size !== b[i].size) return false;
+  }
+  return true;
+}
+
+/** List a directory, deduping concurrent callers and populating the cache. */
+function fetchDir(cwd: string, machine: string, dir: string): Promise<DirResult> {
+  const key = dirKey(machine, dir);
+  const running = dirInflight.get(key);
+  if (running) return running;
+  const p = window.cowork
+    .listFiles({ cwd, machine, dir })
+    .then((res): DirResult => {
+      if (res.ok) dirCache.set(key, res.entries);
+      return res;
+    })
+    .catch((e): DirResult => ({ ok: false, error: e instanceof Error ? e.message : String(e) }))
+    .finally(() => dirInflight.delete(key));
+  dirInflight.set(key, p);
+  return p;
+}
+
+/** Drop a dir (and, for a deleted folder, everything beneath it) from the cache. */
+function invalidateDir(machine: string, dir: string, subtree = false): void {
+  const key = dirKey(machine, dir);
+  dirCache.delete(key);
+  dirInflight.delete(key);
+  if (!subtree) return;
+  for (const k of [...dirCache.keys()]) if (k.startsWith(key + "/")) dirCache.delete(k);
+}
+
+/* Prefetch one level ahead: after a dir renders we warm its subdirectories so the
+ * next expand is instant. Capped concurrency — a folder with 200 subdirs would
+ * otherwise fire 200 SSH execs at once and starve the listing the user is waiting on. */
+const PREFETCH_MAX = 4;
+let prefetchActive = 0;
+const prefetchQueue: Array<() => void> = [];
+
+function pumpPrefetch(): void {
+  while (prefetchActive < PREFETCH_MAX && prefetchQueue.length) {
+    const job = prefetchQueue.shift()!;
+    prefetchActive++;
+    job();
+  }
+}
+
+/** Queue background listings for `entries`' subdirectories (skips ones already known). */
+function prefetchChildren(cwd: string, machine: string, entries: DirEntry[]): void {
+  for (const e of entries) {
+    if (e.kind !== "dir") continue;
+    const key = dirKey(machine, e.path);
+    if (dirCache.has(key) || dirInflight.has(key)) continue;
+    const dir = e.path;
+    prefetchQueue.push(() => {
+      // Re-check: the user may have expanded (and thus cached) this dir while queued.
+      const done = () => {
+        prefetchActive--;
+        pumpPrefetch();
+      };
+      if (dirCache.has(dirKey(machine, dir))) return done();
+      fetchDir(cwd, machine, dir).then(done, done);
+    });
+  }
+  pumpPrefetch();
+}
+
 /**
  * Copy text to the clipboard from the renderer. Uses the legacy execCommand path
  * (a hidden, selected textarea) which works in Electron under file:// where
@@ -121,21 +205,42 @@ export default function FilesPanel({ sessionId, cwd, machine }: Props) {
   const [showAll, setShowAll] = useState<Set<string>>(new Set());
   const revealAllInDir = useCallback((dir: string) => setShowAll((s) => new Set(s).add(dir)), []);
 
+  // The scope a listing belongs to — an in-flight load from the previous session /
+  // host must not paint into the tree after the user switched.
+  const scopeRef = useRef(`${machine} ${cwd}`);
+  useEffect(() => {
+    scopeRef.current = `${machine} ${cwd}`;
+  }, [cwd, machine]);
+
+  /**
+   * Load a directory into the tree. Cached listings paint immediately (no spinner)
+   * and are then revalidated in the background — the state is only replaced if the
+   * listing actually changed, so a re-expand of an unchanged folder is a no-op.
+   */
   const loadDir = useCallback(
     async (dir: string) => {
-      setLoadingDirs((s) => new Set(s).add(dir));
-      try {
-        const res = await window.cowork.listFiles({ cwd, machine, dir });
+      const scope = `${machine} ${cwd}`;
+      const cached = dirCache.get(dirKey(machine, dir));
+      if (cached) {
+        setTree((t) => (t[dir] && sameEntries(t[dir], cached) ? t : { ...t, [dir]: cached }));
+      } else {
+        // Only spin when we have nothing to show for this dir.
+        setLoadingDirs((s) => new Set(s).add(dir));
+      }
+      const res = await fetchDir(cwd, machine, dir);
+      if (scopeRef.current === scope) {
         if (res.ok) {
-          setTree((t) => ({ ...t, [dir]: res.entries }));
+          setTree((t) => (t[dir] && sameEntries(t[dir], res.entries) ? t : { ...t, [dir]: res.entries }));
           setTreeError(null);
+          // Warm one level down so the next expand is instant.
+          prefetchChildren(cwd, machine, res.entries);
         } else {
           setTreeError(res.error);
         }
-      } catch (e) {
-        setTreeError(e instanceof Error ? e.message : String(e));
-      } finally {
+      }
+      if (!cached) {
         setLoadingDirs((s) => {
+          if (!s.has(dir)) return s;
           const n = new Set(s);
           n.delete(dir);
           return n;
@@ -164,8 +269,10 @@ export default function FilesPanel({ sessionId, cwd, machine }: Props) {
       const n = new Set(s);
       if (n.has(dir)) n.delete(dir);
       else {
+        // Always call loadDir — it paints the cached listing synchronously (if any)
+        // and revalidates in the background, so this is free when nothing changed.
         n.add(dir);
-        if (!tree[dir]) loadDir(dir);
+        loadDir(dir);
       }
       return n;
     });
@@ -399,6 +506,7 @@ export default function FilesPanel({ sessionId, cwd, machine }: Props) {
     if (res.ok) {
       setCreating(null);
       setExpanded((s) => new Set(s).add(parent));
+      invalidateDir(machine, parent);
       await loadDir(parent);
       // Jump straight into a freshly created file.
       if (kind === "file" && res.path) openFile(res.path);
@@ -413,6 +521,7 @@ export default function FilesPanel({ sessionId, cwd, machine }: Props) {
     const res = await window.cowork.uploadFiles({ cwd, machine, destDir });
     if (res.ok && res.uploaded > 0) {
       setExpanded((s) => new Set(s).add(destDir));
+      invalidateDir(machine, destDir);
       await loadDir(destDir);
       setToast(`Uploaded ${res.uploaded} file${res.uploaded > 1 ? "s" : ""}`);
       setTimeout(() => setToast(null), 1800);
@@ -433,6 +542,9 @@ export default function FilesPanel({ sessionId, cwd, machine }: Props) {
         setRead(null);
       }
       const parent = t.path.slice(0, t.path.lastIndexOf("/")) || cwd;
+      // A deleted folder takes its whole cached subtree with it.
+      if (t.isDir) invalidateDir(machine, t.path, true);
+      invalidateDir(machine, parent);
       await loadDir(parent);
     } else {
       setOpError(res.error ?? "delete failed");
@@ -441,7 +553,15 @@ export default function FilesPanel({ sessionId, cwd, machine }: Props) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
-      <ConnectionBar sessionId={sessionId} machine={machine} onHostChange={() => loadDir(cwd)} />
+      {/* A host change points the same machine id at different files — drop the cache. */}
+      <ConnectionBar
+        sessionId={sessionId}
+        machine={machine}
+        onHostChange={() => {
+          invalidateDir(machine, cwd, true);
+          loadDir(cwd);
+        }}
+      />
       <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
         {/* File tree — or project-wide search when toggled (⌘⇧F) */}
         <div

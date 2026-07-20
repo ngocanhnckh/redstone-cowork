@@ -203,6 +203,23 @@ declare global {
         | { ok: true; matches: Array<{ path: string; line: number; text: string }>; truncated: boolean }
         | { ok: false; error: string }
       >;
+      /**
+       * Streaming search: `onBatch` fires repeatedly as matches arrive, `onDone`
+       * exactly once at the end. The returned fn stops the remote grep and
+       * suppresses `onDone`. Preferred over `searchFiles` in the UI.
+       */
+      searchFilesStream(
+        a: {
+          cwd: string;
+          machine: string;
+          query: string;
+          caseSensitive?: boolean;
+          regex?: boolean;
+          maxResults?: number;
+        },
+        onBatch: (matches: Array<{ path: string; line: number; text: string }>) => void,
+        onDone: (r: { truncated: boolean; error?: string }) => void
+      ): () => void;
       readFile(a: {
         cwd: string;
         machine: string;

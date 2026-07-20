@@ -108,25 +108,142 @@ export async function searchFiles(
   const { cwd, machine, query } = args;
   if (!query || !query.trim()) return { ok: true, matches: [], truncated: false };
   const max = Math.max(1, Math.min(2000, args.maxResults ?? 500));
-  const flags = ["-rnI", args.caseSensitive ? "" : "-i", args.regex ? "-E" : "-F"].filter(Boolean).join(" ");
-  const excludes = [".git", "node_modules", "dist", "build", ".next", "out", ".turbo", ".cache", "vendor"]
-    .map((d) => `--exclude-dir=${d}`)
-    .join(" ");
-  // grep exits 1 on no matches; the `| head` pipeline makes the shell exit 0 regardless.
-  const cmd = `grep ${flags} ${excludes} -e ${shellQuote(query)} ${shellQuote(cwd)} 2>/dev/null | head -n ${max + 1}`;
+  const cmd = grepCmd({ ...args, maxResults: max });
   try {
     const raw = isLocalMachine(machine) ? await localCapture(cmd) : await sshCapture(await getSshTarget(machine), cmd);
     const lines = raw.split("\n").filter(Boolean);
     const truncated = lines.length > max;
     const matches: SearchMatch[] = [];
     for (const l of lines.slice(0, max)) {
-      const m = l.match(/^(.+?):(\d+):(.*)$/);
-      if (m) matches.push({ path: m[1], line: Number(m[2]), text: m[3].slice(0, 400) });
+      const m = parseGrepLine(l);
+      if (m) matches.push(m);
     }
     return { ok: true, matches, truncated };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
+}
+
+/** Parse one `path:line:text` grep record. Returns null for a malformed line.
+ * Paths can contain colons, so the split is anchored on the `:<digits>:` that
+ * grep always emits between the path and the line's text. */
+export function parseGrepLine(line: string): SearchMatch | null {
+  const m = line.match(/^(.+?):(\d+):(.*)$/);
+  return m ? { path: m[1], line: Number(m[2]), text: m[3].slice(0, 400) } : null;
+}
+
+export type SearchHandle = { cancel: () => void };
+
+/**
+ * Streaming variant of `searchFiles`: emits matches as grep finds them instead of
+ * buffering the whole run behind a 15s timeout. This is what makes search feel
+ * instant — the first results land in well under a second on a large tree, and a
+ * long search yields partial results instead of failing with "Command failed".
+ *
+ * `onBatch` is called with each group of new matches; `onDone` fires exactly once.
+ * Returns a handle whose `cancel()` kills the underlying process (used when the
+ * user edits the query, so a superseded search stops burning remote CPU).
+ */
+export async function searchFilesStream(
+  args: Loc & { query: string; caseSensitive?: boolean; regex?: boolean; maxResults?: number },
+  onBatch: (matches: SearchMatch[]) => void,
+  onDone: (r: { truncated: boolean; error?: string }) => void
+): Promise<SearchHandle> {
+  const { machine, query } = args;
+  if (!query || !query.trim()) {
+    onDone({ truncated: false });
+    return { cancel: () => {} };
+  }
+  const max = Math.max(1, Math.min(2000, args.maxResults ?? 500));
+  const cmd = grepCmd({ ...args, maxResults: max });
+
+  let child: ReturnType<typeof spawn>;
+  // Resolving the ssh target is async, so a cancel() can arrive before the child
+  // exists; `cancelled` makes that case kill the process as soon as it spawns.
+  let cancelled = false;
+  try {
+    if (isLocalMachine(machine)) {
+      child = spawn("/bin/sh", ["-c", cmd], { stdio: ["ignore", "pipe", "ignore"] });
+    } else {
+      const target = await getSshTarget(machine);
+      child = spawn(
+        "ssh",
+        [...sshMuxOpts(), ...target.opts, "-o", "BatchMode=yes", "-o", "ConnectTimeout=8", target.host, cmd],
+        { stdio: ["ignore", "pipe", "ignore"] }
+      );
+    }
+  } catch (e) {
+    onDone({ truncated: false, error: e instanceof Error ? e.message : String(e) });
+    return { cancel: () => {} };
+  }
+  if (cancelled) {
+    try {
+      child.kill();
+    } catch {
+      /* already gone */
+    }
+    return { cancel: () => {} };
+  }
+
+  let done = false;
+  let count = 0;
+  let truncated = false;
+  let buf = "";
+  const finish = (error?: string) => {
+    if (done) return;
+    done = true;
+    onDone({ truncated, error });
+  };
+
+  child.stdout?.setEncoding("utf8");
+  child.stdout?.on("data", (chunk: string) => {
+    buf += chunk;
+    // Keep the trailing partial line in the buffer until its newline arrives.
+    const lines = buf.split("\n");
+    buf = lines.pop() ?? "";
+    const batch: SearchMatch[] = [];
+    for (const l of lines) {
+      if (!l) continue;
+      if (count >= max) {
+        truncated = true;
+        break;
+      }
+      const m = parseGrepLine(l);
+      if (!m) continue;
+      batch.push(m);
+      count++;
+    }
+    if (batch.length) onBatch(batch);
+    if (truncated) child.kill();
+  });
+  // Losing the pipe (we killed it after hitting the cap) is expected, not an error.
+  child.stdout?.on("error", () => {});
+  child.on("error", (e) => finish(e.message));
+  child.on("close", () => finish());
+
+  return {
+    cancel: () => {
+      done = true; // suppress onDone — the caller is no longer interested
+      cancelled = true;
+      try {
+        child.kill();
+      } catch {
+        /* already gone */
+      }
+    },
+  };
+}
+
+/** Build the grep pipeline shared by the buffered and streaming search paths. */
+function grepCmd(args: Loc & { query: string; caseSensitive?: boolean; regex?: boolean; maxResults?: number }): string {
+  const flags = ["-rnI", args.caseSensitive ? "" : "-i", args.regex ? "-E" : "-F"].filter(Boolean).join(" ");
+  const excludes = [".git", "node_modules", "dist", "build", ".next", "out", ".turbo", ".cache", "vendor"]
+    .map((d) => `--exclude-dir=${d}`)
+    .join(" ");
+  // grep exits 1 on no matches; the `| head` pipeline makes the shell exit 0 regardless.
+  // `--line-buffered` is what lets matches stream out instead of sitting in grep's
+  // 4KB stdio buffer until the whole tree has been walked.
+  return `grep --line-buffered ${flags} ${excludes} -e ${shellQuote(args.query)} ${shellQuote(args.cwd)} 2>/dev/null | head -n ${(args.maxResults ?? 500) + 1}`;
 }
 
 /** Guess a MIME type from extension for inline preview (img/pdf) decisions. */
@@ -177,6 +294,56 @@ export function looksBinary(sample: Buffer): boolean {
 
 // ----------------------------------- list ----------------------------------
 
+/**
+ * Remote directory listing as a SINGLE process, emitting `<type>\t<size>\t<name>`
+ * per entry. GNU `find -printf` is the fast path; if it isn't available (BSD/
+ * BusyBox find rejects `-printf` during argument parsing, before printing any
+ * entries, so the `||` fallback can't produce duplicates) we fall back to a
+ * python3 one-liner that yields the identical framing. Both are one exec — never
+ * one-per-entry, which is what made this slow.
+ */
+export function remoteListCmd(dir: string): string {
+  const q = shellQuote(dir);
+  const find = `find -L . -maxdepth 1 -mindepth 1 -printf '%y\\t%s\\t%f\\n' 2>/dev/null`;
+  // os.scandir + stat(follow) mirrors `find -L`: symlinked dirs read as `d`,
+  // broken links fall back to the link itself (`l`) instead of raising.
+  const py = [
+    `import os,sys`,
+    `d='.'`,
+    `for e in os.scandir(d):`,
+    ` try: st=e.stat(); t='d' if os.path.isdir(e.path) else 'f'`,
+    ` except OSError: st=None; t='l'`,
+    ` sys.stdout.write('%s\\t%d\\t%s\\n'%(t, st.st_size if st else 0, e.name))`,
+  ].join("\n");
+  return `cd ${q} && { ${find} || python3 -c ${shellQuote(py)} 2>/dev/null; }`;
+}
+
+/**
+ * Parse the tab-framed listing into entries. Names may legitimately contain tabs,
+ * so only the first two fields are split off and the remainder is the name.
+ * Type `d` is a directory; everything else (including `l`, a broken symlink) is
+ * shown as a file so the tree renders it instead of failing the whole listing.
+ */
+export function parseFindList(out: string, dir: string): DirEntry[] {
+  const base = dir.replace(/\/+$/, "");
+  const entries: DirEntry[] = [];
+  for (const line of out.split("\n")) {
+    if (!line.trim()) continue;
+    const first = line.indexOf("\t");
+    const second = line.indexOf("\t", first + 1);
+    if (first < 0 || second < 0) continue;
+    const name = line.slice(second + 1);
+    if (!name || name === "." || name === "..") continue;
+    entries.push({
+      name,
+      path: base + "/" + name,
+      kind: line.slice(0, first) === "d" ? "dir" : "file",
+      size: Number(line.slice(first + 1, second)) || 0,
+    });
+  }
+  return entries;
+}
+
 export async function listDir(args: Loc & { dir: string }): Promise<{ ok: true; entries: DirEntry[] } | { ok: false; error: string }> {
   const { machine, dir } = args;
   try {
@@ -198,28 +365,17 @@ export async function listDir(args: Loc & { dir: string }): Promise<{ ok: true; 
       }
       return { ok: true, entries: sortEntries(entries) };
     }
-    // Remote: one stat call per entry is too chatty; use a single find with printf.
+    // Remote: ONE process, one round trip. The previous implementation globbed
+    // `* .*` in the login shell and ran a `wc -c` SUBPROCESS PER ENTRY — on a
+    // 35-entry dir over a relayed link that measured 6.4s, and a directory with a
+    // broken symlink leaked `bash: <name>: No such file or directory` to stderr
+    // (the `2>/dev/null` bound to `wc`, but the SHELL reports a failed redirect).
+    // GNU find does the whole thing in one exec: %y = type (dereferenced under
+    // -L, so a symlinked dir reports as `d`; a BROKEN link stays `l` and is
+    // listed as a file rather than erroring), %s = size, %f = basename.
     const sshTarget = await getSshTarget(machine);
-    // %y = file type (d/f/l...), %s = size, %p = path. NUL-separate fields & records.
-    // `setopt nonomatch` stops zsh (a common login shell) from ABORTING on an
-    // unmatched `.*` glob when a dir has no dotfiles; it's a no-op in bash/sh
-    // (which pass an unmatched glob through literally, then the `-e` guard skips it).
-    const cmd = `setopt nonomatch 2>/dev/null; cd ${shellQuote(dir)} && for n in * .*; do [ "$n" = "." ] || [ "$n" = ".." ] || [ ! -e "$n" -a ! -L "$n" ] || { if [ -d "$n" ]; then t=d; s=0; else t=f; s=$(wc -c < "$n" 2>/dev/null || echo 0); fi; printf '%s\\t%s\\t%s\\n' "$t" "$s" "$n"; }; done`;
-    const out = await sshCapture(sshTarget, cmd);
-    const entries: DirEntry[] = [];
-    for (const line of out.split("\n")) {
-      if (!line.trim()) continue;
-      const [t, s, ...rest] = line.split("\t");
-      const name = rest.join("\t");
-      if (!name) continue;
-      entries.push({
-        name,
-        path: dir.replace(/\/$/, "") + "/" + name,
-        kind: t === "d" ? "dir" : "file",
-        size: Number(s) || 0,
-      });
-    }
-    return { ok: true, entries: sortEntries(entries) };
+    const out = await sshCapture(sshTarget, remoteListCmd(dir));
+    return { ok: true, entries: sortEntries(parseFindList(out, dir)) };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }

@@ -27,7 +27,7 @@ import {
   type StartArgs as ForwardStartArgs,
 } from "./forwarding";
 import { sshSetup, type SshSetupArgs } from "./ssh-setup";
-import { listDir, readFileAt, writeFileAt, writeFileBase64, deletePath, makeDir, createFile, uploadLocalFile, searchFiles, downloadFileTo } from "./files";
+import { listDir, readFileAt, writeFileAt, writeFileBase64, deletePath, makeDir, createFile, uploadLocalFile, searchFiles, searchFilesStream, downloadFileTo } from "./files";
 import { gitInfo } from "./git";
 import { chooseBgImage, getBgImage, clearBgImage, setSimpleFullscreen, isFullscreen, setVibrancy, chooseBgVideo, getBgVideoUrl, clearBgVideo, currentBgVideoPath } from "./appearance";
 import { registerSessionBrowser, unregisterSessionBrowser, startInspect, stopInspect, stopAllInspectors, getResponseBody } from "./devtools";
@@ -266,7 +266,7 @@ function startForwarding(): void {
       }
       // Keep tray in sync with every server event (fire-and-forget)
       refreshTrayAndNotify().catch(() => {/* ignore */});
-    });
+    }, () => BrowserWindow.getAllWindows().some((w) => w.isVisible() && !w.isMinimized()));
     // Initial tray sync after connecting
     refreshTrayAndNotify().catch(() => {/* ignore */});
     // Auto-discover SSH targets now and every 60s.
@@ -757,6 +757,42 @@ ipcMain.handle(IPC.filesList, (_e, a: { cwd: string; machine: string; dir: strin
   listDir(a)
 );
 ipcMain.handle(IPC.filesSearch, (_e, a: Parameters<typeof searchFiles>[0]) => searchFiles(a));
+
+// Streaming search: matches are pushed to the renderer as grep finds them, so the
+// first results appear immediately instead of after the whole tree is walked. Each
+// run is keyed by an id the renderer supplies, letting it cancel a superseded
+// query (every keystroke) so we don't leave greps burning CPU on the remote host.
+const liveSearches = new Map<string, { cancel: () => void }>();
+ipcMain.handle(
+  IPC.filesSearchStart,
+  async (e, a: Parameters<typeof searchFiles>[0] & { searchId: string }) => {
+    liveSearches.get(a.searchId)?.cancel();
+    const wc = e.sender;
+    const send = (payload: unknown) => {
+      if (!wc.isDestroyed()) wc.send(IPC.filesSearchEvent, payload);
+    };
+    const handle = await searchFilesStream(
+      a,
+      (matches) => send({ searchId: a.searchId, matches }),
+      (r) => {
+        liveSearches.delete(a.searchId);
+        send({ searchId: a.searchId, done: true, ...r });
+      }
+    );
+    liveSearches.set(a.searchId, handle);
+    // A reloaded/closed panel must not leave the grep running.
+    wc.once("destroyed", () => {
+      handle.cancel();
+      liveSearches.delete(a.searchId);
+    });
+    return { ok: true };
+  }
+);
+ipcMain.handle(IPC.filesSearchCancel, (_e, a: { searchId: string }) => {
+  liveSearches.get(a.searchId)?.cancel();
+  liveSearches.delete(a.searchId);
+  return { ok: true };
+});
 ipcMain.handle(IPC.filesRead, (_e, a: { cwd: string; machine: string; file: string }) =>
   readFileAt(a)
 );

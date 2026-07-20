@@ -46,25 +46,46 @@ export default function FileSearch({
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const inputRef = useRef<HTMLInputElement>(null);
   const seq = useRef(0);
+  // Cancels the grep still running on the host for the previous search.
+  const cancelRef = useRef<(() => void) | null>(null);
+  // How many matches the current search produced — `matches` is set asynchronously,
+  // so we can't read it when `onDone` fires to decide on the "No results" message.
+  const gotRef = useRef(0);
+  // Set by "Replace all" so the follow-up search's "No results" (expected — the
+  // old query no longer matches) doesn't clobber the replace confirmation.
+  const keepMsg = useRef(false);
 
   useEffect(() => { if (autoFocus) inputRef.current?.focus(); }, [autoFocus]);
 
-  const runSearch = async () => {
-    const q = query;
-    if (!q.trim()) { setMatches([]); setTruncated(false); setMsg(null); return; }
+  const runSearch = () => {
+    // Stop the previous grep — otherwise every keystroke leaves one running remotely.
+    cancelRef.current?.();
+    cancelRef.current = null;
     const mine = ++seq.current;
+    const q = query;
+    setMatches([]);
+    setTruncated(false);
+    if (!q.trim()) { setBusy(false); setMsg(null); return; }
+    gotRef.current = 0;
     setBusy(true);
     setMsg(null);
-    try {
-      const r = await window.cowork.searchFiles({ cwd, machine, query: q, caseSensitive, regex });
-      if (mine !== seq.current) return; // a newer search superseded this one
-      if (r.ok) { setMatches(r.matches); setTruncated(r.truncated); if (!r.matches.length) setMsg("No results"); }
-      else { setMatches([]); setMsg(r.error); }
-    } catch (e) {
-      if (mine === seq.current) { setMatches([]); setMsg(e instanceof Error ? e.message : String(e)); }
-    } finally {
-      if (mine === seq.current) setBusy(false);
-    }
+    cancelRef.current = window.cowork.searchFilesStream(
+      { cwd, machine, query: q, caseSensitive, regex },
+      (batch) => {
+        if (mine !== seq.current) return; // a newer search superseded this one
+        gotRef.current += batch.length;
+        setMatches((prev) => prev.concat(batch));
+      },
+      (r) => {
+        if (mine !== seq.current) return;
+        cancelRef.current = null;
+        setBusy(false);
+        setTruncated(r.truncated);
+        if (r.error) setMsg(r.error);
+        else if (!gotRef.current && !keepMsg.current) setMsg("No results");
+        keepMsg.current = false;
+      }
+    );
   };
 
   // Debounced live search as you type / toggle options.
@@ -73,6 +94,9 @@ export default function FileSearch({
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query, caseSensitive, regex]);
+
+  // Never leave a grep running on the host after the panel closes.
+  useEffect(() => () => { seq.current++; cancelRef.current?.(); }, []);
 
   const grouped = useMemo(() => {
     const by = new Map<string, Match[]>();
@@ -100,12 +124,16 @@ export default function FileSearch({
         }
       }
       onReplaced(changedFiles);
+      // Re-search FIRST (it clears `msg`), then post the confirmation, so the
+      // result of the replace survives instead of being wiped by the new run.
+      runSearch();
+      keepMsg.current = true;
       setMsg(`Replaced in ${changedFiles.length} file${changedFiles.length === 1 ? "" : "s"}`);
-      await runSearch();
     } catch (e) {
       setMsg(e instanceof Error ? e.message : String(e));
     } finally {
-      setBusy(false);
+      // The re-search kicked off above owns `busy` until its onDone fires.
+      if (!cancelRef.current) setBusy(false);
     }
   };
 
@@ -143,7 +171,13 @@ export default function FileSearch({
           </button>
         </div>
         <div className="mono faint" style={{ fontSize: 10, minHeight: 13 }}>
-          {busy ? "searching…" : msg ? msg : matches.length ? `${matches.length} match${matches.length === 1 ? "" : "es"} in ${grouped.length} file${grouped.length === 1 ? "" : "s"}${truncated ? " (truncated)" : ""}` : ""}
+          {busy
+            ? `searching…${matches.length ? ` ${matches.length} so far` : ""}`
+            : msg
+              ? msg
+              : matches.length
+                ? `${truncated ? `showing first ${matches.length}` : `${matches.length} match${matches.length === 1 ? "" : "es"}`} in ${grouped.length} file${grouped.length === 1 ? "" : "s"}`
+                : ""}
         </div>
       </div>
 
