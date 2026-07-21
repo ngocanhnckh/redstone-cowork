@@ -120,11 +120,31 @@ const GUEST = `(() => {
     hover = mk("div", "position:fixed;z-index:2147483640;pointer-events:none;border:2px solid " + ACCENT + ";background:" + ACCENT + "22;border-radius:3px;transition:all .04s ease;display:none;");
     var panel = mk("div", "position:fixed;right:14px;bottom:14px;z-index:2147483646;width:300px;max-height:60vh;overflow:auto;background:#1b1712f2;color:#f4ece2;font:12px/1.4 -apple-system,system-ui,sans-serif;border:1px solid #ffffff26;border-radius:12px;box-shadow:0 18px 50px #000a;padding:10px;backdrop-filter:blur(8px);");
     var head = mk("div", "position:absolute;left:-9999px;"); // placeholder to keep node order tidy
-    panel.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><b style="font-size:12.5px">Comment mode</b><span style="opacity:.6">click elements · Esc to exit</span></div><div data-list></div><div data-empty style="opacity:.6;padding:6px 2px">Hover and click an element to pin it.</div><div style="display:flex;gap:8px;margin-top:10px"><button data-send style="flex:1;background:' + ACCENT + ';color:#1b1006;border:0;border-radius:8px;padding:7px 10px;font-weight:700;cursor:pointer">Send review (0)</button><button data-cancel style="background:#ffffff1a;color:#f4ece2;border:0;border-radius:8px;padding:7px 10px;cursor:pointer">Cancel</button></div>';
+    panel.innerHTML = '<div data-drag style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;cursor:move;user-select:none"><b style="font-size:12.5px">⠿ Comment mode</b><span style="opacity:.6;font-size:11px;text-align:right">drag to move · Esc to exit</span></div><div data-list></div><div data-empty style="opacity:.6;padding:6px 2px">Hover and click an element to pin it.</div><div style="display:flex;gap:8px;margin-top:10px"><button data-send style="flex:1;background:' + ACCENT + ';color:#1b1006;border:0;border-radius:8px;padding:7px 10px;font-weight:700;cursor:pointer">Send review (0)</button><button data-cancel style="background:#ffffff1a;color:#f4ece2;border:0;border-radius:8px;padding:7px 10px;cursor:pointer">Cancel</button></div>';
     var listEl = panel.querySelector("[data-list]");
     var emptyEl = panel.querySelector("[data-empty]");
     var sendBtn = panel.querySelector("[data-send]");
     panel.querySelector("[data-cancel]").addEventListener("click", function () { signal({ t: "exit" }); teardown(); });
+
+    // Drag the panel by its header so it never blocks the element you want to click.
+    var drag = null;
+    function onDragMove(e) {
+      if (!drag) return;
+      var x = Math.max(0, Math.min(window.innerWidth - panel.offsetWidth, e.clientX - drag.dx));
+      var y = Math.max(0, Math.min(window.innerHeight - panel.offsetHeight, e.clientY - drag.dy));
+      panel.style.left = x + "px"; panel.style.top = y + "px";
+    }
+    function onDragUp() { drag = null; document.removeEventListener("mousemove", onDragMove, true); document.removeEventListener("mouseup", onDragUp, true); }
+    panel.querySelector("[data-drag]").addEventListener("mousedown", function (e) {
+      e.preventDefault(); e.stopPropagation();
+      var r = panel.getBoundingClientRect();
+      // Switch from right/bottom anchoring to explicit left/top on first grab.
+      panel.style.right = "auto"; panel.style.bottom = "auto";
+      panel.style.left = r.left + "px"; panel.style.top = r.top + "px";
+      drag = { dx: e.clientX - r.left, dy: e.clientY - r.top };
+      document.addEventListener("mousemove", onDragMove, true);
+      document.addEventListener("mouseup", onDragUp, true);
+    });
 
     function renderList() {
       emptyEl.style.display = pins.length ? "none" : "block";
