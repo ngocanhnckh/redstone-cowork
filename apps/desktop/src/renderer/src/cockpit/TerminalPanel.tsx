@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
-import { WebglAddon } from "@xterm/addon-webgl";
 import "@xterm/xterm/css/xterm.css";
 import ConnectionBar from "./ConnectionBar";
 
@@ -110,22 +109,13 @@ export default function TerminalPanel({
     term.open(container);
     termRef.current = term;
 
-    // GPU renderer: the DOM fallback is by far the slowest + most memory hungry.
-    // Context creation can fail (no driver, too many live WebGL contexts) — fall
-    // back silently, and drop the addon on context loss so we degrade to the DOM
-    // renderer instead of rendering a blank terminal.
-    let webgl: WebglAddon | null = null;
-    try {
-      webgl = new WebglAddon();
-      webgl.onContextLoss(() => {
-        try { webgl?.dispose(); } catch { /* ignore */ }
-        webgl = null;
-      });
-      term.loadAddon(webgl);
-    } catch {
-      try { webgl?.dispose(); } catch { /* ignore */ }
-      webgl = null;
-    }
+    // NOTE: we deliberately use xterm's default (DOM) renderer here, NOT WebglAddon.
+    // WebGL gave one GPU context PER terminal, and every session's terminal stays
+    // mounted — past Chromium's ~16-context-per-process cap the GPU process thrashed
+    // creating/evicting contexts and pegged a core at 100%, freezing the whole app.
+    // A per-terminal GPU context is the wrong trade for a many-session cockpit. If we
+    // want off-DOM rendering later, do it with the Canvas addon (2D context, no hard
+    // cap) and/or only on the visible terminal.
 
     // --- OSC 52 clipboard ---------------------------------------------------
     // THE reliable way to copy out of tmux: in copy-mode (aka "cursor mode") you
@@ -262,8 +252,6 @@ export default function TerminalPanel({
       }
       // Dispose xterm but DO NOT kill the pty — it persists across tab switches.
       if (termRef.current === term) termRef.current = null;
-      try { webgl?.dispose(); } catch { /* ignore */ }
-      webgl = null;
       term.dispose();
     };
   }, [pty, cwd, machine, restartKey]);
