@@ -3,6 +3,8 @@ import { useStore } from "../store";
 import { wireOpenTab } from "./openTabIntercept";
 import { fillJs, SAVE_DETECT_JS, decodeCred } from "./credAutofill";
 import { recordVisit, updateTitle, suggestions, type HistEntry } from "./browserHistory";
+import { wireAnnotate, annotateReadyJs, type AnnotateEvent, type AnnotateMode, type Box } from "./browserAnnotate";
+import { buildDomPrompt, buildRegionPrompt, shotPaths, stamp, type DomPin } from "./pointPrompt";
 
 interface Props {
   sessionId: string;
@@ -38,6 +40,11 @@ interface Props {
   onTitle?: (title: string) => void;
   /** Reports the current URL on navigation, so tabs can be persisted/restored. */
   onUrl?: (url: string) => void;
+  /** Active "point & prompt" tool for this tab: DOM comment/inspect or region
+   * screenshot. "off" tears the overlay down. Only the visible tab is ever driven. */
+  annotateMode?: "off" | AnnotateMode;
+  /** Called when the overlay finishes (sent or cancelled) so the toolbar untoggles. */
+  onExitAnnotate?: () => void;
 }
 
 // Minimal typing for Electron's <webview> so JSX type-checks. We only use the
@@ -55,6 +62,8 @@ type WebviewEl = HTMLElement & {
   stopFindInPage(action: "clearSelection" | "keepSelection" | "activateSelection"): void;
   setZoomFactor(factor: number): void;
   executeJavaScript(code: string): Promise<unknown>;
+  /** Capture the visible page as a NativeImage-like object exposing a data URL. */
+  capturePage(rect?: { x: number; y: number; width: number; height: number }): Promise<{ toDataURL(): string }>;
   cut(): void;
   copy(): void;
   paste(): void;
@@ -136,7 +145,7 @@ export function normalizeAddress(raw: string): string {
   return "https://www.google.com/search?q=" + encodeURIComponent(s);
 }
 
-export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, isActive, chromeHidden, initialUrl, partition = "persist:rcw-web", incognito, zoom = 1, device = "laptop", onViewport, onTitle, onUrl }: Props) {
+export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, isActive, chromeHidden, initialUrl, partition = "persist:rcw-web", incognito, zoom = 1, device = "laptop", onViewport, onTitle, onUrl, annotateMode = "off", onExitAnnotate }: Props) {
   // Saved override URL (a typed address); when empty the preview is port-driven.
   const [browserUrl, setBrowserUrl] = useState("");
   const [forwardPorts, setForwardPorts] = useState<number[]>([]);
@@ -156,6 +165,8 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, isAct
   const lastRecorded = useRef<string>("");
   const [loading, setLoading] = useState(false); // page in flight — drives the sci-fi loader
   const webviewRef = useRef<WebviewEl | null>(null);
+  // Relative path of the region screenshot just captured, awaiting its command.
+  const regionShotRef = useRef<string | null>(null);
 
   // In-page find (Cmd/Ctrl+F). `find` is the query; matches tracks active/total
   // from the webview's found-in-page event. The input is focused when opened.
@@ -391,6 +402,93 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, isAct
     return wireOpenTab(wv, openInNewTab);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadUrl, sessionId]);
+
+  // ── "Point & prompt" tools (DOM comment / region screenshot) ──────────────
+  // The overlay UI lives in the guest (browserAnnotate.ts); here we capture the
+  // screenshots, drop them onto the session's host as readable files, and send the
+  // assembled prompt to this browser's OWNING agent via instruct().
+  const captureCrop = async (wv: WebviewEl, box: Box, vw: number): Promise<string | null> => {
+    // capturePage() grabs the visible viewport at device pixels; the guest reports
+    // boxes in CSS px, so scale by (image px ÷ CSS viewport px) = effective DPR.
+    try {
+      const img = await wv.capturePage();
+      const dataUrl = img.toDataURL();
+      const bmp = await new Promise<HTMLImageElement>((res, rej) => {
+        const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = dataUrl;
+      });
+      const ratio = vw > 0 ? bmp.width / vw : 1;
+      const sx = Math.max(0, box.x * ratio), sy = Math.max(0, box.y * ratio);
+      const sw = Math.max(1, Math.min(box.w * ratio, bmp.width - sx));
+      const sh = Math.max(1, Math.min(box.h * ratio, bmp.height - sy));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(sw); canvas.height = Math.round(sh);
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return null;
+      ctx.drawImage(bmp, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+      return canvas.toDataURL("image/png").split(",")[1] ?? null; // base64 without the data: prefix
+    } catch { return null; }
+  };
+
+  const uploadShot = async (base64: string, name: string): Promise<string | null> => {
+    const { abs, rel } = shotPaths(cwd, name);
+    const r = await window.cowork.writeFileBase64({ cwd, machine, file: abs, base64 });
+    return r.ok ? rel : null;
+  };
+
+  useEffect(() => {
+    const wv = webviewRef.current;
+    if (!wv || annotateMode === "off") return;
+    // Element context captured at pin time, keyed by pin id, awaiting notes on send.
+    const pinData = new Map<number, { selector: string; domPath: string; text: string; box: Box; shot: string | null }>();
+
+    const onEvent = async (e: AnnotateEvent) => {
+      if (e.t === "exit") { onExitAnnotate?.(); return; }
+
+      if (e.t === "pin") {
+        // Capture this element's screenshot now, while it's on-screen.
+        const b64 = await captureCrop(wv, e.box, e.vw);
+        const shot = b64 ? await uploadShot(b64, `${stamp(new Date())}-el${e.id}.png`) : null;
+        pinData.set(e.id, { selector: e.selector, domPath: e.domPath, text: e.text, box: e.box, shot });
+        return;
+      }
+      if (e.t === "unpin") { pinData.delete(e.id); return; }
+
+      if (e.t === "send") {
+        const pins: DomPin[] = [];
+        e.notes.forEach(({ id, note }, i) => {
+          const d = pinData.get(id);
+          if (d) pins.push({ n: i + 1, selector: d.selector, domPath: d.domPath, text: d.text, box: d.box, shot: d.shot, note });
+        });
+        onExitAnnotate?.();
+        if (pins.length) await useStore.getState().instruct(sessionId, buildDomPrompt(e.url, pins));
+        return;
+      }
+
+      if (e.t === "region") {
+        // Capture + upload immediately, copy the host path to the clipboard, and
+        // echo it into the guest command bar. The command arrives in region-send.
+        const b64 = await captureCrop(wv, e.box, e.vw);
+        const rel = b64 ? await uploadShot(b64, `${stamp(new Date())}-region.png`) : null;
+        regionShotRef.current = rel;
+        if (rel) {
+          const { abs } = shotPaths(cwd, rel.replace(/^\.\/\.rcw-shots\//, ""));
+          window.cowork.copyText(abs).catch(() => {});
+          try { void wv.executeJavaScript(annotateReadyJs(rel)); } catch { /* gone */ }
+        }
+        return;
+      }
+      if (e.t === "region-send") {
+        const rel = regionShotRef.current;
+        onExitAnnotate?.();
+        if (rel) await useStore.getState().instruct(sessionId, buildRegionPrompt(e.url, rel, e.command));
+        regionShotRef.current = null;
+        return;
+      }
+    };
+
+    return wireAnnotate(wv, annotateMode, (e) => { void onEvent(e); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [annotateMode, sessionId, cwd, machine]);
 
   // Password autofill: on each document, fill saved credentials for the current
   // origin and install the save-detector (which signals new logins back via the

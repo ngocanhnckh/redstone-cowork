@@ -75,3 +75,13 @@ export const IconRefresh = (p: IconProps) => (
 export const IconExternal = (p: IconProps) => (
   <Svg {...p}><path d="M8 3 H3.5 A1 1 0 0 0 2.5 4 v8 a1 1 0 0 0 1 1 h8 a1 1 0 0 0 1-1 V8" /><path d="M9.5 2.5 H13.5 V6.5" /><path d="M13.5 2.5 L7.5 8.5" /></Svg>
 );
+
+// Comment / annotate: a speech bubble with a small pin dot (DOM-feedback mode).
+export const IconComment = (p: IconProps) => (
+  <Svg {...p}><path d="M2.5 4.5 a1 1 0 0 1 1-1 h9 a1 1 0 0 1 1 1 v5 a1 1 0 0 1-1 1 H7 l-3 2.5 V10.5 H3.5 a1 1 0 0 1-1-1 Z" /><circle cx="8" cy="7" r="0.9" fill="currentColor" stroke="none" /></Svg>
+);
+
+// Region screenshot: a crop / marquee frame (visual-feedback mode).
+export const IconCrop = (p: IconProps) => (
+  <Svg {...p}><path d="M4.5 1.5 V11 a1 1 0 0 0 1 1 H14.5" /><path d="M1.5 4.5 H11 a1 1 0 0 1 1 1 V14.5" /></Svg>
+);

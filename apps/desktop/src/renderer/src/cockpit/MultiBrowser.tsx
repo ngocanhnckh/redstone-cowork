@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import BrowserPanel from "./BrowserPanel";
-import { IconMenu, IconIncognito, IconKey, IconPuzzle, IconLaptop, IconPhone, IconPlus, IconMinus, IconEyeOff, IconExternal } from "./Icons";
+import { IconMenu, IconIncognito, IconKey, IconPuzzle, IconLaptop, IconPhone, IconPlus, IconMinus, IconEyeOff, IconExternal, IconComment, IconCrop } from "./Icons";
 import ExtensionsPanel from "./ExtensionsPanel";
 import VaultPanel from "./VaultPanel";
 import { useStore } from "../store";
@@ -60,6 +60,10 @@ export default function MultiBrowser({ sessionId, cwd, machine, visible }: { ses
   const [extOpen, setExtOpen] = useState(false);
   const [vaultOpen, setVaultOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  // Active "point & prompt" tool for the visible tab (comment/inspect or region shot).
+  const [annotate, setAnnotate] = useState<"off" | "dom" | "region">("off");
+  // Leaving a tab exits any active tool so it never carries over to the next tab.
+  useEffect(() => { setAnnotate("off"); }, [active]);
   // Esc closes the tools menu (there's no DOM click-away over a native webview).
   useEffect(() => {
     if (!menuOpen) return;
@@ -244,6 +248,16 @@ export default function MultiBrowser({ sessionId, cwd, machine, visible }: { ses
             the page (webview hidden while open) — an Electron <webview> paints above all
             DOM, so it can't sit under a normal z-indexed dropdown. Hiding preserves the
             webview's SIZE, so the page's width/responsive layout stays accurate. */}
+        {/* Point & prompt: DOM comment/inspect and region screenshot → prompt the
+            session's agent with exact context. Toggle off by clicking again / Esc. */}
+        <button onClick={() => setAnnotate((m) => (m === "dom" ? "off" : "dom"))} title="Comment on elements → prompt the agent"
+          style={{ ...ctrlBtn, flexShrink: 0, padding: "4px 7px", background: annotate === "dom" ? "rgb(var(--accent) / 0.22)" : "transparent", color: annotate === "dom" ? "var(--text)" : "var(--text-soft)" }}>
+          <IconComment size={15} />
+        </button>
+        <button onClick={() => setAnnotate((m) => (m === "region" ? "off" : "region"))} title="Screenshot an area → prompt the agent"
+          style={{ ...ctrlBtn, flexShrink: 0, padding: "4px 7px", background: annotate === "region" ? "rgb(var(--accent) / 0.22)" : "transparent", color: annotate === "region" ? "var(--text)" : "var(--text-soft)" }}>
+          <IconCrop size={15} />
+        </button>
         <button onClick={() => setMenuOpen((v) => !v)} title="Browser tools" aria-expanded={menuOpen}
           style={{ ...ctrlBtn, flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 7px", background: menuOpen ? "rgb(var(--primary) / 0.18)" : "transparent", color: menuOpen ? "var(--text)" : "var(--text-soft)" }}>
           <IconMenu size={15} />
@@ -264,6 +278,8 @@ export default function MultiBrowser({ sessionId, cwd, machine, visible }: { ses
               ephemeral={tab.id !== 0} isActive={tab.id === active} chromeHidden={chromeHidden} initialUrl={tab.url}
               partition={partitionFor(sessionId, tab)} incognito={tab.temp}
               zoom={zoomByTab[tab.id] ?? 1} device={deviceByTab[tab.id] ?? "laptop"}
+              annotateMode={tab.id === active ? annotate : "off"}
+              onExitAnnotate={() => setAnnotate("off")}
               onViewport={(w, h) => setVpByTab((m) => (m[tab.id]?.w === w && m[tab.id]?.h === h ? m : { ...m, [tab.id]: { w, h } }))}
               onTitle={(t) => setTitleByTab((m) => (m[tab.id] === t ? m : { ...m, [tab.id]: t }))}
               onUrl={(u) => setUrlByTab((m) => (m[tab.id] === u ? m : { ...m, [tab.id]: u }))}

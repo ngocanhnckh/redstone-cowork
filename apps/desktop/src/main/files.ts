@@ -505,7 +505,9 @@ export async function writeFileBase64(args: Loc & { file: string; base64: string
     }
     const sshTarget = await getSshTarget(machine);
     // Feed the base64 text on stdin and decode it remotely into the target file.
-    await sshWrite(sshTarget, `base64 -d > ${shellQuote(file)}`, base64);
+    // mkdir -p the parent first so writing into a fresh dir (e.g. .rcw-shots/) works.
+    const q = shellQuote(file);
+    await sshWrite(sshTarget, `mkdir -p "$(dirname ${q})" && base64 -d > ${q}`, base64);
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
