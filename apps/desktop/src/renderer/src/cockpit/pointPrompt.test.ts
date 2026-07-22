@@ -51,18 +51,18 @@ describe("buildDomPrompt", () => {
     expect(out).toContain("1. `button.save`   (main > form > button.save)");
     expect(out).toContain("box: x=812 y=431 w=96 h=36");
     expect(out).toContain('text: "Save changes"');
-    expect(out).toContain("shot: ./.rcw-shots/a.png");
     expect(out).toContain("→ make it blue");
+  });
+  it("never references a screenshot (element feedback is text-only)", () => {
+    const out = buildDomPrompt("https://x", [pin({ shot: "./.rcw-shots/a.png" })]);
+    expect(out).not.toContain("shot");
+    expect(out).not.toContain(".rcw-shots");
   });
   it("pluralises and separates multiple pins", () => {
     const out = buildDomPrompt("https://x", [pin({ n: 1 }), pin({ n: 2, note: "second" })]);
     expect(out).toContain("— 2 items.");
     expect(out).toContain("2. `button.save`");
     expect(out).toContain("→ second");
-  });
-  it("omits the shot line when there is no screenshot", () => {
-    const out = buildDomPrompt("https://x", [pin({ shot: null })]);
-    expect(out).not.toContain("shot:");
   });
   it("falls back to (no note) for an empty note", () => {
     expect(buildDomPrompt("https://x", [pin({ note: "  " })])).toContain("→ (no note)");
@@ -75,5 +75,11 @@ describe("buildRegionPrompt", () => {
     expect(out).toContain("https://x/pricing");
     expect(out).toContain("Image (readable on this machine): ./.rcw-shots/r.png");
     expect(out).toContain("→ tighten the spacing");
+  });
+  it("says so when the screenshot is missing instead of referencing a bad path", () => {
+    const out = buildRegionPrompt("https://x", null, "fix this");
+    expect(out).toContain("screenshot capture failed");
+    expect(out).not.toContain(".rcw-shots");
+    expect(out).toContain("→ fix this");
   });
 });

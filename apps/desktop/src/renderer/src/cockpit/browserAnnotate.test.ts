@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { annotateJs, annotateReadyJs, ANNOTATE_TEARDOWN_JS, ANNOTATE_MARK } from "./browserAnnotate";
+import { annotateJs, annotateStatusJs, ANNOTATE_TEARDOWN_JS, ANNOTATE_MARK } from "./browserAnnotate";
 
 // The overlay runs as a string injected into the guest, so tsc can't see inside it.
 // These parse the emitted program with `new Function` to catch syntax errors, and
@@ -23,9 +23,9 @@ describe("annotate helper scripts", () => {
   it("teardown is valid JS", () => {
     expect(() => new Function(ANNOTATE_TEARDOWN_JS)).not.toThrow();
   });
-  it("ready script is valid JS and carries the path", () => {
-    const code = annotateReadyJs("./.rcw-shots/x.png");
+  it("status script is valid JS and carries the text", () => {
+    const code = annotateStatusJs("uploading screenshot…");
     expect(() => new Function(code)).not.toThrow();
-    expect(code).toContain("./.rcw-shots/x.png");
+    expect(code).toContain("uploading screenshot…");
   });
 });

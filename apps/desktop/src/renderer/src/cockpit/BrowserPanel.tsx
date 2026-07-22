@@ -3,7 +3,7 @@ import { useStore } from "../store";
 import { wireOpenTab } from "./openTabIntercept";
 import { fillJs, SAVE_DETECT_JS, decodeCred } from "./credAutofill";
 import { recordVisit, updateTitle, suggestions, type HistEntry } from "./browserHistory";
-import { wireAnnotate, annotateReadyJs, type AnnotateEvent, type AnnotateMode, type Box } from "./browserAnnotate";
+import { wireAnnotate, annotateStatusJs, type AnnotateEvent, type AnnotateMode, type Box } from "./browserAnnotate";
 import { buildDomPrompt, buildRegionPrompt, shotPaths, stamp, type DomPin } from "./pointPrompt";
 
 interface Props {
@@ -439,16 +439,17 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, isAct
     const wv = webviewRef.current;
     if (!wv || annotateMode === "off") return;
     // Element context captured at pin time, keyed by pin id, awaiting notes on send.
-    const pinData = new Map<number, { selector: string; domPath: string; text: string; box: Box; shot: string | null }>();
+    // DELIBERATELY no screenshots here — element feedback is text-only (selector,
+    // path, box); screenshots are the SEPARATE region tool's job. (Capturing a PNG
+    // per pin also froze the UI: each capture syncronously encodes the viewport.)
+    const pinData = new Map<number, { selector: string; domPath: string; text: string; box: Box }>();
+    const setStatus = (t: string) => { try { void wv.executeJavaScript(annotateStatusJs(t)); } catch { /* gone */ } };
 
     const onEvent = async (e: AnnotateEvent) => {
       if (e.t === "exit") { onExitAnnotate?.(); return; }
 
       if (e.t === "pin") {
-        // Capture this element's screenshot now, while it's on-screen.
-        const b64 = await captureCrop(wv, e.box, e.vw);
-        const shot = b64 ? await uploadShot(b64, `${stamp(new Date())}-el${e.id}.png`) : null;
-        pinData.set(e.id, { selector: e.selector, domPath: e.domPath, text: e.text, box: e.box, shot });
+        pinData.set(e.id, { selector: e.selector, domPath: e.domPath, text: e.text, box: e.box });
         return;
       }
       if (e.t === "unpin") { pinData.delete(e.id); return; }
@@ -457,7 +458,7 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, isAct
         const pins: DomPin[] = [];
         e.notes.forEach(({ id, note }, i) => {
           const d = pinData.get(id);
-          if (d) pins.push({ n: i + 1, selector: d.selector, domPath: d.domPath, text: d.text, box: d.box, shot: d.shot, note });
+          if (d) pins.push({ n: i + 1, selector: d.selector, domPath: d.domPath, text: d.text, box: d.box, shot: null, note });
         });
         onExitAnnotate?.();
         if (pins.length) await useStore.getState().instruct(sessionId, buildDomPrompt(e.url, pins));
@@ -465,22 +466,25 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, isAct
       }
 
       if (e.t === "region") {
-        // Capture + upload immediately, copy the host path to the clipboard, and
-        // echo it into the guest command bar. The command arrives in region-send.
+        // Capture → upload → copy path, keeping the guest command bar honest about
+        // progress so you never wonder whether the image made it before you send.
+        regionShotRef.current = null;
+        setStatus("capturing…");
         const b64 = await captureCrop(wv, e.box, e.vw);
-        const rel = b64 ? await uploadShot(b64, `${stamp(new Date())}-region.png`) : null;
+        if (!b64) { setStatus("⚠ couldn't capture — Send will go without an image"); return; }
+        setStatus("uploading screenshot…");
+        const rel = await uploadShot(b64, `${stamp(new Date())}-region.png`);
+        if (!rel) { setStatus("⚠ upload failed — Send will go without an image"); return; }
         regionShotRef.current = rel;
-        if (rel) {
-          const { abs } = shotPaths(cwd, rel.replace(/^\.\/\.rcw-shots\//, ""));
-          window.cowork.copyText(abs).catch(() => {});
-          try { void wv.executeJavaScript(annotateReadyJs(rel)); } catch { /* gone */ }
-        }
+        const { abs } = shotPaths(cwd, rel.replace(/^\.\/\.rcw-shots\//, ""));
+        window.cowork.copyText(abs).catch(() => {});
+        setStatus("✓ saved & path copied — add a command");
         return;
       }
       if (e.t === "region-send") {
-        const rel = regionShotRef.current;
+        const rel = regionShotRef.current; // null if capture/upload failed — prompt says so
         onExitAnnotate?.();
-        if (rel) await useStore.getState().instruct(sessionId, buildRegionPrompt(e.url, rel, e.command));
+        await useStore.getState().instruct(sessionId, buildRegionPrompt(e.url, rel, e.command));
         regionShotRef.current = null;
         return;
       }

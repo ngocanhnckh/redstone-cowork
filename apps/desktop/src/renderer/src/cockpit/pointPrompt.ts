@@ -51,24 +51,27 @@ export function buildDomPrompt(url: string, pins: DomPin[]): string {
         `${p.n}. \`${p.selector}\`   (${p.domPath})`,
         `   box: x=${Math.round(p.box.x)} y=${Math.round(p.box.y)} w=${Math.round(p.box.w)} h=${Math.round(p.box.h)} · text: ${JSON.stringify(clip(p.text))}`,
       ];
-      if (p.shot) lines.push(`   shot: ${p.shot}`);
       lines.push(`   → ${clip(p.note, 600) || "(no note)"}`);
       return lines.join("\n");
     })
     .join("\n\n");
   const n = pins.length;
   return (
-    `Visual feedback from the in-app browser on ${url} — ${n} item${n === 1 ? "" : "s"}.\n` +
-    `Each item points at a specific element I want changed; the shot paths are PNGs on this machine you can read.\n\n` +
+    `Element feedback from the in-app browser on ${url} — ${n} item${n === 1 ? "" : "s"}.\n` +
+    `Each item points at a specific element I want changed (CSS selector, DOM path, visible text and on-screen box).\n\n` +
     items
   );
 }
 
-/** Build the prompt for a region screenshot: the image path, the URL, the command. */
-export function buildRegionPrompt(url: string, shotRel: string, command: string): string {
+/** Build the prompt for a region screenshot. `shotRel` may be null when the capture
+ * or upload failed — the prompt then says so rather than referencing a missing file. */
+export function buildRegionPrompt(url: string, shotRel: string | null, command: string): string {
+  const img = shotRel
+    ? `Image (readable on this machine): ${shotRel}`
+    : `(screenshot capture failed — no image available)`;
   return (
     `Screenshot from the in-app browser on ${url}.\n` +
-    `Image (readable on this machine): ${shotRel}\n\n` +
+    `${img}\n\n` +
     `→ ${clip(command, 800) || "(no command)"}`
   );
 }

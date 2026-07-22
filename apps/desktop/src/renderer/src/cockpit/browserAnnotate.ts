@@ -105,7 +105,7 @@ const GUEST = `(() => {
     nodes = []; pins = [];
     try { delete window.__rcwAnnot; } catch (e) { window.__rcwAnnot = null; }
   }
-  window.__rcwAnnot = { mode: MODE, teardown: teardown, ready: function () {} };
+  window.__rcwAnnot = { mode: MODE, teardown: teardown, status: function () {} };
 
   // A hover highlighter shared by DOM mode.
   var hover = null, onMove = function () {}, onClick = function () {}, onKey = function () {},
@@ -244,8 +244,11 @@ const GUEST = `(() => {
   if (MODE === "region") {
     var dim = mk("div", "position:fixed;inset:0;z-index:2147483640;cursor:crosshair;background:#0000;");
     var rect = mk("div", "position:fixed;z-index:2147483641;pointer-events:none;border:2px solid " + ACCENT + ";background:" + ACCENT + "1f;display:none;");
-    var tip = mk("div", "position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:2147483646;background:#1b1712f2;color:#f4ece2;font:12px system-ui;border:1px solid #ffffff26;border-radius:999px;padding:6px 14px;box-shadow:0 10px 30px #0008");
+    var tip = mk("div", "position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:2147483646;background:#1b1712;color:#f4ece2;font:12px system-ui;border:1px solid #ffffff26;border-radius:999px;padding:6px 14px;box-shadow:0 10px 30px #0008");
     tip.textContent = "Drag to select an area · Esc to cancel";
+    // The host drives this (capturing… / uploading… / ✓ / ⚠) so you always know the
+    // screenshot's state before you Send. Defined up front so no update is missed.
+    window.__rcwAnnot.status = function (t) { try { tip.textContent = t; } catch (e) {} };
     var start = null, cur = null, sent = false;
 
     function rectBox() {
@@ -267,12 +270,9 @@ const GUEST = `(() => {
       var bar = mk("div", "position:fixed;z-index:2147483646;background:#1b1712f5;border:1px solid #ffffff26;border-radius:10px;box-shadow:0 14px 40px #000a;padding:8px;display:flex;gap:8px;align-items:center;width:min(460px,80vw)");
       bar.style.left = Math.max(8, Math.min(b.x, window.innerWidth - 470)) + "px";
       bar.style.top = Math.min(b.y + b.h + 8, window.innerHeight - 60) + "px";
-      var status = "capturing…";
       bar.innerHTML = '<input data-cmd placeholder="Command for this screenshot…" style="flex:1;background:#0000003a;border:1px solid #ffffff1f;color:#f4ece2;border-radius:7px;padding:7px 9px;font:13px system-ui"/><button data-go style="background:' + ACCENT + ';color:#1b1006;border:0;border-radius:8px;padding:7px 12px;font-weight:700;cursor:pointer">Send</button>';
       var input = bar.querySelector("[data-cmd]");
       var go = bar.querySelector("[data-go]");
-      tip.textContent = status;
-      window.__rcwAnnot.ready = function (rel) { tip.textContent = "📋 " + rel + " (copied) — add a command"; };
       function submit() { signal({ t: "region-send", url: urlNow(), command: input.value || "" }); teardown(); }
       go.addEventListener("click", submit);
       input.addEventListener("keydown", function (e2) { if (e2.key === "Enter") { e2.preventDefault(); submit(); } });
@@ -291,9 +291,10 @@ export function annotateJs(mode: AnnotateMode): string {
 /** Tear down any active overlay (used when toggling a mode off from the host). */
 export const ANNOTATE_TEARDOWN_JS = `(() => { try { if (window.__rcwAnnot) window.__rcwAnnot.teardown(); } catch (e) {} })();`;
 
-/** Push the saved screenshot path into the region command bar (host → guest). */
-export function annotateReadyJs(rel: string): string {
-  return `(() => { try { if (window.__rcwAnnot && window.__rcwAnnot.ready) window.__rcwAnnot.ready(${JSON.stringify(rel)}); } catch (e) {} })();`;
+/** Update the region command-bar status line (host → guest): capturing / uploading
+ * / ✓ saved / ⚠ failed, so the user always knows the screenshot's state. */
+export function annotateStatusJs(text: string): string {
+  return `(() => { try { if (window.__rcwAnnot && window.__rcwAnnot.status) window.__rcwAnnot.status(${JSON.stringify(text)}); } catch (e) {} })();`;
 }
 
 type WV = HTMLElement & { executeJavaScript(code: string): Promise<unknown> };
