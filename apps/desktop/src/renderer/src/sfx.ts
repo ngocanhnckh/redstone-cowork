@@ -7,12 +7,13 @@ import buttonUrl from "./assets/sfx/button.wav?url";
 import messageUrl from "./assets/sfx/message.wav?url";
 import loadingUrl from "./assets/sfx/loading.wav?url";
 import pageloadedUrl from "./assets/sfx/pageloaded.wav?url";
+import keystrokeUrl from "./assets/sfx/keystroke.wav?url";
 import thinkingUrl from "./assets/sfx/thinking.mp3?url";
 import { loadAppearance } from "./appearance";
 
-export type SfxName = "button" | "message" | "loading" | "pageloaded";
+export type SfxName = "button" | "message" | "loading" | "pageloaded" | "keystroke";
 
-const SRC: Record<SfxName, string> = { button: buttonUrl, message: messageUrl, loading: loadingUrl, pageloaded: pageloadedUrl };
+const SRC: Record<SfxName, string> = { button: buttonUrl, message: messageUrl, loading: loadingUrl, pageloaded: pageloadedUrl, keystroke: keystrokeUrl };
 
 // One decoded element per sound, cloned per play so overlapping triggers (e.g. rapid
 // clicks) don't cut each other off.
@@ -73,7 +74,7 @@ export function setThinking(on: boolean): void {
 // Rate-limit each sound so a burst (e.g. many sessions completing at once, or a
 // flurry of clicks) can't stack into noise. Per-name last-played timestamp.
 const lastAt: Partial<Record<SfxName, number>> = {};
-const MIN_GAP_MS: Record<SfxName, number> = { button: 40, message: 400, loading: 600, pageloaded: 300 };
+const MIN_GAP_MS: Record<SfxName, number> = { button: 40, message: 400, loading: 600, pageloaded: 300, keystroke: 20 };
 
 function playAt(name: SfxName, vol: number): void {
   if (vol <= 0) return;
@@ -123,7 +124,12 @@ export function installGlobalSfx(): void {
     }
     if (clickable) playSfx("button");
   }, { capture: true });
+  // Per-keystroke cue (eDEX keyboard sound). Skips auto-repeat (held keys) and bare
+  // modifiers so it's one tap per key, not a machine-gun; rate-limited + volume-gated.
   window.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && !e.repeat) playSfx("button");
+    if (e.repeat || MODIFIER_KEYS.has(e.key)) return;
+    playSfx("keystroke");
   }, { capture: true });
 }
+
+const MODIFIER_KEYS = new Set(["Shift", "Control", "Alt", "Meta", "CapsLock", "Fn", "Dead"]);

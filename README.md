@@ -7,7 +7,7 @@
 **One calm cockpit for every Claude Code session you're running — on any machine.**
 
 [![Release](https://img.shields.io/github/v/release/ngocanhnckh/redstone-cowork?sort=semver)](https://github.com/ngocanhnckh/redstone-cowork/releases/latest)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
 ![Platforms](https://img.shields.io/badge/desktop-macOS%20%7C%20Windows%20%7C%20Linux-1b1712)
 ![Built with](https://img.shields.io/badge/built%20with-Electron%20·%20React%20·%20TypeScript-ff7a3c)
 
@@ -151,4 +151,8 @@ Issues and PRs welcome. Please keep changes focused, follow the conventions in
 
 ## License
 
-[MIT](LICENSE) © Redstone Cowork
+[GPL-3.0](LICENSE) © Redstone Cowork
+
+This project is copyleft: distributing it or a derivative requires releasing the full
+source under the GPL-3.0. See [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) for
+attribution of incorporated GPL-3.0 material (e.g. eDEX-UI sound effects by IceWolf).
