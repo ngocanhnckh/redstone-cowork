@@ -25,9 +25,15 @@ export default function SessionSwitcher() {
   const decisions = useStore((s) => s.decisions);
   const workingStale = useStore((s) => s.workingStale);
   const selRef = useRef<HTMLDivElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
 
   // Keep the highlighted tile scrolled into view as you tab through.
   useEffect(() => { selRef.current?.scrollIntoView({ block: "nearest", inline: "center" }); }, [switcher?.index]);
+
+  // Pull keyboard focus to the host on open: a <webview> guest doesn't reliably
+  // deliver the modifier keyUp that commits the switcher, but the host does — so
+  // once we hold focus, the native keyup fallback in useKeybindings fires on release.
+  useEffect(() => { if (switcher) rootRef.current?.focus(); }, [!!switcher]);
 
   if (!switcher) return null;
   const find = (id: string) => sessions.find((s) => s.id === id) ?? queue.find((s) => s.id === id);
@@ -39,7 +45,7 @@ export default function SessionSwitcher() {
   const selStatus = statusOf(sel, waitingFor(sel.id), !!workingStale[sel.id]);
 
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 6000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)" }}>
+    <div ref={rootRef} tabIndex={-1} style={{ position: "fixed", inset: 0, zIndex: 6000, outline: "none", display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)" }}>
       <div className="glass-menu" style={{ width: 720, maxWidth: "92vw", borderRadius: 18, border: "1px solid var(--border-strong)", boxShadow: "0 30px 80px rgba(0,0,0,0.6)", padding: 18, background: "color-mix(in srgb, var(--app-panel) 95%, transparent)" }}>
         {/* Tile strip */}
         <div className="no-scrollbar" style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 4 }}>

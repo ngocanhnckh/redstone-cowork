@@ -41,10 +41,31 @@ function runSimpleAction(action: ActionId): boolean {
   return false;
 }
 
+/** Does a KeyboardEvent-style modifier flag set still hold `mod` ("Control"/…)? */
+function modHeld(mod: string, m: { ctrl?: boolean; meta?: boolean; alt?: boolean }): boolean {
+  return (mod === "Control" && !!m.ctrl) || (mod === "Meta" && !!m.meta) || (mod === "Alt" && !!m.alt);
+}
+
 export function useKeybindings(): void {
   const keybindings = useStore((s) => s.keybindings);
   // Which modifier is holding the switcher open (so we know when it's released).
   const holdKeyRef = useRef<string | null>(null);
+  // Backstop timer: a modifier keyUp from inside a focused <webview> guest is
+  // unreliable in Electron, so the hold-to-switch overlay could wedge open forever
+  // (it's a full-screen zIndex-6000 layer — a wedged switcher looks like a freeze).
+  // If no release arrives, auto-commit so it can never get stuck.
+  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const closeSwitcher = (how: "commit" | "cancel"): void => {
+    if (holdTimer.current) { clearTimeout(holdTimer.current); holdTimer.current = null; }
+    holdKeyRef.current = null;
+    const st = useStore.getState();
+    if (!st.switcher) return;
+    if (how === "commit") st.commitSwitcher(); else st.cancelSwitcher();
+  };
+  const armHoldTimeout = (): void => {
+    if (holdTimer.current) clearTimeout(holdTimer.current);
+    holdTimer.current = setTimeout(() => { if (useStore.getState().switcher) closeSwitcher("commit"); }, 4000);
+  };
 
   // Tell main which accelerators are bound so it can preventDefault them (and keep it
   // in sync when the user rebinds).
@@ -60,11 +81,14 @@ export function useKeybindings(): void {
     const off = window.cowork.onGuestKey((k) => {
       const st = useStore.getState();
       if (k.type === "keyUp") {
-        if (st.switcher && holdKeyRef.current && k.key === holdKeyRef.current) { st.commitSwitcher(); holdKeyRef.current = null; }
+        if (st.switcher && holdKeyRef.current && k.key === holdKeyRef.current) closeSwitcher("commit");
         return;
       }
       // keyDown
-      if (st.switcher && k.key === "Escape") { st.cancelSwitcher(); holdKeyRef.current = null; return; }
+      if (st.switcher && k.key === "Escape") { closeSwitcher("cancel"); return; }
+      // If the switcher is open but its hold modifier is no longer down in THIS
+      // event, the release was missed — commit now rather than wedge open.
+      if (st.switcher && holdKeyRef.current && !modHeld(holdKeyRef.current, k)) { closeSwitcher("commit"); return; }
       const accel = accelFromParts({ key: k.key, ctrl: k.ctrl, alt: k.alt, shift: k.shift, meta: k.meta });
       if (!accel) return;
       const action = actionForAccel(st.keybindings as Record<ActionId, string>, accel);
@@ -75,20 +99,31 @@ export function useKeybindings(): void {
         if (!hold) { st.cycleFocus(dir); return; }
         if (st.switcher) st.moveSwitcher(dir);
         else { st.openSwitcher(dir); holdKeyRef.current = hold; }
+        armHoldTimeout(); // (re)start the no-release backstop on open AND each move
         return;
       }
       runSimpleAction(action);
     });
     return off;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Fallback: a NATIVE keyup on the host window commits instantly when focus is on
+  // the cockpit itself (the forwarded-guest path covers focus inside a webview).
+  useEffect(() => {
+    const onUp = (e: KeyboardEvent) => {
+      if (holdKeyRef.current && e.key === holdKeyRef.current) closeSwitcher("commit");
+    };
+    window.addEventListener("keyup", onUp, true);
+    return () => { window.removeEventListener("keyup", onUp, true); if (holdTimer.current) clearTimeout(holdTimer.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Losing OS focus mid-switch: commit to whatever's highlighted (don't wedge open).
   useEffect(() => {
-    const onBlur = () => {
-      const st = useStore.getState();
-      if (st.switcher) { st.commitSwitcher(); holdKeyRef.current = null; }
-    };
+    const onBlur = () => { if (useStore.getState().switcher) closeSwitcher("commit"); };
     window.addEventListener("blur", onBlur);
     return () => window.removeEventListener("blur", onBlur);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 }
