@@ -9,7 +9,10 @@ const ConfigSchema = z.object({
   // unset = personal mode only (instance-token auth, unchanged). REDSTONE_ISSUER is
   // the reachable public origin of the Redstone agent — endpoints are built from it,
   // we do NOT trust the discovery document (whose URLs may be misconfigured).
-  REDSTONE_ISSUER: z.string().url().optional(),
+  // A fresh install writes REDSTONE_ISSUER= (empty), which is NOT the same as unset
+  // for zod — `.url()` rejects "". Treat blank as unset so the API boots in personal
+  // mode without org SSO configured (this crashed every default install).
+  REDSTONE_ISSUER: z.preprocess((v) => (typeof v === "string" && v.trim() === "" ? undefined : v), z.string().url().optional()),
   REDSTONE_CLIENT_ID: z.string().optional(),
   REDSTONE_CLIENT_SECRET: z.string().optional(),
 });
