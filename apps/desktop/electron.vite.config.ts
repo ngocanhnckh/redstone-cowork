@@ -21,6 +21,11 @@ export default defineConfig({
   renderer: {
     root: "src/renderer",
     plugins: [react(), tailwindcss()],
+    // PIN the dev port. localStorage (layout, Jira/connection settings, login) is
+    // partitioned by ORIGIN — if Vite silently falls back from 5173 to 5174 because
+    // an orphaned server holds 5173, the app loads a blank origin and all saved
+    // state "disappears". strictPort makes it fail loudly instead of drifting.
+    server: { port: 5173, strictPort: true },
     build: {
       rollupOptions: { input: { index: resolve(__dirname, "src/renderer/index.html") } },
     },
