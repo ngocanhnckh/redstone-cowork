@@ -1,5 +1,9 @@
 import { useEffect, useState } from "react";
 import { useStore } from "../store";
+import { playSfx } from "../sfx";
+
+// Play the boot chime once per app launch (BootScreen can remount on reconnects).
+let bootChimePlayed = false;
 
 // The boot sequence shown until the FIRST session fetch succeeds. It doubles as an
 // honest connection monitor: while connecting it animates through boot steps; if the
@@ -37,6 +41,7 @@ const CSS = `
 @keyframes rcw-boot-ring { 0% { transform: scale(.6); opacity: .5; } 100% { transform: scale(1.7); opacity: 0; } }
 @keyframes rcw-boot-caret { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
 @keyframes rcw-boot-scan { 0% { transform: translateY(-100%); } 100% { transform: translateY(2200%); } }
+@keyframes rcw-boot-title { 0% { opacity: 0; transform: translateY(8px); letter-spacing: 0.42em; filter: blur(4px); } 100% { opacity: 1; transform: none; filter: none; } }
 `;
 
 export default function BootScreen() {
@@ -51,6 +56,11 @@ export default function BootScreen() {
   // reached step if the connection errors (that's the step that failed).
   const [step, setStep] = useState(0);
   const failed = !!error;
+
+  // Boot chime — once per launch, on the first mount of the boot sequence.
+  useEffect(() => {
+    if (!bootChimePlayed) { bootChimePlayed = true; playSfx("boot"); }
+  }, []);
 
   useEffect(() => {
     if (failed) return; // stop advancing — the current step is where it broke
@@ -76,6 +86,16 @@ export default function BootScreen() {
       <div style={{ position: "absolute", left: 0, right: 0, top: 0, height: 40, background: `linear-gradient(var(--app-panel), transparent)`, opacity: 0.06, animation: "rcw-boot-scan 6s linear infinite", pointerEvents: "none" }} />
 
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 30, maxWidth: 520, padding: 24 }}>
+        {/* splash title */}
+        <div style={{ textAlign: "center", animation: "rcw-boot-title 0.9s ease both" }}>
+          <div className="display" style={{ fontSize: 34, letterSpacing: "0.14em", lineHeight: 1, textShadow: `0 0 26px ${accent}` }}>
+            REDSTONE<span style={{ color: accent }}> COWORK</span>
+          </div>
+          <div className="mono" style={{ fontSize: 10, letterSpacing: "0.4em", textTransform: "uppercase", color: "var(--text-faint)", marginTop: 8 }}>
+            Session Control Plane
+          </div>
+        </div>
+
         {/* orbital core — pulsing rings + rotating dashed orbit + glowing core */}
         <div style={{ position: "relative", width: 132, height: 132, display: "flex", alignItems: "center", justifyContent: "center" }}>
           {[0, 1, 2].map((i) => (
