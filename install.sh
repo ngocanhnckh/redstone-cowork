@@ -17,14 +17,20 @@ bold() { printf '\033[1m%s\033[0m\n' "$1"; }
 info() { printf '  %s\n' "$1"; }
 die()  { printf '\033[31m✗ %s\033[0m\n' "$1" >&2; exit 1; }
 
-# Read a prompt even when the script is piped from curl (stdin is the script, so we
-# talk to the terminal directly). Non-interactive (no tty) → use the default.
+# Can we actually talk to a terminal? `curl | bash` in a real shell keeps a usable
+# /dev/tty; a non-interactive SSH command or CI does NOT — and there `[ -r /dev/tty ]`
+# lies (the node is readable but OPENING it fails), so probe by actually opening it.
+TTY_OK=0; { : < /dev/tty; } 2>/dev/null && TTY_OK=1
+
+# Read a prompt from the terminal when interactive; otherwise use the default.
 ask() { # ask <prompt> <default>
   local prompt="$1" def="$2" ans=""
-  if [ -r /dev/tty ]; then printf '%s' "$prompt" > /dev/tty; read -r ans < /dev/tty || true; fi
+  if [ "$TTY_OK" = 1 ]; then printf '%s' "$prompt" > /dev/tty; read -r ans < /dev/tty || true; fi
   printf '%s' "${ans:-$def}"
 }
+# Interactive → ask y/N. Non-interactive → auto-proceed (the one-liner shouldn't hang).
 confirm() { # confirm <prompt>  → 0 if yes
+  [ "$TTY_OK" = 1 ] || return 0
   local ans; ans="$(ask "$1 [y/N] " "n")"
   case "$ans" in y|Y|yes|YES) return 0 ;; *) return 1 ;; esac
 }
@@ -87,7 +93,7 @@ else
   info "name:     $NAME"
   info "web port: $WEB_PORT   (the UI you sign in to)"
   info "api port: $API_PORT"
-  if [ -r /dev/tty ]; then
+  if [ "$TTY_OK" = 1 ]; then
     confirm "Write .env and start the stack?" || die "aborted."
   else
     info "(non-interactive — proceeding)"
