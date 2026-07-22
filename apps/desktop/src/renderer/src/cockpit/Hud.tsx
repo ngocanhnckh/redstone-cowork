@@ -1321,8 +1321,12 @@ function HudConsole() {
         if (rect && rect.width > 0 && rect.height > 0) ws = clampWin(ws, rect.width, rect.height);
         return { ...w, wins: { ...w.wins, [wid]: ws }, z: [...w.z.filter((k) => k !== wid), wid] };
       }
-      // Un-minimize (if needed) and raise to front — never toggle it closed.
-      return { ...w, wins: { ...w.wins, [wid]: { ...cur, min: false } }, z: [...w.z.filter((k) => k !== wid), wid] };
+      // TOGGLE (same as clicking the dock icon): minimized/hidden → restore + raise;
+      // visible-but-behind → raise to front; visible-and-frontmost → minimize (hide).
+      const front = w.z[w.z.length - 1];
+      if (cur.min) return { ...w, wins: { ...w.wins, [wid]: { ...cur, min: false } }, z: [...w.z.filter((k) => k !== wid), wid] };
+      if (front === wid) return { ...w, wins: { ...w.wins, [wid]: { ...cur, min: true } } };
+      return { ...w, z: [...w.z.filter((k) => k !== wid), wid] };
     });
   };
   // The global keyboard shortcuts (Ctrl+1..5) live in Cockpit; they signal via the

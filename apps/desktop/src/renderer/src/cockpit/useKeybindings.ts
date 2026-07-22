@@ -34,8 +34,15 @@ function runSimpleAction(action: ActionId): boolean {
   if (action === "assistant.toggle") { st.toggleAssist(); return true; }
   const tab = TAB_FOR[action];
   if (tab) {
-    if (st.mode === "hud") st.requestHudApp(HUD_KEY[tab]);
-    else if (st.focusId) st.setActiveTab(st.focusId, tab);
+    if (st.mode === "hud") {
+      // HUD toggles the app window (revealApp: open/raise, or minimise if frontmost).
+      st.requestHudApp(HUD_KEY[tab]);
+    } else if (st.focusId) {
+      // Flow/Grid toggle: pressing the shortcut for the ALREADY-active tab returns to
+      // chat (hides it); otherwise switch to it. "chat" itself just stays on chat.
+      const current = st.activeTab[st.focusId] ?? "chat";
+      st.setActiveTab(st.focusId, current === tab && tab !== "chat" ? "chat" : tab);
+    }
     return true;
   }
   return false;
