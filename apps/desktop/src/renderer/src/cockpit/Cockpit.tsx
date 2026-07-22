@@ -1,5 +1,6 @@
 import ScreenSharePicker from "./ScreenSharePicker";
 import AmbientAudio from "./AmbientAudio";
+import ThinkingSound from "./ThinkingSound";
 import { useEffect, useState, type CSSProperties } from "react";
 import { useStore } from "../store";
 import { startCockpit } from "../store";
@@ -128,6 +129,7 @@ export default function Cockpit() {
     >
       <ScreenSharePicker />
       <AmbientAudio />
+      <ThinkingSound />
       <div className="atmosphere">
         <div className="blob blob--a" />
         <div className="blob blob--b" />

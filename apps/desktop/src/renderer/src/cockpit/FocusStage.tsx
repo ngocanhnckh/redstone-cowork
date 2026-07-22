@@ -12,7 +12,6 @@ import SessionSettingsPanel from "./SessionSettingsPanel";
 import FilesPanel from "./FilesPanel";
 import FolderSessionTabs from "./FolderSessionTabs";
 import SciFiSpinner from "./SciFiSpinner";
-import { setThinking } from "../sfx";
 
 // The "ports" key is kept internally (per-session active-tab state, the ⌃4 shortcut)
 // even though it now opens the broader per-session Settings panel.
@@ -97,13 +96,6 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
   const isWorking =
     session?.status !== "lost" && !actionableDecision &&
     ((!!session?.working && (!id || !workingStale[id])) || pending.length > 0);
-
-  // Loop the hi-tech "thinking" ambience while the focused session is working, and
-  // stop it when it settles or the view unmounts (switching sessions).
-  useEffect(() => {
-    setThinking(isWorking);
-    return () => setThinking(false);
-  }, [isWorking]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   // Only auto-scroll to the bottom when the user is already near it, so a poll
