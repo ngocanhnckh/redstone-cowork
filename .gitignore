@@ -27,3 +27,7 @@ coverage/
 
 # Local agent worktrees / session state
 .claude/
+
+# electron-builder app-icon resource (source asset under a "build" dir, not an output)
+!apps/desktop/build/
+!apps/desktop/build/**

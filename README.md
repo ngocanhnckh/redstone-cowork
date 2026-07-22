@@ -91,8 +91,13 @@ pnpm --filter @rcw/desktop dev  # run the cockpit against a server
 Ports are uncommon by design — web `47100`, API `47101` (host side, from `.env`); containers
 use 3000/3001 internally.
 
+**Building the desktop app into installers** (Windows/macOS/Linux) is documented in
+[**docs/BUILD.md**](docs/BUILD.md) — note it needs a C++ toolchain for the native `node-pty`
+module, and each platform's installer must be built on that platform.
+
 ## Docs
 
+- [Building the desktop app](docs/BUILD.md)
 - [Project plan & milestones](docs/PLAN.md)
 - [Deployment](docs/prd/006-deployment.md)
 - [Tech debt](docs/TECH-DEBT.md)
