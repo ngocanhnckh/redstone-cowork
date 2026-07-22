@@ -31,3 +31,7 @@ coverage/
 # electron-builder app-icon resource (source asset under a "build" dir, not an output)
 !apps/desktop/build/
 !apps/desktop/build/**
+
+# Raw source audio (huge originals). Processed/cropped assets live bundled in
+# apps/desktop/src/renderer/src/assets/sfx/ and ARE committed.
+/sound-effects/

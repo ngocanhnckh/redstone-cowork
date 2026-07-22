@@ -11,6 +11,8 @@ import BrowserStack from "./BrowserStack";
 import SessionSettingsPanel from "./SessionSettingsPanel";
 import FilesPanel from "./FilesPanel";
 import FolderSessionTabs from "./FolderSessionTabs";
+import SciFiSpinner from "./SciFiSpinner";
+import { playSfx } from "../sfx";
 
 // The "ports" key is kept internally (per-session active-tab state, the ⌃4 shortcut)
 // even though it now opens the broader per-session Settings panel.
@@ -95,6 +97,14 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
   const isWorking =
     session?.status !== "lost" && !actionableDecision &&
     ((!!session?.working && (!id || !workingStale[id])) || pending.length > 0);
+
+  // Play the hi-tech "loading" cue when the focused session STARTS working
+  // (idle → working edge), matching the spinner appearing.
+  const wasWorking = useRef(false);
+  useEffect(() => {
+    if (isWorking && !wasWorking.current) playSfx("loading");
+    wasWorking.current = isWorking;
+  }, [isWorking]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   // Only auto-scroll to the bottom when the user is already near it, so a poll
@@ -399,12 +409,7 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
 
         {isWorking && (
           <div className="thinking-card">
-            <span className="ai-core" />
-            <span className="eq">
-              {[0, 1, 2, 3, 4].map((i) => (
-                <span key={i} className="eq-bar" style={{ animationDelay: `${i * 0.13}s` }} />
-              ))}
-            </span>
+            <SciFiSpinner size={28} />
             <span
               className="shimmer"
               style={{ fontFamily: "var(--font-mono)", fontSize: 11.5, letterSpacing: "0.04em", position: "relative" }}

@@ -1,4 +1,5 @@
 import ScreenSharePicker from "./ScreenSharePicker";
+import AmbientAudio from "./AmbientAudio";
 import { useEffect, useState, type CSSProperties } from "react";
 import { useStore } from "../store";
 import { startCockpit } from "../store";
@@ -126,6 +127,7 @@ export default function Cockpit() {
       style={{ height: "100vh", position: "relative", display: "flex", flexDirection: "column", overflow: "hidden" }}
     >
       <ScreenSharePicker />
+      <AmbientAudio />
       <div className="atmosphere">
         <div className="blob blob--a" />
         <div className="blob blob--b" />

@@ -9,7 +9,17 @@ import { useEffect, useState } from "react";
 
 export type DockPos = "top" | "bottom" | "bottom-left" | "bottom-right" | "left" | "right";
 
+export type Theme = "warm" | "hitech";
+
 export type Appearance = {
+  /** Visual theme. "warm" = the default clay/amber liquid-glass look; "hitech" =
+   *  cyan holographic HUD (dark navy, cyan glow, grid texture, mono labels). Applied
+   *  as a `data-theme` attribute on the document root that overrides the CSS tokens. */
+  theme: Theme;
+  /** UI sound-effect volume, 0–100 (0 = muted). Applied to every SFX via sfx.ts. */
+  sfxVolume: number;
+  /** Background ambient-loop volume, 0–100 (0 = off). Drives the looping hi-tech pad. */
+  ambientVolume: number;
   /** App tint over the desktop/background, as a percentage (0 = clear). */
   veil: number;
   /** Backdrop blur of the app surface, in px. */
@@ -30,7 +40,7 @@ export type Appearance = {
   videoMuted: boolean;
 };
 
-export const DEFAULT_APPEARANCE: Appearance = { veil: 6, blur: 28, bgAnim: true, dockPos: "bottom", dockScale: 1, hudClear: false, glass: 94, videoMuted: false };
+export const DEFAULT_APPEARANCE: Appearance = { theme: "warm", sfxVolume: 50, ambientVolume: 30, veil: 6, blur: 28, bgAnim: true, dockPos: "bottom", dockScale: 1, hudClear: false, glass: 94, videoMuted: false };
 
 const KEY = "rcw.appearance";
 
@@ -38,6 +48,9 @@ export function loadAppearance(): Appearance {
   try {
     const raw = JSON.parse(localStorage.getItem(KEY) || "{}");
     return {
+      theme: raw.theme === "hitech" ? "hitech" : DEFAULT_APPEARANCE.theme,
+      sfxVolume: clampNum(raw.sfxVolume, 0, 100, DEFAULT_APPEARANCE.sfxVolume),
+      ambientVolume: clampNum(raw.ambientVolume, 0, 100, DEFAULT_APPEARANCE.ambientVolume),
       veil: clampNum(raw.veil, 0, 40, DEFAULT_APPEARANCE.veil),
       blur: clampNum(raw.blur, 0, 80, DEFAULT_APPEARANCE.blur),
       bgAnim: typeof raw.bgAnim === "boolean" ? raw.bgAnim : DEFAULT_APPEARANCE.bgAnim,
@@ -64,7 +77,9 @@ export function applyAppearance(a: Appearance): void {
   r.style.setProperty("--glass-pct", `${a.glass}%`);
   r.classList.toggle("rcw-no-anim", !a.bgAnim);
   r.setAttribute("data-dock", a.dockPos);
-  // Let live consumers (e.g. the HUD dock) react without prop-threading.
+  // The theme swaps the whole CSS-token set (see globals.css [data-theme="hitech"]).
+  r.setAttribute("data-theme", a.theme);
+  // Let live consumers (e.g. the HUD dock, sfx.ts volume) react without prop-threading.
   window.dispatchEvent(new CustomEvent("rcw-appearance", { detail: a }));
 }
 

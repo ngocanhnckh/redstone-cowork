@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useStore } from "../store";
 import Markdown from "./Markdown";
+import { playSfx } from "../sfx";
 
 /**
  * HUD-only completion alerts. When a background session finishes a turn (its
@@ -90,7 +91,10 @@ export default function CompletionNotifier() {
       }
     }
     primed.current = true;
-    if (fresh.length) setNotes((cur) => [...cur, ...fresh].slice(-MAX_CARDS));
+    if (fresh.length) {
+      setNotes((cur) => [...cur, ...fresh].slice(-MAX_CARDS));
+      playSfx("message"); // hi-tech "new message" cue (rate-limited in sfx.ts)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessions, queue, decisions]);
 

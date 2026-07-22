@@ -12,6 +12,7 @@ import {
   DOCK_POSITIONS,
   DOCK_LABEL,
 } from "../appearance";
+import { previewSfx } from "../sfx";
 import {
   type AutoLayout,
   type ScreenClass,
@@ -237,6 +238,29 @@ export default function SettingsPanel() {
         <span className="kicker">Appearance</span>
         <h2 className="display" style={{ fontSize: 22, margin: "2px 0 16px" }}>Look &amp; feel</h2>
 
+        <label className="soft" style={labelStyle}>Theme</label>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 18 }}>
+          {([
+            { id: "warm", label: "Warm", sub: "clay · amber" },
+            { id: "hitech", label: "Hi-tech", sub: "cyan HUD" },
+          ] as const).map((t) => (
+            <button
+              key={t.id}
+              onClick={() => patchAppr({ theme: t.id })}
+              style={{
+                padding: "10px 8px", fontSize: 12.5, fontWeight: 600, cursor: "pointer", borderRadius: 9,
+                display: "flex", flexDirection: "column", gap: 2, alignItems: "center",
+                border: appr.theme === t.id ? "1px solid rgb(var(--accent) / 0.6)" : "1px solid var(--border)",
+                background: appr.theme === t.id ? "rgb(var(--primary) / 0.28)" : "transparent",
+                color: appr.theme === t.id ? "#fff" : "var(--text-soft)",
+              }}
+            >
+              {t.label}
+              <span className="mono" style={{ fontSize: 9.5, opacity: 0.7, letterSpacing: "0.06em" }}>{t.sub}</span>
+            </button>
+          ))}
+        </div>
+
         <SwitchRow
           label="Background animation"
           hint="The drifting aurora glow behind the app."
@@ -346,6 +370,33 @@ export default function SettingsPanel() {
         <p className="faint" style={{ fontSize: 11, margin: "0 2px 18px", lineHeight: 1.5 }}>
           Plays on a loop behind the app (with audio) as a live wallpaper — great in fullscreen / transparent HUD mode. Takes precedence over a background image.
         </p>
+
+        {/* ---- Sound ---- */}
+        <span className="kicker" style={{ display: "block", marginTop: 6 }}>Sound</span>
+        <h2 className="display" style={{ fontSize: 20, margin: "2px 0 14px" }}>Audio</h2>
+
+        <SliderRow
+          label="UI sound effects"
+          hint="Volume of the hi-tech click / message / loading cues (0 = muted)."
+          value={appr.sfxVolume}
+          min={0}
+          max={100}
+          suffix="%"
+          onChange={(v) => { patchAppr({ sfxVolume: v }); previewSfx("button", v / 100); }}
+        />
+        <SliderRow
+          label="Background ambiance"
+          hint="Volume of the looping hi-tech background pad (0 = off)."
+          value={appr.ambientVolume}
+          min={0}
+          max={100}
+          suffix="%"
+          onChange={(v) => patchAppr({ ambientVolume: v })}
+        />
+        <div style={{ display: "flex", gap: 8, margin: "0 2px 18px" }}>
+          <button onClick={() => previewSfx("message", appr.sfxVolume / 100)} style={{ ...iconBtn, width: "auto", padding: "7px 12px", borderRadius: 999, fontSize: 12 }}>▶ Test message</button>
+          <button onClick={() => previewSfx("loading", appr.sfxVolume / 100)} style={{ ...iconBtn, width: "auto", padding: "7px 12px", borderRadius: 999, fontSize: 12 }}>▶ Test loading</button>
+        </div>
 
         <SwitchRow
           label="Keep wallpaper in fullscreen"

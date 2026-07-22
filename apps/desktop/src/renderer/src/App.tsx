@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import Login from "./Login";
 import Cockpit from "./cockpit/Cockpit";
 import BgVideo from "./cockpit/BgVideo";
+import { playSfx } from "./sfx";
 
 type ConfigState = { serverUrl: string; hasToken: boolean } | null | "loading";
 
@@ -16,6 +17,18 @@ export default function App() {
   useEffect(() => {
     recheck();
   }, [recheck]);
+
+  // Global "button click" cue: a single capture-phase listener plays the hi-tech
+  // click sound whenever a real button is pressed, anywhere in the app. Rate-limited
+  // and volume-gated in sfx.ts, so it's silent when the user sets SFX volume to 0.
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (el && el.closest("button, [role=button]")) playSfx("button");
+    };
+    window.addEventListener("click", onClick, { capture: true });
+    return () => window.removeEventListener("click", onClick, { capture: true });
+  }, []);
 
   let content: React.ReactNode;
   if (configState === "loading") {
