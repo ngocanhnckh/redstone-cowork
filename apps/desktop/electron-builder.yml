@@ -14,9 +14,9 @@ files:
   - "!**/*.map"
 
 # node-pty ships a compiled .node binary that cannot live inside the asar archive
-# — it must be unpacked so the OS can dlopen it at runtime.
+# — it must be unpacked so the OS can dlopen it at runtime. Scope it to node-pty
+# (a broad **/*.node glob traverses the pnpm workspace and errors).
 asarUnpack:
-  - "**/*.node"
   - "**/node_modules/node-pty/**"
 
 # Rebuild native modules (node-pty) against the bundled Electron's ABI at package
