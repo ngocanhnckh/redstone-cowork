@@ -4,6 +4,7 @@ import { useStore } from "../store";
 import { HostTelemetryView } from "../types";
 import QueueRail from "./QueueRail";
 import TerminalStack from "./TerminalStack";
+import MultiTerminal from "./MultiTerminal";
 import FilesPanel from "./FilesPanel";
 import BrowserStack from "./BrowserStack";
 import DockerLogPanel from "./DockerLogPanel";
@@ -624,6 +625,7 @@ const FIXED: { key: FixedKey; title: string; icon: string }[] = [
 ];
 const GRID_PANELS: GridKey[] = ["chat", "term", "files", "browser"];
 const isDockerId = (id: string): boolean => id.startsWith("docker:");
+const isTermWinId = (id: string): boolean => id.startsWith("term:"); // dynamic extra terminal windows (built-in "term" has no colon)
 const isAppId = (id: string): boolean => id.startsWith("app:");
 const appWinId = (appId: string): string => `app:${appId}`;
 
@@ -653,6 +655,8 @@ type WinMap = {
   wins: Record<string, WinState>;
   dockerIds: string[];
   sessIds: string[]; // dynamic per-session chat windows ("sess:<sessionId>")
+  termIds: string[]; // dynamic extra terminal windows ("term:N")
+  termHosts: Record<string, { sessionId: string; cwd: string; machine: string }>; // term:N → the host its shell runs on
   z: string[];
   seq: number;
   _init: boolean;
@@ -697,6 +701,8 @@ function defaultWins(): WinMap {
     },
     dockerIds: [],
     sessIds: [],
+    termIds: [],
+    termHosts: {},
     z: ["chat", "term", "files", "browser", "tasks", "notes", "ports", "devtools"],
     seq: 0,
     _init: false,
@@ -728,10 +734,19 @@ function sanitizeWinMap(p: Partial<WinMap> | undefined): WinMap {
   const sessIds = Array.isArray(p.sessIds)
     ? p.sessIds.filter((id): id is string => typeof id === "string" && !!wins[id])
     : [];
-  const allIds = [...FIXED.map((f) => f.key), ...dockerIds, ...sessIds];
+  const termIds = Array.isArray(p.termIds)
+    ? p.termIds.filter((id): id is string => typeof id === "string" && !!wins[id])
+    : [];
+  const rawHosts = (p.termHosts && typeof p.termHosts === "object") ? p.termHosts : {};
+  const termHosts: WinMap["termHosts"] = {};
+  for (const id of termIds) {
+    const h = rawHosts[id];
+    if (h && typeof h.sessionId === "string" && typeof h.cwd === "string" && typeof h.machine === "string") termHosts[id] = h;
+  }
+  const allIds = [...FIXED.map((f) => f.key), ...dockerIds, ...sessIds, ...termIds];
   const z = (Array.isArray(p.z) ? p.z.filter((id) => allIds.includes(id)) : []) as string[];
   for (const id of allIds) if (!z.includes(id)) z.push(id);
-  return { wins, dockerIds, sessIds, z, seq: typeof p.seq === "number" ? p.seq : 0, _init: p._init ?? false };
+  return { wins, dockerIds, sessIds, termIds, termHosts, z, seq: typeof p.seq === "number" ? p.seq : 0, _init: p._init ?? false };
 }
 
 // The console arrangement is stored PER SESSION so each session remembers its own
@@ -1237,6 +1252,36 @@ function HudConsole() {
     return { ...w, dockerIds: w.dockerIds.filter((d) => d !== id), wins: nextWins, z: w.z.filter((k) => k !== id) };
   });
 
+  // Spawn ANOTHER terminal as its own HUD window (like Docker's "New window"), bound
+  // to the currently-focused session's host — each gets a unique id so its PTYs don't
+  // collide with the main terminal or other terminal windows.
+  const createTermWindow = () => {
+    if (!session) return; // a terminal needs a host; no focused session → nothing to open
+    setLayout("windows");
+    setWins((w) => {
+      const n = w.seq + 1;
+      const id = `term:${n}`;
+      const rect = canvasRef.current?.getBoundingClientRect();
+      const off = (w.termIds.length * 30) % 150;
+      let ws: WinState = { x: 96 + off, y: 62 + off, w: 720, h: 420, min: false };
+      if (rect && rect.width > 0 && rect.height > 0) ws = clampWin(ws, rect.width, rect.height);
+      return {
+        ...w, seq: n,
+        termIds: [...w.termIds, id],
+        termHosts: { ...w.termHosts, [id]: { sessionId: session.id, cwd: session.cwd, machine: session.machine } },
+        wins: { ...w.wins, [id]: ws },
+        z: [...w.z.filter((k) => k !== id), id],
+      };
+    });
+  };
+  const closeTermWindow = (id: string) => setWins((w) => {
+    const nextWins = { ...w.wins };
+    delete nextWins[id];
+    const nextHosts = { ...w.termHosts };
+    delete nextHosts[id];
+    return { ...w, termIds: w.termIds.filter((d) => d !== id), termHosts: nextHosts, wins: nextWins, z: w.z.filter((k) => k !== id) };
+  });
+
   // Pop a session's chat into its own floating window (side-by-side sessions). If a
   // window for that session already exists, just un-minimize + raise it.
   const createSessionWindow = (sid: string) => {
@@ -1272,6 +1317,18 @@ function HudConsole() {
     createSessionWindow(p.sessionId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingSessionWindow]);
+
+  // React to a one-shot "open another terminal window" request (MultiTerminal's
+  // ⤢ button). Nonce-guarded so it fires exactly once.
+  const pendingTermWindow = useStore((s) => s.pendingTermWindow);
+  const termWinNonce = useRef(0);
+  useEffect(() => {
+    const p = pendingTermWindow;
+    if (!p || p.nonce === termWinNonce.current) return;
+    termWinNonce.current = p.nonce;
+    createTermWindow();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingTermWindow]);
   // The single Docker dock icon behaves like a normal app: left-click focuses /
   // minimizes / restores the frontmost Docker window (creating one if none exist).
   // A NEW window is only made via the right-click menu.
@@ -1385,6 +1442,7 @@ function HudConsole() {
       case "devtools": return <DevToolsPanel sessionId={session?.id} active={!grid && !wins.wins.devtools?.min} />;
       default:
         if (isDockerId(id)) return <DockerLogPanel streamId={id} active={!grid && !wins.wins[id]?.min} />;
+        if (isTermWinId(id)) { const h = wins.termHosts?.[id]; return h ? <MultiTerminal idPrefix={id} sessionId={h.sessionId} cwd={h.cwd} machine={h.machine} /> : null; }
         if (isSessId(id)) return <ChatPane sessionId={sessIdOf(id)} />;
         if (isAppId(id)) { const app = apps.find((a) => appWinId(a.id) === id); return app ? <CustomAppPanel app={app} onFavicon={setAppFavicon} /> : null; }
         return null;
@@ -1434,6 +1492,7 @@ function HudConsole() {
       area: (GRID_PANELS as string[]).includes(f.key) ? cfg.areas[f.key as GridKey] : undefined,
     })),
     ...(wins.dockerIds ?? []).map((id, i) => ({ id, title: `Docker ${i + 1}`, onClose: () => closeDocker(id) })),
+    ...(wins.termIds ?? []).map((id, i) => ({ id, title: `Terminal ${i + 2}`, onClose: () => closeTermWindow(id) })),
     ...(wins.sessIds ?? []).map((wid) => {
       const sid = sessIdOf(wid);
       const s = sessions.find((x) => x.id === sid) ?? queue.find((x) => x.id === sid);

@@ -209,6 +209,11 @@ type State = {
   // (for side-by-side work on multiple sessions in the same folder). The HUD reacts
   // by creating/revealing a `sess:<id>` window; switches to HUD mode if needed.
   pendingSessionWindow: { sessionId: string; nonce: number } | null;
+  // One-shot request to spawn ANOTHER terminal as its own HUD window (like Docker's
+  // "New window") — bound to the currently-focused session. The HUD creates a
+  // dynamic `term:N` window; switches to HUD mode if needed.
+  pendingTermWindow: { nonce: number } | null;
+  requestTermWindow: () => void;
   openTerminals: string[]; // sessionIds whose terminal was opened — kept alive (see TerminalStack)
   contextCollapsed: boolean; // right context sidebar collapsed (more room for the body)
   assistOpen: boolean; // LLM assistant slide-over
@@ -290,6 +295,8 @@ export const useStore = create<State>((set, get) => ({
   hudAppRequest: null,
   requestHudApp: (key) => set((state) => ({ hudAppRequest: { key, nonce: (state.hudAppRequest?.nonce ?? 0) + 1 } })),
   pendingSessionWindow: null,
+  pendingTermWindow: null,
+  requestTermWindow: () => set((state) => ({ pendingTermWindow: { nonce: (state.pendingTermWindow?.nonce ?? 0) + 1 } })),
   openTerminals: [],
   contextCollapsed: false,
   assistOpen: false,

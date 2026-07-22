@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import TerminalPanel from "./TerminalPanel";
+import { useStore } from "../store";
 
 /**
  * A tabbed set of terminals for one session — like an IDE's terminal panel. Each
@@ -7,14 +8,16 @@ import TerminalPanel from "./TerminalPanel";
  * toggled with `display` so switching tabs never kills a running shell. Closing a
  * tab kills its PTY.
  */
-export default function MultiTerminal({ sessionId, cwd, machine }: { sessionId: string; cwd: string; machine: string }) {
+export default function MultiTerminal({ sessionId, cwd, machine, idPrefix }: { sessionId: string; cwd: string; machine: string; idPrefix?: string }) {
   const seq = useRef(1);
   const [tabs, setTabs] = useState<number[]>([1]);
   const [active, setActive] = useState(1);
   // Per-tab remount counter so "restart" re-spawns a fresh shell.
   const [restart, setRestart] = useState<Record<number, number>>({});
 
-  const ptyId = (n: number) => `${sessionId}::term::${n}`;
+  // PTY namespace — idPrefix keeps a second MultiTerminal (an extra HUD terminal
+  // window) from colliding with the main one on the same session's pty ids.
+  const ptyId = (n: number) => `${idPrefix ?? sessionId}::term::${n}`;
 
   const addTab = () => {
     const n = ++seq.current;
@@ -59,8 +62,8 @@ export default function MultiTerminal({ sessionId, cwd, machine }: { sessionId: 
         })}
         <button onClick={addTab} title="New terminal tab" style={{ ...tabBtn, background: "transparent", color: "var(--text-soft)", border: "1px dashed var(--border-strong)" }}>+ tab</button>
         <button
-          onClick={() => window.cowork.openTerminalWindow({ sessionId, cwd, machine, title: `${machine} · terminal` })}
-          title="Open a terminal in its own window (drag to another monitor)"
+          onClick={() => useStore.getState().requestTermWindow()}
+          title="Open another terminal as its own HUD window (like Docker's New window)"
           style={{ ...tabBtn, background: "transparent", color: "var(--text-soft)", border: "1px solid var(--border)" }}
         >
           ⤢ window
