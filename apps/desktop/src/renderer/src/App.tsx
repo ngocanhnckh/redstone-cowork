@@ -30,6 +30,19 @@ export default function App() {
     return () => window.removeEventListener("click", onClick, { capture: true });
   }, []);
 
+  // Hi-tech keystroke cue: the same click sound on each keypress (typing anywhere —
+  // terminal, chat, inputs). Skips auto-repeat (held keys) and bare modifiers so it's
+  // a crisp click-per-key, not a machine-gun; rate-limited + volume-gated in sfx.ts.
+  useEffect(() => {
+    const MOD = new Set(["Shift", "Control", "Alt", "Meta", "CapsLock", "Fn", "Dead"]);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.repeat || MOD.has(e.key)) return;
+      playSfx("button");
+    };
+    window.addEventListener("keydown", onKey, { capture: true });
+    return () => window.removeEventListener("keydown", onKey, { capture: true });
+  }, []);
+
   let content: React.ReactNode;
   if (configState === "loading") {
     content = (
