@@ -33,6 +33,13 @@ jobs:
           node-version: 22
           cache: pnpm
 
+      # node-gyp (used to compile node-pty) imports distutils, which Python 3.12
+      # removed — pin 3.11 so the native build works on every runner.
+      - name: Setup Python (node-gyp needs distutils)
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
