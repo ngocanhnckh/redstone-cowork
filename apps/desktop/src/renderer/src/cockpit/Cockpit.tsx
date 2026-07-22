@@ -37,7 +37,15 @@ export default function Cockpit() {
   const toggleCaps = useStore((s) => s.toggleCaps);
   const offline = useStore((s) => s.offline);
   const exitOffline = useStore((s) => s.exitOffline);
+  const offlineScope = useStore((s) => s.offlineScope);
+  const startOfflineSession = useStore((s) => s.startOfflineSession);
   const [offlineModal, setOfflineModal] = useState(false);
+  const [starting, setStarting] = useState(false);
+
+  const startSession = async (resume: boolean) => {
+    setStarting(true);
+    try { await startOfflineSession(resume); } finally { setStarting(false); }
+  };
 
   const appr = useAppearance();
 
@@ -210,6 +218,43 @@ export default function Cockpit() {
                 Exit
               </button>
             </span>
+          )}
+          {offline && offlineScope && (
+            <>
+              <span
+                className="mono"
+                title={offlineScope.folder}
+                style={{ ...noDrag, fontSize: 10.5, color: "var(--text-soft)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 220, direction: "rtl", textAlign: "left" }}
+              >
+                {offlineScope.folder}
+              </span>
+              <button
+                onClick={() => startSession(true)}
+                disabled={starting}
+                title="Resume the folder's last Claude conversation (claude --continue) in a new tmux session"
+                style={{
+                  ...noDrag,
+                  fontFamily: "var(--font-mono)", fontSize: 10.5, letterSpacing: "0.06em",
+                  color: "rgb(var(--accent))", border: "1px solid var(--border)", borderRadius: 999,
+                  padding: "2px 9px", background: "transparent", cursor: starting ? "wait" : "pointer",
+                }}
+              >
+                ＋ Resume here
+              </button>
+              <button
+                onClick={() => startSession(false)}
+                disabled={starting}
+                title="Start a fresh Claude session in this folder"
+                style={{
+                  ...noDrag,
+                  fontFamily: "var(--font-mono)", fontSize: 10.5, letterSpacing: "0.06em",
+                  color: "var(--text-soft)", border: "1px solid var(--border)", borderRadius: 999,
+                  padding: "2px 9px", background: "transparent", cursor: starting ? "wait" : "pointer",
+                }}
+              >
+                fresh
+              </button>
+            </>
           )}
           {!offline && (
             <button

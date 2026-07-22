@@ -318,7 +318,8 @@ declare global {
       offlineScan(hosts: OfflineHost[]): Promise<{ sessions: OfflineSession[]; errors: Record<string, string> }>;
       offlineAnswer(a: { host: string; tmux: string; text: string }): Promise<{ ok: boolean; error?: string }>;
       offlineSendKey(a: { host: string; tmux: string; keys: string }): Promise<{ ok: boolean; error?: string }>;
-      offlineStart(a: { host: OfflineHost; cwd: string; seed: number }): Promise<
+      offlineHome(host: string): Promise<string>;
+      offlineStart(a: { host: OfflineHost; cwd: string; seed: number; resume?: boolean }): Promise<
         { ok: true; id: string; tmux: string } | { ok: false; error: string }
       >;
 

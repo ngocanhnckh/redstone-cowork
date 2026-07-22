@@ -41,6 +41,7 @@ import {
   answerOffline,
   sendKeyOffline,
   startOffline,
+  homeOffline,
   type OfflineHost,
 } from "./offline";
 import { IPC } from "../shared/ipc";
@@ -779,7 +780,8 @@ ipcMain.handle(IPC.offlineSshConfig, () => sshConfigHostCandidates());
 ipcMain.handle(IPC.offlineScan, (_e, a: { hosts: OfflineHost[] }) => scanAll(a.hosts));
 ipcMain.handle(IPC.offlineAnswer, (_e, a: { host: string; tmux: string; text: string }) => answerOffline(a.host, a.tmux, a.text));
 ipcMain.handle(IPC.offlineSendKey, (_e, a: { host: string; tmux: string; keys: string }) => sendKeyOffline(a.host, a.tmux, a.keys));
-ipcMain.handle(IPC.offlineStart, (_e, a: { host: OfflineHost; cwd: string; seed: number }) => startOffline(a.host, a.cwd, a.seed));
+ipcMain.handle(IPC.offlineHome, (_e, a: { host: string }) => homeOffline(a.host));
+ipcMain.handle(IPC.offlineStart, (_e, a: { host: OfflineHost; cwd: string; seed: number; resume?: boolean }) => startOffline(a.host, a.cwd, a.seed, { resume: a.resume }));
 
 // File browser — list / read / write, local or over ssh. Main never throws across IPC.
 ipcMain.handle(IPC.filesList, (_e, a: { cwd: string; machine: string; dir: string }) =>

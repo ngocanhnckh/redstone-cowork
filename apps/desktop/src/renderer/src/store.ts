@@ -271,9 +271,15 @@ type State = {
   offline: boolean;
   offlineHosts: OfflineHost[]; // hosts scanned in offline mode (persisted in main)
   offlineErrors: Record<string, string>; // hostAlias → last scan error (unreachable, etc.)
-  /** Persist the given hosts, switch to offline mode, and scan immediately. */
-  enterOffline: (hosts: OfflineHost[]) => Promise<void>;
+  /** The single {host, folder} the offline cockpit is scoped to (VS Code Remote-SSH
+   * style: one server + one folder). null when not in offline mode. */
+  offlineScope: { host: OfflineHost; folder: string } | null;
+  /** Enter offline mode scoped to ONE host + ONE folder, and scan immediately. */
+  enterOffline: (host: OfflineHost, folder: string) => Promise<void>;
   exitOffline: () => void;
+  /** Start a Claude session in the scoped folder (resume the last one by default,
+   * `--continue`; `resume:false` starts fresh), then refresh so it appears. */
+  startOfflineSession: (resume?: boolean) => Promise<void>;
   setOfflineHosts: (hosts: OfflineHost[]) => void;
   refresh: () => Promise<void>;
   setActiveTab: (sessionId: string, tab: "chat" | "terminal" | "browser" | "ports" | "files") => void;
@@ -356,14 +362,30 @@ export const useStore = create<State>((set, get) => ({
   offline: false,
   offlineHosts: [],
   offlineErrors: {},
+  offlineScope: null,
 
-  enterOffline: async (hosts) => {
-    try { await window.cowork.offlineHostsSet(hosts); } catch { /* best effort */ }
-    set({ offline: true, offlineHosts: hosts, hasLoaded: false });
+  enterOffline: async (host, folder) => {
+    // Remember the host in the saved list (so the picker re-offers it), then scope
+    // offline mode to just this host + folder.
+    try {
+      const saved = await window.cowork.offlineHostsList();
+      if (!saved.some((h) => h.alias === host.alias)) await window.cowork.offlineHostsSet([...saved, host]);
+    } catch { /* best effort */ }
+    set({ offline: true, offlineHosts: [host], offlineScope: { host, folder }, hasLoaded: false });
     await get().refresh();
   },
 
-  exitOffline: () => set({ offline: false, offlineErrors: {} }),
+  exitOffline: () => set({ offline: false, offlineErrors: {}, offlineScope: null }),
+
+  startOfflineSession: async (resume = true) => {
+    const scope = get().offlineScope;
+    if (!scope) return;
+    try {
+      const r = await window.cowork.offlineStart({ host: scope.host, cwd: scope.folder, seed: Date.now(), resume });
+      if (!r.ok) { set({ error: r.error }); return; }
+      await get().refresh();
+    } catch (e) { set({ error: e instanceof Error ? e.message : String(e) }); }
+  },
 
   setOfflineHosts: (hosts) => set({ offlineHosts: hosts }),
 
@@ -416,9 +438,21 @@ export const useStore = create<State>((set, get) => ({
     // Offline mode: scan the SSH hosts for tmux Claude sessions and map them into
     // the same SessionView shape the cockpit renders — never touch the server API.
     if (get().offline) {
+      const scope = get().offlineScope;
+      // No scope yet (shouldn't happen once entered) → nothing to scan, but still let
+      // the cockpit load so the UI can recover rather than hang on the boot screen.
+      if (!scope) { set({ sessions: [], queue: [], decisions: [], error: null, hasLoaded: true }); return; }
       try {
-        const { sessions: found, errors } = await window.cowork.offlineScan(get().offlineHosts);
-        const s = found.map(offlineToSessionView);
+        // Scan ONLY the scoped host, then keep sessions living IN the chosen folder
+        // (the folder itself or a subdirectory). tmux reports absolute cwds, so the
+        // folder (also absolute) matches directly.
+        const { sessions: found, errors } = await window.cowork.offlineScan([scope.host]);
+        const folder = scope.folder.replace(/\/+$/, "") || "/";
+        const inFolder = found.filter((o) => {
+          const cwd = (o.cwd || "").replace(/\/+$/, "");
+          return cwd === folder || cwd.startsWith(folder + "/");
+        });
+        const s = inFolder.map(offlineToSessionView);
         const q = s.filter((v) => v.status === "waiting");
         set((state) => ({
           sessions: s,

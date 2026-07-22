@@ -478,7 +478,8 @@ contextBridge.exposeInMainWorld("cowork", {
     ipcRenderer.invoke(IPC.offlineAnswer, a),
   offlineSendKey: (a: { host: string; tmux: string; keys: string }): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke(IPC.offlineSendKey, a),
-  offlineStart: (a: { host: OfflineHost; cwd: string; seed: number }): Promise<
+  offlineHome: (host: string): Promise<string> => ipcRenderer.invoke(IPC.offlineHome, { host }),
+  offlineStart: (a: { host: OfflineHost; cwd: string; seed: number; resume?: boolean }): Promise<
     { ok: true; id: string; tmux: string } | { ok: false; error: string }
   > => ipcRenderer.invoke(IPC.offlineStart, a),
 

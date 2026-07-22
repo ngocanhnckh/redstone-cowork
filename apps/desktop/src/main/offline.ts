@@ -216,22 +216,42 @@ export async function sendKeyOffline(host: string, tmux: string, keys: string): 
   }
 }
 
+/** Resolve a host's absolute home directory, so the folder picker can START there
+ * with an ABSOLUTE path — tmux reports absolute session cwds, and the scope filter
+ * (cwd === folder / cwd.startsWith(folder + "/")) only matches against absolute
+ * paths. `$HOME` over ssh is fast and needs no server. Falls back to "/". */
+export async function homeOffline(host: string): Promise<string> {
+  try {
+    const out = await sshRun(host, `printf '%s' "$HOME"`);
+    const home = out.trim();
+    return home.startsWith("/") ? home : "/";
+  } catch {
+    return "/";
+  }
+}
+
 /** Filesystem-safe, unique-ish tmux session name for a new session. */
 export function newSessionName(seed: number): string {
   return `rcw-${(seed >>> 0).toString(36)}`;
 }
 
-/** Start a new Claude Code session in a detached tmux on the host. Returns its id. */
+/** Start a Claude Code session in a detached tmux on the host. Returns its id.
+ * `resume` (default true) runs `claude --continue`, picking up the folder's last
+ * conversation — matching the agent wrapper's norm — vs. a blank session. */
 export async function startOffline(
   h: OfflineHost,
   cwd: string,
   seed: number,
+  opts: { resume?: boolean } = {},
 ): Promise<{ ok: true; id: string; tmux: string } | { ok: false; error: string }> {
   const name = newSessionName(seed);
+  // `--continue` resumes the most recent conversation in this cwd; without it a
+  // fresh, blank session starts. Default to resume — the wrapper does the same.
+  const claudeArgs = opts.resume === false ? `claude '--dangerously-skip-permissions'` : `claude '--continue' '--dangerously-skip-permissions'`;
   try {
     await sshRun(
       h.host,
-      `tmux new-session -d -s ${shellQuote(name)} -c ${shellQuote(cwd)} claude '--dangerously-skip-permissions'`,
+      `tmux new-session -d -s ${shellQuote(name)} -c ${shellQuote(cwd)} ${claudeArgs}`,
     );
     return { ok: true, id: `${h.alias}::${name}`, tmux: name };
   } catch (e) {

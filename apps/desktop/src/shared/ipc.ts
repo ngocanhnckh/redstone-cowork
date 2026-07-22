@@ -140,5 +140,6 @@ export const IPC = {
   offlineScan: "api:offline:scan",
   offlineAnswer: "api:offline:answer",
   offlineSendKey: "api:offline:sendkey",
+  offlineHome: "api:offline:home",
   offlineStart: "api:offline:start",
 } as const;
