@@ -270,16 +270,18 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, isAct
   useEffect(() => {
     const wv = webviewRef.current;
     if (!wv) return;
-    const start = () => { setLoading(true); playSfx("loading"); }; // hi-tech loading signal
+    const start = () => setLoading(true);
     const stop = () => setLoading(false);
+    // Play the hi-tech "done" chime once the page finishes loading (not while loading).
+    const done = () => { setLoading(false); playSfx("pageloaded"); };
     wv.addEventListener("did-start-loading", start as EventListener);
-    wv.addEventListener("did-stop-loading", stop as EventListener);
+    wv.addEventListener("did-stop-loading", done as EventListener);
     wv.addEventListener("did-finish-load", stop as EventListener);
     wv.addEventListener("did-fail-load", stop as EventListener);
     wv.addEventListener("crashed", stop as EventListener);
     return () => {
       wv.removeEventListener("did-start-loading", start as EventListener);
-      wv.removeEventListener("did-stop-loading", stop as EventListener);
+      wv.removeEventListener("did-stop-loading", done as EventListener);
       wv.removeEventListener("did-finish-load", stop as EventListener);
       wv.removeEventListener("did-fail-load", stop as EventListener);
       wv.removeEventListener("crashed", stop as EventListener);
