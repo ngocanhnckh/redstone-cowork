@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { DockerHostView, DockerContainer } from "../types";
 import { useStore } from "../store";
+import { bestDockerHost } from "./dockerHost";
 
 const fmtBytes = (b: number | null): string => {
   if (!b || b <= 0) return "—";
@@ -70,8 +71,9 @@ export default function DockerDeck() {
     return () => { alive = false; clearInterval(t); };
   }, []);
 
-  // Only the docker report for the focused session's host.
-  const host = machine ? hosts.find((h) => h.machine === machine) ?? null : null;
+  // Only the docker report for the focused session's host — the BEST one when the
+  // feed carries duplicate entries for a machine (see bestDockerHost).
+  const host = bestDockerHost(hosts, machine);
   const containers = host?.available ? host.containers : [];
   const totalRunning = containers.filter((c) => c.state === "running").length;
   const total = containers.length;

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "../store";
 import { DockerContainer, DockerHostView } from "../types";
+import { bestDockerHost } from "./dockerHost";
 
 const IDLE_RETURN_MS = 60_000; // after scrolling up, resume tailing after 1 min idle
 const RETRY_MS = 30_000; // auto-reconnect this long after a log stream ends (e.g. container restarted)
@@ -124,7 +125,7 @@ export default function DockerLogPanel({ streamId, active }: { streamId: string;
         .getDocker()
         .then((hosts) => {
           if (!alive) return;
-          const host = (hosts as DockerHostView[]).find((h) => h.machine === machine);
+          const host = bestDockerHost(hosts as DockerHostView[], machine);
           setContainers(host?.available ? host.containers : []);
         })
         .catch(() => {});
