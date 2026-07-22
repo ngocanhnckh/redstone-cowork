@@ -117,8 +117,11 @@ const GUEST = `(() => {
 
   // =========================================================================
   if (MODE === "dom") {
-    hover = mk("div", "position:fixed;z-index:2147483640;pointer-events:none;border:2px solid " + ACCENT + ";background:" + ACCENT + "22;border-radius:3px;transition:all .04s ease;display:none;");
-    var panel = mk("div", "position:fixed;right:14px;bottom:14px;z-index:2147483646;width:300px;max-height:60vh;overflow:auto;background:#1b1712f2;color:#f4ece2;font:12px/1.4 -apple-system,system-ui,sans-serif;border:1px solid #ffffff26;border-radius:12px;box-shadow:0 18px 50px #000a;padding:10px;backdrop-filter:blur(8px);");
+    // No CSS transition and a SOLID background (no backdrop-filter): a highlight
+    // that follows the cursor with a transition, plus a blurred panel, forces the
+    // GPU compositor to repaint continuously while you hover — enough to peg it.
+    hover = mk("div", "position:fixed;z-index:2147483640;pointer-events:none;border:2px solid " + ACCENT + ";background:" + ACCENT + "22;border-radius:3px;display:none;");
+    var panel = mk("div", "position:fixed;right:14px;bottom:14px;z-index:2147483646;width:300px;max-height:60vh;overflow:auto;background:#1b1712;color:#f4ece2;font:12px/1.4 -apple-system,system-ui,sans-serif;border:1px solid #ffffff26;border-radius:12px;box-shadow:0 18px 50px #000a;padding:10px;");
     var head = mk("div", "position:absolute;left:-9999px;"); // placeholder to keep node order tidy
     panel.innerHTML = '<div data-drag style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;cursor:move;user-select:none"><b style="font-size:12.5px">⠿ Comment mode</b><span style="opacity:.6;font-size:11px;text-align:right">drag to move · Esc to exit</span></div><div data-list></div><div data-empty style="opacity:.6;padding:6px 2px">Hover and click an element to pin it.</div><div style="display:flex;gap:8px;margin-top:10px"><button data-send style="flex:1;background:' + ACCENT + ';color:#1b1006;border:0;border-radius:8px;padding:7px 10px;font-weight:700;cursor:pointer">Send review (0)</button><button data-cancel style="background:#ffffff1a;color:#f4ece2;border:0;border-radius:8px;padding:7px 10px;cursor:pointer">Cancel</button></div>';
     var listEl = panel.querySelector("[data-list]");
@@ -168,13 +171,20 @@ const GUEST = `(() => {
         listEl.appendChild(row);
       });
     }
+    // Reposition pin outlines/badges at most once per frame (scroll/resize fire in
+    // bursts; recomputing every event pegs the compositor).
+    var repoRaf = 0;
     function reposition2() {
-      pins.forEach(function (p) {
-        if (!p.el || !p.el.isConnected) return;
-        var r = p.el.getBoundingClientRect();
-        p.outline.style.left = r.left + "px"; p.outline.style.top = r.top + "px";
-        p.outline.style.width = r.width + "px"; p.outline.style.height = r.height + "px";
-        p.badge.style.left = (r.left) + "px"; p.badge.style.top = (r.top) + "px";
+      if (repoRaf) return;
+      repoRaf = requestAnimationFrame(function () {
+        repoRaf = 0;
+        pins.forEach(function (p) {
+          if (!p.el || !p.el.isConnected) return;
+          var r = p.el.getBoundingClientRect();
+          p.outline.style.left = r.left + "px"; p.outline.style.top = r.top + "px";
+          p.outline.style.width = r.width + "px"; p.outline.style.height = r.height + "px";
+          p.badge.style.left = (r.left) + "px"; p.badge.style.top = (r.top) + "px";
+        });
       });
     }
     reposition = reposition2;
@@ -184,14 +194,24 @@ const GUEST = `(() => {
       try { pins[i].outline.remove(); pins[i].badge.remove(); } catch (e) {}
       pins.splice(i, 1); renderList(); signal({ t: "unpin", id: id });
     }
+    // Coalesce mousemove to one update per animation frame — elementFromPoint +
+    // getBoundingClientRect + style writes on every raw mousemove thrash layout and
+    // the compositor; at frame cadence it's cheap and looks identical.
+    var moveRaf = 0, lastXY = null;
     onMove = function (e) {
-      var el = document.elementFromPoint(e.clientX, e.clientY);
-      if (!el || isOurs(el)) { hover.style.display = "none"; return; }
-      var r = el.getBoundingClientRect();
-      hover.style.display = "block";
-      hover.style.left = r.left + "px"; hover.style.top = r.top + "px";
-      hover.style.width = r.width + "px"; hover.style.height = r.height + "px";
-      hover.__el = el;
+      lastXY = { x: e.clientX, y: e.clientY };
+      if (moveRaf) return;
+      moveRaf = requestAnimationFrame(function () {
+        moveRaf = 0;
+        if (!lastXY) return;
+        var el = document.elementFromPoint(lastXY.x, lastXY.y);
+        if (!el || isOurs(el)) { hover.style.display = "none"; return; }
+        var r = el.getBoundingClientRect();
+        hover.style.display = "block";
+        hover.style.left = r.left + "px"; hover.style.top = r.top + "px";
+        hover.style.width = r.width + "px"; hover.style.height = r.height + "px";
+        hover.__el = el;
+      });
     };
     onClick = function (e) {
       if (isOurs(e.target)) return;             // clicks in our panel behave normally
