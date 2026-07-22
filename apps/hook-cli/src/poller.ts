@@ -303,10 +303,60 @@ export async function syncTranscript(
 }
 
 /**
- * Long-running poller loop launched by `redstone-claude` in a hidden tmux window.
+ * How often to heartbeat + sync the transcript, INDEPENDENT of the delivery long-poll.
+ * Kept short so a missed/raced hook push self-heals within a few seconds: Claude's
+ * hooks are the primary path for in-progress messages + the turn-end (final message
+ * and `working:false`), but they don't always fire — and previously the ONLY fallback
+ * (this transcript sync) ran once per delivery loop, which BLOCKS up to 25s on the
+ * long-poll. That starvation is why the chat lagged ~30s behind Claude and why a
+ * session could sit "waiting" with its final message missing after a dropped Stop hook.
+ */
+export const SYNC_INTERVAL_MS = 3_000;
+
+/**
+ * Heartbeat + transcript-sync loop. Runs on a fixed fast cadence, decoupled from the
+ * delivery long-poll so in-progress messages and turn-end reach the cockpit within a
+ * few seconds regardless of the deliveries poll. `shouldContinue` gates the loop (real
+ * runs pass `() => true`; tests bound it). Never throws — it must never break the
+ * user's session. Threads the sync signature so it only pushes on real changes.
+ */
+export async function runSyncLoop(
+  api: Pick<ApiClient, "heartbeat" | "pushState">,
+  sessionId: string,
+  cwd: string | undefined,
+  opts: {
+    sleep: (ms: number) => Promise<void>;
+    shouldContinue: () => boolean;
+    intervalMs?: number;
+    sync?: typeof syncTranscript;
+  },
+): Promise<void> {
+  const sync = opts.sync ?? syncTranscript;
+  const interval = opts.intervalMs ?? SYNC_INTERVAL_MS;
+  let sig = "";
+  while (opts.shouldContinue()) {
+    try {
+      // Heartbeat so the server can tell a live waiting session from a killed one
+      // (whose poller is gone) by staleness.
+      await api.heartbeat(sessionId).catch(() => {});
+      // Direct transcript sync — the fallback for when Claude's hooks miss.
+      sig = await sync(api, sessionId, cwd, sig);
+    } catch {
+      // never break the loop
+    }
+    await opts.sleep(interval);
+  }
+}
+
+/**
+ * Long-running poller launched by `redstone-claude` in a hidden tmux window.
  *
  * 1. Wait until the session is registered (hook handler fires on first Claude activity).
- * 2. Loop indefinitely: poll → send keys → ack; back-off 5s on error.
+ * 2. Run TWO concurrent loops forever:
+ *    - delivery loop: long-poll for the user's answers and send keystrokes into tmux.
+ *    - sync loop: heartbeat + transcript sync every ~3s (see runSyncLoop).
+ *    They're independent so the delivery long-poll (up to 25s) can no longer starve
+ *    the transcript sync — the fix for the ~30s chat lag / stuck-after-Stop bug.
  */
 export async function runPoller(opts: {
   wrapperId: string;
@@ -319,6 +369,7 @@ export async function runPoller(opts: {
   const sendKeys = async (keys: string[]): Promise<void> => {
     await execFileP("tmux", ["send-keys", "-t", tmuxTarget, ...keys]);
   };
+  const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
   // Wait for the session to be registered by the hook handler
   let sessionId: string | null = null;
@@ -327,7 +378,7 @@ export async function runPoller(opts: {
     if (s) {
       sessionId = s.id;
     } else {
-      await new Promise<void>((resolve) => setTimeout(resolve, 3000));
+      await sleep(3000);
     }
   }
 
@@ -338,27 +389,26 @@ export async function runPoller(opts: {
     postSshResult: (sid, result) => api.postSshResult(sid, result),
   });
 
-  // Infinite poll loop with 5s error back-off. Each iteration also heartbeats the
-  // session: while the tmux session lives, the poller keeps running even when
-  // Claude is blocked waiting for the user — so the server can tell a live
-  // waiting session from a killed one (whose poller is gone) by staleness.
-  let syncSig = "";
-  for (;;) {
-    try {
-      await api.heartbeat(sessionId).catch(() => {});
-      // Sync the transcript file directly (fallback for when Claude's hooks stop
-      // firing) so new answers still reach the cockpit. Guarded; never throws.
-      syncSig = await syncTranscript(api, sessionId, cwd, syncSig);
-      await pollOnce({
-        deliveries: () =>
-          api.deliveries(wrapperId, 25_000) as Promise<Delivery[]>,
-        markDelivered: (id) => api.markDelivered(id),
-        sendKeys,
-        postSshResult: (sid, result) => api.postSshResult(sid, result),
-        sleep: (ms) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
-      });
-    } catch {
-      await new Promise<void>((resolve) => setTimeout(resolve, 5000));
+  // Delivery loop: long-poll for deliveries and execute keystrokes, 5s error back-off.
+  const deliveryLoop = (async () => {
+    for (;;) {
+      try {
+        await pollOnce({
+          deliveries: () => api.deliveries(wrapperId, 25_000) as Promise<Delivery[]>,
+          markDelivered: (id) => api.markDelivered(id),
+          sendKeys,
+          postSshResult: (sid, result) => api.postSshResult(sid, result),
+          sleep,
+        });
+      } catch {
+        await sleep(5000);
+      }
     }
-  }
+  })();
+
+  // Sync loop: fast, independent heartbeat + transcript sync.
+  const syncLoop = runSyncLoop(api, sessionId, cwd, { sleep, shouldContinue: () => true });
+
+  // Both run forever; if either throws unexpectedly it's isolated to its own loop.
+  await Promise.all([deliveryLoop, syncLoop]);
 }

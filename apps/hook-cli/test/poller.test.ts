@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, rmSync, readFileSync, existsSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { pollOnce, pasteSettleMs, reportHostInfo, transcriptSig, syncTranscript } from "../src/poller";
+import { pollOnce, pasteSettleMs, reportHostInfo, transcriptSig, syncTranscript, runSyncLoop } from "../src/poller";
 
 describe("pollOnce", () => {
   it("sends keys for each delivery and acks", async () => {
@@ -252,5 +252,48 @@ describe("syncTranscript (hook-independent transcript fallback)", () => {
     const api = { pushState: vi.fn().mockRejectedValue(new Error("network")) };
     const sig = await syncTranscript(api, "s1", "/cwd", "prev", stub());
     expect(sig).toBe("prev");
+  });
+});
+
+describe("runSyncLoop (fast transcript sync, decoupled from the 25s delivery poll)", () => {
+  it("heartbeats + syncs every interval, independent of deliveries", async () => {
+    const heartbeat = vi.fn().mockResolvedValue(true);
+    const sync = vi.fn().mockResolvedValue("sig");
+    const sleeps: number[] = [];
+    let n = 0;
+    await runSyncLoop({ heartbeat, pushState: vi.fn() } as never, "s1", "/cwd", {
+      sleep: async (ms: number) => { sleeps.push(ms); },
+      shouldContinue: () => n++ < 3,
+      intervalMs: 3000,
+      sync,
+    });
+    expect(heartbeat).toHaveBeenCalledTimes(3);
+    expect(sync).toHaveBeenCalledTimes(3);
+    expect(sleeps).toEqual([3000, 3000, 3000]);
+  });
+
+  it("keeps looping when a sync throws (never breaks the session)", async () => {
+    const sync = vi.fn().mockRejectedValue(new Error("boom"));
+    let n = 0;
+    await runSyncLoop({ heartbeat: vi.fn().mockResolvedValue(true), pushState: vi.fn() } as never, "s1", "/cwd", {
+      sleep: async () => {},
+      shouldContinue: () => n++ < 2,
+      sync,
+    });
+    expect(sync).toHaveBeenCalledTimes(2);
+  });
+
+  it("threads the signature between iterations (so it dedups across syncs)", async () => {
+    const seen: string[] = [];
+    const rets = ["A", "B", "C"];
+    let i = 0;
+    const sync = vi.fn().mockImplementation(async (_a, _s, _c, prev: string) => { seen.push(prev); return rets[i++]; });
+    let n = 0;
+    await runSyncLoop({ heartbeat: vi.fn().mockResolvedValue(true), pushState: vi.fn() } as never, "s1", "/cwd", {
+      sleep: async () => {},
+      shouldContinue: () => n++ < 3,
+      sync,
+    });
+    expect(seen).toEqual(["", "A", "B"]);
   });
 });
