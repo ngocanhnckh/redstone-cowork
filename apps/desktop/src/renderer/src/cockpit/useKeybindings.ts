@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useStore } from "../store";
 import { accelFromParts, actionForAccel, type ActionId } from "./keybindings";
+import { playSfx } from "../sfx";
 
 const TAB_FOR: Partial<Record<ActionId, "chat" | "terminal" | "browser" | "ports" | "files">> = {
   "tab.chat": "chat",
@@ -34,6 +35,7 @@ function runSimpleAction(action: ActionId): boolean {
   if (action === "assistant.toggle") { st.toggleAssist(); return true; }
   const tab = TAB_FOR[action];
   if (tab) {
+    playSfx("message"); // hi-tech cue when a window shortcut opens/hides an app
     if (st.mode === "hud") {
       // HUD toggles the app window (revealApp: open/raise, or minimise if frontmost).
       st.requestHudApp(HUD_KEY[tab]);
