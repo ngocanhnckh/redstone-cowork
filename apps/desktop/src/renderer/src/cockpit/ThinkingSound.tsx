@@ -1,6 +1,6 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useStore } from "../store";
-import { setThinking } from "../sfx";
+import { setThinking, playSfx } from "../sfx";
 
 const ACTIONABLE = ["question", "permission", "mode"];
 
@@ -28,6 +28,14 @@ export default function ThinkingSound() {
   useEffect(() => {
     setThinking(isWorking);
     return () => setThinking(false);
+  }, [isWorking]);
+
+  // Chime when the focused session FINISHES a reply (working true → false). Background
+  // sessions are handled by CompletionNotifier, so together every reply makes a sound.
+  const wasWorking = useRef(false);
+  useEffect(() => {
+    if (wasWorking.current && !isWorking) playSfx("message");
+    wasWorking.current = isWorking;
   }, [isWorking]);
 
   return null;

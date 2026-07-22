@@ -1311,7 +1311,11 @@ function HudConsole() {
   // Reveal (open OR raise, never minimize) a HUD app window — used by the keyboard
   // shortcuts, which should always SHOW the app, unlike a dock click which toggles.
   const revealApp = (appId: string) => {
-    const wid = appWinId(appId);
+    // Built-in apps (chat/term/browser/files/ports) are keyed by their BARE name in
+    // the window map + childFor switch — NOT the "app:" prefix (that's custom apps).
+    // The keybinding path always passes a built-in key, so use it directly; using
+    // appWinId here targeted a phantom "app:browser" window, so shortcuts did nothing.
+    const wid = appId;
     setLayout("windows");
     setWins((w) => {
       const cur = w.wins[wid];

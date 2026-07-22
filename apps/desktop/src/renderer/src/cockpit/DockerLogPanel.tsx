@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "../store";
 import { DockerContainer, DockerHostView } from "../types";
 import { bestDockerHost } from "./dockerHost";
+import { playSfx } from "../sfx";
 
 const IDLE_RETURN_MS = 60_000; // after scrolling up, resume tailing after 1 min idle
 const RETRY_MS = 30_000; // auto-reconnect this long after a log stream ends (e.g. container restarted)
@@ -194,7 +195,11 @@ export default function DockerLogPanel({ streamId, active }: { streamId: string;
       if (retryTimer.current) clearTimeout(retryTimer.current);
       retryTimer.current = setTimeout(() => setRetryNonce((n) => n + 1), RETRY_MS);
     };
-    const offData = window.cowork.onDockerLogData((a) => { if (a.id === streamId) bufRef.current += a.data; });
+    const offData = window.cowork.onDockerLogData((a) => {
+      if (a.id !== streamId) return;
+      bufRef.current += a.data;
+      if (a.data.includes("\n")) playSfx("output"); // hi-tech output cue on new log line(s), rate-limited
+    });
     const offExit = window.cowork.onDockerLogExit((a) => {
       if (a.id !== streamId) return;
       bufRef.current += `\n[stream ended — reconnecting in ${RETRY_MS / 1000}s]\n`;

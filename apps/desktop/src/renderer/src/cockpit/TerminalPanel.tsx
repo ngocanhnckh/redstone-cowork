@@ -3,6 +3,7 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
 import ConnectionBar from "./ConnectionBar";
+import { playSfx } from "../sfx";
 
 // xterm theme tuned to the liquid-glass tokens: a transparent background so the
 // terminal sits on the warm-ink glass panel (not a solid black box), with a warm
@@ -194,7 +195,10 @@ export default function TerminalPanel({
 
     // Receive bytes from the pty (filtered by our id).
     const offData = window.cowork.onTerminalData(({ id, data }) => {
-      if (id === pty && !disposed) term.write(data);
+      if (id === pty && !disposed) {
+        term.write(data);
+        if (data.includes("\n")) playSfx("output"); // hi-tech output cue on new line(s), rate-limited
+      }
     });
     cleanups.push(offData);
 
