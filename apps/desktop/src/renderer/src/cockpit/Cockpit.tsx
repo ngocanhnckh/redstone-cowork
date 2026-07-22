@@ -34,6 +34,8 @@ export default function Cockpit() {
   const toggleAssist = useStore((s) => s.toggleAssist);
   const toggleSettings = useStore((s) => s.toggleSettings);
   const toggleCaps = useStore((s) => s.toggleCaps);
+  const offline = useStore((s) => s.offline);
+  const exitOffline = useStore((s) => s.exitOffline);
 
   const appr = useAppearance();
 
@@ -171,6 +173,42 @@ export default function Cockpit() {
           >
             redstone cowork
           </span>
+          {offline && (
+            <span
+              style={{
+                ...noDrag,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                fontFamily: "var(--font-mono)",
+                fontSize: 10.5,
+                letterSpacing: "0.1em",
+                color: "rgb(var(--accent))",
+                border: "1px solid var(--border)",
+                borderRadius: 999,
+                padding: "2px 8px",
+              }}
+              title="Direct SSH — no cowork server"
+            >
+              ● OFFLINE
+              <button
+                onClick={exitOffline}
+                title="Exit offline mode"
+                style={{
+                  ...noDrag,
+                  border: 0,
+                  background: "transparent",
+                  color: "var(--text-soft)",
+                  cursor: "pointer",
+                  fontSize: 10.5,
+                  fontFamily: "var(--font-mono)",
+                  padding: 0,
+                }}
+              >
+                Exit
+              </button>
+            </span>
+          )}
           <div style={{ flex: 1 }} />
           {/* Connection settings */}
           <button

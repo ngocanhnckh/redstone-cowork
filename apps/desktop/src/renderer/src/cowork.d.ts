@@ -311,10 +311,33 @@ declare global {
         modelId?: string;
       }): Promise<{ text: string; steps: Array<{ tool: string; args: string; result: string }> }>;
 
+      // Offline mode (direct SSH, no cowork server)
+      offlineHostsList(): Promise<OfflineHost[]>;
+      offlineHostsSet(hosts: OfflineHost[]): Promise<{ ok: true }>;
+      offlineSshConfig(): Promise<string[]>;
+      offlineScan(hosts: OfflineHost[]): Promise<{ sessions: OfflineSession[]; errors: Record<string, string> }>;
+      offlineAnswer(a: { host: string; tmux: string; text: string }): Promise<{ ok: boolean; error?: string }>;
+      offlineSendKey(a: { host: string; tmux: string; keys: string }): Promise<{ ok: boolean; error?: string }>;
+      offlineStart(a: { host: OfflineHost; cwd: string; seed: number }): Promise<
+        { ok: true; id: string; tmux: string } | { ok: false; error: string }
+      >;
+
       // Stream
       onUpdate(cb: () => void): () => void;
     };
   }
+
+  type OfflineHost = { alias: string; host: string; label?: string };
+  type OfflineSession = {
+    id: string;
+    hostAlias: string;
+    host: string;
+    tmux: string;
+    cwd: string;
+    createdAt: number;
+    state: "working" | "waiting" | "idle";
+    transcript: string;
+  };
 
   type ForwardStatus = "local" | "starting" | "active" | "failed" | "stopped";
 
