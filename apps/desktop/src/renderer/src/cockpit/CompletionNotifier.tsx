@@ -53,9 +53,12 @@ export default function CompletionNotifier() {
   const decisions = useStore((s) => s.decisions);
   const focusId = useStore((s) => s.focusId);
   const setFocus = useStore((s) => s.setFocus);
+  const offline = useStore((s) => s.offline);
 
   const [notes, setNotes] = useState<Note[]>([]);
   const prevWorking = useRef<Map<string, boolean>>(new Map());
+  // Per-session cooldown so a flapping `working` flag can't spam completions.
+  const lastNotified = useRef<Map<string, number>>(new Map());
   const seq = useRef(0);
   const primed = useRef(false); // skip the very first pass (avoid notifying for pre-existing completions)
   const focusRef = useRef(focusId);
@@ -70,8 +73,13 @@ export default function CompletionNotifier() {
     for (const s of all) {
       const was = prevWorking.current.get(s.id);
       prevWorking.current.set(s.id, !!s.working);
-      // Completion = working went true → false. Skip the focused session (already visible).
-      if (primed.current && was === true && s.working === false && s.id !== focusRef.current) {
+      // Completion = working went true → false. Skip the focused session (already
+      // visible), skip offline mode entirely (its `working` is a noisy pane-text
+      // heuristic that flaps → infinite completions), and rate-limit per session.
+      const now = Date.now();
+      const cooled = now - (lastNotified.current.get(s.id) ?? 0) > 15_000;
+      if (primed.current && !offline && cooled && was === true && s.working === false && s.id !== focusRef.current) {
+        lastNotified.current.set(s.id, now);
         const last = [...(s.transcript ?? [])].reverse().find((m) => m.role === "assistant")?.text;
         fresh.push({
           key: ++seq.current,
@@ -86,7 +94,7 @@ export default function CompletionNotifier() {
     primed.current = true;
     if (fresh.length) setNotes((cur) => [...cur, ...fresh].slice(-MAX_CARDS));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessions, queue, decisions]);
+  }, [sessions, queue, decisions, offline]);
 
   // Auto-expire each card.
   useEffect(() => {

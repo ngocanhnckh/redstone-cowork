@@ -2,128 +2,122 @@ import { useEffect, useState } from "react";
 import { useStore } from "./store";
 
 /**
- * Host picker for entering offline mode (direct SSH, no cowork server). Lists
- * ~/.ssh/config aliases as toggles, allows manual `alias / user@host` entry, and
- * connects via store.enterOffline. Shared by the login screen and the in-cockpit
- * "Go offline" modal.
+ * VS Code Remote-SSH style host list for offline mode. Shows your saved hosts and
+ * ~/.ssh/config aliases as a list; click ONE to connect to it (open that host).
+ * The "+" adds a new host to your saved list. Selective — one host at a time, not
+ * "grab everything and connect to all".
  */
 export default function OfflinePicker({ onDone }: { onDone?: () => void }) {
   const enterOffline = useStore((s) => s.enterOffline);
-  const [candidates, setCandidates] = useState<string[]>([]);
-  const [selected, setSelected] = useState<OfflineHost[]>([]);
-  const [manual, setManual] = useState("");
+  const [saved, setSaved] = useState<OfflineHost[]>([]);
+  const [configHosts, setConfigHosts] = useState<string[]>([]);
+  const [adding, setAdding] = useState(false);
+  const [draft, setDraft] = useState("");
 
   useEffect(() => {
-    window.cowork.offlineSshConfig().then(setCandidates).catch(() => {});
-    window.cowork.offlineHostsList().then((h) => { if (h.length) setSelected(h); }).catch(() => {});
+    window.cowork.offlineHostsList().then(setSaved).catch(() => {});
+    window.cowork.offlineSshConfig().then(setConfigHosts).catch(() => {});
   }, []);
 
-  const addHost = (target: string) => {
-    const t = target.trim();
-    if (!t) return;
-    setSelected((prev) => (prev.some((h) => h.host === t || h.alias === t) ? prev : [...prev, { alias: t, host: t }]));
+  const persist = (hosts: OfflineHost[]) => {
+    setSaved(hosts);
+    window.cowork.offlineHostsSet(hosts).catch(() => {});
   };
-  const removeHost = (alias: string) => setSelected((prev) => prev.filter((h) => h.alias !== alias));
 
-  const inputStyle: React.CSSProperties = {
-    padding: "10px 12px", borderRadius: 10, fontSize: 13.5, fontFamily: "var(--font-mono)",
-    border: "1px solid var(--border, rgba(255,255,255,0.12))", background: "rgba(0,0,0,0.18)", color: "inherit",
+  // The merged list: saved hosts first, then ~/.ssh/config aliases not already saved.
+  const savedAliases = new Set(saved.map((h) => h.alias));
+  const rows: Array<OfflineHost & { fromConfig?: boolean }> = [
+    ...saved,
+    ...configHosts.filter((c) => !savedAliases.has(c)).map((c) => ({ alias: c, host: c, fromConfig: true })),
+  ];
+
+  const connect = (h: OfflineHost) => { enterOffline([h]); onDone?.(); };
+
+  const addNew = () => {
+    const t = draft.trim();
+    if (!t) { setAdding(false); return; }
+    if (!saved.some((h) => h.alias === t || h.host === t)) persist([...saved, { alias: t, host: t }]);
+    setDraft("");
+    setAdding(false);
+  };
+  const removeSaved = (alias: string) => persist(saved.filter((h) => h.alias !== alias));
+
+  const rowBtn: React.CSSProperties = {
+    display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left",
+    padding: "10px 12px", borderRadius: 10, cursor: "pointer", fontSize: 13.5,
+    border: "1px solid var(--border, rgba(255,255,255,0.10))", background: "rgba(255,255,255,0.03)", color: "inherit",
   };
 
   return (
     <div>
-      <p className="soft" style={{ fontSize: 12.5, lineHeight: 1.55, margin: "0 0 14px" }}>
-        No cowork server — discover and answer Claude sessions running in tmux on hosts you can reach over SSH.
-      </p>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+        <p className="soft" style={{ fontSize: 12.5, lineHeight: 1.5, margin: 0, maxWidth: 320 }}>
+          Pick a host to open its Claude sessions over SSH — no cowork server.
+        </p>
+        <button
+          type="button"
+          onClick={() => { setAdding((v) => !v); setDraft(""); }}
+          title="Add a host"
+          style={{
+            flexShrink: 0, width: 30, height: 30, borderRadius: 8, cursor: "pointer", fontSize: 18, lineHeight: 1,
+            border: "1px solid var(--border, rgba(255,255,255,0.12))", background: adding ? "rgba(var(--primary), 0.22)" : "transparent", color: "inherit",
+          }}
+        >
+          +
+        </button>
+      </div>
 
-      {candidates.length > 0 && (
-        <div style={{ marginBottom: 14 }}>
-          <label className="soft" style={{ display: "block", marginBottom: 6, fontSize: 12.5 }}>From your ~/.ssh/config</label>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            {candidates.map((c) => {
-              const on = selected.some((h) => h.alias === c || h.host === c);
-              return (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => (on ? removeHost(c) : addHost(c))}
-                  style={{
-                    padding: "4px 10px", borderRadius: 999, fontSize: 12, cursor: "pointer",
-                    border: "1px solid var(--border, rgba(255,255,255,0.12))",
-                    background: on ? "rgba(var(--primary), 0.22)" : "transparent",
-                    color: "inherit", fontFamily: "var(--font-mono)",
-                  }}
-                >
-                  {on ? "✓ " : ""}{c}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      <div style={{ marginBottom: 14 }}>
-        <label className="soft" style={{ display: "block", marginBottom: 6, fontSize: 12.5 }}>Add a host</label>
-        <div style={{ display: "flex", gap: 8 }}>
+      {adding && (
+        <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
           <input
-            value={manual}
-            onChange={(e) => setManual(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addHost(manual); setManual(""); } }}
-            placeholder="alias / user@host"
+            autoFocus
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addNew(); } if (e.key === "Escape") setAdding(false); }}
+            placeholder="alias  or  user@host"
             autoCapitalize="off" autoCorrect="off" spellCheck={false}
-            style={{ ...inputStyle, flex: 1 }}
+            style={{
+              flex: 1, padding: "9px 12px", borderRadius: 9, fontSize: 13.5, fontFamily: "var(--font-mono)",
+              border: "1px solid var(--border, rgba(255,255,255,0.12))", background: "rgba(0,0,0,0.18)", color: "inherit",
+            }}
           />
           <button
             type="button"
-            onClick={() => { addHost(manual); setManual(""); }}
-            style={{
-              padding: "0 16px", borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: "pointer",
-              border: "1px solid var(--border, rgba(255,255,255,0.12))", background: "transparent", color: "inherit",
-            }}
+            onClick={addNew}
+            className="glass-btn--clay"
+            style={{ padding: "0 16px", borderRadius: 9, fontSize: 13, fontWeight: 600, border: "none", cursor: "pointer" }}
           >
             Add
           </button>
         </div>
-      </div>
+      )}
 
-      {selected.length > 0 && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 16 }}>
-          {selected.map((h) => (
-            <span
-              key={h.alias}
-              style={{
-                display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 8px 4px 10px", borderRadius: 999,
-                fontSize: 12, fontFamily: "var(--font-mono)", background: "rgba(var(--primary), 0.18)",
-                border: "1px solid var(--border, rgba(255,255,255,0.12))",
-              }}
-            >
-              {h.alias}
+      <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: "48vh", overflowY: "auto" }} className="no-scrollbar">
+        {rows.length === 0 && !adding && (
+          <p className="soft" style={{ fontSize: 12.5, textAlign: "center", padding: "18px 0", margin: 0 }}>
+            No hosts yet — press <b>+</b> to add one (an alias from your ~/.ssh/config, or <code>user@host</code>).
+          </p>
+        )}
+        {rows.map((h) => (
+          <div key={h.alias} style={{ position: "relative", display: "flex", alignItems: "center", gap: 4 }}>
+            <button type="button" onClick={() => connect(h)} style={rowBtn}>
+              <span style={{ opacity: 0.7 }}>🖥</span>
+              <span style={{ flex: 1, fontFamily: "var(--font-mono)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{h.alias}</span>
+              {h.fromConfig && <span className="soft" style={{ fontSize: 10.5, letterSpacing: "0.05em" }}>ssh config</span>}
+              <span style={{ opacity: 0.5 }}>→</span>
+            </button>
+            {!h.fromConfig && (
               <button
                 type="button"
-                onClick={() => removeHost(h.alias)}
-                title="Remove"
-                style={{ border: 0, background: "transparent", color: "inherit", cursor: "pointer", fontSize: 13, lineHeight: 1, padding: 0 }}
+                onClick={() => removeSaved(h.alias)}
+                title="Remove from saved hosts"
+                style={{ position: "absolute", right: 34, border: 0, background: "transparent", color: "var(--text-soft)", cursor: "pointer", fontSize: 15, padding: 4 }}
               >
                 ×
               </button>
-            </span>
-          ))}
-        </div>
-      )}
-
-      <div style={{ display: "flex", gap: 10 }}>
-        <button
-          type="button"
-          onClick={() => { enterOffline(selected); onDone?.(); }}
-          disabled={selected.length === 0}
-          className="glass-btn--clay"
-          style={{
-            flex: 1, padding: "12px 0", borderRadius: 10, fontSize: 14, fontWeight: 600, border: "none",
-            cursor: selected.length ? "pointer" : "not-allowed", opacity: selected.length ? 1 : 0.5,
-          }}
-        >
-          Connect offline{selected.length ? ` (${selected.length})` : ""}
-        </button>
+            )}
+          </div>
+        ))}
       </div>
     </div>
   );
