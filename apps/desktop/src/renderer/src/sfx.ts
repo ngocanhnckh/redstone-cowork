@@ -110,7 +110,17 @@ export function installGlobalSfx(): void {
   installed = true;
   window.addEventListener("click", (e) => {
     const el = e.target as HTMLElement | null;
-    if (el && el.closest("button, [role=button]")) playSfx("button");
+    if (!el) return;
+    // Fire on any INTERACTIVE target — not just <button>. Lots of the UI (HUD tabs,
+    // session rows, dock items) are div/span with onClick + cursor:pointer, so we
+    // also treat a pointer cursor as "clickable" (cursor inherits, so an inner span
+    // reads its parent's pointer). Covers buttons, links, tabs and custom controls.
+    const tag = el.closest("button, a, [role=button], [role=tab], [role=menuitem], summary, select, label");
+    let clickable = !!tag;
+    if (!clickable) {
+      try { clickable = getComputedStyle(el).cursor === "pointer"; } catch { /* detached node */ }
+    }
+    if (clickable) playSfx("button");
   }, { capture: true });
   window.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.repeat) playSfx("button");
