@@ -153,6 +153,12 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, isAct
   // The URL the webview is actually showing. Seeds from initialUrl (a link opened
   // in the workspace) so the tab paints its target immediately.
   const [loadUrl, setLoadUrl] = useState(initialUrl?.trim() ? initialUrl : "");
+  // Whether the <webview> is mounted (only rendered once there IS a url). Toggles
+  // false↔true on mount/unmount only — NOT on navigation — so webview event
+  // listeners keyed on it attach exactly once per element lifetime (Electron does
+  // not reliably detach forwarded webContents events on re-attach, so a per-navigation
+  // dependency leaks a listener each navigation → the did-stop-loading pile-up freeze).
+  const hasUrl = loadUrl.trim().length > 0;
   // The text shown in the address bar — tracks the live/loaded URL, editable.
   const [address, setAddress] = useState(initialUrl?.trim() ? initialUrl : "");
   const [status, setStatus] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
@@ -277,7 +283,8 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, isAct
       wv.removeEventListener("did-fail-load", stop as EventListener);
       wv.removeEventListener("crashed", stop as EventListener);
     };
-  }, [loadUrl]);
+    // Attach ONCE per webview element (mount), not per navigation — see hasUrl.
+  }, [hasUrl]);
 
   // Report the ACTIVE tab's guest webContents id so the Inspector (DevTools) panel
   // attaches console/network capture to whatever tab the user is looking at — not
@@ -305,7 +312,10 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, isAct
       try { id = wv.getWebContentsId(); } catch { /* guest gone */ }
       window.cowork.unregisterSessionBrowser(sessionId, id).catch(() => {});
     };
-  }, [isActive, sessionId, loadUrl]);
+    // dom-ready re-registers the (possibly new) guest id on each navigation, so this
+    // only needs to re-run when the tab activates or its session changes — NOT per
+    // navigation (which leaked a dom-ready listener each time).
+  }, [isActive, sessionId, hasUrl]);
 
   // Callbacks held in refs so re-renders don't churn the webview event listeners.
   const onTitleRef = useRef(onTitle);
@@ -353,7 +363,8 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, isAct
       wv.removeEventListener("did-navigate-in-page", onNav as EventListener);
       wv.removeEventListener("page-title-updated", onTitleEv as EventListener);
     };
-  }, [loadUrl]);
+    // Handlers read live state via refs / wv.getURL() — attach once per element.
+  }, [hasUrl]);
 
   // Update the match counter from the webview's found-in-page results.
   useEffect(() => {
@@ -365,7 +376,7 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, isAct
     };
     wv.addEventListener("found-in-page", onFound as EventListener);
     return () => wv.removeEventListener("found-in-page", onFound as EventListener);
-  }, [loadUrl]);
+  }, [hasUrl]);
 
   // Cmd/Ctrl+F from a focused guest is intercepted in main and forwarded here;
   // only the panel whose webview matches the guest id reacts. Esc closes.
@@ -400,8 +411,11 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, isAct
     const wv = webviewRef.current;
     if (!wv) return;
     return wireOpenTab(wv, openInNewTab);
+    // wireOpenTab attaches dom-ready/did-navigate/console-message which re-fire on
+    // every navigation anyway — attach once per element (not per navigation, which
+    // leaked 4 listeners each time).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loadUrl, sessionId]);
+  }, [hasUrl, sessionId]);
 
   // ── "Point & prompt" tools (DOM comment / region screenshot) ──────────────
   // The overlay UI lives in the guest (browserAnnotate.ts); here we capture the
@@ -511,7 +525,8 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, isAct
     };
     wv.addEventListener("dom-ready", apply as EventListener);
     return () => wv.removeEventListener("dom-ready", apply as EventListener);
-  }, [loadUrl]);
+    // dom-ready fires on every navigation regardless — attach once per element.
+  }, [hasUrl]);
 
   // The right-click menu is built in the main process on the guest's webContents
   // (see index.ts `context-menu`) — a <webview> does NOT forward that event to the
@@ -537,18 +552,27 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, isAct
     const ro = new ResizeObserver(report);
     ro.observe(wv);
     return () => ro.disconnect();
-  }, [zoom, device, loadUrl]);
+  }, [zoom, device, hasUrl]);
 
-  // Apply the page zoom factor — on change and on each navigation (a fresh document
-  // resets the webContents zoom back to 1).
+  // Apply the page zoom factor. A fresh document resets webContents zoom to 1, so we
+  // must re-apply on every navigation (dom-ready) — but attach that listener ONCE per
+  // element (via hasUrl) reading the live zoom from a ref, and apply imperatively on
+  // zoom change in a separate listener-free effect. (Re-attaching dom-ready per zoom/
+  // navigation leaked a listener each time — part of the freeze pile-up.)
+  const zoomRef = useRef(zoom);
+  zoomRef.current = zoom;
+  useEffect(() => {
+    const wv = webviewRef.current;
+    if (wv) { try { wv.setZoomFactor(zoom); } catch { /* guest not ready */ } }
+  }, [zoom]);
   useEffect(() => {
     const wv = webviewRef.current;
     if (!wv) return;
-    const apply = () => { try { wv.setZoomFactor(zoom); } catch { /* guest not ready */ } };
+    const apply = () => { try { wv.setZoomFactor(zoomRef.current); } catch { /* guest not ready */ } };
     apply();
     wv.addEventListener("dom-ready", apply as EventListener);
     return () => wv.removeEventListener("dom-ready", apply as EventListener);
-  }, [zoom, loadUrl]);
+  }, [hasUrl]);
 
   async function saveConfig(next: { browserUrl: string; previewPort: number | null }) {
     if (ephemeral) return; // extra tabs navigate freely but don't touch saved config
@@ -608,7 +632,6 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, isAct
     navigate(portUrl(port));
   }
 
-  const hasUrl = loadUrl.trim().length > 0;
   // Top frequent sites for the blank new-tab page (recomputed when the tab empties).
   const frequent = useMemo(() => (hasUrl ? [] : suggestions("", 8)), [hasUrl]);
 

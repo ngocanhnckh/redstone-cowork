@@ -1,6 +1,6 @@
 import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, Notification, shell, dialog, clipboard, protocol, net, desktopCapturer, session, webContents as webContentsModule, type Session } from "electron";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { dirname, join, basename } from "node:path";
+import { dirname, join, basename, extname, normalize, sep } from "node:path";
 import { saveConfig, loadConfig, clearConfig } from "./config";
 import * as api from "./api";
 import { getWorkspaceConfig, saveWorkspaceConfig, getSshHost, setSshHost, isLocalMachine, setServerHosts, warmSshMaster } from "./workspace";
@@ -37,10 +37,17 @@ import { IPC } from "../shared/ipc";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
-// The custom scheme that streams the user's background video to the renderer with
-// range support. Must be registered as privileged BEFORE the app is ready.
+// Custom privileged schemes — must be registered BEFORE the app is ready.
+//  · rcw-media — streams the user's background video with range support.
+//  · app       — serves the packaged renderer from a FIXED origin (app://bundle/…)
+//    instead of file://. This is what makes localStorage durable: the unsigned mac
+//    app runs from a randomized App-Translocation path each launch, so a file://
+//    origin (whose storage Chromium keys per-path/opaque) kept "forgetting" the
+//    saved layout, Jira settings and token. A standard+secure custom scheme has a
+//    constant origin regardless of where the .app is mounted, so web storage sticks.
 protocol.registerSchemesAsPrivileged([
   { scheme: "rcw-media", privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
+  { scheme: "app", privileges: { standard: true, secure: true, supportFetchAPI: true } },
 ]);
 
 // ---------------------------------------------------------------------------
@@ -234,7 +241,9 @@ function createWindow(): void {
   if (process.env.ELECTRON_RENDERER_URL) {
     win.loadURL(process.env.ELECTRON_RENDERER_URL);
   } else {
-    win.loadFile(join(here, "../renderer/index.html"));
+    // Load from the fixed app:// origin (see registerSchemesAsPrivileged) — NOT
+    // file:// — so localStorage persists across launches / app-translocation.
+    win.loadURL("app://bundle/index.html");
   }
 }
 
@@ -916,6 +925,11 @@ const NAV_KEYS_JS = `(() => {
 // handled from the renderer.
 app.on("web-contents-created", (_e, contents) => {
   if (contents.getType() !== "webview") return;
+  // Belt-and-suspenders: a guest legitimately carries several forwarded webContents
+  // listeners (loading, navigation, dom-ready, before-input, find, …). The default
+  // cap of 10 tripped MaxListenersExceededWarning spam even at normal usage; raise it
+  // so a genuine leak still surfaces (much higher) but ordinary use stays quiet.
+  contents.setMaxListeners(40);
   // A <webview> guest swallows keydown — it never bubbles to the host window — so
   // forward its keys to the cockpit renderer's shortcut dispatcher too.
   contents.on("before-input-event", forwardShortcut);
@@ -1134,6 +1148,28 @@ app.whenReady().then(async () => {
     if (!p) return new Response("", { status: 404 });
     try {
       return await net.fetch(pathToFileURL(p).toString());
+    } catch {
+      return new Response("", { status: 404 });
+    }
+  });
+
+  // Serve the packaged renderer over the fixed app:// origin (see the privileged-
+  // scheme registration). app://bundle/<path> → the built renderer file; a path
+  // that doesn't resolve to a real asset falls back to index.html (SPA routing).
+  const rendererDir = join(here, "../renderer");
+  protocol.handle("app", async (req) => {
+    try {
+      const rel = decodeURIComponent(new URL(req.url).pathname).replace(/^\/+/, "") || "index.html";
+      // Contain within rendererDir — reject any ../ traversal out of the bundle.
+      const abs = normalize(join(rendererDir, rel));
+      if (abs !== rendererDir && !abs.startsWith(rendererDir + sep)) return new Response("", { status: 403 });
+      try {
+        return await net.fetch(pathToFileURL(abs).toString());
+      } catch {
+        // Missing asset → 404; missing route (no file extension) → index.html.
+        if (extname(abs)) return new Response("", { status: 404 });
+        return await net.fetch(pathToFileURL(join(rendererDir, "index.html")).toString());
+      }
     } catch {
       return new Response("", { status: 404 });
     }
