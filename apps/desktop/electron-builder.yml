@@ -6,6 +6,10 @@ directories:
   output: dist
   buildResources: build
 
+# Restore +x on node-pty's spawn-helper (its prebuild ships it non-executable),
+# otherwise the packaged app throws `posix_spawnp failed` when opening a terminal.
+afterPack: build/afterPack.cjs
+
 # electron-vite emits the app to out/; ship that plus the manifest. Production
 # node_modules (node-pty, the native PTY) are pulled in automatically.
 files:
