@@ -33,13 +33,6 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      # node-gyp (used to compile node-pty) imports distutils, which Python 3.12
-      # removed — pin 3.11 so the native build works on every runner.
-      - name: Setup Python (node-gyp needs distutils)
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -48,14 +41,8 @@ jobs:
       - name: Build shared package
         run: pnpm --filter @rcw/shared build || true
 
-      # node-pty needs the MSVC C++ toolchain to compile; node-gyp doesn't reliably
-      # auto-detect it on the runner, so put the VS build env on PATH first.
-      - name: Set up MSVC (Windows)
-        if: runner.os == 'Windows'
-        uses: ilammy/msvc-dev-cmd@v1
-
-      # electron-builder rebuilds native modules (node-pty) for the Electron ABI
-      # itself via npmRebuild, so no separate electron-rebuild step is needed.
+      # No native compilation: node-pty ships N-API prebuilds and npmRebuild is off,
+      # so no C++ toolchain / Python / MSVC is needed on any runner.
       - name: Build and package
         run: pnpm --filter @rcw/desktop run dist
         env:

@@ -12,6 +12,11 @@ files:
   - out/**/*
   - package.json
   - "!**/*.map"
+  # node-pty's locally-compiled build/ (host-only binary) and Windows debug symbols
+  # aren't needed — the ABI-stable prebuilds/ are what load at runtime. Dropping them
+  # avoids shipping a wrong-platform binary and ~40MB of .pdb bloat.
+  - "!**/node_modules/node-pty/build/**"
+  - "!**/node_modules/node-pty/**/*.pdb"
 
 # node-pty ships a compiled .node binary that cannot live inside the asar archive
 # — it must be unpacked so the OS can dlopen it at runtime. Scope it to node-pty
@@ -19,9 +24,12 @@ files:
 asarUnpack:
   - "**/node_modules/node-pty/**"
 
-# Rebuild native modules (node-pty) against the bundled Electron's ABI at package
-# time. CI also runs electron-rebuild explicitly before this as a belt-and-braces.
-npmRebuild: true
+# DON'T recompile native modules. node-pty ships N-API prebuilds (one pty.node per
+# platform, ABI-stable across Node AND Electron) for darwin + win32, so recompiling
+# is unnecessary — and recompiling is the ONLY thing that needs a per-platform C++
+# toolchain. With this off, every target (including Windows) packages from the Mac
+# with no Visual Studio / node-gyp / Python involved.
+npmRebuild: false
 
 mac:
   category: public.app-category.developer-tools
