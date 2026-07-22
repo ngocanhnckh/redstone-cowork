@@ -627,6 +627,12 @@ function forwardShortcut(event: Electron.Event, input: Electron.Input): void {
 }
 ipcMain.handle(IPC.keybindingsSync, (_e, a: { accels: string[] }) => { boundAccels = new Set(a?.accels ?? []); return { ok: true }; });
 
+// Pull keyboard focus to the host window content (away from any focused <webview>
+// or terminal guest). The session switcher calls this on open so the modifier
+// keyUp that commits it actually reaches the renderer — a guest swallows keyUp,
+// which is what made the switcher hang until its fallback timer fired.
+ipcMain.on(IPC.focusMainWindow, () => { try { mainWinWC?.focus(); } catch { /* window gone */ } });
+
 let displayPickResolver: ((c: { kind: string; id: string } | null) => void) | null = null;
 ipcMain.handle(IPC.displayMediaPick, (_e, a: { kind: string; id: string }) => { displayPickResolver?.(a); return { ok: true }; });
 ipcMain.handle(IPC.displayMediaCancel, () => { displayPickResolver?.(null); return { ok: true }; });

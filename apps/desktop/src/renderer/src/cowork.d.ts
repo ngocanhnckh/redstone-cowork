@@ -163,6 +163,7 @@ declare global {
       openBrowserWindow(url: string, partition?: string): Promise<{ ok: boolean; error?: string }>;
       onGuestKey(cb: (k: { type: "keyDown" | "keyUp"; key: string; ctrl: boolean; meta: boolean; alt: boolean; shift: boolean }) => void): () => void;
       syncKeybindings(accels: string[]): Promise<{ ok: boolean }>;
+      focusMainWindow(): void;
 
       // Appearance — custom background image + macOS fullscreen-keeps-wallpaper.
       chooseBgImage(): Promise<{ ok: boolean; dataUrl?: string; error?: string }>;

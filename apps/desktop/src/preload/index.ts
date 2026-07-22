@@ -258,6 +258,8 @@ contextBridge.exposeInMainWorld("cowork", {
   },
   // Tell main which accelerators are bound, so it can preventDefault them at the input layer.
   syncKeybindings: (accels: string[]): Promise<{ ok: boolean }> => ipcRenderer.invoke(IPC.keybindingsSync, { accels }),
+  /** Move keyboard focus to the host window (off any webview/terminal guest). */
+  focusMainWindow: (): void => ipcRenderer.send(IPC.focusMainWindow),
   // Main forwards Cmd/Ctrl+F (and Esc) from a focused browser <webview> guest so
   // the owning panel can open/close its in-page find bar. `guestId` is the guest's
   // webContents id, matched against the webview's getWebContentsId().

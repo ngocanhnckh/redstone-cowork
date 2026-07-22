@@ -84,6 +84,7 @@ export const IPC = {
   browserOpenWindow: "api:browser:open-window",
   guestKey: "api:guest:key",
   keybindingsSync: "api:keybindings:sync",
+  focusMainWindow: "api:window:focus-main",
   extensionSetEnabled: "api:extensions:enabled",
   extensionRemove: "api:extensions:remove",
   vaultAvailable: "api:vault:available",

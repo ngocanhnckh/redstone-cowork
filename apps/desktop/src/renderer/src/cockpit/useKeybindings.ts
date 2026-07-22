@@ -105,7 +105,14 @@ export function useKeybindings(): void {
         const hold = holdModifier(st.keybindings[action] ?? "");
         if (!hold) { st.cycleFocus(dir); return; }
         if (st.switcher) st.moveSwitcher(dir);
-        else { st.openSwitcher(dir); holdKeyRef.current = hold; }
+        else {
+          st.openSwitcher(dir); holdKeyRef.current = hold;
+          // Grab focus onto the host window so the modifier keyUp that commits the
+          // switcher reaches us instantly — a focused webview/terminal guest
+          // swallows keyUp, which is why it used to hang until the fallback timer.
+          try { window.cowork.focusMainWindow(); } catch { /* ignore */ }
+          try { (document.activeElement as HTMLElement | null)?.blur?.(); } catch { /* ignore */ }
+        }
         armHoldTimeout(); // (re)start the no-release backstop on open AND each move
         return;
       }
