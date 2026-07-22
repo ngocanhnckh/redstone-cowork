@@ -60,11 +60,18 @@ export function useKeybindings(): void {
     holdKeyRef.current = null;
     const st = useStore.getState();
     if (!st.switcher) return;
-    if (how === "commit") st.commitSwitcher(); else st.cancelSwitcher();
+    if (how === "cancel") { st.cancelSwitcher(); return; }
+    st.commitSwitcher();
+    // Landed on a session → put the cursor in its chat box so you can type right
+    // away. Deferred so the newly-focused session's dock has rendered first.
+    setTimeout(() => window.dispatchEvent(new CustomEvent("rcw-focus-chat")), 60);
   };
   const armHoldTimeout = (): void => {
     if (holdTimer.current) clearTimeout(holdTimer.current);
-    holdTimer.current = setTimeout(() => { if (useStore.getState().switcher) closeSwitcher("commit"); }, 4000);
+    // Short: the keyUp/focus paths commit instantly when they fire; this backstop
+    // just makes sure a missed release settles fast (resets on every Tab move, so
+    // tabbing through sessions keeps it open).
+    holdTimer.current = setTimeout(() => { if (useStore.getState().switcher) closeSwitcher("commit"); }, 400);
   };
 
   // Tell main which accelerators are bound so it can preventDefault them (and keep it

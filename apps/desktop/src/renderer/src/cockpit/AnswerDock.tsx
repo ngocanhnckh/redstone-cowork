@@ -18,6 +18,18 @@ export default function AnswerDock({ decision, working, sessionId: sessionIdProp
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const idleInputRef = useRef<HTMLTextAreaElement>(null);
   const [sent, setSent] = useState(false);
+
+  // After switching sessions (Ctrl+Tab), drop the cursor straight into whichever
+  // chat box is showing — the message box when idle, the reply box on a decision —
+  // but only the on-screen one (offsetParent is null for a hidden/other dock).
+  useEffect(() => {
+    const onFocusChat = () => {
+      const el = idleInputRef.current ?? inputRef.current;
+      if (el && el.offsetParent !== null) { el.focus(); }
+    };
+    window.addEventListener("rcw-focus-chat", onFocusChat);
+    return () => window.removeEventListener("rcw-focus-chat", onFocusChat);
+  }, []);
   const [idleSent, setIdleSent] = useState(false);
   // Answering state: which option is in flight, an error if a resolve failed, and
   // the per-question picks for a multi-question / multiSelect form.
