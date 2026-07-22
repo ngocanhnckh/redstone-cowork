@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 FROM node:22-alpine AS build
 RUN corepack enable
 WORKDIR /repo
@@ -5,14 +6,16 @@ COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY packages/shared/package.json packages/shared/
 COPY apps/api/package.json apps/api/
 COPY apps/hook-cli/package.json apps/hook-cli/
-RUN pnpm install --frozen-lockfile --filter @rcw/api... --filter @rcw/hook-cli...
+RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
+    pnpm install --frozen-lockfile --filter @rcw/api... --filter @rcw/hook-cli...
 COPY tsconfig.base.json ./
 COPY packages/shared packages/shared
 COPY apps/api apps/api
 COPY apps/hook-cli apps/hook-cli
 RUN pnpm --filter @rcw/shared build && pnpm --filter @rcw/api build
 RUN pnpm --filter @rcw/hook-cli build:bundle
-RUN pnpm --filter @rcw/api deploy --prod --legacy /out
+RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
+    pnpm --filter @rcw/api deploy --prod --legacy /out
 
 FROM node:22-alpine
 WORKDIR /app
