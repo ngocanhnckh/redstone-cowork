@@ -113,6 +113,7 @@ declare global {
       sendTerminalInput(a: { id: string; data: string }): void;
       resizeTerminal(a: { id: string; cols: number; rows: number }): void;
       killTerminal(id: string): Promise<{ ok: boolean }>;
+      openTerminalWindow(a: { sessionId: string; cwd: string; machine: string; title?: string }): Promise<{ ok: boolean }>;
       onTerminalData(cb: (a: { id: string; data: string }) => void): () => void;
       onTerminalExit(cb: (a: { id: string }) => void): () => void;
 

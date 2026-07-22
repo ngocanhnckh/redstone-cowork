@@ -6,6 +6,7 @@
 import buttonUrl from "./assets/sfx/button.wav?url";
 import messageUrl from "./assets/sfx/message.wav?url";
 import loadingUrl from "./assets/sfx/loading.wav?url";
+import thinkingUrl from "./assets/sfx/thinking.mp3?url";
 import { loadAppearance } from "./appearance";
 
 export type SfxName = "button" | "message" | "loading";
@@ -34,8 +35,38 @@ let volume = clamp01(loadAppearance().sfxVolume / 100);
 if (typeof window !== "undefined") {
   window.addEventListener("rcw-appearance", (e) => {
     const d = (e as CustomEvent).detail as { sfxVolume?: number } | undefined;
-    if (d && typeof d.sfxVolume === "number") volume = clamp01(d.sfxVolume / 100);
+    if (d && typeof d.sfxVolume === "number") {
+      volume = clamp01(d.sfxVolume / 100);
+      // Reflect the new level onto (or silence) a running thinking loop live.
+      if (thinkingEl) {
+        thinkingEl.volume = volume;
+        if (volume <= 0) thinkingEl.pause();
+        else if (thinkingWanted && thinkingEl.paused) thinkingEl.play().catch(() => {});
+      }
+    }
   });
+}
+
+// The "Claude is thinking" ambience loop — a single looping element toggled on/off
+// while the focused session works (see setThinking). Kept separate from the one-shot
+// cue pool. `thinkingWanted` remembers intent so a volume change can resume it.
+let thinkingEl: HTMLAudioElement | null = null;
+let thinkingWanted = false;
+
+/** Start/stop the looping "thinking" ambience. On while the focused session works. */
+export function setThinking(on: boolean): void {
+  thinkingWanted = on;
+  if (on) {
+    if (volume <= 0) return; // muted → don't start; a later volume bump resumes it
+    if (!thinkingEl) {
+      thinkingEl = new Audio(thinkingUrl);
+      thinkingEl.loop = true;
+    }
+    thinkingEl.volume = volume;
+    if (thinkingEl.paused) thinkingEl.play().catch(() => {});
+  } else if (thinkingEl && !thinkingEl.paused) {
+    thinkingEl.pause();
+  }
 }
 
 // Rate-limit each sound so a burst (e.g. many sessions completing at once, or a
@@ -67,4 +98,21 @@ export function playSfx(name: SfxName): void {
  *  limit and the saved level so the user hears exactly what they're setting. */
 export function previewSfx(name: SfxName, vol01: number): void {
   playAt(name, clamp01(vol01));
+}
+
+// Install the global UI cues on THIS window. Called once per window (from main.tsx)
+// so both the cockpit AND pop-out terminal windows get them. Idempotent-guarded.
+// The click sound fires on real buttons; the key sound fires ONLY on Enter (i.e.
+// sending a message / submitting) — NOT on every keystroke.
+let installed = false;
+export function installGlobalSfx(): void {
+  if (installed || typeof window === "undefined") return;
+  installed = true;
+  window.addEventListener("click", (e) => {
+    const el = e.target as HTMLElement | null;
+    if (el && el.closest("button, [role=button]")) playSfx("button");
+  }, { capture: true });
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.repeat) playSfx("button");
+  }, { capture: true });
 }

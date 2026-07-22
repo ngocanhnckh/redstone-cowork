@@ -166,6 +166,9 @@ contextBridge.exposeInMainWorld("cowork", {
     ipcRenderer.send(IPC.terminalResize, a),
   killTerminal: (id: string): Promise<{ ok: boolean }> =>
     ipcRenderer.invoke(IPC.terminalKill, { id }),
+  /** Pop a terminal out into its own OS window (independent shell on the same host). */
+  openTerminalWindow: (a: { sessionId: string; cwd: string; machine: string; title?: string }): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke(IPC.terminalWindowOpen, a),
   onTerminalData: (cb: (a: { id: string; data: string }) => void): (() => void) => {
     const handler = (_e: unknown, a: { id: string; data: string }) => cb(a);
     ipcRenderer.on(IPC.terminalData, handler);

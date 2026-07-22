@@ -247,6 +247,50 @@ function createWindow(): void {
   }
 }
 
+// Pop-out terminal windows — each is a small standalone OS window that renders ONLY
+// a terminal (the renderer routes on the `#term=` hash), with its own independent
+// PTY (unique id), on the session's host/cwd. Tracked so they close cleanly.
+let termWinSeq = 0;
+const termWindows = new Set<BrowserWindow>();
+function openTerminalWindow(a: { sessionId: string; cwd: string; machine: string; title?: string }): void {
+  const ptyId = `${a.sessionId || "term"}::win::${++termWinSeq}`;
+  const win = new BrowserWindow({
+    width: 900,
+    height: 560,
+    minWidth: 420,
+    minHeight: 240,
+    show: false,
+    title: a.title || "Terminal",
+    titleBarStyle: "hiddenInset",
+    trafficLightPosition: { x: 12, y: 12 },
+    vibrancy: "under-window",
+    visualEffectState: "active",
+    transparent: true,
+    backgroundColor: "#00000000",
+    webPreferences: {
+      preload: join(here, "../preload/index.mjs"),
+      sandbox: false,
+      autoplayPolicy: "no-user-gesture-required",
+    },
+  });
+  if (process.platform === "darwin") win.setVibrancy("under-window");
+  win.webContents.on("before-input-event", forwardShortcut);
+  win.on("ready-to-show", () => win.show());
+  termWindows.add(win);
+  win.on("closed", () => {
+    termWindows.delete(win);
+    // Reap the pop-out's PTY so its shell doesn't linger after the window is gone.
+    killTerminal(ptyId);
+  });
+
+  const hash = "#term=" + encodeURIComponent(JSON.stringify({ ...a, ptyId }));
+  if (process.env.ELECTRON_RENDERER_URL) {
+    win.loadURL(process.env.ELECTRON_RENDERER_URL + hash);
+  } else {
+    win.loadURL("app://bundle/index.html" + hash);
+  }
+}
+
 let stopStream: (() => void) | null = null;
 let hostTargetsTimer: NodeJS.Timeout | null = null;
 
@@ -448,6 +492,10 @@ ipcMain.on(IPC.terminalResize, (_e, a: { id: string; cols: number; rows: number 
 );
 ipcMain.handle(IPC.terminalKill, (_e, a: { id: string }) => {
   killTerminal(a.id);
+  return { ok: true };
+});
+ipcMain.handle(IPC.terminalWindowOpen, (_e, a: { sessionId: string; cwd: string; machine: string; title?: string }) => {
+  openTerminalWindow(a);
   return { ok: true };
 });
 

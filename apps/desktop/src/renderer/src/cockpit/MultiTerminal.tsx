@@ -57,7 +57,14 @@ export default function MultiTerminal({ sessionId, cwd, machine }: { sessionId: 
             </span>
           );
         })}
-        <button onClick={addTab} title="New terminal" style={{ ...tabBtn, background: "transparent", color: "var(--text-soft)", border: "1px dashed var(--border-strong)" }}>+ new</button>
+        <button onClick={addTab} title="New terminal tab" style={{ ...tabBtn, background: "transparent", color: "var(--text-soft)", border: "1px dashed var(--border-strong)" }}>+ tab</button>
+        <button
+          onClick={() => window.cowork.openTerminalWindow({ sessionId, cwd, machine, title: `${machine} · terminal` })}
+          title="Open a terminal in its own window (drag to another monitor)"
+          style={{ ...tabBtn, background: "transparent", color: "var(--text-soft)", border: "1px solid var(--border)" }}
+        >
+          ⤢ window
+        </button>
         <span style={{ flex: 1 }} />
         <button onClick={() => restartTab(active)} title="Restart this shell" style={{ ...tabBtn, background: "transparent", color: "var(--text-soft)", border: "1px solid var(--border)" }}>⟳ restart</button>
       </div>

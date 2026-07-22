@@ -65,6 +65,7 @@ export const IPC = {
   terminalResize: "api:terminal:resize",
   terminalKill: "api:terminal:kill",
   terminalExit: "api:terminal:exit",
+  terminalWindowOpen: "api:terminal:window:open",
   dockerLogStart: "api:dockerlog:start",
   dockerLogData: "api:dockerlog:data",
   dockerLogExit: "api:dockerlog:exit",

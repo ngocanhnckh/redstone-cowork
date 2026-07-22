@@ -12,7 +12,7 @@ import {
   DOCK_POSITIONS,
   DOCK_LABEL,
 } from "../appearance";
-import { previewSfx } from "../sfx";
+import { previewSfx, setThinking } from "../sfx";
 import {
   type AutoLayout,
   type ScreenClass,
@@ -393,9 +393,12 @@ export default function SettingsPanel() {
           suffix="%"
           onChange={(v) => patchAppr({ ambientVolume: v })}
         />
+        <p className="faint" style={{ fontSize: 11, margin: "0 2px 8px", lineHeight: 1.5 }}>
+          Cues: a click on buttons &amp; on Enter (sending), a chime when Claude replies, and a looping ambience while Claude is thinking.
+        </p>
         <div style={{ display: "flex", gap: 8, margin: "0 2px 18px" }}>
           <button onClick={() => previewSfx("message", appr.sfxVolume / 100)} style={{ ...iconBtn, width: "auto", padding: "7px 12px", borderRadius: 999, fontSize: 12 }}>▶ Test message</button>
-          <button onClick={() => previewSfx("loading", appr.sfxVolume / 100)} style={{ ...iconBtn, width: "auto", padding: "7px 12px", borderRadius: 999, fontSize: 12 }}>▶ Test loading</button>
+          <button onClick={() => { setThinking(true); setTimeout(() => setThinking(false), 3000); }} style={{ ...iconBtn, width: "auto", padding: "7px 12px", borderRadius: 999, fontSize: 12 }}>▶ Test thinking</button>
         </div>
 
         <SwitchRow
