@@ -3,6 +3,7 @@ import { useStore } from "../store";
 import { wireOpenTab } from "./openTabIntercept";
 import { fillJs, SAVE_DETECT_JS, decodeCred } from "./credAutofill";
 import { recordVisit, updateTitle, suggestions, type HistEntry } from "./browserHistory";
+import { playSfx } from "../sfx";
 import { wireAnnotate, annotateStatusJs, type AnnotateEvent, type AnnotateMode, type Box } from "./browserAnnotate";
 import { buildDomPrompt, buildRegionPrompt, shotPaths, stamp, type DomPin } from "./pointPrompt";
 
@@ -269,7 +270,7 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, isAct
   useEffect(() => {
     const wv = webviewRef.current;
     if (!wv) return;
-    const start = () => setLoading(true);
+    const start = () => { setLoading(true); playSfx("loading"); }; // hi-tech loading signal
     const stop = () => setLoading(false);
     wv.addEventListener("did-start-loading", start as EventListener);
     wv.addEventListener("did-stop-loading", stop as EventListener);
@@ -966,25 +967,87 @@ const LOADER_CSS = `
   text-transform:uppercase; color: rgb(var(--primary-soft)); text-shadow: 0 0 12px rgb(var(--primary-soft) / 0.6); }
 .rcwl-label b { color: var(--text-soft); font-weight:500; letter-spacing:.12em; text-transform:none; }
 .rcwl-dot { width:6px; height:6px; border-radius:50%; background: rgb(var(--accent)); box-shadow:0 0 10px 1px rgb(var(--accent)); animation: rcwl-blink 1s steps(1) infinite; }
+/* layering: hex stream sits behind the reticle/readout, scanline rides on top */
+.rcwl-reticle, .rcwl-track, .rcwl-readout, .rcwl-label { position:relative; z-index:2; }
+/* running byte text — two mirrored columns of scrolling hex, faded toward center */
+@keyframes rcwl-scanline { 0% { top:-5%; } 100% { top:105%; } }
+.rcwl-scan { position:absolute; left:0; right:0; height:2px; z-index:3; pointer-events:none; opacity:.65;
+  background: linear-gradient(90deg, transparent, rgb(var(--primary-soft) / 0.7), transparent);
+  box-shadow: 0 0 18px 2px rgb(var(--primary-soft) / 0.4); animation: rcwl-scanline 2.3s linear infinite; }
+.rcwl-stream { position:absolute; top:0; bottom:0; width:210px; margin:0; padding:12px 8px; z-index:1; pointer-events:none;
+  font-family:var(--font-mono); font-size:10px; line-height:1.55; letter-spacing:.08em; white-space:pre; overflow:hidden;
+  color: rgb(var(--primary-soft)); opacity:.22; text-shadow:0 0 8px rgb(var(--primary-soft) / 0.5); }
+.rcwl-stream--l { left:0;  -webkit-mask-image: linear-gradient(90deg,#000 0%,#000 45%,transparent 100%); mask-image: linear-gradient(90deg,#000 0%,#000 45%,transparent 100%); }
+.rcwl-stream--r { right:0; text-align:right; -webkit-mask-image: linear-gradient(90deg,transparent 0%,#000 55%,#000 100%); mask-image: linear-gradient(90deg,transparent 0%,#000 55%,#000 100%); }
+/* big centered % inside the reticle */
+.rcwl-pct { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); z-index:3;
+  font-family:var(--font-mono); font-size:30px; font-weight:600; letter-spacing:.02em; line-height:1;
+  color:#eafcff; text-shadow:0 0 22px rgb(var(--primary-soft) / 0.85); }
+.rcwl-pct i { font-size:12px; font-style:normal; opacity:.55; margin-left:1px; }
+/* running hex readout line under the progress bar */
+.rcwl-readout { display:flex; align-items:center; gap:9px; font-size:10.5px; letter-spacing:.16em;
+  color: rgb(var(--primary-soft) / 0.92); text-shadow:0 0 10px rgb(var(--primary-soft) / 0.4); }
+.rcwl-rx { color: rgb(var(--accent)); font-weight:600; letter-spacing:.1em; }
+.rcwl-kb { color: var(--text-soft); }
 `;
 
 /** A self-contained sci-fi loading overlay shown while a page is in flight. */
+const LOADER_PHASES = ["Establishing link", "Negotiating TLS", "Fetching payload", "Decoding stream"];
+
+/** A row of random hex bytes ("4A F2 8B …") — the streaming data-terminal effect. */
+function hexRow(cols: number): string {
+  let s = "";
+  for (let i = 0; i < cols; i++) {
+    s += Math.floor(Math.random() * 256).toString(16).padStart(2, "0").toUpperCase();
+    s += (i + 1) % 4 === 0 ? "  " : " ";
+  }
+  return s.trimEnd();
+}
+
 function BrowserLoader({ url }: { url: string }) {
+  // Indeterminate but ALIVE: a % that ramps toward ~96, a cycling status phase, a
+  // scrolling hex backdrop + a fast-changing hex readout, and a climbing RX byte
+  // counter — a data-terminal handshake that matches the beeping loading signal.
+  const [pct, setPct] = useState(4);
+  const [phase, setPhase] = useState(0);
+  const [rows, setRows] = useState<string[]>(() => Array.from({ length: 16 }, () => hexRow(14)));
+  const [wire, setWire] = useState(() => hexRow(8));
+  const [rx, setRx] = useState(0);
+  useEffect(() => {
+    const ramp = setInterval(() => setPct((p) => (p >= 96 ? 96 : p + Math.max(1, Math.round((96 - p) * 0.09)))), 170);
+    const step = setInterval(() => setPhase((i) => (i + 1) % LOADER_PHASES.length), 850);
+    const feed = setInterval(() => setRows((r) => [...r.slice(1), hexRow(14)]), 80);
+    const flick = setInterval(() => setWire(hexRow(8)), 90);
+    const bytes = setInterval(() => setRx((b) => b + Math.floor(Math.random() * 1100 + 160)), 90);
+    return () => { clearInterval(ramp); clearInterval(step); clearInterval(feed); clearInterval(flick); clearInterval(bytes); };
+  }, []);
+  const kb = (rx / 1024).toFixed(2);
+
   return (
     <div className="rcwl no-scrollbar">
       <style>{LOADER_CSS}</style>
       <span className="rcwl-grid" />
+      {/* streaming hex data — the "running byte text", two mirrored columns */}
+      <pre className="rcwl-stream rcwl-stream--l" aria-hidden>{rows.join("\n")}</pre>
+      <pre className="rcwl-stream rcwl-stream--r" aria-hidden>{[...rows].reverse().join("\n")}</pre>
+      <span className="rcwl-scan" />
+
       <div className="rcwl-reticle">
         <span className="rcwl-sweep" />
         <span className="rcwl-ring r1" />
         <span className="rcwl-ring r2" />
         <span className="rcwl-ring r3" />
-        <span className="rcwl-core" />
+        <span className="rcwl-pct">{pct}<i>%</i></span>
       </div>
+
       <div className="rcwl-track"><i /></div>
+
+      <div className="rcwl-readout mono">
+        <span className="rcwl-rx">RX</span> {wire} <span className="rcwl-kb">{kb} KB</span>
+      </div>
       <div className="rcwl-label">
         <span className="rcwl-dot" />
-        Establishing link<b style={{ marginLeft: 4 }}>{hostLabel(url)}</b>
+        {LOADER_PHASES[phase]}<b style={{ marginLeft: 4 }}>{hostLabel(url)}</b>
       </div>
     </div>
   );
