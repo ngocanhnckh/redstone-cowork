@@ -133,13 +133,4 @@ export const IPC = {
   llmDeleteEndpoint: "api:llm:endpoint:delete",
   llmAgent: "api:llm:agent",
   llmAgentEnabled: "api:llm:agent:enabled",
-  // Offline mode — drive Claude sessions on remote hosts over plain SSH, no server.
-  offlineHostsList: "api:offline:hosts:list",
-  offlineHostsSet: "api:offline:hosts:set",
-  offlineSshConfig: "api:offline:sshconfig",
-  offlineScan: "api:offline:scan",
-  offlineAnswer: "api:offline:answer",
-  offlineSendKey: "api:offline:sendkey",
-  offlineHome: "api:offline:home",
-  offlineStart: "api:offline:start",
 } as const;

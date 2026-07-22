@@ -33,17 +33,6 @@ import { chooseBgImage, getBgImage, clearBgImage, setSimpleFullscreen, isFullscr
 import { registerSessionBrowser, unregisterSessionBrowser, startInspect, stopInspect, stopAllInspectors, getResponseBody } from "./devtools";
 import { loadEnabledExtensions, listExtensions, chooseAndAddExtension, installFromWebStore, setExtensionEnabled, removeExtension, browserSession } from "./browser-extensions";
 import { vaultAvailable, listCredentials, getCredentialForOrigin, saveCredential, deleteCredential } from "./browser-vault";
-import {
-  readOfflineHosts,
-  writeOfflineHosts,
-  sshConfigHostCandidates,
-  scanAll,
-  answerOffline,
-  sendKeyOffline,
-  startOffline,
-  homeOffline,
-  type OfflineHost,
-} from "./offline";
 import { IPC } from "../shared/ipc";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -768,20 +757,6 @@ ipcMain.handle(IPC.vaultList, () => listCredentials());
 ipcMain.handle(IPC.vaultGetForOrigin, (_e, a: { origin: string }) => getCredentialForOrigin(a.origin));
 ipcMain.handle(IPC.vaultSave, (_e, a: { origin: string; username: string; password: string }) => saveCredential(a.origin, a.username, a.password));
 ipcMain.handle(IPC.vaultDelete, (_e, a: { origin: string; username: string }) => deleteCredential(a.origin, a.username));
-
-// Offline mode — discover + drive Claude sessions over plain SSH (no cowork server).
-// See ./offline for the provider core; these just relay it across IPC.
-ipcMain.handle(IPC.offlineHostsList, () => readOfflineHosts());
-ipcMain.handle(IPC.offlineHostsSet, (_e, a: { hosts: OfflineHost[] }) => {
-  writeOfflineHosts(a.hosts);
-  return { ok: true };
-});
-ipcMain.handle(IPC.offlineSshConfig, () => sshConfigHostCandidates());
-ipcMain.handle(IPC.offlineScan, (_e, a: { hosts: OfflineHost[] }) => scanAll(a.hosts));
-ipcMain.handle(IPC.offlineAnswer, (_e, a: { host: string; tmux: string; text: string }) => answerOffline(a.host, a.tmux, a.text));
-ipcMain.handle(IPC.offlineSendKey, (_e, a: { host: string; tmux: string; keys: string }) => sendKeyOffline(a.host, a.tmux, a.keys));
-ipcMain.handle(IPC.offlineHome, (_e, a: { host: string }) => homeOffline(a.host));
-ipcMain.handle(IPC.offlineStart, (_e, a: { host: OfflineHost; cwd: string; seed: number; resume?: boolean }) => startOffline(a.host, a.cwd, a.seed, { resume: a.resume }));
 
 // File browser — list / read / write, local or over ssh. Main never throws across IPC.
 ipcMain.handle(IPC.filesList, (_e, a: { cwd: string; machine: string; dir: string }) =>

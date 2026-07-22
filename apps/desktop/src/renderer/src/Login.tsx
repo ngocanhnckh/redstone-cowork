@@ -1,6 +1,4 @@
 import { useEffect, useState } from "react";
-import { useStore } from "./store";
-import OfflinePicker from "./OfflinePicker";
 
 interface LoginProps {
   onConnected: () => void;
@@ -29,9 +27,6 @@ export default function Login({ onConnected }: LoginProps) {
   const [password, setPassword] = useState("");
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState("");
-
-  // Offline mode (direct SSH, no cowork server) — OfflinePicker manages the hosts.
-  const [offlineOpen, setOfflineOpen] = useState(false);
 
   // Ask the server (as the URL changes) whether it offers Redstone org sign-in.
   useEffect(() => {
@@ -137,37 +132,6 @@ export default function Login({ onConnected }: LoginProps) {
           </button>
           {error && <p className="mono" style={{ color: "#e0736a", fontSize: 12.5, marginTop: 14 }}>{error}</p>}
         </form>
-
-        {/* ---- Offline mode: drive Claude sessions on remote hosts over plain SSH ---- */}
-        <div style={{ marginTop: 26, paddingTop: 22, borderTop: "1px solid var(--border, rgba(255,255,255,0.12))" }}>
-          {!offlineOpen ? (
-            <button
-              type="button"
-              onClick={() => setOfflineOpen(true)}
-              style={{
-                width: "100%", padding: "11px 0", borderRadius: 10, fontSize: 13.5, fontWeight: 600, cursor: "pointer",
-                border: "1px solid var(--border, rgba(255,255,255,0.12))", background: "transparent", color: "inherit",
-              }}
-            >
-              Work offline (direct SSH) →
-            </button>
-          ) : (
-            <>
-              <span className="kicker" style={{ display: "block", marginBottom: 12 }}>Work offline · direct SSH</span>
-              <OfflinePicker onDone={() => setOfflineOpen(false)} />
-              <button
-                type="button"
-                onClick={() => setOfflineOpen(false)}
-                style={{
-                  marginTop: 12, width: "100%", padding: "9px 0", borderRadius: 10, fontSize: 13, cursor: "pointer",
-                  border: "1px solid var(--border, rgba(255,255,255,0.12))", background: "transparent", color: "var(--text-soft, rgba(255,255,255,0.55))",
-                }}
-              >
-                Cancel
-              </button>
-            </>
-          )}
-        </div>
       </div>
     </div>
   );

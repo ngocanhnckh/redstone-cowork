@@ -1,5 +1,4 @@
 import ScreenSharePicker from "./ScreenSharePicker";
-import OfflinePicker from "../OfflinePicker";
 import { useEffect, useState, type CSSProperties } from "react";
 import { useStore } from "../store";
 import { startCockpit } from "../store";
@@ -35,17 +34,6 @@ export default function Cockpit() {
   const toggleAssist = useStore((s) => s.toggleAssist);
   const toggleSettings = useStore((s) => s.toggleSettings);
   const toggleCaps = useStore((s) => s.toggleCaps);
-  const offline = useStore((s) => s.offline);
-  const exitOffline = useStore((s) => s.exitOffline);
-  const offlineScope = useStore((s) => s.offlineScope);
-  const startOfflineSession = useStore((s) => s.startOfflineSession);
-  const [offlineModal, setOfflineModal] = useState(false);
-  const [starting, setStarting] = useState(false);
-
-  const startSession = async (resume: boolean) => {
-    setStarting(true);
-    try { await startOfflineSession(resume); } finally { setStarting(false); }
-  };
 
   const appr = useAppearance();
 
@@ -183,94 +171,6 @@ export default function Cockpit() {
           >
             redstone cowork
           </span>
-          {offline && (
-            <span
-              style={{
-                ...noDrag,
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                fontFamily: "var(--font-mono)",
-                fontSize: 10.5,
-                letterSpacing: "0.1em",
-                color: "rgb(var(--accent))",
-                border: "1px solid var(--border)",
-                borderRadius: 999,
-                padding: "2px 8px",
-              }}
-              title="Direct SSH — no cowork server"
-            >
-              ● OFFLINE
-              <button
-                onClick={exitOffline}
-                title="Exit offline mode"
-                style={{
-                  ...noDrag,
-                  border: 0,
-                  background: "transparent",
-                  color: "var(--text-soft)",
-                  cursor: "pointer",
-                  fontSize: 10.5,
-                  fontFamily: "var(--font-mono)",
-                  padding: 0,
-                }}
-              >
-                Exit
-              </button>
-            </span>
-          )}
-          {offline && offlineScope && (
-            <>
-              <span
-                className="mono"
-                title={offlineScope.folder}
-                style={{ ...noDrag, fontSize: 10.5, color: "var(--text-soft)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 220, direction: "rtl", textAlign: "left" }}
-              >
-                {offlineScope.folder}
-              </span>
-              <button
-                onClick={() => startSession(true)}
-                disabled={starting}
-                title="Resume the folder's last Claude conversation (claude --continue) in a new tmux session"
-                style={{
-                  ...noDrag,
-                  fontFamily: "var(--font-mono)", fontSize: 10.5, letterSpacing: "0.06em",
-                  color: "rgb(var(--accent))", border: "1px solid var(--border)", borderRadius: 999,
-                  padding: "2px 9px", background: "transparent", cursor: starting ? "wait" : "pointer",
-                }}
-              >
-                ＋ Resume here
-              </button>
-              <button
-                onClick={() => startSession(false)}
-                disabled={starting}
-                title="Start a fresh Claude session in this folder"
-                style={{
-                  ...noDrag,
-                  fontFamily: "var(--font-mono)", fontSize: 10.5, letterSpacing: "0.06em",
-                  color: "var(--text-soft)", border: "1px solid var(--border)", borderRadius: 999,
-                  padding: "2px 9px", background: "transparent", cursor: starting ? "wait" : "pointer",
-                }}
-              >
-                fresh
-              </button>
-            </>
-          )}
-          {!offline && (
-            <button
-              onClick={() => setOfflineModal(true)}
-              title="Work offline — drive Claude sessions over direct SSH, no server"
-              style={{
-                ...noDrag,
-                display: "inline-flex", alignItems: "center", gap: 5,
-                fontFamily: "var(--font-mono)", fontSize: 10.5, letterSpacing: "0.08em",
-                color: "var(--text-soft)", border: "1px solid var(--border)", borderRadius: 999,
-                padding: "2px 9px", background: "transparent", cursor: "pointer",
-              }}
-            >
-              ⌁ Go offline
-            </button>
-          )}
           <div style={{ flex: 1 }} />
           {/* Connection settings */}
           <button
@@ -445,24 +345,6 @@ export default function Cockpit() {
       <SettingsPanel />
       <CapsModal />
       <SessionSwitcher />
-      {offlineModal && (
-        <div
-          onClick={() => setOfflineModal(false)}
-          style={{ position: "fixed", inset: 0, zIndex: 5000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="glass-menu"
-            style={{ width: 460, maxWidth: "92vw", borderRadius: 16, border: "1px solid var(--border-strong)", boxShadow: "0 30px 80px rgba(0,0,0,0.6)", padding: 22, background: "color-mix(in srgb, var(--app-panel) 96%, transparent)" }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 14 }}>
-              <span className="kicker">Work offline · direct SSH</span>
-              <button onClick={() => setOfflineModal(false)} title="Close" style={{ border: 0, background: "transparent", color: "var(--text-soft)", cursor: "pointer", fontSize: 15 }}>×</button>
-            </div>
-            <OfflinePicker onDone={() => setOfflineModal(false)} />
-          </div>
-        </div>
-      )}
     </div>
   );
 }

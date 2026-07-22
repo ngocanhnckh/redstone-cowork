@@ -1,7 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
 import { IPC } from "../shared/ipc";
 import type { SshSetupResult } from "../main/ssh-setup";
-import type { OfflineHost, OfflineSession } from "../main/offline";
 
 contextBridge.exposeInMainWorld("cowork", {
   // Config
@@ -466,22 +465,6 @@ contextBridge.exposeInMainWorld("cowork", {
     modelId?: string;
   }): Promise<{ text: string; steps: Array<{ tool: string; args: string; result: string }> }> =>
     ipcRenderer.invoke(IPC.llmAgent, a),
-
-  // Offline mode (direct SSH, no cowork server)
-  offlineHostsList: (): Promise<OfflineHost[]> => ipcRenderer.invoke(IPC.offlineHostsList),
-  offlineHostsSet: (hosts: OfflineHost[]): Promise<{ ok: true }> =>
-    ipcRenderer.invoke(IPC.offlineHostsSet, { hosts }),
-  offlineSshConfig: (): Promise<string[]> => ipcRenderer.invoke(IPC.offlineSshConfig),
-  offlineScan: (hosts: OfflineHost[]): Promise<{ sessions: OfflineSession[]; errors: Record<string, string> }> =>
-    ipcRenderer.invoke(IPC.offlineScan, { hosts }),
-  offlineAnswer: (a: { host: string; tmux: string; text: string }): Promise<{ ok: boolean; error?: string }> =>
-    ipcRenderer.invoke(IPC.offlineAnswer, a),
-  offlineSendKey: (a: { host: string; tmux: string; keys: string }): Promise<{ ok: boolean; error?: string }> =>
-    ipcRenderer.invoke(IPC.offlineSendKey, a),
-  offlineHome: (host: string): Promise<string> => ipcRenderer.invoke(IPC.offlineHome, { host }),
-  offlineStart: (a: { host: OfflineHost; cwd: string; seed: number; resume?: boolean }): Promise<
-    { ok: true; id: string; tmux: string } | { ok: false; error: string }
-  > => ipcRenderer.invoke(IPC.offlineStart, a),
 
   // Stream
   onUpdate: (cb: () => void): (() => void) => {

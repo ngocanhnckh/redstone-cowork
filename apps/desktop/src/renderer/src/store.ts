@@ -181,54 +181,6 @@ export function computeStaleWorking(lists: SessionView[][], now: number): Record
   return stale;
 }
 
-/** The trailing slice of a pane transcript we surface as the session's `latestAnswer`
- * — the last ~400 chars of its non-empty lines (what Claude most recently said). */
-function offlineLatestAnswer(transcript: string): string | null {
-  const body = transcript
-    .split("\n")
-    .filter((l) => l.trim().length > 0)
-    .join("\n")
-    .trimEnd();
-  if (!body) return null;
-  return body.length > 400 ? body.slice(-400) : body;
-}
-
-/** Map a discovered offline (SSH/tmux) session into the cockpit's `SessionView`
- * shape so the exact same UI renders it. Fields the server would supply (tokens,
- * git, todos, decisions) get sensible empty defaults — offline has no such data. */
-function offlineToSessionView(o: OfflineSession): SessionView {
-  const answer = offlineLatestAnswer(o.transcript);
-  return {
-    id: o.id,
-    machine: o.hostAlias,
-    cwd: o.cwd,
-    gitBranch: null,
-    wrapperId: o.tmux,
-    status: o.state === "waiting" ? "waiting" : "active",
-    pendingDecisions: 0,
-    waitingSince: null,
-    latestAnswer: answer,
-    summary: null,
-    todos: [],
-    userTodos: [],
-    tags: [],
-    // Show the captured pane as a single assistant bubble so the chat isn't empty.
-    transcript: answer ? [{ role: "assistant", text: o.transcript.trimEnd() }] : [],
-    working: o.state === "working",
-    contextTokens: null,
-    model: null,
-    tokensInput: 0,
-    tokensOutput: 0,
-    tokenSeries: [],
-    pinned: false,
-    snoozedUntil: null,
-    lastSeenAt: new Date().toISOString(),
-    attachedAt: null,
-    permissionMode: null,
-    autoModeEnabled: false,
-  };
-}
-
 type State = {
   sessions: SessionView[];
   queue: SessionView[];
@@ -267,20 +219,6 @@ type State = {
    * genuinely nothing waiting" (show All-clear) from "never connected / failed"
    * (show the boot screen + the real error, not a misleading All-clear). */
   hasLoaded: boolean;
-  /** Offline mode: sessions come from direct SSH (tmux), not the cowork server. */
-  offline: boolean;
-  offlineHosts: OfflineHost[]; // hosts scanned in offline mode (persisted in main)
-  offlineErrors: Record<string, string>; // hostAlias → last scan error (unreachable, etc.)
-  /** The single {host, folder} the offline cockpit is scoped to (VS Code Remote-SSH
-   * style: one server + one folder). null when not in offline mode. */
-  offlineScope: { host: OfflineHost; folder: string } | null;
-  /** Enter offline mode scoped to ONE host + ONE folder, and scan immediately. */
-  enterOffline: (host: OfflineHost, folder: string) => Promise<void>;
-  exitOffline: () => void;
-  /** Start a Claude session in the scoped folder (resume the last one by default,
-   * `--continue`; `resume:false` starts fresh), then refresh so it appears. */
-  startOfflineSession: (resume?: boolean) => Promise<void>;
-  setOfflineHosts: (hosts: OfflineHost[]) => void;
   refresh: () => Promise<void>;
   setActiveTab: (sessionId: string, tab: "chat" | "terminal" | "browser" | "ports" | "files") => void;
   openBrowser: (sessionId: string) => void;
@@ -359,35 +297,6 @@ export const useStore = create<State>((set, get) => ({
   loading: false,
   error: null,
   hasLoaded: false,
-  offline: false,
-  offlineHosts: [],
-  offlineErrors: {},
-  offlineScope: null,
-
-  enterOffline: async (host, folder) => {
-    // Remember the host in the saved list (so the picker re-offers it), then scope
-    // offline mode to just this host + folder.
-    try {
-      const saved = await window.cowork.offlineHostsList();
-      if (!saved.some((h) => h.alias === host.alias)) await window.cowork.offlineHostsSet([...saved, host]);
-    } catch { /* best effort */ }
-    set({ offline: true, offlineHosts: [host], offlineScope: { host, folder }, hasLoaded: false });
-    await get().refresh();
-  },
-
-  exitOffline: () => set({ offline: false, offlineErrors: {}, offlineScope: null }),
-
-  startOfflineSession: async (resume = true) => {
-    const scope = get().offlineScope;
-    if (!scope) return;
-    try {
-      const r = await window.cowork.offlineStart({ host: scope.host, cwd: scope.folder, seed: Date.now(), resume });
-      if (!r.ok) { set({ error: r.error }); return; }
-      await get().refresh();
-    } catch (e) { set({ error: e instanceof Error ? e.message : String(e) }); }
-  },
-
-  setOfflineHosts: (hosts) => set({ offlineHosts: hosts }),
 
   setActiveTab: (sessionId, tab) => {
     set((state) => ({
@@ -435,39 +344,6 @@ export const useStore = create<State>((set, get) => ({
   toggleSettings: () => set((state) => ({ settingsOpen: !state.settingsOpen })),
 
   refresh: async () => {
-    // Offline mode: scan the SSH hosts for tmux Claude sessions and map them into
-    // the same SessionView shape the cockpit renders — never touch the server API.
-    if (get().offline) {
-      const scope = get().offlineScope;
-      // No scope yet (shouldn't happen once entered) → nothing to scan, but still let
-      // the cockpit load so the UI can recover rather than hang on the boot screen.
-      if (!scope) { set({ sessions: [], queue: [], decisions: [], error: null, hasLoaded: true }); return; }
-      try {
-        // Scan ONLY the scoped host, then keep sessions living IN the chosen folder
-        // (the folder itself or a subdirectory). tmux reports absolute cwds, so the
-        // folder (also absolute) matches directly.
-        const { sessions: found, errors } = await window.cowork.offlineScan([scope.host]);
-        const folder = scope.folder.replace(/\/+$/, "") || "/";
-        const inFolder = found.filter((o) => {
-          const cwd = (o.cwd || "").replace(/\/+$/, "");
-          return cwd === folder || cwd.startsWith(folder + "/");
-        });
-        const s = inFolder.map(offlineToSessionView);
-        const q = s.filter((v) => v.status === "waiting");
-        set((state) => ({
-          sessions: s,
-          queue: q,
-          decisions: [],
-          offlineErrors: errors,
-          focusId: pickFocus(q, s, state.focusId),
-          error: null,
-          hasLoaded: true,
-        }));
-      } catch (e) {
-        set({ error: e instanceof Error ? e.message : String(e) });
-      }
-      return;
-    }
     try {
       const [queue, sessions, decisions] = await Promise.all([
         window.cowork.getQueue(),
@@ -693,18 +569,6 @@ export const useStore = create<State>((set, get) => ({
   instruct: async (sessionId, text) => {
     try {
       get().recordSent(sessionId, text);
-      // Offline: type the answer straight into the session's tmux pane over SSH.
-      if (get().offline) {
-        const s = get().sessions.find((x) => x.id === sessionId) ?? get().queue.find((x) => x.id === sessionId);
-        if (s && s.wrapperId) {
-          // The ssh target is the host behind this session's alias (fall back to the
-          // alias itself, which is a valid ssh target when it came from ~/.ssh/config).
-          const host = get().offlineHosts.find((h) => h.alias === s.machine)?.host ?? s.machine;
-          await window.cowork.offlineAnswer({ host, tmux: s.wrapperId, text });
-        }
-        await get().refresh();
-        return true;
-      }
       await window.cowork.instruct(sessionId, text);
       // Refresh FIRST so the advance decision uses fresh queue + decisions (a stale
       // snapshot was picking sessions that had since been answered / started thinking).
@@ -791,18 +655,9 @@ export const useStore = create<State>((set, get) => ({
 }));
 
 export function startCockpit(): () => void {
-  // Remember any previously-used offline hosts (so the picker + a re-entry prefill).
-  window.cowork.offlineHostsList().then((hosts) => useStore.setState({ offlineHosts: hosts })).catch(() => {});
   useStore.getState().refresh();
-  // Skills/commands come from the server — skip them (and their poll) when offline.
-  const offline = useStore.getState().offline;
-  if (!offline) useStore.getState().fetchCaps();
-  const capsTimer = offline ? null : setInterval(() => useStore.getState().fetchCaps(), 5 * 60_000);
-  // Server stream pushes updates online; offline has no stream, so poll the SSH
-  // hosts on the same ~9s backstop cadence to keep session state fresh.
-  const offlineTimer = setInterval(() => {
-    if (useStore.getState().offline) useStore.getState().refresh();
-  }, 9_000);
+  useStore.getState().fetchCaps();
+  const capsTimer = setInterval(() => useStore.getState().fetchCaps(), 5 * 60_000);
   const unsub = window.cowork.onUpdate(() => useStore.getState().refresh());
-  return () => { if (capsTimer) clearInterval(capsTimer); clearInterval(offlineTimer); unsub(); };
+  return () => { clearInterval(capsTimer); unsub(); };
 }

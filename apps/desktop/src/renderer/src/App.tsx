@@ -2,14 +2,11 @@ import { useState, useEffect, useCallback } from "react";
 import Login from "./Login";
 import Cockpit from "./cockpit/Cockpit";
 import BgVideo from "./cockpit/BgVideo";
-import { useStore } from "./store";
 
 type ConfigState = { serverUrl: string; hasToken: boolean } | null | "loading";
 
 export default function App() {
   const [configState, setConfigState] = useState<ConfigState>("loading");
-  // Offline mode (direct SSH) enters the cockpit without a configured server.
-  const offline = useStore((s) => s.offline);
 
   const recheck = useCallback(async () => {
     const cfg = await window.cowork.getConfig();
@@ -48,11 +45,11 @@ export default function App() {
         </div>
       </div>
     );
-  } else if (!(configState !== null && configState.hasToken) && !offline) {
-    // Not configured (and not in offline mode) — show login
+  } else if (!(configState !== null && configState.hasToken)) {
+    // Not configured — show login
     content = <Login onConnected={recheck} />;
   } else {
-    // Configured online, or driving sessions over direct SSH — show Focus Theater
+    // Configured — show Focus Theater
     content = <Cockpit />;
   }
 
