@@ -9,6 +9,7 @@
     "url": "https://github.com/ngocanhnckh/redstone-cowork.git"
   },
   "scripts": {
+    "postinstall": "node scripts/fix-native-perms.cjs",
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
