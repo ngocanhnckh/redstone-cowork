@@ -1,4 +1,5 @@
 import ScreenSharePicker from "./ScreenSharePicker";
+import OfflinePicker from "../OfflinePicker";
 import { useEffect, useState, type CSSProperties } from "react";
 import { useStore } from "../store";
 import { startCockpit } from "../store";
@@ -36,6 +37,7 @@ export default function Cockpit() {
   const toggleCaps = useStore((s) => s.toggleCaps);
   const offline = useStore((s) => s.offline);
   const exitOffline = useStore((s) => s.exitOffline);
+  const [offlineModal, setOfflineModal] = useState(false);
 
   const appr = useAppearance();
 
@@ -208,6 +210,21 @@ export default function Cockpit() {
                 Exit
               </button>
             </span>
+          )}
+          {!offline && (
+            <button
+              onClick={() => setOfflineModal(true)}
+              title="Work offline — drive Claude sessions over direct SSH, no server"
+              style={{
+                ...noDrag,
+                display: "inline-flex", alignItems: "center", gap: 5,
+                fontFamily: "var(--font-mono)", fontSize: 10.5, letterSpacing: "0.08em",
+                color: "var(--text-soft)", border: "1px solid var(--border)", borderRadius: 999,
+                padding: "2px 9px", background: "transparent", cursor: "pointer",
+              }}
+            >
+              ⌁ Go offline
+            </button>
           )}
           <div style={{ flex: 1 }} />
           {/* Connection settings */}
@@ -383,6 +400,24 @@ export default function Cockpit() {
       <SettingsPanel />
       <CapsModal />
       <SessionSwitcher />
+      {offlineModal && (
+        <div
+          onClick={() => setOfflineModal(false)}
+          style={{ position: "fixed", inset: 0, zIndex: 5000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="glass-menu"
+            style={{ width: 460, maxWidth: "92vw", borderRadius: 16, border: "1px solid var(--border-strong)", boxShadow: "0 30px 80px rgba(0,0,0,0.6)", padding: 22, background: "color-mix(in srgb, var(--app-panel) 96%, transparent)" }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 14 }}>
+              <span className="kicker">Work offline · direct SSH</span>
+              <button onClick={() => setOfflineModal(false)} title="Close" style={{ border: 0, background: "transparent", color: "var(--text-soft)", cursor: "pointer", fontSize: 15 }}>×</button>
+            </div>
+            <OfflinePicker onDone={() => setOfflineModal(false)} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
