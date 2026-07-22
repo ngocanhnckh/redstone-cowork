@@ -466,12 +466,19 @@ export function startStream(
   let activeReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
   let connected = false;
 
-  // Poll fallback every 3000ms — ONLY while the SSE stream is down (and a window
-  // is actually visible). A healthy stream already pushes every change, so
-  // ticking regardless just burned a full app refresh every 3s forever.
+  // Poll (only while a window is visible — no work when backgrounded):
+  //   - stream DOWN  → poll IS the data source, every 3s.
+  //   - stream UP    → poll is a BACKSTOP every ~9s. The stream doesn't reliably
+  //     push every transition (notably a turn ending / a decision resolving), and
+  //     the cockpit detects a turn's end by comparing state ACROSS refreshes — so
+  //     with no backstop a session could sit "waiting"/"working" forever after
+  //     Claude finished. Gentle enough to keep the idle/battery win.
+  let tick = 0;
   const pollInterval = setInterval(() => {
-    if (stopped || connected) return;
+    if (stopped) return;
     if (shouldPoll && !shouldPoll()) return;
+    tick++;
+    if (connected && tick % 3 !== 0) return; // connected → every 3rd tick (~9s)
     onEvent({ type: "poll.tick", payload: null });
   }, 3000);
 
