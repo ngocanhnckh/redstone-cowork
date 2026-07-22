@@ -1,0 +1,84 @@
+name: Release desktop app
+
+# Build the Electron cockpit for macOS, Windows and Linux on their native runners
+# (node-pty is a native module and cannot be cross-compiled), then attach every
+# installer to a GitHub Release. Triggered by pushing a version tag, e.g. v0.1.0.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        # macos-latest = Apple Silicon (arm64), macos-13 = Intel (x64): node-pty is
+        # native, so each Mac arch builds on its own runner.
+        os: [macos-latest, macos-13, windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # @rcw/desktop imports types from the shared package; build it first if it
+      # emits a dist (no-op when it exports source directly).
+      - name: Build shared package
+        run: pnpm --filter @rcw/shared build || true
+
+      # Compile node-pty against the bundled Electron ABI before packaging.
+      - name: Rebuild native modules for Electron
+        run: pnpm --filter @rcw/desktop run rebuild
+
+      - name: Build and package
+        run: pnpm --filter @rcw/desktop run dist
+        env:
+          # electron-builder reads this; we publish in a later job, so no upload here.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Collect installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: installers-${{ matrix.os }}
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            apps/desktop/dist/*.dmg
+            apps/desktop/dist/*.zip
+            apps/desktop/dist/*.exe
+            apps/desktop/dist/*.AppImage
+            apps/desktop/dist/*.deb
+
+  release:
+    name: Publish release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Download all installers
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create / update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          fail_on_unmatched_files: true
+          generate_release_notes: true

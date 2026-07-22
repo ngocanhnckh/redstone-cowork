@@ -1,0 +1,55 @@
+appId: com.example.cowork
+productName: Redstone Cowork
+copyright: © Redstone
+
+directories:
+  output: dist
+  buildResources: build
+
+# electron-vite emits the app to out/; ship that plus the manifest. Production
+# node_modules (node-pty, the native PTY) are pulled in automatically.
+files:
+  - out/**/*
+  - package.json
+  - "!**/*.map"
+
+# node-pty ships a compiled .node binary that cannot live inside the asar archive
+# — it must be unpacked so the OS can dlopen it at runtime.
+asarUnpack:
+  - "**/*.node"
+  - "**/node_modules/node-pty/**"
+
+# Rebuild native modules (node-pty) against the bundled Electron's ABI at package
+# time. CI also runs electron-rebuild explicitly before this as a belt-and-braces.
+npmRebuild: true
+
+mac:
+  category: public.app-category.developer-tools
+  # Arch defaults to the runner's own (arm64 on macos-latest, x64 on macos-13) —
+  # node-pty is native and can't be cross-compiled, so each arch builds on its
+  # own runner (see the release workflow matrix).
+  target:
+    - dmg
+    - zip
+  # Unsigned builds: allow the app to run without a hardened-runtime signature.
+  identity: null
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  artifactName: ${productName}-${version}-Setup.${ext}
+
+linux:
+  category: Development
+  maintainer: Redstone <admin@example.com>
+  target:
+    - target: AppImage
+      arch: [x64]
+    - target: deb
+      arch: [x64]

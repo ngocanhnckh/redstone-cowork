@@ -1,6 +1,6 @@
 {
   "name": "@rcw/desktop",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "main": "./out/main/index.js",
@@ -10,7 +10,9 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "start": "electron-vite preview",
-    "rebuild": "electron-rebuild -f -w node-pty"
+    "rebuild": "electron-rebuild -f -w node-pty",
+    "dist": "electron-vite build && electron-builder --config electron-builder.yml",
+    "dist:dir": "electron-vite build && electron-builder --config electron-builder.yml --dir"
   },
   "dependencies": {
     "@blocknote/core": "^0.51.4",
@@ -41,6 +43,7 @@
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.3.4",
     "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
     "electron-vite": "^3.1.0",
     "jsdom": "^25.0.0",
     "react": "^19.0.0",
