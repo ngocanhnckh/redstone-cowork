@@ -1,48 +1,87 @@
+<div align="center">
+
+<img src="docs/assets/logo.png" alt="Redstone Cowork" width="120" />
+
 # Redstone Cowork
 
-**One calm surface for every Claude Code session you're running — on any machine.**
+**One calm cockpit for every Claude Code session you're running — on any machine.**
 
-Redstone Cowork is a self-hosted **control plane for coding agents**. Your Claude Code
-sessions run wherever you code (laptops, VPSes, dev servers); Cowork gathers them into a
-single cockpit so you can see what each one is doing, jump on the ones that need an answer,
-and reply — from your desktop or your phone — without SSH-ing into each box. When a session
-finishes or asks a question, it surfaces in a waiting queue that auto-advances, so multitasking
-across many agents stops leaking dead time.
+[![Release](https://img.shields.io/github/v/release/ngocanhnckh/redstone-cowork?sort=semver)](https://github.com/ngocanhnckh/redstone-cowork/releases/latest)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![Platforms](https://img.shields.io/badge/desktop-macOS%20%7C%20Windows%20%7C%20Linux-1b1712)
+![Built with](https://img.shields.io/badge/built%20with-Electron%20·%20React%20·%20TypeScript-ff7a3c)
 
-The cockpit gives each session a live **terminal**, an in-app **browser** (with point-and-prompt
-feedback tools), an editable **file browser**, **port forwarding**, and host **telemetry** — all
-proxied through the server so mobile and browser are first-class.
-
-> Self-hosted, single user per instance, Docker deployment. Uses your own Claude subscription.
+</div>
 
 ---
 
-## Install the server (any Linux VPS)
+Your Claude Code sessions run wherever you code — laptops, VPSes, dev servers. Redstone
+Cowork is a **self-hosted control plane** that gathers them all into a single cockpit, so
+you can see what each one is doing, jump on the ones that need an answer, and reply — from
+your desktop or your phone — **without SSH-ing into every box**.
 
-One line — it picks a free port pair (asking you to confirm), generates your login token, and
-brings the stack up:
+When a session finishes or asks a question, it lands in a **waiting queue that auto-advances**:
+answer one, and you're dropped onto the next that needs you. Multitasking across a dozen
+agents stops leaking dead time.
+
+> Self-hosted · single user per instance · Docker · uses **your own** Claude subscription.
+
+<div align="center">
+
+<!-- Add a clean demo capture here (no real usernames/clients/IPs):
+     save it as docs/assets/cockpit.png and it renders below. -->
+<!-- <img src="docs/assets/cockpit.png" alt="The Redstone Cowork cockpit" width="920" /> -->
+
+</div>
+
+## Why
+
+Running many coding agents at once is a coordination problem, not a coding problem. You lose
+time to *"is it done? is it stuck? is it waiting on me?"* across terminals you have to go
+find. Cowork turns that scattered attention into one prioritized surface:
+
+- **See everything at a glance** — every session, its status (working / waiting / idle), a
+  live one-line summary, and its current plan.
+- **Answer where you are** — a single queue that auto-advances, so you clear the backlog
+  instead of hunting for it. Reply from desktop, browser, or phone.
+- **Reach into any session** — a live terminal, an in-app browser, an editable file tree,
+  port forwarding, and host telemetry — all proxied through the server, so mobile and web
+  are first-class.
+
+## Features
+
+| | |
+|---|---|
+| 🧭 **Waiting queue, auto-advanced** | Sessions that need you are ranked and surfaced; answering one jumps to the next. Skip, snooze, or pin. |
+| 💬 **Full session view** | Transcript + custom reply, with Claude's mode at a glance (Default / Accept Edits / Plan / Auto) and a live context meter. |
+| 🖥️ **Live terminal** | A real PTY into each session's host — local or over SSH — right in the cockpit. |
+| 🌐 **In-app browser** | Preview a session's web app, with **point-and-prompt** tools: click an element or drag a screenshot region and send it back to the agent as precise, contextual feedback. |
+| 📁 **Editable file browser** | Browse and edit files on the session's machine, with fast remote listing, streaming search, and previews. |
+| 🔌 **Port forwarding** | Reach a session's `localhost:PORT` services directly, via an SSH fast-lane or the server proxy. |
+| 📊 **Host telemetry** | Live CPU / RAM per machine, so you know what each host is doing. |
+| ⚡ **Skills & Commands palette** | Every Claude Code slash-command and skill across all your hosts, searchable in one place. |
+| 🪟 **Flow · Grid · HUD** | Focus one session, tile many, or drop into a transparent desktop HUD that floats over your work. |
+| 🎨 **Liquid-glass UI** | A warm-ink, frosted-glass interface — tune blur, tint, glass, and dock, or make it see-through over your desktop. |
+| 🔔 **Notifications** | Get pinged the moment a background session finishes or needs a decision. |
+
+## Install the server
+
+One line on any Linux VPS — it picks a free port pair (asking you to confirm), generates your
+login token, and brings the stack up:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/ngocanhnckh/redstone-cowork/main/install.sh | bash
 ```
 
-It will:
+It installs Docker if needed, clones the repo, scans for a **free, uncommon** host-port pair,
+generates a unique instance token + database password, starts the containers, and prints your
+**URL** and **login token**. Sign in at `http://<server-ip>:<web_port>` with that token — it
+*is* your password, so keep it secret. For a public HTTPS address, point a reverse proxy or a
+Cloudflare tunnel at the web port.
 
-1. install Docker if it's missing (with your OK),
-2. clone the repo to `~/redstone-cowork`,
-3. scan for a **free, uncommon host-port pair** and show it for confirmation,
-4. generate a unique instance token + database password,
-5. build and start the containers, and
-6. print your **URL** and **login token**.
-
-Sign in at `http://<server-ip>:<web_port>` with the printed token (it *is* your password —
-keep it secret; anyone with it controls the instance). For a public HTTPS address, point a
-reverse proxy or a Cloudflare tunnel at the web port.
-
-Re-running the installer against an existing checkout leaves your `.env` (ports + token)
-untouched. Manage the stack with `cd ~/redstone-cowork && docker compose {ps,logs,down}`.
-
-**Env knobs:** `RCW_DIR` (install location), `RCW_BRANCH`, `RCW_REPO_URL`.
+Re-running the installer leaves an existing `.env` (ports + token) untouched. Manage the stack
+with `cd ~/redstone-cowork && docker compose {ps,logs,down}`. Env knobs: `RCW_DIR`,
+`RCW_BRANCH`, `RCW_REPO_URL`.
 
 ## Get the desktop app
 
@@ -51,13 +90,13 @@ Download the cockpit for **macOS**, **Windows**, or **Linux** from the
 
 | Platform | File |
 |----------|------|
-| macOS    | `Redstone Cowork-<version>.dmg` (or `.zip`) |
+| macOS    | `Redstone Cowork-<version>-arm64.dmg` (or `.zip`) |
 | Windows  | `Redstone Cowork-<version>-Setup.exe` |
 | Linux    | `.AppImage` or `.deb` |
 
-The builds are unsigned, so the first launch needs a one-time bypass: on macOS right-click →
-**Open**; on Windows click **More info → Run anyway**. Point the app at your server URL and sign
-in with the same instance token.
+Builds are unsigned, so the first launch needs a one-time bypass: on macOS right-click →
+**Open**; on Windows click **More info → Run anyway**. Point the app at your server URL and
+sign in with the same instance token.
 
 ## Connect a machine
 
@@ -66,48 +105,50 @@ To make a machine's Claude Code sessions show up in the cockpit, run the Redston
 [`docs/prd/006-deployment.md`](docs/prd/006-deployment.md) and the enrollment flow in the app's
 **Settings → Hosts**.
 
----
+## How it works
 
-## Architecture
+```
+  Claude Code sessions            Redstone Cowork server              You
+  (any host, via the agent)   ──▶  (apps/api + apps/web)      ◀──▶   desktop · browser · phone
+   sessions · terminals · files    queue · summaries · vault
+   ports · telemetry               file/port proxy · bridge
+```
 
-- **`apps/api`** — the hub: sessions, decisions, the waiting queue, summaries, credential vault,
-  file/port proxy, host telemetry, and the agent bridge.
-- **`apps/web`** — Next.js server that the desktop and browser talk through.
+- **`apps/api`** — the hub: sessions, decisions, the waiting queue, summaries, credential
+  vault, file/port proxy, host telemetry, and the agent bridge.
+- **`apps/web`** — Next.js server the desktop and browser talk through.
 - **`apps/worker`** — background jobs / heartbeats.
 - **`apps/desktop`** — the Electron cockpit (shared React renderer).
 - **Postgres + Qdrant** — persistence and vector store.
 
 Hexagonal API (domain ports → use cases → adapters), shared Zod types in `packages/shared`,
-prompts as Jinja templates under `prompts/`. See `CLAUDE.md` for the conventions.
+prompts as Jinja templates under `prompts/`. Conventions live in [`CLAUDE.md`](CLAUDE.md).
 
-## Develop
+## Build from source
+
+The desktop app needs only **Node 22 + pnpm** — no C++ toolchain (its one native dependency,
+`node-pty`, ships prebuilt binaries). You can even cross-build a Windows installer from macOS.
+Full instructions, including cross-building, are in [**docs/BUILD.md**](docs/BUILD.md).
 
 ```bash
 pnpm install
-pnpm test                       # all packages (Vitest)
-pnpm --filter @rcw/desktop dev  # run the cockpit against a server
+pnpm --filter @rcw/desktop dev   # run the cockpit against a server
+pnpm test                        # all packages (Vitest)
 ```
 
-Ports are uncommon by design — web `47100`, API `47101` (host side, from `.env`); containers
-use 3000/3001 internally.
+## Contributing
 
-**Building the desktop app into installers** (Windows/macOS/Linux) is documented in
-[**docs/BUILD.md**](docs/BUILD.md) — note it needs a C++ toolchain for the native `node-pty`
-module, and each platform's installer must be built on that platform.
+Issues and PRs welcome. Please keep changes focused, follow the conventions in
+[`CLAUDE.md`](CLAUDE.md), and add tests for behavior-bearing code (the suite is Vitest;
+`pnpm test` at the root). Conventional commits (`feat(api): …`, `fix(desktop): …`).
 
 ## Docs
 
 - [Building the desktop app](docs/BUILD.md)
 - [Project plan & milestones](docs/PLAN.md)
 - [Deployment](docs/prd/006-deployment.md)
-- [Tech debt](docs/TECH-DEBT.md)
 - [Vision / history](docs/ABOUT.md) *(pre-pivot, kept for context)*
 
-## Releasing
+## License
 
-Desktop binaries are built by [`.github/workflows/release.yml`](.github/workflows/release.yml)
-on macOS/Windows/Linux runners and attached to a GitHub Release. Cut one by pushing a tag:
-
-```bash
-git tag v0.1.0 && git push origin v0.1.0
-```
+[MIT](LICENSE) © Redstone Cowork
