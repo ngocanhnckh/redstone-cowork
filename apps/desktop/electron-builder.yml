@@ -56,6 +56,9 @@ nsis:
 linux:
   category: Development
   maintainer: Redstone <admin@example.com>
+  # Name outputs from productName — the default used the scoped package name
+  # (@rcw/desktop), whose "/" made the .deb write into a missing subdirectory.
+  artifactName: ${productName}-${version}-${arch}.${ext}
   target:
     - target: AppImage
       arch: [x64]

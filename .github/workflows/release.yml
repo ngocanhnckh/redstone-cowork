@@ -48,6 +48,9 @@ jobs:
         env:
           # electron-builder reads this; we publish in a later job, so no upload here.
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # The renderer bundle (Monaco, Mermaid, …) blows the default ~2GB Node heap
+          # on the smaller CI runners — give it room so electron-vite build doesn't OOM.
+          NODE_OPTIONS: --max-old-space-size=6144
 
       - name: Collect installers
         uses: actions/upload-artifact@v4
