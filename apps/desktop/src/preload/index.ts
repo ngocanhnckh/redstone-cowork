@@ -2,6 +2,12 @@ import { contextBridge, ipcRenderer } from "electron";
 import { IPC } from "../shared/ipc";
 import type { SshSetupResult } from "../main/ssh-setup";
 
+// ipcRenderer is a SINGLETON shared by every panel. Several channels are legitimately
+// subscribed once-per-component (browser:find per browser panel, onUpdate per view),
+// so with many tabs/sessions open the count exceeds Node's default 10-listener warning
+// threshold. Raise it — a genuine runaway leak still trips at a much higher bar.
+ipcRenderer.setMaxListeners(60);
+
 contextBridge.exposeInMainWorld("cowork", {
   // Config
   getConfig: (): Promise<{ serverUrl: string; hasToken: boolean; isOrg: boolean } | null> =>

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { getTransitions, invalidateTransitions } from "./jiraTransitionsCache";
 
 type Transition = { id: string; name: string; to: string };
 
@@ -24,12 +25,10 @@ export default function JiraStatusSelect({
   // click time, so lazy-loading would show an empty dropdown on the first click.
   useEffect(() => {
     let alive = true;
-    // Guard against a stale preload (old app instance without this IPC) so the
-    // component degrades to "current status only" instead of throwing.
-    const fn = window.cowork.jiraIssueTransitions;
-    if (typeof fn === "function") {
-      fn(sessionId, issueKey).then((t) => { if (alive) setTransitions(t); }).catch(() => {});
-    }
+    // Cached + de-duplicated: a whole sprint of rows (and their remounts on every
+    // state refresh) share one request per issue, and a failing endpoint isn't
+    // re-hit on every render (was spamming api:jira:issue:transitions 400s).
+    getTransitions(sessionId, issueKey).then((t) => { if (alive) setTransitions(t); });
     return () => { alive = false; };
   }, [sessionId, issueKey]);
 
@@ -38,6 +37,7 @@ export default function JiraStatusSelect({
     setBusy(true);
     try {
       await window.cowork.jiraTransitionIssue(sessionId, issueKey, transitionId);
+      invalidateTransitions(sessionId, issueKey); // new state → different transitions
       onChanged?.();
     } catch { /* leave status as-is on failure */ }
     finally { setBusy(false); }

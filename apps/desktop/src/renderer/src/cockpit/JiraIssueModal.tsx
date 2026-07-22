@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import JiraDescriptionEditor, { type JiraDescriptionHandle } from "./JiraDescriptionEditor";
+import { getTransitions, invalidateTransitions } from "./jiraTransitionsCache";
 
 type SubIssue = { key: string; summary: string; status: string; statusCategory: string; assignee: string | null; url: string };
 type Detail = {
@@ -52,10 +53,9 @@ export default function JiraIssueModal({ sessionId, issueKey, onClose, startAddS
     setState("loading");
     setEditing(false);
     setAddingSub(false);
-    const transFn = window.cowork.jiraIssueTransitions;
     Promise.all([
       window.cowork.jiraIssueDetail(sessionId, activeKey),
-      typeof transFn === "function" ? transFn(sessionId, activeKey).catch(() => [] as Transition[]) : Promise.resolve([] as Transition[]),
+      getTransitions(sessionId, activeKey),
     ])
       .then(([d, t]) => {
         if (!alive) return;
@@ -78,6 +78,7 @@ export default function JiraIssueModal({ sessionId, issueKey, onClose, startAddS
     setBusy(true);
     try {
       await window.cowork.jiraTransitionIssue(sessionId, activeKey, transitionId);
+      invalidateTransitions(sessionId, activeKey); // new state → different transitions
       notifyTasks();
       reload();
     } catch { /* leave the current status; the dropdown stays put */ }

@@ -391,8 +391,10 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, isAct
       else closeFind();
     });
     return off;
+    // Subscribe ONCE per panel (reads the live webview via ref) — re-subscribing per
+    // navigation piled api:browser:find listeners onto the shared ipcRenderer.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loadUrl]);
+  }, []);
 
   // Re-run the search as the query changes while the bar is open.
   useEffect(() => {
