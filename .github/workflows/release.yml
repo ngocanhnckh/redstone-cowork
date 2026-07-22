@@ -41,10 +41,14 @@ jobs:
       - name: Build shared package
         run: pnpm --filter @rcw/shared build || true
 
-      # Compile node-pty against the bundled Electron ABI before packaging.
-      - name: Rebuild native modules for Electron
-        run: pnpm --filter @rcw/desktop run rebuild
+      # node-pty needs the MSVC C++ toolchain to compile; node-gyp doesn't reliably
+      # auto-detect it on the runner, so put the VS build env on PATH first.
+      - name: Set up MSVC (Windows)
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
 
+      # electron-builder rebuilds native modules (node-pty) for the Electron ABI
+      # itself via npmRebuild, so no separate electron-rebuild step is needed.
       - name: Build and package
         run: pnpm --filter @rcw/desktop run dist
         env:
