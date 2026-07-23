@@ -42,10 +42,6 @@ const TERM_CSS = `
   background-size: 32px 32px;
   mask-image: radial-gradient(120% 100% at 50% 0%, #000 55%, transparent 100%);
   -webkit-mask-image: radial-gradient(120% 100% at 50% 0%, #000 55%, transparent 100%); }
-.rcw-term-scan { position:absolute; left:0; right:0; height:2px; z-index:3; pointer-events:none; opacity:.4;
-  background: linear-gradient(90deg, transparent, rgb(var(--primary-soft) / 0.6), transparent);
-  box-shadow: 0 0 14px 2px rgb(var(--primary-soft) / 0.35); animation: rcw-term-scan 4.4s linear infinite; }
-@keyframes rcw-term-scan { 0% { top:-2%; } 100% { top:102%; } }
 .rcw-term-wrap .xterm { position:relative; z-index:2; }
 .rcw-term-wrap .xterm .xterm-rows { text-shadow: 0 0 3px rgb(var(--primary-soft) / 0.28); }
 .rcw-term-cnr { position:absolute; width:13px; height:13px; z-index:4; pointer-events:none; }
@@ -53,7 +49,6 @@ const TERM_CSS = `
 .rcw-term-cnr.tr { top:6px; right:8px; border-top:1.5px solid rgb(var(--primary-soft) / 0.55); border-right:1.5px solid rgb(var(--primary-soft) / 0.55); }
 .rcw-term-cnr.bl { bottom:8px; left:8px; border-bottom:1.5px solid rgb(var(--primary-soft) / 0.55); border-left:1.5px solid rgb(var(--primary-soft) / 0.55); }
 .rcw-term-cnr.br { bottom:8px; right:8px; border-bottom:1.5px solid rgb(var(--primary-soft) / 0.55); border-right:1.5px solid rgb(var(--primary-soft) / 0.55); }
-body.rcw-hidden .rcw-term-scan { animation-play-state: paused !important; }
 `;
 
 export default function TerminalPanel({
@@ -329,7 +324,6 @@ export default function TerminalPanel({
       ) : null}
       <div className="rcw-term-wrap" style={{ flex: 1, minHeight: 0, position: "relative", display: error ? "none" : "flex" }}>
         <span className="rcw-term-grid" />
-        <span className="rcw-term-scan" />
         <span className="rcw-term-cnr tl" />
         <span className="rcw-term-cnr tr" />
         <span className="rcw-term-cnr bl" />

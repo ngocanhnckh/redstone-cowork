@@ -30,8 +30,52 @@ function highlight(text: string, query: string, current: number): { nodes: React
   return { nodes, count: i };
 }
 
-const MAX_CHARS = 200_000; // trim the rendered buffer so a chatty container can't grow unbounded
+const MAX_LINES = 1600; // trim the rendered buffer so a chatty container can't grow unbounded
 const HIST = 48; // samples kept for the status sparklines (~4 min at the 5s poll)
+
+type LogLevel = "err" | "warn" | "info" | "debug" | null;
+type LogLine = { id: number; text: string; anim: boolean; lvl: LogLevel };
+
+/** Best-effort log level from a line's content — drives its colour (see DLOG_CSS). */
+function levelOf(s: string): LogLevel {
+  if (/\b(error|err|fatal|panic|exception|fail(ed|ure)?|\b5\d\d\b)\b/i.test(s)) return "err";
+  if (/\b(warn(ing)?|deprecat|retry|\b4\d\d\b)\b/i.test(s)) return "warn";
+  if (/\b(debug|trace|verbose)\b/i.test(s)) return "debug";
+  if (/\b(info|ready|listening|started|success|done|\b2\d\d\b)\b/i.test(s)) return "info";
+  return null;
+}
+
+// Log body styling: bolder, glowing, level-coloured text (echoing the replay look) and
+// a slide-in transition for freshly-arrived lines. A subtle edge glow while streaming.
+const DLOG_CSS = `
+.rcw-dlog { font-family: var(--font-mono); font-size: 10.6px; line-height: 1.55; transition: box-shadow .3s; }
+.rcw-dlog.streaming { box-shadow: inset 0 0 22px -8px rgb(var(--primary-soft) / 0.35), inset 0 2px 0 -1px rgb(var(--accent) / 0.4); }
+.rcw-dlog-line { white-space: pre-wrap; word-break: break-word; font-weight: 500; color: var(--text);
+  text-shadow: 0 0 3px rgb(var(--primary-soft) / 0.28); }
+.rcw-dlog-line.in { animation: rcw-dlog-in .26s cubic-bezier(.2,.8,.2,1) both; }
+@keyframes rcw-dlog-in { from { opacity: 0; transform: translateX(-9px); filter: brightness(1.9); } to { opacity: 1; transform: none; filter: none; } }
+.rcw-dlog-line.lvl-err  { color: #ff8f85; text-shadow: 0 0 5px rgb(255 107 107 / 0.45); }
+.rcw-dlog-line.lvl-warn { color: #ffcf7a; text-shadow: 0 0 5px rgb(255 178 84 / 0.4); }
+.rcw-dlog-line.lvl-info { color: #7ff0c0; text-shadow: 0 0 4px rgb(94 242 176 / 0.35); }
+.rcw-dlog-line.lvl-debug { color: var(--text-faint); text-shadow: none; font-weight: 400; }
+.rcw-dlog-rx { display: inline-flex; align-items: flex-end; gap: 1px; height: 12px; }
+.rcw-dlog-rx > i { width: 2px; background: rgb(var(--accent)); border-radius: 1px; box-shadow: 0 0 4px rgb(var(--accent) / 0.7); transition: height .25s ease; }
+`;
+
+/** A live "receiving" bar-meter that spikes with the incoming log line-rate. */
+function StreamMeter({ rate }: { rate: number[] }) {
+  const bars = rate.slice(-14);
+  const peak = Math.max(2, ...bars);
+  const lps = Math.round((bars.slice(-3).reduce((a, b) => a + b, 0) / 3) * 2.5);
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, flexShrink: 0 }} title="incoming log rate">
+      <span className="rcw-dlog-rx">
+        {bars.map((v, i) => <i key={i} style={{ height: `${Math.max(2, (v / peak) * 12)}px`, opacity: 0.5 + 0.5 * (i / bars.length) }} />)}
+      </span>
+      <span className="mono" style={{ fontSize: 9, color: "rgb(var(--accent))", letterSpacing: "0.04em" }}>{lps}/s</span>
+    </span>
+  );
+}
 
 const shortName = (n: string): string => n.replace(/^\//, "");
 
@@ -101,10 +145,16 @@ export default function DockerLogPanel({ streamId, active }: { streamId: string;
   const selKey = `${focusId ?? "none"}:${streamId}`;
   const [containers, setContainers] = useState<DockerContainer[]>([]);
   const [container, setContainer] = useState(() => loadSelection(selKey));
-  const [text, setText] = useState("");
+  // Log rendered as individual lines (stable ids) so freshly-arrived lines can animate
+  // in and only NEW lines re-render. `text` is derived for find + the replay stream.
+  const [lines, setLines] = useState<LogLine[]>([]);
+  const text = useMemo(() => lines.map((l) => l.text).join("\n"), [lines]);
+  const leftoverRef = useRef("");   // trailing partial line (no \n yet) held for next flush
+  const nextIdRef = useRef(0);
+  const streamStartRef = useRef(0); // lines within ~600ms of (re)start are the scrollback → no entrance anim
   const [history, setHistory] = useState<{ cpu: number[]; mem: number[] }>({ cpu: [], mem: [] });
   const bufRef = useRef("");
-  const preRef = useRef<HTMLPreElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
   const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -115,6 +165,16 @@ export default function DockerLogPanel({ streamId, active }: { streamId: string;
   const [atBottom, setAtBottom] = useState(true);
   const busyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Live line-rate for the "receiving" meter: count newlines between samples.
+  const linesRef = useRef(0);
+  const [rate, setRate] = useState<number[]>([]);
+  useEffect(() => {
+    const id = setInterval(() => {
+      const n = linesRef.current; linesRef.current = 0;
+      setRate((r) => (n === 0 && r.every((v) => v === 0) ? r : [...r, n].slice(-26)));
+    }, 400);
+    return () => clearInterval(id);
+  }, []);
   const [retryNonce, setRetryNonce] = useState(0); // bumped to re-attach after the stream ends
   const containerRef = useRef(container);
   containerRef.current = container;
@@ -174,16 +234,23 @@ export default function DockerLogPanel({ streamId, active }: { streamId: string;
     }));
   }, [containers]);
 
-  // Coalesce incoming chunks: buffer in a ref, flush to state a few times a second
-  // so a high-volume log doesn't trigger a render per chunk.
+  // Coalesce incoming chunks: buffer in a ref, flush a few times a second (so a
+  // high-volume log doesn't render per chunk), splitting into complete lines. Lines
+  // arriving after the initial scrollback settles are marked `anim` → they slide in.
   useEffect(() => {
     const t = setInterval(() => {
       if (!bufRef.current) return;
       const chunk = bufRef.current;
       bufRef.current = "";
-      setText((prev) => {
-        const next = prev + chunk;
-        return next.length > MAX_CHARS ? next.slice(next.length - MAX_CHARS) : next;
+      const pending = leftoverRef.current + chunk;
+      const parts = pending.split("\n");
+      leftoverRef.current = parts.pop() ?? ""; // last piece has no trailing \n yet
+      if (parts.length === 0) return;
+      const anim = Date.now() - streamStartRef.current > 600;
+      setLines((prev) => {
+        const add: LogLine[] = parts.map((tx) => ({ id: nextIdRef.current++, text: tx, anim, lvl: levelOf(tx) }));
+        const next = prev.concat(add);
+        return next.length > MAX_LINES ? next.slice(next.length - MAX_LINES) : next;
       });
     }, 150);
     return () => clearInterval(t);
@@ -197,7 +264,9 @@ export default function DockerLogPanel({ streamId, active }: { streamId: string;
   const isRetry = retryNonce > 0;
   useEffect(() => {
     if (!active || !machine || !container) return;
-    if (!isRetry) { setText(""); bufRef.current = ""; }
+    // The scrollback that loads now shouldn't animate line-by-line — only live lines do.
+    streamStartRef.current = Date.now();
+    if (!isRetry) { setLines([]); leftoverRef.current = ""; bufRef.current = ""; }
     stick.current = true;
     const armRetry = () => {
       if (retryTimer.current) clearTimeout(retryTimer.current);
@@ -206,7 +275,8 @@ export default function DockerLogPanel({ streamId, active }: { streamId: string;
     const offData = window.cowork.onDockerLogData((a) => {
       if (a.id !== streamId) return;
       bufRef.current += a.data;
-      if (a.data.includes("\n")) playSfx("output"); // hi-tech output cue on new log line(s), rate-limited
+      const nl = a.data.split("\n").length - 1;
+      if (nl > 0) { playSfx("output"); linesRef.current += nl; } // output cue + line-rate meter
       // Mark the stream busy for a few seconds so a replay won't fire over live logs.
       setBusy(true);
       if (busyTimer.current) clearTimeout(busyTimer.current);
@@ -241,14 +311,14 @@ export default function DockerLogPanel({ streamId, active }: { streamId: string;
 
   // Tail: keep pinned to the bottom unless the user scrolled up (or is searching).
   useEffect(() => {
-    const el = preRef.current;
+    const el = scrollRef.current;
     if (el && stick.current && !finding) el.scrollTop = el.scrollHeight;
-  }, [text, finding]);
+  }, [lines, finding]);
 
   // Scroll handler: track whether we're at the bottom, and if the user scrolled up,
   // arm a 1-minute idle timer that resumes tailing (reset on every scroll).
   const onLogScroll = () => {
-    const el = preRef.current;
+    const el = scrollRef.current;
     if (!el) return;
     const bottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
     stick.current = bottom;
@@ -262,7 +332,7 @@ export default function DockerLogPanel({ streamId, active }: { streamId: string;
       idleTimer.current = setTimeout(() => {
         stick.current = true;
         setAtBottom(true);
-        const e2 = preRef.current;
+        const e2 = scrollRef.current;
         if (e2) e2.scrollTop = e2.scrollHeight;
       }, IDLE_RETURN_MS);
     }
@@ -275,9 +345,9 @@ export default function DockerLogPanel({ streamId, active }: { streamId: string;
 
   // Recent log lines → the replay stream (a snapshot is captured when a replay fires).
   const relayItems = useMemo<RelayItem[]>(() => {
-    const lines = text.split("\n").map((l) => l.replace(/\s+$/, "")).filter((l) => l.trim().length > 0);
-    return lines.slice(-RELAY_COUNT).map((l, i) => ({ key: `${container}-${i}`, label: "LOG", icon: "❯", color: "rgb(var(--primary-soft))", detail: l.slice(0, 400) }));
-  }, [text, container]);
+    const recent = lines.filter((l) => l.text.trim().length > 0).slice(-RELAY_COUNT);
+    return recent.map((l) => ({ key: `${container}-${l.id}`, label: "LOG", icon: "❯", color: "rgb(var(--primary-soft))", detail: l.text.replace(/\s+$/, "").slice(0, 400) }));
+  }, [lines, container]);
   const relay = useRelay(relayItems, active && !!container && !finding, busy || scrolling || !atBottom);
 
   // Find: rendered nodes + match count, reset to first match as the query changes,
@@ -289,7 +359,7 @@ export default function DockerLogPanel({ streamId, active }: { streamId: string;
   useEffect(() => {
     if (!finding) return;
     const t = setTimeout(() => {
-      (preRef.current?.querySelector(`[data-mi="${matchIdx}"]`) as HTMLElement | null)?.scrollIntoView({ block: "center" });
+      (scrollRef.current?.querySelector(`[data-mi="${matchIdx}"]`) as HTMLElement | null)?.scrollIntoView({ block: "center" });
     }, 0);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -302,6 +372,7 @@ export default function DockerLogPanel({ streamId, active }: { streamId: string;
   return (
     <div style={{ position: "relative", display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
       <RelayStyles />
+      <style>{DLOG_CSS}</style>
       {/* control row: container picker + live indicator */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 12px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
         <span style={{ fontSize: 13 }}>🐳</span>
@@ -314,6 +385,7 @@ export default function DockerLogPanel({ streamId, active }: { streamId: string;
         ) : (
           <span className="mono faint" style={{ fontSize: 11, flex: 1 }}>select a session</span>
         )}
+        {container && busy && <StreamMeter rate={rate} />}
         {container && (
           <span style={{ display: "inline-flex", alignItems: "center", gap: 5, flexShrink: 0 }}>
             <span
@@ -377,23 +449,21 @@ export default function DockerLogPanel({ streamId, active }: { streamId: string;
         </div>
       )}
 
-      {/* log body */}
-      <pre
-        ref={preRef}
-        className="no-scrollbar"
-        onScroll={onLogScroll}
-        style={{
-          flex: 1, minHeight: 0, overflowY: "auto", margin: 0, padding: "10px 12px",
-          fontFamily: "var(--font-mono)", fontSize: 10.5, lineHeight: 1.5, color: "var(--text-soft)",
-          whiteSpace: "pre-wrap", wordBreak: "break-word",
-        }}
-      >
-        {finding ? highlighted?.nodes : text || (
-          <span className="mono faint hud-blink">
+      {/* log body — per-line so fresh lines slide in; bold, level-coloured, glowing */}
+      <div ref={scrollRef} className={`rcw-dlog no-scrollbar${busy ? " streaming" : ""}`} onScroll={onLogScroll}
+        style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "10px 12px" }}>
+        {finding ? (
+          <pre style={{ margin: 0, fontFamily: "var(--font-mono)", fontSize: 10.5, lineHeight: 1.55, color: "var(--text-soft)", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{highlighted?.nodes}</pre>
+        ) : lines.length ? (
+          lines.map((l) => (
+            <div key={l.id} className={`rcw-dlog-line${l.anim ? " in" : ""}${l.lvl ? ` lvl-${l.lvl}` : ""}`}>{l.text || " "}</div>
+          ))
+        ) : (
+          <span className="mono faint hud-blink" style={{ fontSize: 10.5 }}>
             {machine && container ? "attaching to log stream…" : "no container selected"}
           </span>
         )}
-      </pre>
+      </div>
       {relay.playing && <RelayOverlay queue={relay.queue} idx={relay.idx} title="Log replay" onDismiss={relay.dismiss} />}
     </div>
   );
