@@ -143,7 +143,7 @@ export default function Cockpit() {
       style={{ height: "100vh", position: "relative", display: "flex", flexDirection: "column", overflow: "hidden" }}
     >
       <ScreenSharePicker />
-      <AmbientAudio />
+      <AmbientAudio enabled={!showBoot} />
       <ThinkingSound />
       {flash && <div className="rcw-flash-overlay" />}
       <div className="atmosphere">

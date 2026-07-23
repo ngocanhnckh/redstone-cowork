@@ -89,13 +89,15 @@ function playAt(name: SfxName, vol: number): void {
   }
 }
 
-/** Play a UI sound at the user's configured volume. No-op when muted. Never throws. */
+/** Play a UI sound at the user's configured volume. No-op when muted. Never throws.
+ *  The boot chime plays at full volume (a signature launch sound), not the SFX level —
+ *  it's still silenced when SFX is fully muted. */
 export function playSfx(name: SfxName): void {
   if (volume <= 0) return;
   const now = Date.now();
   if (now - (lastAt[name] ?? 0) < MIN_GAP_MS[name]) return;
   lastAt[name] = now;
-  playAt(name, volume);
+  playAt(name, name === "boot" ? 1 : volume);
 }
 
 /** Preview a sound at a SPECIFIC volume (the Settings slider), bypassing the rate
