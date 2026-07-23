@@ -832,34 +832,39 @@ input:focus, textarea:focus {
    while the session is thinking, instead of an inline loader eating the
    card's width (the session name keeps full width). Masked to the ring.
    ===================================================================== */
-/* Bulletproof orbit: a child <span class="rcw-orbit"> masked to a FIXED ring, with a
-   ::before gradient layer that spins via plain transform:rotate (which always
-   animates). The ring stays put; the bright arc sweeps around it. */
+/* Orbit — NO mask, NO @property (both proved fragile). A <span class="rcw-orbit">
+   clips (overflow:hidden) to the card's rounded rect; its ::before is a big conic
+   gradient spun by transform:rotate (guaranteed to animate); its ::after covers the
+   interior, leaving only the border ring showing the sweeping arc. The card's own
+   content is raised above the orbit (z-index) so the cover never hides it. */
 @keyframes rcw-orbit-spin { to { transform: rotate(360deg); } }
 .rcw-orbit {
     position: absolute;
-    inset: -1px;
-    border-radius: 14px;
-    padding: 1.6px;
+    inset: 0;
+    border-radius: 13px;
+    overflow: hidden;
     z-index: 0;
     pointer-events: none;
-    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-    -webkit-mask-composite: xor;
-    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-    mask-composite: exclude;
 }
 .rcw-orbit::before {
     content: "";
     position: absolute;
-    inset: -60%;
+    inset: -100%;
     background: conic-gradient(
         from 0deg,
-        transparent 0deg 244deg,
-        rgb(var(--primary-soft) / 0.7) 306deg,
+        transparent 0deg 236deg,
+        rgb(var(--primary-soft) / 0.75) 300deg,
         rgb(var(--accent)) 344deg,
-        rgb(var(--primary-soft) / 0.7) 356deg,
+        rgb(var(--primary-soft) / 0.75) 356deg,
         transparent 360deg
     );
     animation: rcw-orbit-spin 1.9s linear infinite;
+}
+.rcw-orbit::after {
+    content: "";
+    position: absolute;
+    inset: 1.6px;
+    border-radius: 11.4px;
+    background: color-mix(in srgb, var(--app-panel) 95%, transparent);
 }
 .rcw-no-anim .rcw-orbit::before { animation: none; }

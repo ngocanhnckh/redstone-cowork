@@ -168,7 +168,7 @@ export default function QueueRail() {
             {focused && (
               <span style={{ position: "absolute", left: 0, top: 14, bottom: 14, width: 3, borderRadius: 9, background: `linear-gradient(rgb(var(--primary-soft)), rgb(var(--accent)))` }} />
             )}
-            <span style={{ position: "relative", flexShrink: 0 }}>
+            <span style={{ position: "relative", flexShrink: 0, zIndex: 1 }}>
               <span
                 style={{
                   width: 30, height: 30, borderRadius: 9, display: "grid", placeItems: "center",
@@ -189,7 +189,7 @@ export default function QueueRail() {
                 }}
               />
             </span>
-            <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ flex: 1, minWidth: 0, position: "relative", zIndex: 1 }}>
               <div style={{ fontSize: 11, fontWeight: 600, lineHeight: 1.25, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {projectName(session.cwd)}
               </div>
