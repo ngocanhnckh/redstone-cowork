@@ -73,7 +73,10 @@ const CSS = `
 .rcw-fb-tile.dir:hover { border-color: rgb(var(--accent) / 0.6); box-shadow: 0 0 22px -8px rgb(var(--accent) / 0.7); }
 .rcw-fb-ico { font-family:var(--font-mono); font-size:24px; line-height:1; text-shadow:0 0 14px currentColor; }
 .rcw-fb-name { font-family:var(--font-mono); font-size:10.5px; text-align:center; word-break:break-all; line-height:1.35; max-height:2.7em; overflow:hidden; }
-.rcw-fb-preview { position:absolute; inset:0; z-index:5; display:flex; flex-direction:column; background: color-mix(in srgb, var(--app-panel) 96%, transparent); animation: rcw-fb-in .18s ease both; }
+.rcw-fb-preview { position:absolute; inset:0; z-index:5; display:flex; flex-direction:column;
+  background: color-mix(in srgb, var(--app-panel) var(--glass-pct, 82%), transparent);
+  -webkit-backdrop-filter: blur(var(--app-blur, 28px)) saturate(1.3); backdrop-filter: blur(var(--app-blur, 28px)) saturate(1.3);
+  animation: rcw-fb-in .18s ease both; }
 .rcw-fb-phd { display:flex; align-items:center; gap:8px; padding:8px 12px; border-bottom:1px solid var(--border); flex-shrink:0; }
 `;
 
@@ -226,25 +229,27 @@ export default function FileBrowserEdex({ cwd, machine, active = true }: { sessi
               </button>
             )}
           </div>
-          <div style={{ flex: 1, minHeight: 0 }}>
+          <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
             {reading ? (
               <span className="mono faint" style={{ fontSize: 11.5, padding: 14, display: "block" }}>Reading…</span>
             ) : !read?.ok ? (
               <span className="mono" style={{ color: "#e0736a", fontSize: 12, padding: 14, display: "block" }}>{read?.error ?? "Failed to read."}</span>
             ) : isOfficeFile(name) && read.encoding === "base64" ? (
-              <OfficeViewer cwd={cwd} machine={machine} path={openFile} base64={read.content} name={name} />
+              <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column" }}>
+                <OfficeViewer cwd={cwd} machine={machine} path={openFile} base64={read.content} name={name} />
+              </div>
             ) : read.encoding === "base64" && read.mime === "application/pdf" ? (
-              <iframe src={`data:application/pdf;base64,${read.content}`} title={name} style={{ width: "100%", height: "100%", border: 0 }} />
+              <iframe src={`data:application/pdf;base64,${read.content}`} title={name} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: 0, background: "#fff" }} />
             ) : read.encoding === "base64" && read.mime.startsWith("image/") ? (
-              <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", padding: 16, overflow: "auto" }}>
-                <img src={`data:${read.mime};base64,${read.content}`} style={{ maxWidth: "100%", maxHeight: "100%", borderRadius: 8, boxShadow: "0 0 40px -12px rgb(var(--primary)/0.6)" }} />
+              <div className="no-scrollbar" style={{ position: "absolute", inset: 0, overflow: "auto", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+                <img src={`data:${read.mime};base64,${read.content}`} style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", borderRadius: 8, boxShadow: "0 0 40px -12px rgb(var(--primary)/0.6)" }} />
               </div>
             ) : read.encoding === "base64" ? (
               <span className="mono faint" style={{ fontSize: 12, padding: 14, display: "block" }}>No inline preview · {(read.size / 1024).toFixed(1)} KB · {read.mime}</span>
             ) : read.encoding === "binary" ? (
               <span className="mono faint" style={{ fontSize: 12, padding: 14, display: "block" }}>Binary file · {(read.size / 1024).toFixed(1)} KB · {read.mime}</span>
             ) : md && mdMode === "preview" ? (
-              <div className="md no-scrollbar" style={{ height: "100%", overflowY: "auto", padding: "12px 16px" }}>
+              <div className="md no-scrollbar" style={{ position: "absolute", inset: 0, overflow: "auto", padding: "14px 18px" }}>
                 <Markdown>{draft ?? read.content}</Markdown>
               </div>
             ) : (
