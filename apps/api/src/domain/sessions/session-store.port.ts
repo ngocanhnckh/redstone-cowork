@@ -18,5 +18,7 @@ export interface SessionStore {
   setAccount(id: string, accountId: string): Promise<void>;
   /** Claim every unowned session (accountId=null) for the given account. Returns count. */
   claimUnowned(accountId: string): Promise<number>;
+  /** Every session including closed ones — for admin analytics / history. */
+  listAllIncludingClosed(): Promise<AgentSession[]>;
 }
 export const SESSION_STORE = Symbol("SessionStore");

@@ -105,6 +105,9 @@ export class InMemorySessionStore implements SessionStore {
     const s = this.sessions.get(id);
     if (s) this.sessions.set(id, { ...s, accountId });
   }
+  async listAllIncludingClosed(): Promise<AgentSession[]> {
+    return [...this.sessions.values()];
+  }
   async claimUnowned(accountId: string): Promise<number> {
     let n = 0;
     for (const [id, s] of this.sessions) {

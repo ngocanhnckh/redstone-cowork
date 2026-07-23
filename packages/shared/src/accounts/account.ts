@@ -20,6 +20,7 @@ export const AccountSchema = z.object({
   phone: z.string().default(""),
   /** Personal webhook URL — Jira task/mission notifications for this agent are forwarded here. */
   webhook: z.string().default(""),
+  jiraProject: z.string().default(""),
   createdAt: z.coerce.date(),
   disabledAt: z.coerce.date().nullable().default(null),
 });
@@ -36,6 +37,7 @@ export const AccountProfilePatchSchema = z.object({
   mattermost: z.string().max(120).optional(),
   phone: z.string().max(40).optional(),
   webhook: z.string().max(500).optional(),
+  jiraProject: z.string().max(60).optional(),
   role: AccountRoleSchema.optional(),
 });
 export type AccountProfilePatch = z.infer<typeof AccountProfilePatchSchema>;
@@ -57,6 +59,7 @@ export const NewAccountSchema = z.object({
   mattermost: z.string().max(120).optional(),
   phone: z.string().max(40).optional(),
   webhook: z.string().max(500).optional(),
+  jiraProject: z.string().max(60).optional(),
 });
 export type NewAccount = z.infer<typeof NewAccountSchema>;
 

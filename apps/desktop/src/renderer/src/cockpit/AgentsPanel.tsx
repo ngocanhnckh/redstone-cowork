@@ -70,7 +70,10 @@ function fileToDataUrl(file: File): Promise<string> {
   });
 }
 
-const EMPTY = { username: "", password: "", displayName: "", level: "", division: "", email: "", jira: "", mattermost: "", phone: "", webhook: "", photo: null as string | null };
+const EMPTY = { username: "", password: "", displayName: "", level: "", division: "", email: "", jira: "", mattermost: "", phone: "", webhook: "", jiraProject: "", photo: null as string | null };
+
+type Analytics = { accountId: string; username: string; displayName: string; sessions: number; activeSessions: number; tokensInput: number; tokensOutput: number; estCostUsd: number; lastActiveAt: string | null };
+const fmtK = (n: number) => n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1e3 ? (n / 1e3).toFixed(0) + "k" : String(n);
 
 export default function AgentsPanel() {
   const [me, setMe] = useState<{ role: string } | null>(null);
@@ -82,6 +85,8 @@ export default function AgentsPanel() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
+  const [view, setView] = useState<"roster" | "console">("roster");
+  const [analytics, setAnalytics] = useState<Analytics[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const sel = agents.find((a) => a.id === selId) ?? null;
@@ -98,6 +103,9 @@ export default function AgentsPanel() {
   }, []);
 
   useEffect(() => { void reload(); }, [reload]);
+  useEffect(() => {
+    if (view === "console" && me?.role === "admin") window.cowork.accountsAnalytics().then((a) => setAnalytics(a as Analytics[])).catch(() => setAnalytics([]));
+  }, [view, me]);
   useEffect(() => {
     window.cowork.accountsAudit(selId ?? undefined, 40).then(setAudit).catch(() => setAudit([]));
   }, [selId, agents]);
@@ -211,6 +219,11 @@ export default function AgentsPanel() {
         <span style={{ flex: 1 }} />
         {msg && <span style={{ fontSize: 10, color: "#7fd18b", letterSpacing: ".14em" }}>{msg}</span>}
         {isAdmin && (
+          <button className="rcw-ag-btn" onClick={() => setView((v) => v === "roster" ? "console" : "roster")}>
+            {view === "roster" ? "📊 CONSOLE" : "◄ ROSTER"}
+          </button>
+        )}
+        {isAdmin && view === "roster" && (
           <button className="rcw-ag-btn" onClick={() => { setMode("recruit"); setSelId(null); setForm(EMPTY); }}>
             ＋ RECRUIT AGENT
           </button>
@@ -219,6 +232,34 @@ export default function AgentsPanel() {
 
       {err && <div style={{ padding: "10px 14px", color: "#ff7d72", fontSize: 11.5 }}>⚠ {err}</div>}
 
+      {view === "console" && isAdmin ? (
+        <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: 14 }}>
+          <div style={{ fontSize: 11, letterSpacing: ".2em", color: "rgb(84 230 255 / .8)", marginBottom: 10 }}>TOKEN SPEND & ACTIVITY · PER AGENT</div>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11.5 }}>
+            <thead><tr style={{ color: "var(--text-faint)", textAlign: "left", fontSize: 9.5, letterSpacing: ".14em" }}>
+              <th style={{ padding: "4px 8px" }}>AGENT</th><th>SESSIONS</th><th>TOKENS IN</th><th>TOKENS OUT</th><th>EST. COST</th><th>LAST ACTIVE</th>
+            </tr></thead>
+            <tbody>
+              {analytics.map((r) => (
+                <tr key={r.accountId} style={{ borderTop: "1px solid var(--border)" }}>
+                  <td style={{ padding: "7px 8px" }}><b style={{ color: "#e6f2f4" }}>{r.displayName}</b> <span className="faint">@{r.username}</span></td>
+                  <td>{r.sessions}{r.activeSessions > 0 && <span style={{ color: "#7fd18b" }}> ({r.activeSessions} live)</span>}</td>
+                  <td>{fmtK(r.tokensInput)}</td>
+                  <td>{fmtK(r.tokensOutput)}</td>
+                  <td style={{ color: "#e0a24a", fontWeight: 700 }}>${r.estCostUsd.toFixed(2)}</td>
+                  <td className="faint">{r.lastActiveAt ? new Date(r.lastActiveAt).toLocaleString() : "—"}</td>
+                </tr>
+              ))}
+              {!analytics.length && <tr><td colSpan={6} className="faint" style={{ padding: 12 }}>No activity recorded yet.</td></tr>}
+            </tbody>
+          </table>
+          {analytics.length > 0 && (
+            <div style={{ marginTop: 14, fontSize: 12, color: "var(--text-soft)" }}>
+              Total est. spend: <b style={{ color: "#e0a24a" }}>${analytics.reduce((s, r) => s + r.estCostUsd, 0).toFixed(2)}</b> across {analytics.reduce((s, r) => s + r.sessions, 0)} sessions
+            </div>
+          )}
+        </div>
+      ) : (
       <div style={{ flex: 1, minHeight: 0, display: "flex" }}>
         <div className="rcw-ag-grid no-scrollbar">
           {agents.map((a, i) => (
@@ -287,6 +328,7 @@ export default function AgentsPanel() {
                     {field("MATTERMOST HANDLE", "mattermost")}
                     {field("PHONE", "phone")}
                     {field("WEBHOOK URL", "webhook")}
+                    {field("JIRA PROJECT KEY", "jiraProject", "e.g. RCW — maps this agent's missions")}
                     <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
                       <button className="rcw-ag-btn" disabled={busy} onClick={saveProfile}>{busy ? "…" : "SAVE DOSSIER"}</button>
                       <button className="rcw-ag-btn" disabled={busy || !sel.photo} onClick={enrollFaceFromPhoto} title="Compute a face signature from the photo so this agent can face-unlock">◈ ENROLL FACE</button>
@@ -319,6 +361,7 @@ export default function AgentsPanel() {
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }

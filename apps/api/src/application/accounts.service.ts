@@ -172,4 +172,66 @@ export class AccountsService implements OnModuleInit {
   async loginAudit(opts?: { accountId?: string; limit?: number }): Promise<LoginAuditEntry[]> {
     return this.store.listLoginAudit(opts);
   }
+
+  /** Per-agent analytics for the admin console: session counts + token spend + est.
+   *  cost, rolled up from every session (incl. closed) grouped by owner account. */
+  async analytics(): Promise<AccountAnalytics[]> {
+    const [accounts, sessions] = await Promise.all([this.store.list(), this.sessions.listAllIncludingClosed()]);
+    const byId = new Map<string, AccountAnalytics>();
+    for (const a of accounts) {
+      byId.set(a.id, {
+        accountId: a.id, username: a.username, displayName: a.displayName, role: a.role,
+        photo: a.photo, level: a.level, division: a.division,
+        sessions: 0, activeSessions: 0, tokensInput: 0, tokensOutput: 0, estCostUsd: 0,
+        lastActiveAt: null,
+      });
+    }
+    for (const s of sessions) {
+      const row = s.accountId ? byId.get(s.accountId) : undefined;
+      if (!row) continue;
+      row.sessions++;
+      if (!s.closedAt) row.activeSessions++;
+      row.tokensInput += s.tokensInput ?? 0;
+      row.tokensOutput += s.tokensOutput ?? 0;
+      row.estCostUsd += estCost(s.model, s.tokensInput ?? 0, s.tokensOutput ?? 0);
+      const seen = s.lastSeenAt?.getTime() ?? 0;
+      if (!row.lastActiveAt || seen > row.lastActiveAt.getTime()) row.lastActiveAt = s.lastSeenAt ?? row.lastActiveAt;
+    }
+    return [...byId.values()].sort((a, b) => b.estCostUsd - a.estCostUsd);
+  }
+
+  /** One agent's session history (id, folder, machine, tokens, cost, timestamps). */
+  async sessionHistory(accountId: string): Promise<AccountSessionRow[]> {
+    const sessions = await this.sessions.listAllIncludingClosed();
+    return sessions
+      .filter((s) => s.accountId === accountId)
+      .map((s) => ({
+        id: s.id, machine: s.machine, cwd: s.cwd, model: s.model,
+        tokensInput: s.tokensInput ?? 0, tokensOutput: s.tokensOutput ?? 0,
+        estCostUsd: estCost(s.model, s.tokensInput ?? 0, s.tokensOutput ?? 0),
+        attachedAt: s.attachedAt, lastSeenAt: s.lastSeenAt, closed: !!s.closedAt,
+      }))
+      .sort((a, b) => b.lastSeenAt.getTime() - a.lastSeenAt.getTime());
+  }
+}
+
+export type AccountAnalytics = {
+  accountId: string; username: string; displayName: string; role: string;
+  photo: string | null; level: string; division: string;
+  sessions: number; activeSessions: number; tokensInput: number; tokensOutput: number;
+  estCostUsd: number; lastActiveAt: Date | null;
+};
+export type AccountSessionRow = {
+  id: string; machine: string; cwd: string; model: string | null;
+  tokensInput: number; tokensOutput: number; estCostUsd: number;
+  attachedAt: Date; lastSeenAt: Date; closed: boolean;
+};
+
+// Per-million-token USD rates by model family (Anthropic list prices).
+function estCost(model: string | null, tin: number, tout: number): number {
+  const m = (model ?? "").toLowerCase();
+  const rate = m.includes("opus") ? { i: 15, o: 75 }
+    : m.includes("haiku") ? { i: 0.8, o: 4 }
+    : { i: 3, o: 15 }; // sonnet / default
+  return (tin / 1e6) * rate.i + (tout / 1e6) * rate.o;
 }

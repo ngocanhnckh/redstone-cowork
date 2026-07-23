@@ -259,6 +259,47 @@ describe("accounts (enterprise auth)", () => {
     });
   });
 
+  describe("admin analytics + jira project mapping", () => {
+    it("aggregates token spend per agent and maps a Jira project", async () => {
+      const login = async (u: string, p: string) =>
+        (await request(app.getHttpServer()).post("/auth/account/login").send({ username: u, password: p })).body.token as string;
+      const adminTok = await login("anh.nguyen", "test-admin-password");
+      const created = await request(app.getHttpServer()).post("/accounts").set("Authorization", `Bearer ${adminTok}`)
+        .send({ username: "agent.stats", password: "password-s1" });
+      const agentTok = await login("agent.stats", "password-s1");
+
+      // agent attaches a session and it accrues token spend
+      await request(app.getHttpServer()).post("/sessions").set("Authorization", `Bearer ${agentTok}`)
+        .send({ id: "stat-sess", machine: "vps-1", cwd: "/home/a/p" });
+      // simulate the hook pushing token spend (opus model)
+      await request(app.getHttpServer()).post("/sessions/stat-sess/state")
+        .set("Authorization", `Bearer ${adminTok}`)
+        .send({ tokensInput: 1_000_000, tokensOutput: 200_000, model: "claude-opus-4-8" });
+
+      const analytics = await request(app.getHttpServer()).get("/accounts/analytics").set("Authorization", `Bearer ${adminTok}`);
+      expect(analytics.status).toBe(200);
+      const row = analytics.body.find((r: { username: string }) => r.username === "agent.stats");
+      expect(row.tokensInput).toBe(1_000_000);
+      expect(row.tokensOutput).toBe(200_000);
+      // 1M in * $15 + 0.2M out * $75 = 15 + 15 = $30
+      expect(row.estCostUsd).toBeCloseTo(30, 1);
+      expect(row.sessions).toBe(1);
+
+      // member cannot read analytics
+      const forbidden = await request(app.getHttpServer()).get("/accounts/analytics").set("Authorization", `Bearer ${agentTok}`);
+      expect(forbidden.status).toBe(403);
+
+      // session history endpoint (admin, or self)
+      const hist = await request(app.getHttpServer()).get(`/accounts/${created.body.id}/sessions`).set("Authorization", `Bearer ${agentTok}`);
+      expect(hist.body.map((h: { id: string }) => h.id)).toContain("stat-sess");
+
+      // admin maps a Jira project onto the agent
+      const mapped = await request(app.getHttpServer()).post(`/accounts/${created.body.id}/profile`)
+        .set("Authorization", `Bearer ${adminTok}`).send({ jiraProject: "RCW" });
+      expect(mapped.body.jiraProject).toBe("RCW");
+    });
+  });
+
   describe("jira inbound webhook", () => {
     it("routes an assigned-issue event to the matching agent (secret-gated)", async () => {
       process.env.JIRA_WEBHOOK_SECRET = "hook-secret-1";

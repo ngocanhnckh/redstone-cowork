@@ -22,6 +22,15 @@ contextBridge.exposeInMainWorld("cowork", {
     ipcRenderer.invoke(IPC.redstoneLogin, { serverUrl, username, password }),
   jiraOAuthLogin: (serverUrl: string): Promise<{ ok: boolean; error?: string; account?: { username: string; displayName: string; role: string } }> =>
     ipcRenderer.invoke(IPC.jiraOAuthLogin, { serverUrl }),
+  serversList: (): Promise<import("../shared/servers").ServerView[]> => ipcRenderer.invoke(IPC.serversList),
+  serverCreate: (input: { name: string; host: string; sshUser?: string; sshPort?: number; description?: string }): Promise<import("../shared/servers").ServerView> => ipcRenderer.invoke(IPC.serverCreate, { input }),
+  serverUpdate: (id: string, patch: Record<string, unknown>): Promise<import("../shared/servers").ServerView> => ipcRenderer.invoke(IPC.serverUpdate, { id, patch }),
+  serverDelete: (id: string): Promise<{ ok: boolean }> => ipcRenderer.invoke(IPC.serverDelete, { id }),
+  serverGrant: (id: string, username: string): Promise<{ ok: boolean }> => ipcRenderer.invoke(IPC.serverGrant, { id, username }),
+  serverRevoke: (id: string, accountId: string): Promise<{ ok: boolean }> => ipcRenderer.invoke(IPC.serverRevoke, { id, accountId }),
+  serverCoworkKey: (): Promise<{ publicKey: string | null }> => ipcRenderer.invoke(IPC.serverCoworkKey),
+  accountsAnalytics: (): Promise<Array<Record<string, unknown>>> => ipcRenderer.invoke(IPC.accountsAnalytics),
+  accountSessions: (id: string): Promise<Array<Record<string, unknown>>> => ipcRenderer.invoke(IPC.accountSessions, { id }),
   faceEnroll: (descriptor: number[], account: { username: string; displayName: string; photo?: string | null }): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke(IPC.faceEnroll, { descriptor, account }),
   faceAdminEnroll: (id: string, descriptor: number[]): Promise<{ ok: boolean; error?: string }> =>

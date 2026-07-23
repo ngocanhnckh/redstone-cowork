@@ -23,6 +23,9 @@ const nextConfig: NextConfig = {
       { source: "/accounts/:path*", destination: `${API_URL}/accounts/:path*` },
       // Inbound Jira webhook (secret-gated in the API) → agent mission notifications.
       { source: "/hooks/:path*", destination: `${API_URL}/hooks/:path*` },
+      // Server registry & ACL (admin-assigned machines + self-added VPS).
+      { source: "/servers", destination: `${API_URL}/servers` },
+      { source: "/servers/:path*", destination: `${API_URL}/servers/:path*` },
       { source: "/sessions", destination: `${API_URL}/sessions` },
       { source: "/sessions/:path*", destination: `${API_URL}/sessions/:path*` },
       { source: "/decisions", destination: `${API_URL}/decisions` },

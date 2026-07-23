@@ -99,6 +99,11 @@ import { JiraOAuthController } from "./adapters/http/jira-oauth.controller";
 import { JiraOAuthService } from "./application/jira-oauth.service";
 import { FaceLoginController, FaceEnrollController } from "./adapters/http/face.controller";
 import { FaceService } from "./application/face.service";
+import { ServersController } from "./adapters/http/servers.controller";
+import { ServersService } from "./application/servers.service";
+import { SERVER_STORE } from "./domain/servers/server-store.port";
+import { InMemoryServerStore } from "./adapters/persistence/in-memory-server-store";
+import { PostgresServerStore } from "./adapters/persistence/postgres-server-store";
 import { AccountsService } from "./application/accounts.service";
 import { ACCOUNT_STORE } from "./domain/accounts/account-store.port";
 import { InMemoryAccountStore } from "./adapters/persistence/in-memory-account-store";
@@ -122,7 +127,7 @@ import { PromptLoader } from "./infrastructure/prompts/prompt-loader";
 import type { Pool } from "pg";
 
 @Module({
-  controllers: [HealthController, EventsController, SessionsController, DecisionsController, StreamController, PushController, ConnectionsController, OAuthController, MicrosoftOAuthController, DevicesController, InstallController, LlmController, AuthController, HostsController, InventoryController, AccessKeysController, TelemetryController, SkillsController, TunnelController, ClaudeConfigsController, JiraController, AccountsController, JiraHooksController, JiraOAuthController, FaceLoginController, FaceEnrollController],
+  controllers: [HealthController, EventsController, SessionsController, DecisionsController, StreamController, PushController, ConnectionsController, OAuthController, MicrosoftOAuthController, DevicesController, InstallController, LlmController, AuthController, HostsController, InventoryController, AccessKeysController, TelemetryController, SkillsController, TunnelController, ClaudeConfigsController, JiraController, AccountsController, JiraHooksController, JiraOAuthController, FaceLoginController, FaceEnrollController, ServersController],
   providers: [
     RecordEventUseCase,
     SessionsService,
@@ -241,6 +246,15 @@ import type { Pool } from "pg";
     AccountsService,
     JiraOAuthService,
     FaceService,
+    {
+      provide: SERVER_STORE,
+      inject: [PG_POOL, ACCOUNT_STORE],
+      useFactory: (pool: Pool | null, accounts: import("./domain/accounts/account-store.port").AccountStore) =>
+        pool
+          ? new PostgresServerStore(pool)
+          : new InMemoryServerStore(async (id) => (await accounts.findById(id))?.username ?? null),
+    },
+    ServersService,
     SettingsService,
     ExternalApiGuard,
     {

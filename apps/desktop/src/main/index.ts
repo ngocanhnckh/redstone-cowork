@@ -364,6 +364,15 @@ ipcMain.handle(IPC.redstoneLogin, async (_e, a: { serverUrl: string; username: s
 });
 // Face enrollment: the renderer computes the descriptor; we relay it + persist the
 // returned device secret locally so face unlock survives the away-lock.
+ipcMain.handle(IPC.serversList, () => api.serversList());
+ipcMain.handle(IPC.serverCreate, (_e, a: { input: unknown }) => api.serverCreate(a.input));
+ipcMain.handle(IPC.serverUpdate, (_e, a: { id: string; patch: unknown }) => api.serverUpdate(a.id, a.patch));
+ipcMain.handle(IPC.serverDelete, (_e, a: { id: string }) => api.serverDelete(a.id));
+ipcMain.handle(IPC.serverGrant, (_e, a: { id: string; username: string }) => api.serverGrant(a.id, a.username));
+ipcMain.handle(IPC.serverRevoke, (_e, a: { id: string; accountId: string }) => api.serverRevoke(a.id, a.accountId));
+ipcMain.handle(IPC.serverCoworkKey, () => api.serverCoworkKey());
+ipcMain.handle(IPC.accountsAnalytics, () => api.accountsAnalytics());
+ipcMain.handle(IPC.accountSessions, (_e, a: { id: string }) => api.accountSessions(a.id));
 ipcMain.handle(IPC.faceEnroll, async (_e, a: { descriptor: number[]; account: { username: string; displayName: string; photo?: string | null } }) => {
   try {
     const label = `${hostname()} · ${process.platform}`;

@@ -18,6 +18,7 @@ const toAccount = (r: Row): Account => ({
   mattermost: r.mattermost ?? "",
   phone: r.phone ?? "",
   webhook: r.webhook ?? "",
+  jiraProject: r.jiraProject ?? "",
   createdAt: r.createdAt,
   disabledAt: r.disabledAt,
 });

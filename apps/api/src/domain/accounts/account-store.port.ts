@@ -15,6 +15,7 @@ export type NewAccountRecord = {
   mattermost?: string;
   phone?: string;
   webhook?: string;
+  jiraProject?: string;
 };
 
 export type AccountTokenRecord = {

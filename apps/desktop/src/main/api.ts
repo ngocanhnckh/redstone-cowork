@@ -101,6 +101,18 @@ export async function accountLogin(
   return j as { token: string; account: { username: string; displayName: string; role: string } };
 }
 
+export async function accountsAnalytics(): Promise<unknown[]> { return (await req("/accounts/analytics")).json(); }
+export async function accountSessions(id: string): Promise<unknown[]> { return (await req(`/accounts/${encodeURIComponent(id)}/sessions`)).json(); }
+
+/** ——— Server registry ——— */
+export async function serversList(): Promise<unknown[]> { return (await req("/servers")).json(); }
+export async function serverCreate(input: unknown): Promise<unknown> { return (await req("/servers", { method: "POST", body: JSON.stringify(input) })).json(); }
+export async function serverUpdate(id: string, patch: unknown): Promise<unknown> { return (await req(`/servers/${encodeURIComponent(id)}`, { method: "POST", body: JSON.stringify(patch) })).json(); }
+export async function serverDelete(id: string): Promise<unknown> { return (await req(`/servers/${encodeURIComponent(id)}`, { method: "DELETE" })).json(); }
+export async function serverGrant(id: string, username: string): Promise<unknown> { return (await req(`/servers/${encodeURIComponent(id)}/access`, { method: "POST", body: JSON.stringify({ username }) })).json(); }
+export async function serverRevoke(id: string, accountId: string): Promise<unknown> { return (await req(`/servers/${encodeURIComponent(id)}/access/${encodeURIComponent(accountId)}`, { method: "DELETE" })).json(); }
+export async function serverCoworkKey(): Promise<{ publicKey: string | null }> { return (await req("/servers/cowork-key")).json(); }
+
 /** Enroll the current agent's face on this device → returns a one-time device secret. */
 export async function faceEnroll(descriptor: number[], deviceLabel: string): Promise<{ deviceSecret: string }> {
   return (await req("/accounts/me/face/enroll", { method: "POST", body: JSON.stringify({ descriptor, deviceLabel }) })).json();

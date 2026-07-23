@@ -16,12 +16,13 @@ export function loadFaceModels(): Promise<void> {
     loading = (async () => {
       // Force the WebGL backend: TF.js otherwise prefers WASM, whose .wasm binaries
       // we don't bundle (and WebGL is always available in the Electron renderer).
+      const tf = faceapi.tf as unknown as { setBackend(b: string): Promise<boolean>; ready(): Promise<void> };
       try {
-        await faceapi.tf.setBackend("webgl");
+        await tf.setBackend("webgl");
       } catch {
-        await faceapi.tf.setBackend("cpu"); // last-resort fallback
+        await tf.setBackend("cpu"); // last-resort fallback
       }
-      await faceapi.tf.ready();
+      await tf.ready();
       await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
       await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
       await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);

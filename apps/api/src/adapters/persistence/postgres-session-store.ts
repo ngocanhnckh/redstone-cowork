@@ -95,6 +95,10 @@ export class PostgresSessionStore implements SessionStore {
     // Idempotent — only stamps the first close, so a re-reap keeps the original time.
     await this.pool.query(`UPDATE sessions SET closed_at = $2 WHERE id = $1 AND closed_at IS NULL`, [id, at]);
   }
+  async listAllIncludingClosed(): Promise<AgentSession[]> {
+    const { rows } = await this.pool.query(`SELECT ${ROW} FROM sessions ORDER BY last_seen_at DESC`);
+    return rows.map((r) => AgentSessionSchema.parse(r));
+  }
   async setAccount(id: string, accountId: string): Promise<void> {
     await this.pool.query(`UPDATE sessions SET account_id = $2 WHERE id = $1`, [id, accountId]);
   }

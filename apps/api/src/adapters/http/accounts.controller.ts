@@ -96,6 +96,20 @@ export class AccountsController {
     return this.accounts.loginAudit({ accountId: accountId || undefined, limit: n });
   }
 
+  /** Admin console: per-agent token spend + session counts, ranked by cost. */
+  @Get("analytics")
+  async analytics(@Req() req: GuardedRequest) {
+    requireAdmin(req);
+    return this.accounts.analytics();
+  }
+
+  /** One agent's session history (admin, or the agent's own). */
+  @Get(":id/sessions")
+  async sessionHistory(@Req() req: GuardedRequest, @Param("id") id: string) {
+    if (!isAdminScope(req) && req.account?.id !== id) throw new ForbiddenException("admin only");
+    return this.accounts.sessionHistory(id);
+  }
+
   @Post("logout")
   @HttpCode(200)
   async logout(@Req() req: GuardedRequest) {
