@@ -1,5 +1,44 @@
 import { useRef, useState } from "react";
 import type { CustomApp } from "./CustomAppPanel";
+import type { AppTheme } from "./appTheme";
+
+const THEMES: { key: AppTheme; label: string }[] = [
+  { key: "off", label: "Off" },
+  { key: "dark", label: "Dark" },
+  { key: "hitech", label: "Hi-tech" },
+];
+
+/** Segmented Off · Dark · Hi-tech control for an app's injected theme. */
+function ThemePicker({ value, onChange }: { value: AppTheme; onChange: (t: AppTheme) => void }) {
+  return (
+    <div style={{ display: "inline-flex", border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden" }}>
+      {THEMES.map((t) => {
+        const on = value === t.key;
+        return (
+          <button
+            key={t.key}
+            onClick={() => onChange(t.key)}
+            title={t.key === "off" ? "No theme — site's own look" : `Restyle the app (${t.label})`}
+            style={{
+              border: "none", cursor: "pointer", padding: "3px 9px", fontSize: 11,
+              fontFamily: "var(--font-mono)", letterSpacing: "0.02em",
+              background: on ? "rgb(var(--primary) / 0.28)" : "transparent",
+              color: on ? "var(--text)" : "var(--text-soft)",
+            }}
+          >
+            {t.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+const cssBox: React.CSSProperties = {
+  width: "100%", boxSizing: "border-box", border: "1px solid var(--border)", background: "rgba(0,0,0,0.28)",
+  color: "var(--text)", borderRadius: 8, padding: "8px 10px", fontSize: 11.5, outline: "none",
+  fontFamily: "var(--font-mono)", resize: "vertical", minHeight: 60,
+};
 
 /** Normalize a typed address into a loadable URL (default to https). */
 function normalizeUrl(raw: string): string {
@@ -27,7 +66,7 @@ export function AppIcon({ icon, size = 18 }: { icon: string | null; size?: numbe
  * is chosen the site's favicon is used automatically once the app first loads.
  */
 export default function AppsModal({
-  apps, workspaceKey, workspaceName, onAdd, onRemove, onClose,
+  apps, workspaceKey, workspaceName, onAdd, onRemove, onUpdate, onClose,
 }: {
   apps: CustomApp[];
   /** Current workspace key (`machine:cwd`) or null when no session is focused. */
@@ -36,6 +75,7 @@ export default function AppsModal({
   workspaceName: string | null;
   onAdd: (app: CustomApp) => void;
   onRemove: (id: string) => void;
+  onUpdate: (id: string, patch: Partial<CustomApp>) => void;
   onClose: () => void;
 }) {
   const [name, setName] = useState("");
@@ -43,7 +83,11 @@ export default function AppsModal({
   const [icon, setIcon] = useState<string | null>(null);
   const [wsOnly, setWsOnly] = useState(false);
   const [ownProfile, setOwnProfile] = useState(false);
+  const [theme, setTheme] = useState<AppTheme>("off");
+  const [customCss, setCustomCss] = useState("");
   const [err, setErr] = useState<string | null>(null);
+  // Which existing app row has its Custom CSS editor expanded.
+  const [cssOpen, setCssOpen] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const seq = useRef(0);
 
@@ -61,8 +105,8 @@ export default function AppsModal({
     try { new URL(finalUrl); } catch { setErr("that doesn't look like a valid URL"); return; }
     // Unique-ish id without Date.now(): time-ish counter + name slug.
     const id = `${name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 24)}-${++seq.current}${apps.length}`;
-    onAdd({ id, name: name.trim(), url: finalUrl, icon, workspace: wsOnly ? workspaceKey : null, sessionProfile: ownProfile });
-    setName(""); setUrl(""); setIcon(null); setWsOnly(false); setOwnProfile(false); setErr(null);
+    onAdd({ id, name: name.trim(), url: finalUrl, icon, workspace: wsOnly ? workspaceKey : null, sessionProfile: ownProfile, theme, customCss: customCss.trim() || null });
+    setName(""); setUrl(""); setIcon(null); setWsOnly(false); setOwnProfile(false); setTheme("off"); setCustomCss(""); setErr(null);
   };
 
   return (
@@ -81,28 +125,54 @@ export default function AppsModal({
         {/* Existing apps */}
         {apps.length > 0 && (
           <div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: 16 }}>
-            {apps.map((a) => (
-              <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 10px", borderRadius: 9, border: "1px solid var(--border)" }}>
-                <AppIcon icon={a.icon} size={20} />
-                <div style={{ minWidth: 0, flex: 1 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <span style={{ fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.name}</span>
-                    {a.workspace && (
-                      <span className="mono" title={`Only in workspace: ${a.workspace}`} style={{ flexShrink: 0, fontSize: 8.5, letterSpacing: "0.06em", textTransform: "uppercase", padding: "1px 6px", borderRadius: 999, background: "rgb(var(--primary) / 0.18)", color: "var(--text-soft)" }}>
-                        workspace
-                      </span>
-                    )}
-                    {a.sessionProfile && (
-                      <span className="mono" title="Isolated browser profile" style={{ flexShrink: 0, fontSize: 8.5, letterSpacing: "0.06em", textTransform: "uppercase", padding: "1px 6px", borderRadius: 999, background: "rgb(var(--accent) / 0.16)", color: "var(--text-soft)" }}>
-                        profile
-                      </span>
-                    )}
+            {apps.map((a) => {
+              const open = cssOpen === a.id;
+              return (
+              <div key={a.id} style={{ display: "flex", flexDirection: "column", gap: 8, padding: "7px 10px", borderRadius: 9, border: "1px solid var(--border)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <AppIcon icon={a.icon} size={20} />
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.name}</span>
+                      {a.workspace && (
+                        <span className="mono" title={`Only in workspace: ${a.workspace}`} style={{ flexShrink: 0, fontSize: 8.5, letterSpacing: "0.06em", textTransform: "uppercase", padding: "1px 6px", borderRadius: 999, background: "rgb(var(--primary) / 0.18)", color: "var(--text-soft)" }}>
+                          workspace
+                        </span>
+                      )}
+                      {a.sessionProfile && (
+                        <span className="mono" title="Isolated browser profile" style={{ flexShrink: 0, fontSize: 8.5, letterSpacing: "0.06em", textTransform: "uppercase", padding: "1px 6px", borderRadius: 999, background: "rgb(var(--accent) / 0.16)", color: "var(--text-soft)" }}>
+                          profile
+                        </span>
+                      )}
+                    </div>
+                    <div className="mono faint" style={{ fontSize: 10, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.url}</div>
                   </div>
-                  <div className="mono faint" style={{ fontSize: 10, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.url}</div>
+                  <button onClick={() => onRemove(a.id)} title="Remove app" style={{ border: "1px solid var(--border)", background: "transparent", color: "#e0736a", borderRadius: 8, padding: "3px 9px", cursor: "pointer", fontSize: 12 }}>remove</button>
                 </div>
-                <button onClick={() => onRemove(a.id)} title="Remove app" style={{ border: "1px solid var(--border)", background: "transparent", color: "#e0736a", borderRadius: 8, padding: "3px 9px", cursor: "pointer", fontSize: 12 }}>remove</button>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span className="mono faint" style={{ fontSize: 9.5, letterSpacing: "0.08em", textTransform: "uppercase" }}>Theme</span>
+                  <ThemePicker value={a.theme ?? "off"} onChange={(t) => onUpdate(a.id, { theme: t })} />
+                  <span style={{ flex: 1 }} />
+                  <button
+                    onClick={() => setCssOpen(open ? null : a.id)}
+                    title="Per-app custom CSS"
+                    style={{ border: "1px solid var(--border)", background: open ? "rgb(var(--primary) / 0.18)" : "transparent", color: "var(--text-soft)", borderRadius: 8, padding: "3px 9px", cursor: "pointer", fontSize: 11, fontFamily: "var(--font-mono)" }}
+                  >
+                    {"</>"} CSS{a.customCss ? " ✦" : ""}
+                  </button>
+                </div>
+                {open && (
+                  <textarea
+                    value={a.customCss ?? ""}
+                    onChange={(e) => onUpdate(a.id, { customCss: e.target.value || null })}
+                    placeholder={"/* custom CSS injected into this app */\n.navbar { background: #0e0d0c !important; }"}
+                    spellCheck={false}
+                    style={cssBox}
+                  />
+                )}
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
@@ -134,6 +204,18 @@ export default function AppsModal({
               <span className="mono faint" style={{ display: "block", fontSize: 10.5, marginTop: 1 }}>Isolated logins, cookies, storage &amp; cache — not shared with the rest of the app.</span>
             </span>
           </label>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span className="mono faint" style={{ fontSize: 9.5, letterSpacing: "0.08em", textTransform: "uppercase" }}>Theme</span>
+            <ThemePicker value={theme} onChange={setTheme} />
+            <span className="mono faint" style={{ fontSize: 10 }}>restyle the app to match the cockpit</span>
+          </div>
+          <textarea
+            value={customCss}
+            onChange={(e) => setCustomCss(e.target.value)}
+            placeholder={"Custom CSS (optional) — injected into the app, appended after the theme"}
+            spellCheck={false}
+            style={{ ...cssBox, minHeight: 48 }}
+          />
           {err && <div className="mono" style={{ color: "#e0736a", fontSize: 11 }}>{err}</div>}
           <button className="glass-btn--clay" onClick={submit} style={{ padding: "9px 16px", fontSize: 13, fontWeight: 600, alignSelf: "flex-start" }}>＋ Add app</button>
         </div>

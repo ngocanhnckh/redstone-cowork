@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useStore } from "../store";
 import { wireOpenTab } from "./openTabIntercept";
+import { themeCss, type AppTheme } from "./appTheme";
 
 // Reuse the same imperative <webview> surface as BrowserPanel (its `declare global`
 // augments JSX for the whole app, so the intrinsic + partition/allowpopups exist).
@@ -16,6 +17,8 @@ type WebviewEl = HTMLElement & {
   findInPage(text: string, options?: { forward?: boolean; findNext?: boolean }): number;
   stopFindInPage(action: "clearSelection" | "keepSelection" | "activateSelection"): void;
   executeJavaScript(code: string): Promise<unknown>;
+  insertCSS(css: string): Promise<string>;
+  removeInsertedCSS(key: string): Promise<void>;
 };
 
 export type CustomApp = {
@@ -29,6 +32,11 @@ export type CustomApp = {
   /** When true, the app uses its OWN persistent browser profile (isolated cookies,
    * storage, logins, cache) instead of the shared global one. */
   sessionProfile?: boolean;
+  /** Cosmetic theme injected into the app's page to match the cockpit. "off" (default)
+   * leaves the site untouched; "dark"/"hitech" inject a universal restyle (appTheme.ts). */
+  theme?: AppTheme;
+  /** Optional per-app CSS, appended after the theme (always wins). */
+  customCss?: string | null;
 };
 
 /** The webview partition for an app: its own persistent profile, or the shared one. */
@@ -138,6 +146,32 @@ export default function CustomAppPanel({ app, onFavicon }: { app: CustomApp; onF
     wv.addEventListener("page-favicon-updated", onFav as EventListener);
     return () => wv.removeEventListener("page-favicon-updated", onFav as EventListener);
   }, [app.id, onFavicon]);
+
+  // Theme injection: restyle the guest page to match the cockpit. The inserted-CSS
+  // key is kept so we can swap it out live when the theme/customCss change (no reload)
+  // and re-apply on every fresh document (dom-ready). All guarded — never throws.
+  const cssKeyRef = useRef<string | null>(null);
+  const css = themeCss(app.theme, app.customCss);
+  useEffect(() => {
+    const wv = ref.current;
+    if (!wv) return;
+    let disposed = false;
+    const apply = async () => {
+      try {
+        const prev = cssKeyRef.current;
+        cssKeyRef.current = null;
+        if (prev) { try { await wv.removeInsertedCSS(prev); } catch { /* stale doc */ } }
+        if (!disposed && css) cssKeyRef.current = await wv.insertCSS(css);
+      } catch { /* guest not ready — dom-ready will fire again */ }
+    };
+    // Apply now (theme/customCss changed on an already-loaded page) and on each new doc.
+    void apply();
+    wv.addEventListener("dom-ready", apply as EventListener);
+    return () => {
+      disposed = true;
+      wv.removeEventListener("dom-ready", apply as EventListener);
+    };
+  }, [app.id, css]);
 
   // Keep the mini-app pinned to its own domain: register this guest's home URL so
   // the main process pops cross-domain links out to the real browser. dom-ready

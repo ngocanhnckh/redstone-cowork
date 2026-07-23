@@ -4,7 +4,7 @@ import { dirname, join, basename, extname, normalize, sep } from "node:path";
 import { saveConfig, loadConfig, clearConfig } from "./config";
 import * as api from "./api";
 import { getWorkspaceConfig, saveWorkspaceConfig, getSshHost, setSshHost, isLocalMachine, setServerHosts, warmSshMaster } from "./workspace";
-import { getHostIps } from "./host-info";
+import { getHostIps, getHostConnections } from "./host-info";
 import {
   ensureTerminal,
   writeTerminal,
@@ -459,6 +459,7 @@ ipcMain.handle(IPC.workspaceIsLocal, (_e, a: { machine: string }) => {
   }
 });
 ipcMain.handle(IPC.hostIps, (_e, a: { machine: string }) => getHostIps(a.machine));
+ipcMain.handle(IPC.hostConnections, (_e, a: { machine: string }) => getHostConnections(a.machine));
 // Warm the SSH master for a remote host when its file/terminal UI opens, so the
 // first file read doesn't pay the (relay-amplified) connection handshake.
 ipcMain.handle(IPC.warmHost, (_e, a: { machine: string }) => { warmSshMaster(a.machine); return { ok: true }; });

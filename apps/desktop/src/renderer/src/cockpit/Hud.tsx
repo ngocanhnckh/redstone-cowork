@@ -26,6 +26,7 @@ import ContextGauge from "./ContextGauge";
 import ModeSelect from "./ModeSelect";
 import TokenSpendWidget from "./TokenSpendWidget";
 import SessionInfoWidget from "./SessionInfoWidget";
+import WidgetLayer from "./WidgetLayer";
 import { GitInfo } from "../types";
 import { useAppearance, type DockPos } from "../appearance";
 import { loadAutoLayout, screenClass, resolveTemplate, useAutoLayout, loadTemplateNames, saveAutoLayout, type ScreenClass } from "../autoLayout";
@@ -1435,6 +1436,8 @@ function HudConsole() {
       return out;
     });
   };
+  const updateApp = (appId: string, patch: Partial<CustomApp>) =>
+    setApps((a) => a.map((x) => (x.id === appId ? { ...x, ...patch } : x)));
   const setAppFavicon = useCallback((appId: string, url: string) =>
     setApps((a) => a.map((x) => (x.id === appId && !x.icon ? { ...x, icon: url } : x))), []);
 
@@ -1659,6 +1662,9 @@ function HudConsole() {
       <div ref={canvasRef} style={grid
         ? { flex: 1, minHeight: 0, display: "grid", gap: 10, gridTemplateColumns: cfg.cols, gridTemplateRows: cfg.rows, gridTemplateAreas: cfg.template }
         : { flex: 1, minHeight: 0, position: "relative", overflow: "hidden" }}>
+        {/* Floating widget canvas — sits over the backdrop, behind every app window
+            (windows render at zIndex ≥ 1). Windows mode only. */}
+        {!grid && <WidgetLayer />}
         {windowList.map((p) => (
           <PanelShell
             key={p.id}
@@ -1764,7 +1770,7 @@ function HudConsole() {
       </div>
 
       {appsModal && (
-        <AppsModal apps={apps} workspaceKey={workspaceKey} workspaceName={workspaceName} onAdd={addApp} onRemove={removeApp} onClose={() => setAppsModal(false)} />
+        <AppsModal apps={apps} workspaceKey={workspaceKey} workspaceName={workspaceName} onAdd={addApp} onRemove={removeApp} onUpdate={updateApp} onClose={() => setAppsModal(false)} />
       )}
     </div>
   );

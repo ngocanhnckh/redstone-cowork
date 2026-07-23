@@ -45,3 +45,51 @@ export async function getHostIps(machine: string): Promise<{ local: string | nul
     return { local: null, public: null };
   }
 }
+
+export type HostPeer = { ip: string; port: number | null; count: number };
+
+// List the remote IPs the host currently has established TCP connections with — the
+// "who is this box talking to" recon feed behind the Recon Radar widget. `ss` is the
+// modern tool; `netstat` is the busybox/older fallback. We only need the peer column,
+// so the raw table is parsed in JS (below). Best-effort — empty on any failure.
+const CONN_SCRIPT = `ss -tn 2>/dev/null || netstat -tn 2>/dev/null`;
+
+/** Parse an `ss -tn` / `netstat -tn` table into deduped external peers (by IP). The
+ * peer address is the LAST `IPv4:port` token on each line (local address comes first);
+ * loopback/link-local are dropped. Deterministic order (by descending count). */
+export function parsePeers(raw: string): HostPeer[] {
+  const byIp = new Map<string, { port: number | null; count: number }>();
+  for (const line of raw.split("\n")) {
+    // Every `1.2.3.4:5678` on the line; the peer (foreign) address is the last one.
+    const hits = line.match(/(\d{1,3}(?:\.\d{1,3}){3}):(\d+)/g);
+    if (!hits || hits.length === 0) continue;
+    const last = hits[hits.length - 1];
+    const m = last.match(/^(\d{1,3}(?:\.\d{1,3}){3}):(\d+)$/);
+    if (!m) continue;
+    const ip = m[1];
+    if (ip === "127.0.0.1" || ip === "0.0.0.0" || ip.startsWith("127.") || ip.startsWith("169.254.")) continue;
+    const port = Number(m[2]);
+    const prev = byIp.get(ip);
+    if (prev) prev.count += 1;
+    else byIp.set(ip, { port: Number.isFinite(port) ? port : null, count: 1 });
+  }
+  return [...byIp.entries()]
+    .map(([ip, v]) => ({ ip, port: v.port, count: v.count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 40);
+}
+
+export async function getHostConnections(machine: string): Promise<HostPeer[]> {
+  try {
+    let raw = "";
+    if (isLocalMachine(machine)) {
+      raw = await run("/bin/sh", ["-c", CONN_SCRIPT]);
+    } else {
+      const target = await getSshTarget(machine);
+      raw = await run("ssh", [...sshMuxOpts(), ...target.opts, target.host, CONN_SCRIPT]);
+    }
+    return parsePeers(raw);
+  } catch {
+    return [];
+  }
+}
