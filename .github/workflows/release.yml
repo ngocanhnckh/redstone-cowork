@@ -41,6 +41,12 @@ jobs:
       - name: Build shared package
         run: pnpm --filter @rcw/shared build || true
 
+      # Fetch the offline GeoIP database (DB-IP City Lite, gitignored) so the Network
+      # Map widget ships bundled in the packaged app (electron-builder extraResources).
+      # The land geojson is already committed, so this only downloads the ~130MB mmdb.
+      - name: Fetch GeoIP database
+        run: pnpm --filter @rcw/desktop geoip
+
       # No native compilation: node-pty ships N-API prebuilds and npmRebuild is off,
       # so no C++ toolchain / Python / MSVC is needed on any runner.
       - name: Build and package
