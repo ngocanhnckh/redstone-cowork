@@ -826,3 +826,36 @@ input:focus, textarea:focus {
     border-color: rgb(var(--primary) / 0.5) !important;
     box-shadow: 0 0 20px -7px rgb(var(--primary) / 0.95), inset 0 0 12px -9px rgb(var(--primary-soft));
 }
+
+/* =====================================================================
+   SESSION CARD "working" glow — a bright arc that ORBITS the card border
+   while the session is thinking, instead of an inline loader eating the
+   card's width (the session name keeps full width). Masked to the ring.
+   ===================================================================== */
+@keyframes rcw-card-orbit { to { transform: rotate(360deg); } }
+.rcw-card-working { position: relative; }
+.rcw-card-working::before {
+    content: "";
+    position: absolute;
+    inset: -1px;
+    border-radius: 14px;
+    padding: 1.5px;
+    pointer-events: none;
+    z-index: 0;
+    background: conic-gradient(
+        from 0deg,
+        transparent 0deg,
+        transparent 232deg,
+        rgb(var(--primary-soft) / 0.6) 300deg,
+        rgb(var(--accent)) 344deg,
+        rgb(var(--primary-soft) / 0.6) 356deg,
+        transparent 360deg
+    );
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    mask-composite: exclude;
+    animation: rcw-card-orbit 1.9s linear infinite;
+    filter: drop-shadow(0 0 5px rgb(var(--primary-soft) / 0.55));
+}
+.rcw-no-anim .rcw-card-working::before { animation: none; }

@@ -145,7 +145,7 @@ export default function QueueRail() {
         return (
           <div
             key={session.id}
-            className={focused ? "glass-inset" : "glass-inset glass-inset-hover"}
+            className={`${focused ? "glass-inset" : "glass-inset glass-inset-hover"}${kind === "working" ? " rcw-card-working" : ""}`}
             draggable
             onClick={() => setFocus(session.id)}
             onMouseEnter={() => setHoverId(session.id)}
@@ -188,20 +188,16 @@ export default function QueueRail() {
               />
             </span>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              <div style={{ fontSize: 11.5, fontWeight: 600, lineHeight: 1.2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {projectName(session.cwd)}
               </div>
-              <div className="mono faint" style={{ fontSize: 10.5, color: kind === "waiting" ? "rgb(var(--accent))" : undefined }}>
+              <div className="mono faint" style={{ fontSize: 10, color: kind === "waiting" ? "rgb(var(--accent))" : undefined }}>
                 {detail}
               </div>
             </div>
-            {/* Persistent "working" loader so you always know which session is busy
-                (previously hidden on hover, which read as it disappearing). */}
-            {kind === "working" && (
-              <span className="eq" style={{ flexShrink: 0 }} title="working…">
-                {[0, 1, 2].map((i) => <span key={i} className="eq-bar" style={{ animationDelay: `${i * 0.13}s` }} />)}
-              </span>
-            )}
+            {/* "working" state is shown by the glow ORBITING the card border (see the
+                .rcw-card-working class), not an inline loader — so the session name keeps
+                its full width. */}
             {/* Drag-to-reorder hint — reserves its slot so nothing shifts on hover. */}
             <span
               title="Drag to reorder"
