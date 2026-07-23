@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, Notification, shell, dialog, clipboard, protocol, net, desktopCapturer, session, webContents as webContentsModule, type Session } from "electron";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join, basename, extname, normalize, sep } from "node:path";
+import { readFile } from "node:fs/promises";
 import { saveConfig, loadConfig, clearConfig } from "./config";
 import * as api from "./api";
 import { getWorkspaceConfig, saveWorkspaceConfig, getSshHost, setSshHost, isLocalMachine, setServerHosts, warmSshMaster } from "./workspace";
@@ -1264,12 +1265,45 @@ app.whenReady().then(async () => {
   // scheme registration). app://bundle/<path> → the built renderer file; a path
   // that doesn't resolve to a real asset falls back to index.html (SPA routing).
   const rendererDir = join(here, "../renderer");
+  // MIME types for media served with byte-range support (see below).
+  const RANGE_MIME: Record<string, string> = {
+    ".wav": "audio/wav", ".mp3": "audio/mpeg", ".ogg": "audio/ogg",
+    ".mp4": "video/mp4", ".webm": "video/webm", ".m4a": "audio/mp4",
+  };
   protocol.handle("app", async (req) => {
     try {
       const rel = decodeURIComponent(new URL(req.url).pathname).replace(/^\/+/, "") || "index.html";
       // Contain within rendererDir — reject any ../ traversal out of the bundle.
       const abs = normalize(join(rendererDir, rel));
       if (abs !== rendererDir && !abs.startsWith(rendererDir + sep)) return new Response("", { status: 403 });
+      // Byte-range support for media. Chromium fetches larger <audio>/<video> assets
+      // with a Range header and expects 206 + Content-Range back. net.fetch over the
+      // asar answers a Range request with a broken 200 + truncated body, so media
+      // above ~32 KB fails to decode ("Format error") and stays silent. Serve the
+      // requested slice ourselves so all sound effects play in the packaged app.
+      const range = req.headers.get("Range");
+      if (range) {
+        try {
+          const buf = await readFile(abs);
+          const m = /bytes=(\d+)-(\d*)/.exec(range);
+          if (m) {
+            const start = Number(m[1]);
+            const end = m[2] ? Math.min(Number(m[2]), buf.length - 1) : buf.length - 1;
+            const chunk = buf.subarray(start, end + 1);
+            return new Response(chunk, {
+              status: 206,
+              headers: {
+                "Content-Type": RANGE_MIME[extname(abs).toLowerCase()] || "application/octet-stream",
+                "Content-Range": `bytes ${start}-${end}/${buf.length}`,
+                "Accept-Ranges": "bytes",
+                "Content-Length": String(chunk.length),
+              },
+            });
+          }
+        } catch {
+          // Fall through to the normal net.fetch path (e.g. missing file → 404 below).
+        }
+      }
       try {
         return await net.fetch(pathToFileURL(abs).toString());
       } catch {
