@@ -63,6 +63,10 @@ mac:
   extendInfo:
     NSCalendarsUsageDescription: Redstone Cowork shows your upcoming events in the Agenda widget.
     NSCalendarsFullAccessUsageDescription: Redstone Cowork shows your upcoming events in the Agenda widget.
+    # Face-scan sequence on the YITEC login + in-app video calls. Without this key
+    # macOS terminates the process on first camera access instead of prompting.
+    NSCameraUsageDescription: Redstone Cowork uses the camera for the sign-in face scan.
+    NSMicrophoneUsageDescription: Redstone Cowork uses the microphone for calls in the workspace browser.
 
 win:
   target:

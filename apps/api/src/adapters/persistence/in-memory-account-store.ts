@@ -75,9 +75,15 @@ export class InMemoryAccountStore implements AccountStore {
     this.tokens.set(rec.tokenHash, { ...rec, lastUsedAt: null, revokedAt: null });
   }
 
-  async findByTokenHash(tokenHash: string, now: Date): Promise<Account | null> {
+  async findByTokenHash(tokenHash: string, now: Date, maxIdleMs: number): Promise<Account | null> {
     const t = this.tokens.get(tokenHash);
     if (!t || t.revokedAt) return null;
+    // Idle expiry: a token unused for maxIdleMs is dead (the user walked away).
+    const lastActive = t.lastUsedAt ?? t.createdAt;
+    if (now.getTime() - lastActive.getTime() > maxIdleMs) {
+      t.revokedAt = now;
+      return null;
+    }
     const row = this.rows.get(t.accountId);
     if (!row || row.disabledAt) return null;
     t.lastUsedAt = now;

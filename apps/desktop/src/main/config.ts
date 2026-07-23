@@ -47,10 +47,14 @@ export function updateTokens(token: string, refreshToken?: string): void {
   fs.writeFileSync(configPath(), JSON.stringify(data), "utf8");
 }
 
-export function loadConfig(): { serverUrl: string; hasToken: boolean; isOrg: boolean } | null {
+export function loadConfig(): { serverUrl: string; hasToken: boolean; isOrg: boolean; isAccount: boolean } | null {
   const data = read();
   if (!data) return null;
-  return { serverUrl: data.serverUrl, hasToken: !!data.tokenEnc, isOrg: !!data.refreshEnc };
+  let isAccount = false;
+  try {
+    isAccount = !!data.tokenEnc && dec(data.tokenEnc).startsWith("rcwa_");
+  } catch { /* undecryptable token — treat as non-account */ }
+  return { serverUrl: data.serverUrl, hasToken: !!data.tokenEnc, isOrg: !!data.refreshEnc, isAccount };
 }
 
 export function getToken(): string | null {

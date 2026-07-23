@@ -3,7 +3,12 @@ import Login from "./Login";
 import Cockpit from "./cockpit/Cockpit";
 import BgVideo from "./cockpit/BgVideo";
 
-type ConfigState = { serverUrl: string; hasToken: boolean } | null | "loading";
+type ConfigState = { serverUrl: string; hasToken: boolean; isAccount?: boolean } | null | "loading";
+
+// Employee sessions lock after this long AWAY from the app (window unfocused).
+// While the app stays focused, no re-login is ever required; the server also
+// idles tokens out after the same window as a backstop.
+const AWAY_LOCK_MS = 30 * 60_000;
 
 export default function App() {
   const [configState, setConfigState] = useState<ConfigState>("loading");
@@ -16,6 +21,30 @@ export default function App() {
   useEffect(() => {
     recheck();
   }, [recheck]);
+
+  // Away-lock: enterprise account sessions sign out after 30 min unfocused.
+  const isAccount = configState !== "loading" && !!configState?.isAccount && !!configState?.hasToken;
+  useEffect(() => {
+    if (!isAccount) return;
+    let awaySince: number | null = document.hasFocus() ? null : Date.now();
+    const lock = async () => {
+      await window.cowork.clearConfig();
+      await recheck(); // token gone → login (face + credentials) screen
+    };
+    const check = () => {
+      if (awaySince !== null && Date.now() - awaySince > AWAY_LOCK_MS) void lock();
+    };
+    const onBlur = () => { awaySince ??= Date.now(); };
+    const onFocus = () => { check(); awaySince = null; };
+    const timer = setInterval(check, 60_000);
+    window.addEventListener("blur", onBlur);
+    window.addEventListener("focus", onFocus);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("blur", onBlur);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [isAccount, recheck]);
 
   let content: React.ReactNode;
   if (configState === "loading") {

@@ -77,15 +77,26 @@ export class PostgresAccountStore implements AccountStore {
     );
   }
 
-  async findByTokenHash(tokenHash: string, now: Date): Promise<Account | null> {
+  async findByTokenHash(tokenHash: string, now: Date, maxIdleMs: number): Promise<Account | null> {
+    // Idle expiry: a token unused for maxIdleMs is dead (the user walked away).
+    const cutoff = new Date(now.getTime() - maxIdleMs);
     const { rows } = await this.pool.query(
       `SELECT a.id, a.username, a.display_name AS "displayName", a.role,
               a.created_at AS "createdAt", a.disabled_at AS "disabledAt"
        FROM account_tokens t JOIN accounts a ON a.id = t.account_id
-       WHERE t.token_hash=$1 AND t.revoked_at IS NULL AND a.disabled_at IS NULL`,
-      [tokenHash]
+       WHERE t.token_hash=$1 AND t.revoked_at IS NULL AND a.disabled_at IS NULL
+         AND COALESCE(t.last_used_at, t.created_at) > $2`,
+      [tokenHash, cutoff]
     );
-    if (!rows[0]) return null;
+    if (!rows[0]) {
+      // Best-effort tombstone so an idled-out token can't be resurrected later.
+      await this.pool.query(
+        `UPDATE account_tokens SET revoked_at=$2 WHERE token_hash=$1 AND revoked_at IS NULL
+           AND COALESCE(last_used_at, created_at) <= $3`,
+        [tokenHash, now, cutoff]
+      );
+      return null;
+    }
     await this.pool.query(`UPDATE account_tokens SET last_used_at=$2 WHERE token_hash=$1`, [tokenHash, now]);
     return AccountSchema.parse(rows[0]);
   }

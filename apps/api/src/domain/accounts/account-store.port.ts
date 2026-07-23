@@ -30,8 +30,9 @@ export interface AccountStore {
   listLoginAudit(opts?: { accountId?: string; limit?: number }): Promise<LoginAuditEntry[]>;
 
   addToken(rec: AccountTokenRecord): Promise<void>;
-  /** Resolve a token hash to its (enabled) account; touches last_used_at. */
-  findByTokenHash(tokenHash: string, now: Date): Promise<Account | null>;
+  /** Resolve a token hash to its (enabled) account; touches last_used_at. A token
+   *  idle longer than maxIdleMs (no request since) is expired and resolves null. */
+  findByTokenHash(tokenHash: string, now: Date, maxIdleMs: number): Promise<Account | null>;
   revokeToken(tokenHash: string, at: Date): Promise<boolean>;
   revokeAllTokens(accountId: string, at: Date): Promise<number>;
 }

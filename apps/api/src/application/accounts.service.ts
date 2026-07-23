@@ -105,10 +105,18 @@ export class AccountsService implements OnModuleInit {
     return { token, account };
   }
 
-  /** Resolve a bearer to its account (null = not an account token / revoked / disabled). */
+  /** Idle window: a token with no request for this long expires (default 30 min).
+   *  While the app is open and focused it polls constantly, so an active session
+   *  never idles out — only time genuinely away from the app counts. */
+  static idleMs(): number {
+    const min = Number(process.env.ACCOUNT_IDLE_MINUTES);
+    return (Number.isFinite(min) && min > 0 ? min : 30) * 60_000;
+  }
+
+  /** Resolve a bearer to its account (null = unknown / revoked / disabled / idled out). */
   async verify(token: string): Promise<Account | null> {
     if (!token.startsWith("rcwa_")) return null;
-    return this.store.findByTokenHash(sha256(token), new Date());
+    return this.store.findByTokenHash(sha256(token), new Date(), AccountsService.idleMs());
   }
 
   async logout(token: string): Promise<void> {

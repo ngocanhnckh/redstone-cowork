@@ -145,6 +145,23 @@ describe("accounts (enterprise auth)", () => {
       expect(relog.status).toBe(401);
     });
 
+    it("token idles out after 30 minutes away, stays alive with activity", async () => {
+      const token = await login("anh.nguyen", "test-admin-password");
+      const store = (accounts as unknown as { store: import("../src/domain/accounts/account-store.port").AccountStore }).store;
+      const hash = (await import("node:crypto")).createHash("sha256").update(token).digest("hex");
+
+      // 29 minutes later: still valid (touches last_used_at → window restarts)
+      const t29 = new Date(Date.now() + 29 * 60_000);
+      expect(await store.findByTokenHash(hash, t29, AccountsService.idleMs())).not.toBeNull();
+      // 29 + 29 minutes: still valid because activity refreshed the window
+      const t58 = new Date(t29.getTime() + 29 * 60_000);
+      expect(await store.findByTokenHash(hash, t58, AccountsService.idleMs())).not.toBeNull();
+      // 31 minutes of silence: expired — and permanently revoked
+      const t89 = new Date(t58.getTime() + 31 * 60_000);
+      expect(await store.findByTokenHash(hash, t89, AccountsService.idleMs())).toBeNull();
+      expect(await store.findByTokenHash(hash, t89, AccountsService.idleMs())).toBeNull();
+    });
+
     it("instance token still works everywhere (back-compat)", async () => {
       const res = await request(app.getHttpServer()).get("/sessions").set("Authorization", `Bearer ${INSTANCE}`);
       expect(res.status).toBe(200);
