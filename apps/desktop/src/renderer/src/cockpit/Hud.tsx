@@ -1447,7 +1447,7 @@ function HudConsole() {
       case "ports": return session ? <SessionSettingsPanel key={`${session.id}-hud-settings`} sessionId={session.id} cwd={session.cwd} machine={session.machine} /> : none;
       case "devtools": return <DevToolsPanel sessionId={session?.id} active={!grid && !wins.wins.devtools?.min} />;
       case "activity": return <ActionFeed sessionId={session?.id} active={!grid && !wins.wins.activity?.min} />;
-      case "explorer": return session ? <FileBrowserEdex sessionId={session.id} cwd={session.cwd} machine={session.machine} active={!grid && !wins.wins.explorer?.min} /> : none;
+      case "explorer": return session ? <FileBrowserEdex key={`${session.id}-explorer`} sessionId={session.id} cwd={session.cwd} machine={session.machine} active={!grid && !wins.wins.explorer?.min} /> : none;
       default:
         if (isDockerId(id)) return <DockerLogPanel streamId={id} active={!grid && !wins.wins[id]?.min} />;
         if (isTermWinId(id)) { const h = wins.termHosts?.[id]; return h ? <MultiTerminal idPrefix={id} sessionId={h.sessionId} cwd={h.cwd} machine={h.machine} /> : null; }
