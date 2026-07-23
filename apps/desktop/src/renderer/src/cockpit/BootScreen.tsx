@@ -123,7 +123,9 @@ export default function BootScreen() {
   const [log, setLog] = useState<Line[]>([]);
   const [phase, setPhase] = useState<"log" | "title">("log");
   const [glitch, setGlitch] = useState(false);
+  const [flash, setFlash] = useState(false);
   const iRef = useRef(0);
+  const done = useRef(false);
   const accent = failed ? "#e0736a" : "rgb(var(--accent))";
 
   // Boot chime — once per launch, at the very start of the sequence.
@@ -131,29 +133,33 @@ export default function BootScreen() {
     if (!bootChimePlayed) { bootChimePlayed = true; playSfx("boot"); }
   }, []);
 
-  // Phase 1: stream the boot log with per-line delays; when done, hand off to the
-  // glitch title. Freezes immediately on error (the log stays; the footer shows why).
+  // The boot log types out fast; then at IMPACT_MS — the "dang" hit in edex-theme.wav
+  // (~1.59s in, measured) — the screen FLASHES and the glitch title lands, in sync with
+  // the sound. Freezes on error (the log stays; the footer shows why).
   useEffect(() => {
     if (failed) return;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout>;
+    const IMPACT_MS = 1590;
     const step = () => {
-      if (cancelled) return;
+      if (cancelled || done.current) return;
       const i = iRef.current;
-      if (i >= BOOT_LOG.length) {
-        timer = setTimeout(() => {
-          if (cancelled) return;
-          setPhase("title");
-          timer = setTimeout(() => { if (!cancelled) setGlitch(true); }, 440);
-        }, 240);
-        return;
-      }
+      if (i >= BOOT_LOG.length) return; // hold at end until the impact fires
       iRef.current = i + 1;
       setLog((cur) => [...cur, BOOT_LOG[i]]);
       timer = setTimeout(step, BOOT_LOG[i].d);
     };
     step();
-    return () => { cancelled = true; clearTimeout(timer); };
+    // The impact: flash + glitch title, synced to the dang.
+    const impact = setTimeout(() => {
+      if (cancelled) return;
+      done.current = true;
+      setPhase("title");
+      setGlitch(true);
+      setFlash(true);
+      setTimeout(() => { if (!cancelled) setFlash(false); }, 520);
+    }, IMPACT_MS);
+    return () => { cancelled = true; clearTimeout(timer); clearTimeout(impact); };
   }, [failed]);
 
   // Keep retrying on a NETWORK/server error so the app recovers when it's back. Don't
@@ -171,6 +177,7 @@ export default function BootScreen() {
       <style>{CSS}</style>
       <span className="rcw-boot-grid" />
       <span className="rcw-boot-scan" />
+      {flash && <div className="rcw-flash-overlay" />}
 
       {showTitle ? (
         <div className="rcw-boot-titlewrap">

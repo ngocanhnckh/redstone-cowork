@@ -1,7 +1,7 @@
 import ScreenSharePicker from "./ScreenSharePicker";
 import AmbientAudio from "./AmbientAudio";
 import ThinkingSound from "./ThinkingSound";
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { useStore } from "../store";
 import { startCockpit } from "../store";
 import QueueRail from "./QueueRail";
@@ -44,15 +44,8 @@ export default function Cockpit() {
   // by and the sound plays over an already-loaded cockpit. First launch only (the
   // timer runs once at mount; a later reconnect just uses hasLoaded).
   const [bootHeld, setBootHeld] = useState(true);
-  useEffect(() => { const t = setTimeout(() => setBootHeld(false), 3100); return () => clearTimeout(t); }, []);
+  useEffect(() => { const t = setTimeout(() => setBootHeld(false), 3000); return () => clearTimeout(t); }, []);
   const showBoot = !hasLoaded || bootHeld;
-  // A brief cyan flash when the splash hands off to the cockpit.
-  const [flash, setFlash] = useState(false);
-  const prevShowBoot = useRef(true);
-  useEffect(() => {
-    if (prevShowBoot.current && !showBoot) { setFlash(true); const t = setTimeout(() => setFlash(false), 480); prevShowBoot.current = showBoot; return () => clearTimeout(t); }
-    prevShowBoot.current = showBoot;
-  }, [showBoot]);
 
   // Quick "keep-wallpaper" fullscreen toggle (mirrors Settings › Appearance).
   const [fullscreen, setFullscreen] = useState(false);
@@ -145,7 +138,6 @@ export default function Cockpit() {
       <ScreenSharePicker />
       <AmbientAudio enabled={!showBoot} />
       <ThinkingSound />
-      {flash && <div className="rcw-flash-overlay" />}
       <div className="atmosphere">
         <div className="blob blob--a" />
         <div className="blob blob--b" />
