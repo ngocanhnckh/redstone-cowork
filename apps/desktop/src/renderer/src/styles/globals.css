@@ -832,7 +832,16 @@ input:focus, textarea:focus {
    while the session is thinking, instead of an inline loader eating the
    card's width (the session name keeps full width). Masked to the ring.
    ===================================================================== */
-@keyframes rcw-card-orbit { to { transform: rotate(360deg); } }
+/* Animate the conic gradient's START ANGLE (not a transform) so the bright arc
+   travels around the fixed ring smoothly — rotating the masked element instead
+   just spins the rounded rectangle and reads as frozen. Needs @property (supported
+   in the app's Chromium). */
+@property --rcw-orbit-a {
+    syntax: "<angle>";
+    initial-value: 0deg;
+    inherits: false;
+}
+@keyframes rcw-card-orbit { to { --rcw-orbit-a: 360deg; } }
 .rcw-card-working { position: relative; }
 .rcw-card-working::before {
     content: "";
@@ -843,12 +852,12 @@ input:focus, textarea:focus {
     pointer-events: none;
     z-index: 0;
     background: conic-gradient(
-        from 0deg,
+        from var(--rcw-orbit-a),
         transparent 0deg,
         transparent 232deg,
-        rgb(var(--primary-soft) / 0.6) 300deg,
+        rgb(var(--primary-soft) / 0.65) 300deg,
         rgb(var(--accent)) 344deg,
-        rgb(var(--primary-soft) / 0.6) 356deg,
+        rgb(var(--primary-soft) / 0.65) 356deg,
         transparent 360deg
     );
     -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
@@ -856,6 +865,5 @@ input:focus, textarea:focus {
     mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
     mask-composite: exclude;
     animation: rcw-card-orbit 1.9s linear infinite;
-    filter: drop-shadow(0 0 5px rgb(var(--primary-soft) / 0.55));
 }
 .rcw-no-anim .rcw-card-working::before { animation: none; }

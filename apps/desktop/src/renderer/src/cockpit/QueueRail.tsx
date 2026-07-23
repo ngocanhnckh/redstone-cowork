@@ -188,49 +188,41 @@ export default function QueueRail() {
               />
             </span>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 11.5, fontWeight: 600, lineHeight: 1.2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              <div style={{ fontSize: 11, fontWeight: 600, lineHeight: 1.25, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {projectName(session.cwd)}
               </div>
-              <div className="mono faint" style={{ fontSize: 10, color: kind === "waiting" ? "rgb(var(--accent))" : undefined }}>
+              <div className="mono faint" style={{ fontSize: 9, color: kind === "waiting" ? "rgb(var(--accent))" : undefined }}>
                 {detail}
               </div>
             </div>
-            {/* "working" state is shown by the glow ORBITING the card border (see the
-                .rcw-card-working class), not an inline loader — so the session name keeps
-                its full width. */}
-            {/* Drag-to-reorder hint — reserves its slot so nothing shifts on hover. */}
-            <span
-              title="Drag to reorder"
+            {/* "working" state is the glow ORBITING the card border (.rcw-card-working),
+                not an inline loader. The drag/dismiss controls are ABSOLUTE (overlay on
+                the right, revealed on hover), so they never steal the session name's
+                width — a gradient backdrop keeps text under them readable on hover. */}
+            <div
               style={{
-                flexShrink: 0, width: 11, textAlign: "center", cursor: "grab", fontSize: 13, lineHeight: 1,
-                color: "var(--border-strong)", opacity: hoverId === session.id ? 0.7 : 0, transition: "opacity 120ms",
-              }}
-            >
-              ⠿
-            </span>
-            {/* Dismiss (soft-close) — revealed on hover; small + stopPropagation so it
-                never selects the card. Muted, red-ish on hover to match the HUD. */}
-            <button
-              title="Dismiss session"
-              aria-label="Dismiss session"
-              onClick={(e) => {
-                e.stopPropagation();
-                dismissSession(session.id);
-              }}
-              style={{
-                flexShrink: 0, width: 18, height: 18, borderRadius: 6, padding: 0,
-                display: "grid", placeItems: "center", cursor: "pointer",
-                border: "none", background: "transparent", lineHeight: 1, fontSize: 13,
-                color: "var(--border-strong)",
-                opacity: hoverId === session.id ? 0.85 : 0,
-                transition: "opacity 120ms, color 120ms",
+                position: "absolute", right: 5, top: 0, bottom: 0, display: "flex", alignItems: "center", gap: 4,
+                paddingLeft: 18, borderRadius: "0 13px 13px 0",
+                opacity: hoverId === session.id ? 1 : 0, transition: "opacity 120ms",
                 pointerEvents: hoverId === session.id ? "auto" : "none",
+                background: "linear-gradient(to right, transparent, color-mix(in srgb, var(--app-panel) 90%, transparent) 35%)",
               }}
-              onMouseEnter={(e) => { e.currentTarget.style.color = "#e0736a"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.color = "var(--border-strong)"; }}
             >
-              ✕
-            </button>
+              <span title="Drag to reorder" style={{ cursor: "grab", fontSize: 12, lineHeight: 1, color: "var(--border-strong)" }}>⠿</span>
+              <button
+                title="Dismiss session"
+                aria-label="Dismiss session"
+                onClick={(e) => { e.stopPropagation(); dismissSession(session.id); }}
+                style={{
+                  width: 18, height: 18, borderRadius: 6, padding: 0, display: "grid", placeItems: "center", cursor: "pointer",
+                  border: "none", background: "transparent", lineHeight: 1, fontSize: 13, color: "var(--border-strong)",
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = "#e0736a"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = "var(--border-strong)"; }}
+              >
+                ✕
+              </button>
+            </div>
           </div>
         );
       })}
