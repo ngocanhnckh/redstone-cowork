@@ -621,6 +621,18 @@ ipcMain.handle(IPC.appGuestUnregister, (_e, a: { webContentsId: number }) => {
   return { ok: true };
 });
 
+// Make a themed custom-app guest composite TRANSPARENTLY so the cockpit's glass panel
+// shows through its (CSS-transparent) page. Off → back to an opaque white base.
+ipcMain.handle(IPC.appSetTransparent, (_e, a: { webContentsId: number; on: boolean }) => {
+  try {
+    const wc = typeof a?.webContentsId === "number" ? webContentsModule.fromId(a.webContentsId) : null;
+    // setBackgroundColor exists on WebContents at runtime (Electron ≥22) but isn't in
+    // the current type defs — cast to reach it.
+    (wc as unknown as { setBackgroundColor?: (c: string) => void } | null)?.setBackgroundColor?.(a.on ? "#00000000" : "#ffffff");
+  } catch { /* guest gone */ }
+  return { ok: true };
+});
+
 // Appearance: custom background image + macOS "keep wallpaper in fullscreen".
 const senderWindow = (e: Electron.IpcMainInvokeEvent): BrowserWindow | undefined =>
   BrowserWindow.fromWebContents(e.sender) ?? BrowserWindow.getAllWindows()[0] ?? undefined;

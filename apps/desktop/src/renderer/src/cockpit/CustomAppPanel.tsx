@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useStore } from "../store";
 import { wireOpenTab } from "./openTabIntercept";
-import { themeCss, type AppTheme } from "./appTheme";
+import { themeCss, isThemed, type AppTheme } from "./appTheme";
 
 // Reuse the same imperative <webview> surface as BrowserPanel (its `declare global`
 // augments JSX for the whole app, so the intrinsic + partition/allowpopups exist).
@@ -152,12 +152,16 @@ export default function CustomAppPanel({ app, onFavicon }: { app: CustomApp; onF
   // and re-apply on every fresh document (dom-ready). All guarded — never throws.
   const cssKeyRef = useRef<string | null>(null);
   const css = themeCss(app.theme, app.customCss);
+  const themed = isThemed(app.theme);
   useEffect(() => {
     const wv = ref.current;
     if (!wv) return;
     let disposed = false;
     const apply = async () => {
       try {
+        // Composite the guest transparently while themed so the cockpit glass shows
+        // through the (CSS-transparent) page; opaque again when the theme is off.
+        try { window.cowork.setAppTransparent(wv.getWebContentsId(), themed).catch(() => {}); } catch { /* not ready */ }
         const prev = cssKeyRef.current;
         cssKeyRef.current = null;
         if (prev) { try { await wv.removeInsertedCSS(prev); } catch { /* stale doc */ } }
@@ -171,7 +175,7 @@ export default function CustomAppPanel({ app, onFavicon }: { app: CustomApp; onF
       disposed = true;
       wv.removeEventListener("dom-ready", apply as EventListener);
     };
-  }, [app.id, css]);
+  }, [app.id, css, themed]);
 
   // Keep the mini-app pinned to its own domain: register this guest's home URL so
   // the main process pops cross-domain links out to the real browser. dom-ready
@@ -216,7 +220,7 @@ export default function CustomAppPanel({ app, onFavicon }: { app: CustomApp; onF
         </span>
         <button style={navBtn} title="Open in real browser" onClick={() => window.cowork.openExternal(app.url).catch(() => {})}>⧉</button>
       </div>
-      <div style={{ flex: 1, minHeight: 0, position: "relative", background: "rgba(0,0,0,0.18)" }}>
+      <div style={{ flex: 1, minHeight: 0, position: "relative", background: themed ? "color-mix(in srgb, var(--app-panel) 52%, transparent)" : "rgba(0,0,0,0.18)", backdropFilter: themed ? "blur(6px)" : undefined }}>
         {/* In-page find bar (Cmd/Ctrl+F) — floats over the top-right of the app */}
         {findOpen && (
           <div
@@ -257,7 +261,9 @@ export default function CustomAppPanel({ app, onFavicon }: { app: CustomApp; onF
           src={app.url}
           partition={appPartition(app)}
           allowpopups
-          style={{ width: "100%", height: "100%", border: 0 }}
+          // Transparent while themed so the guest's CSS-transparent page composites over
+          // the glass panel behind it (see setAppTransparent); opaque otherwise.
+          style={{ width: "100%", height: "100%", border: 0, backgroundColor: themed ? "transparent" : undefined }}
         />
       </div>
     </div>

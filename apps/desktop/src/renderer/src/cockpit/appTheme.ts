@@ -1,57 +1,49 @@
 // CSS injected into a custom app's <webview> to restyle it to match the cockpit.
-// Injected via webview.insertCSS() on dom-ready (see CustomAppPanel). The guest page
-// can't read our CSS variables, so accent values are hard-coded to the hi-tech cyan.
+// Injected via webview.insertCSS() on dom-ready (see CustomAppPanel).
+//
+// Strategy: instead of inverting colours (which turns already-DARK sites light), we
+// make the app's own surfaces TRANSPARENT and force text light. The cockpit's dark
+// glass panel then shows THROUGH the page (the translucent hi-tech look), and it reads
+// the same whether the site was originally light or dark. Custom CSS is appended last
+// (and, since there's no filter now, its colours behave intuitively).
 
 export type AppTheme = "off" | "dark" | "hitech";
 
-// Hi-tech cyan accent (matches the [data-theme="hitech"] --accent family).
-const CYAN = "#54e6ff";
+const LIGHT = "#e6f2f4";   // readable light text on the dark cockpit backdrop
+const CYAN = "#54e6ff";    // hi-tech accent (matches [data-theme="hitech"])
 
-// Universal "dark mode" by inversion (Dark-Reader-lite): invert the whole document,
-// spin the hue back so colours stay recognisable, then RE-invert media so photos,
-// videos, canvases and background images render normally. Works on ANY site with no
-// per-site knowledge — approximate, but reliable.
-const DARK = `
-html { background: #0e0d0c !important; }
-html { filter: invert(1) hue-rotate(180deg) !important; }
-img, video, picture, canvas, svg image, [style*="background-image"],
-[class*="avatar"], [class*="logo"], iframe, embed, object {
-  filter: invert(1) hue-rotate(180deg) !important;
+// Base "see-through dark": strip page backgrounds so our panel shows through, and force
+// text light. Media (img/video/canvas/svg) keep their own paint. Inputs get a faint
+// fill + border so fields stay visible on the glass.
+const BASE = `
+html, body { background: transparent !important; background-image: none !important; }
+body *:not(img):not(video):not(canvas):not(svg):not(svg *):not(picture) {
+  background-color: transparent !important;
 }
+body, body *:not(svg):not(svg *):not(path) { color: ${LIGHT} !important; }
+body *:not(svg):not(svg *) { border-color: rgba(230,242,244,0.14) !important; }
+input, textarea, select, [contenteditable="true"], [role="textbox"] {
+  background-color: rgba(255,255,255,0.06) !important;
+  color: ${LIGHT} !important;
+}
+::placeholder { color: rgba(230,242,244,0.45) !important; }
+::selection { background: rgba(84,230,255,0.30) !important; color: #eafcff !important; }
 `;
 
-// The hi-tech pass, layered on top of DARK: cyan accents on interactive chrome, cyan
-// text selection and scrollbars, and a NON-INTERACTIVE scanline + vignette overlay so
-// the app still works underneath. Kept selector-broad so it lands on arbitrary sites.
-const HITECH_EXTRA = `
-::selection { background: ${CYAN}66 !important; color: #eafcff !important; }
-a, a * { color: ${CYAN} !important; }
-button, [role="button"], input[type="submit"], input[type="button"] {
-  border-color: ${CYAN}55 !important;
-}
-:focus, :focus-visible {
-  outline-color: ${CYAN} !important;
-  box-shadow: 0 0 0 1px ${CYAN}66 !important;
-}
-* { scrollbar-color: ${CYAN}88 transparent; }
+// Hi-tech adds cyan accents on links/focus/scrollbars (no filter, so cyan stays cyan).
+const HITECH = `
+a, a *, [role="link"] { color: ${CYAN} !important; }
+:focus-visible { outline: 1px solid ${CYAN} !important; outline-offset: 1px; }
+* { scrollbar-color: ${CYAN}88 transparent; scrollbar-width: thin; }
 ::-webkit-scrollbar { width: 9px; height: 9px; }
-::-webkit-scrollbar-thumb { background: ${CYAN}66; border-radius: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-/* Scanline + vignette overlay — the DARK filter re-inverts this ::after because it
-   sits inside <html>, so we pre-invert the colours here to survive that. Fixed,
-   full-viewport, pointer-events:none so clicks pass through to the app. */
-html::after {
-  content: "" !important;
-  position: fixed !important;
-  inset: 0 !important;
-  z-index: 2147483647 !important;
-  pointer-events: none !important;
-  mix-blend-mode: screen !important;
-  background:
-    repeating-linear-gradient(0deg, rgba(0,0,0,0) 0px, rgba(0,0,0,0) 2px, rgba(120,220,255,0.05) 3px),
-    radial-gradient(120% 100% at 50% 50%, transparent 62%, rgba(0,40,60,0.35) 100%) !important;
-}
+::-webkit-scrollbar-thumb { background: ${CYAN}66 !important; border-radius: 6px; }
+::-webkit-scrollbar-track { background: transparent !important; }
 `;
+
+/** True when a theme is active (so the panel makes its webview transparent to match). */
+export function isThemed(theme: AppTheme | undefined): boolean {
+  return theme === "dark" || theme === "hitech";
+}
 
 /**
  * The full stylesheet for an app given its theme + optional custom CSS. Custom CSS is
@@ -59,8 +51,8 @@ html::after {
  */
 export function themeCss(theme: AppTheme | undefined, custom?: string | null): string {
   const parts: string[] = [];
-  if (theme === "dark") parts.push(DARK);
-  else if (theme === "hitech") parts.push(DARK, HITECH_EXTRA);
+  if (theme === "dark") parts.push(BASE);
+  else if (theme === "hitech") parts.push(BASE, HITECH);
   const trimmed = (custom ?? "").trim();
   if (trimmed) parts.push(trimmed);
   return parts.join("\n");

@@ -158,6 +158,7 @@ declare global {
       // navigations pop out to the real browser (keyed by wv.getWebContentsId()).
       registerAppGuest(webContentsId: number, homeUrl: string): Promise<{ ok: boolean }>;
       unregisterAppGuest(webContentsId: number): Promise<{ ok: boolean }>;
+      setAppTransparent(webContentsId: number, on: boolean): Promise<{ ok: boolean }>;
       // Main asks the renderer to open a URL in the focused session's workspace
       // browser (a custom app left its domain). Returns an unsubscribe fn.
       onOpenInWorkspaceBrowser(cb: (a: { url: string }) => void): () => void;

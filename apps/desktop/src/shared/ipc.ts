@@ -62,6 +62,7 @@ export const IPC = {
   calendarEvents: "api:calendar:events",
   networkMap: "api:network:map",
   weather: "api:weather",
+  appSetTransparent: "api:app:transparent",
   sshSetup: "api:ssh:setup",
   sshResultGet: "api:ssh:result:get",
   terminalStart: "api:terminal:start",
