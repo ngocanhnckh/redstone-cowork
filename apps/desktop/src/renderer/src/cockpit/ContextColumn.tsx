@@ -5,6 +5,7 @@ import Markdown from "./Markdown";
 import TodoProgress from "./TodoProgress";
 import JiraIssueModal from "./JiraIssueModal";
 import JiraStatusSelect from "./JiraStatusSelect";
+import AgentIdentityCard from "./AgentIdentityCard";
 
 type JiraIssue = { key: string; summary: string; status: string; statusCategory: "todo" | "inprogress" | "done"; assignee: string | null; url: string };
 const CAT_DOT: Record<string, string> = { todo: "var(--border-strong)", inprogress: "rgb(var(--primary-soft))", done: "#6bbf82" };
@@ -239,6 +240,7 @@ export default function ContextColumn({ sessionId, hideSummary }: { sessionId?: 
         overflow: "hidden",
       }}
     >
+      <AgentIdentityCard />
       {/* Summary — fixed height so a long todo list can't squeeze it; scrolls internally. */}
       {!hideSummary && (
         <>

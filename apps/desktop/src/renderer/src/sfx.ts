@@ -14,11 +14,12 @@ import scanUrl from "./assets/sfx/scan.wav?url";
 import folderUrl from "./assets/sfx/folder.wav?url";
 import panelsUrl from "./assets/sfx/panels.wav?url";
 import thinkingUrl from "./assets/sfx/thinking.mp3?url";
+import alarmUrl from "./assets/sfx/alarm.wav?url";
 import { loadAppearance } from "./appearance";
 
-export type SfxName = "button" | "message" | "loading" | "pageloaded" | "keystroke" | "boot" | "output" | "scan" | "folder" | "panels";
+export type SfxName = "button" | "message" | "loading" | "pageloaded" | "keystroke" | "boot" | "output" | "scan" | "folder" | "panels" | "alarm";
 
-const SRC: Record<SfxName, string> = { button: buttonUrl, message: messageUrl, loading: loadingUrl, pageloaded: pageloadedUrl, keystroke: keystrokeUrl, boot: bootUrl, output: outputUrl, scan: scanUrl, folder: folderUrl, panels: panelsUrl };
+const SRC: Record<SfxName, string> = { button: buttonUrl, message: messageUrl, loading: loadingUrl, pageloaded: pageloadedUrl, keystroke: keystrokeUrl, boot: bootUrl, output: outputUrl, scan: scanUrl, folder: folderUrl, panels: panelsUrl, alarm: alarmUrl };
 
 // One decoded element per sound, cloned per play so overlapping triggers (e.g. rapid
 // clicks) don't cut each other off.
@@ -79,7 +80,7 @@ export function setThinking(on: boolean): void {
 // Rate-limit each sound so a burst (e.g. many sessions completing at once, or a
 // flurry of clicks) can't stack into noise. Per-name last-played timestamp.
 const lastAt: Partial<Record<SfxName, number>> = {};
-const MIN_GAP_MS: Record<SfxName, number> = { button: 40, message: 400, loading: 600, pageloaded: 300, keystroke: 20, boot: 4000, output: 180, scan: 500, folder: 80, panels: 120 };
+const MIN_GAP_MS: Record<SfxName, number> = { button: 40, message: 400, loading: 600, pageloaded: 300, keystroke: 20, boot: 4000, output: 180, scan: 500, folder: 80, panels: 120, alarm: 3000 };
 
 function playAt(name: SfxName, vol: number): void {
   if (vol <= 0) return;
@@ -100,7 +101,7 @@ export function playSfx(name: SfxName): void {
   const now = Date.now();
   if (now - (lastAt[name] ?? 0) < MIN_GAP_MS[name]) return;
   lastAt[name] = now;
-  playAt(name, name === "boot" ? 1 : volume);
+  playAt(name, name === "boot" || name === "alarm" ? 1 : volume);
 }
 
 /** Preview a sound at a SPECIFIC volume (the Settings slider), bypassing the rate
