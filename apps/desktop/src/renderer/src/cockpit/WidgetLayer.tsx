@@ -228,49 +228,60 @@ function modelRate(model: string | null): { in: number; out: number } {
   return { in: 3, out: 15 };
 }
 
-// Sample fleet-wide totals (tokens + $) on an interval and expose recent per-interval
-// deltas → live tok/min, $/hr and sparklines. Shared by Fleet Burn + Throughput.
+// Fleet-wide token/cost stats derived DIRECTLY from each session's timestamped
+// `tokenSeries` (cumulative per-turn totals). We sum per-turn DELTAS that fall in a
+// recent window → live tok/min & $/hr + per-minute sparklines, plus lifetime totals.
+// Reads BOTH `sessions` and `queue` (the fleet spans both) and dedupes by id — a
+// session living only in `queue` was previously missed, so throughput read 0.
+const WINDOW_MIN = 10;
 function useFleetSamples(): { totalTok: number; totalCost: number; tokPerMin: number; costPerHr: number; tokSpark: number[]; costSpark: number[] } {
   const sessions = useStore((s) => s.sessions);
-  const totals = useMemo(() => {
-    let tok = 0, cost = 0;
-    for (const s of sessions) {
-      tok += (s.tokensInput ?? 0) + (s.tokensOutput ?? 0);
+  const queue = useStore((s) => s.queue);
+  const now = useNow(5000); // re-derive every 5s so the window slides
+
+  return useMemo(() => {
+    const byId = new Map<string, (typeof sessions)[number]>();
+    for (const s of [...sessions, ...queue]) if (!byId.has(s.id)) byId.set(s.id, s);
+    const all = [...byId.values()];
+
+    let totalTok = 0, totalCost = 0;
+    const cutoff = now - WINDOW_MIN * 60_000;
+    // Per-minute buckets of tokens & $ spent, for the sparklines + headline rate.
+    const tokByMin = new Map<number, number>();
+    const costByMin = new Map<number, number>();
+    for (const s of all) {
       const r = modelRate(s.model);
-      cost += (s.tokensInput ?? 0) / 1e6 * r.in + (s.tokensOutput ?? 0) / 1e6 * r.out;
+      totalTok += (s.tokensInput ?? 0) + (s.tokensOutput ?? 0);
+      totalCost += (s.tokensInput ?? 0) / 1e6 * r.in + (s.tokensOutput ?? 0) / 1e6 * r.out;
+      const series = s.tokenSeries ?? [];
+      for (let i = 1; i < series.length; i++) {
+        const t = new Date(series[i].t).getTime();
+        if (!Number.isFinite(t) || t < cutoff) continue;
+        const dIn = Math.max(0, (series[i].input ?? 0) - (series[i - 1].input ?? 0));
+        const dOut = Math.max(0, (series[i].output ?? 0) - (series[i - 1].output ?? 0));
+        const min = Math.floor(t / 60_000);
+        tokByMin.set(min, (tokByMin.get(min) ?? 0) + dIn + dOut);
+        costByMin.set(min, (costByMin.get(min) ?? 0) + dIn / 1e6 * r.in + dOut / 1e6 * r.out);
+      }
     }
-    return { tok, cost };
-  }, [sessions]);
 
-  // Ring of timestamped samples; a new one is captured every SAMPLE_MS.
-  const SAMPLE_MS = 5000, MAX = 24;
-  const [ring, setRing] = useState<{ t: number; tok: number; cost: number }[]>(() => [{ t: Date.now(), tok: totals.tok, cost: totals.cost }]);
-  const totalsRef = useRef(totals); totalsRef.current = totals;
-  useEffect(() => {
-    const id = setInterval(() => {
-      setRing((r) => [...r, { t: Date.now(), tok: totalsRef.current.tok, cost: totalsRef.current.cost }].slice(-MAX));
-    }, SAMPLE_MS);
-    return () => clearInterval(id);
-  }, []);
-
-  const { tokPerMin, costPerHr, tokSpark, costSpark } = useMemo(() => {
-    const tSpark: number[] = [], cSpark: number[] = [];
-    for (let i = 1; i < ring.length; i++) {
-      const dt = (ring[i].t - ring[i - 1].t) / 1000; // seconds
-      if (dt <= 0) continue;
-      tSpark.push(Math.max(0, (ring[i].tok - ring[i - 1].tok)) / dt * 60);       // tok/min this interval
-      cSpark.push(Math.max(0, (ring[i].cost - ring[i - 1].cost)) / dt * 3600);   // $/hr this interval
+    // Fill a contiguous per-minute series for the last WINDOW_MIN minutes (oldest→newest).
+    const nowMin = Math.floor(now / 60_000);
+    const tokSpark: number[] = [], costSpark: number[] = [];
+    let windowTok = 0, windowCost = 0;
+    for (let m = nowMin - WINDOW_MIN + 1; m <= nowMin; m++) {
+      const tk = tokByMin.get(m) ?? 0, ct = costByMin.get(m) ?? 0;
+      tokSpark.push(tk);            // tokens that minute = tok/min
+      costSpark.push(ct * 60);      // $/hr for that minute
+      windowTok += tk; windowCost += ct;
     }
-    const oldest = ring[0], newest = ring[ring.length - 1];
-    const span = Math.max(1, (newest.t - oldest.t) / 1000);
     return {
-      tokPerMin: Math.max(0, (newest.tok - oldest.tok)) / span * 60,
-      costPerHr: Math.max(0, (newest.cost - oldest.cost)) / span * 3600,
-      tokSpark: tSpark, costSpark: cSpark,
+      totalTok, totalCost,
+      tokPerMin: windowTok / WINDOW_MIN,
+      costPerHr: windowCost / WINDOW_MIN * 60,
+      tokSpark, costSpark,
     };
-  }, [ring]);
-
-  return { totalTok: totals.tok, totalCost: totals.cost, tokPerMin, costPerHr, tokSpark, costSpark };
+  }, [sessions, queue, now]);
 }
 
 function Spark({ data, color, height = 30 }: { data: number[]; color: string; height?: number }) {
