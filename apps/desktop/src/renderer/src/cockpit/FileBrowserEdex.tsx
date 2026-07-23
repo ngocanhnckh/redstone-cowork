@@ -191,7 +191,15 @@ export default function FileBrowserEdex({ cwd, machine, active = true }: { sessi
               onClick={() => enter(e)}
               title={e.name}
             >
-              <span className="rcw-fb-ico" style={{ color: ico.c }}>{ico.ch}</span>
+              {e.kind === "dir" ? (
+                <span className="rcw-fb-ico" style={{ color: ico.c, display: "grid", placeItems: "center" }}>
+                  <svg viewBox="0 0 24 24" width="27" height="27" fill="rgb(var(--accent) / 0.16)" stroke="currentColor" strokeWidth={1.5} strokeLinejoin="round">
+                    <path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h4l2 2h9A1.5 1.5 0 0 1 21 8.5v9A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5z" />
+                  </svg>
+                </span>
+              ) : (
+                <span className="rcw-fb-ico" style={{ color: ico.c }}>{ico.ch}</span>
+              )}
               <span className="rcw-fb-name">{e.name}</span>
             </div>
           );
