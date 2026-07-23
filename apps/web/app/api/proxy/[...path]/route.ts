@@ -16,6 +16,11 @@ const ALLOWED = [
   /^events\/recent$/,
   /^devices$/,
   /^devices\/[\w-]+$/,
+  // Enterprise: accounts (roster, profiles, analytics, audit), servers registry.
+  /^accounts$/,
+  /^accounts\/[\w./:-]+$/,
+  /^servers$/,
+  /^servers\/[\w./:-]+$/,
 ];
 
 async function forward(req: Request, params: Promise<{ path: string[] }>, method: string) {

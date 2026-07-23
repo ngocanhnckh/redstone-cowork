@@ -1,4 +1,5 @@
-import { Controller, Get, Header, Post, Query, Req } from "@nestjs/common";
+import { Body, Controller, Get, Post, Query, Req, Res } from "@nestjs/common";
+import type { Response } from "express";
 import type { Request } from "express";
 import { JiraOAuthError, JiraOAuthService } from "../../application/jira-oauth.service";
 import { clientIp } from "./auth.controller";
@@ -8,11 +9,12 @@ import { clientIp } from "./auth.controller";
 export class JiraOAuthController {
   constructor(private readonly jira: JiraOAuthService) {}
 
-  /** Begin sign-in: hand the client the Jira authorize URL + a state to poll on. */
+  /** Begin sign-in: hand the client the Jira authorize URL + a state to poll on.
+   *  Body { redirectTo } (web flow) makes the callback 302 back there with the state. */
   @Post("start")
-  start() {
+  start(@Body() body?: { redirectTo?: string }) {
     try {
-      return { ok: true, ...this.jira.start() };
+      return { ok: true, ...this.jira.start(body?.redirectTo) };
     } catch (e) {
       return { ok: false, error: e instanceof JiraOAuthError ? e.message : "unavailable" };
     }
@@ -20,16 +22,19 @@ export class JiraOAuthController {
 
   /** Jira redirects the browser here after consent. Renders the cinematic result page. */
   @Get("callback")
-  @Header("Content-Type", "text/html; charset=utf-8")
-  async callback(@Query("code") code: string | undefined, @Query("state") state: string | undefined, @Req() req: Request): Promise<string> {
-    if (!code || !state) return resultPage(false, "Missing authorization code.");
+  async callback(@Query("code") code: string | undefined, @Query("state") state: string | undefined, @Req() req: Request, @Res() res: Response): Promise<void> {
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    if (!code || !state) { res.send(resultPage(false, "Missing authorization code.")); return; }
     await this.jira.handleCallback(code, state, {
       ip: clientIp(req),
       device: String(req.headers["user-agent"] ?? "browser"),
     });
-    // peek() does NOT drain — the desktop's poll() is what consumes the session token.
+    // Web flow: 302 back to the web finish route (which drains poll → sets cookie).
+    const redirectTo = this.jira.redirectFor(state);
+    if (redirectTo) { res.redirect(302, `${redirectTo}?state=${encodeURIComponent(state)}`); return; }
+    // Desktop flow: peek() (non-draining) — the desktop's poll() consumes the token.
     const { ok, error } = this.jira.peek(state);
-    return resultPage(ok, error);
+    res.send(resultPage(ok, error));
   }
 
   /** Desktop drains the sign-in outcome by state. */

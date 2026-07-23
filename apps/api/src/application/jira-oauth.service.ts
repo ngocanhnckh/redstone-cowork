@@ -16,8 +16,8 @@ import { CredentialCipher } from "../infrastructure/credential-cipher";
 // fixed server callback registered in Jira), so we bridge with a short-lived state:
 // start() → browser → callback() stashes the result under `state` → poll() drains it.
 
-type PendingAuth = { verifier: string; createdAt: number };
-type Ready = { session: AccountSession | null; error: string | null; at: number };
+type PendingAuth = { verifier: string; createdAt: number; redirectTo?: string };
+type Ready = { session: AccountSession | null; error: string | null; at: number; redirectTo?: string };
 
 const TTL_MS = 10 * 60_000;
 
@@ -57,14 +57,16 @@ export class JiraOAuthService {
     for (const [k, v] of this.ready) if (now - v.at > TTL_MS) this.ready.delete(k);
   }
 
-  /** Begin sign-in: returns the Jira authorize URL + a state the client polls on. */
-  start(): { authUrl: string; state: string } {
+  /** Begin sign-in: returns the Jira authorize URL + a state the client polls on.
+   *  redirectTo (web flow) makes the callback 302 back to the web finish route with
+   *  the state instead of rendering the desktop "return to app" page + poll. */
+  start(redirectTo?: string): { authUrl: string; state: string } {
     if (!this.enabled()) throw new JiraOAuthError("Jira OAuth not configured");
     this.sweep();
     const state = randomBytes(16).toString("hex");
     const verifier = randomBytes(32).toString("base64url");
     const challenge = createHash("sha256").update(verifier).digest("base64url");
-    this.pending.set(state, { verifier, createdAt: Date.now() });
+    this.pending.set(state, { verifier, createdAt: Date.now(), redirectTo });
     const u = new URL(`${this.baseUrl()}/rest/oauth2/latest/authorize`);
     u.searchParams.set("client_id", process.env.JIRA_OAUTH_CLIENT_ID!);
     u.searchParams.set("redirect_uri", this.redirectUri());
@@ -109,9 +111,9 @@ export class JiraOAuthService {
       }
 
       const session = await this.accounts.issueSession(account, { ...ctx, method: "jira-oauth" });
-      this.ready.set(state, { session, error: null, at: Date.now() });
+      this.ready.set(state, { session, error: null, at: Date.now(), redirectTo: pend?.redirectTo });
     } catch (e) {
-      this.ready.set(state, { session: null, error: e instanceof Error ? e.message : "sign-in failed", at: Date.now() });
+      this.ready.set(state, { session: null, error: e instanceof Error ? e.message : "sign-in failed", at: Date.now(), redirectTo: pend?.redirectTo });
     }
   }
 
@@ -122,6 +124,11 @@ export class JiraOAuthService {
     if (!r) return { status: "pending" };
     this.ready.delete(state);
     return r.session ? { status: "ok", session: r.session } : { status: "error", error: r.error ?? "sign-in failed" };
+  }
+
+  /** The web finish redirect target for a completed flow, if it was a web start. */
+  redirectFor(state: string): string | null {
+    return this.ready.get(state)?.redirectTo ?? null;
   }
 
   /** Non-draining read for the browser callback page (leaves the token for the desktop poll). */

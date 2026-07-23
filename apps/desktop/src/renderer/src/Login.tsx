@@ -87,7 +87,8 @@ function Corners() {
 }
 
 export default function Login({ onConnected }: LoginProps) {
-  const [serverUrl, setServerUrl] = useState("https://cowork.example.com");
+  const [serverUrl, setServerUrl] = useState("https://cowork.chatredstone.com");
+  const [enrollFace, setEnrollFace] = useState(false); // opt in to face sign-in on this device
   const [mode, setMode] = useState<Mode>("agency");
   const [redstoneOn, setRedstoneOn] = useState(false);
   const [accountsOn, setAccountsOn] = useState(false);
@@ -155,12 +156,13 @@ export default function Login({ onConnected }: LoginProps) {
     return () => { cancelled = true; clearTimeout(t); };
   }, [serverUrl]);
 
-  // Kick the scan once when agency mode becomes active. Camera also runs in
-  // faceunlock mode (its own effect drives it) — only stop it for the text modes.
+  // Camera runs ONLY for face unlock (its own effect) or when the user opts into
+  // face enrollment. Otherwise agency mode is a plain credential form — no camera,
+  // so an agent with no face on file just signs in right away.
   useEffect(() => {
-    if (mode === "agency" && scan === "idle") void startScan();
-    if (mode === "redstone" || mode === "token") { stopCam(); setScan("idle"); }
-  }, [mode, scan, startScan, stopCam]);
+    if (mode === "agency" && enrollFace && scan === "idle") void startScan();
+    if (!enrollFace && (mode === "agency" || mode === "redstone" || mode === "token")) { stopCam(); setScan("idle"); }
+  }, [mode, scan, enrollFace, startScan, stopCam]);
 
   const canSubmit =
     serverUrl.trim().length > 0 && !connecting &&
@@ -213,6 +215,7 @@ export default function Login({ onConnected }: LoginProps) {
   // After a full login, silently enroll the live face so next time is face-only.
   async function maybeEnrollFace(account: { username: string; displayName: string }) {
     try {
+      if (!enrollFace) return; // opt-in only — otherwise we never touched the camera
       const existing = await window.cowork.deviceTrust();
       if (existing?.username === account.username) return; // already paired
       if (!videoRef.current) return;
@@ -330,26 +333,24 @@ export default function Login({ onConnected }: LoginProps) {
         <form onSubmit={handleSubmit}>
           {mode === "agency" ? (
             <>
-              <div className="yia-scanwrap">
-                <span className="yia-ring" />
-                <span className="yia-ring2" style={{ animationPlayState: scan === "scanning" || scan === "acquiring" ? "running" : "paused" }} />
-                <div className="yia-cam">
-                  {scan === "denied" ? (
-                    <span style={{ fontSize: 34, opacity: 0.35 }}>⎚</span>
-                  ) : (
-                    <video ref={videoRef} muted playsInline />
-                  )}
-                  {scan === "scanning" && <span className="yia-sweepline" />}
-                </div>
-                {scan === "locked" && (
-                  <span style={{ position: "absolute", inset: 16, borderRadius: "50%", border: "2px solid rgb(127 209 139 / .75)", boxShadow: "0 0 26px -4px rgb(127 209 139 / .8)", animation: "yia-pulse 2.2s ease infinite" }} />
-                )}
-              </div>
-              <div className="yia-status" style={{ color: scanStatus[scan].color }}>{scanStatus[scan].text}</div>
+              {enrollFace && (
+                <>
+                  <div className="yia-scanwrap">
+                    <span className="yia-ring" />
+                    <span className="yia-ring2" style={{ animationPlayState: scan === "scanning" || scan === "acquiring" ? "running" : "paused" }} />
+                    <div className="yia-cam">
+                      {scan === "denied" ? <span style={{ fontSize: 34, opacity: 0.35 }}>⎚</span> : <video ref={videoRef} muted playsInline />}
+                      {scan === "scanning" && <span className="yia-sweepline" />}
+                    </div>
+                  </div>
+                  <div className="yia-status" style={{ color: scanStatus[scan].color }}>{scanStatus[scan].text}</div>
+                </>
+              )}
 
               <div style={{ marginBottom: 13 }}>
                 <label className="yia-label">AGENT ID</label>
-                <input className="yia-input" value={username} onChange={(e) => setUsername(e.target.value)}
+                {/* eslint-disable-next-line jsx-a11y/no-autofocus */}
+                <input className="yia-input" autoFocus value={username} onChange={(e) => setUsername(e.target.value)}
                   placeholder="firstname.lastname" autoCapitalize="off" autoCorrect="off" spellCheck={false} />
               </div>
               <div>
@@ -357,6 +358,10 @@ export default function Login({ onConnected }: LoginProps) {
                 <input className="yia-input" type="password" value={password} onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••••••" autoComplete="current-password" />
               </div>
+              <label style={{ display: "flex", gap: 7, alignItems: "center", marginTop: 12, fontSize: 10.5, letterSpacing: ".12em", color: "rgb(230 242 244 / .5)", cursor: "pointer" }}>
+                <input type="checkbox" checked={enrollFace} onChange={(e) => setEnrollFace(e.target.checked)} />
+                ENABLE FACE SIGN-IN ON THIS DEVICE (scans your face after login)
+              </label>
             </>
           ) : mode === "redstone" ? (
             <>
