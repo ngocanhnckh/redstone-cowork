@@ -22,6 +22,7 @@ import FolderSessionTabs from "./FolderSessionTabs";
 import CompletionNotifier from "./CompletionNotifier";
 import OverdueAlert from "./OverdueAlert";
 import JiraNotifier from "./JiraNotifier";
+import AgentIdentityCard from "./AgentIdentityCard";
 import AppsModal, { AppIcon } from "./AppsModal";
 import ContextColumn from "./ContextColumn";
 import AnswerDock from "./AnswerDock";
@@ -1988,6 +1989,7 @@ export default function Hud() {
             onDoubleClick={() => setRightWidth(RIGHT_DEFAULT)}
             title="Drag to resize · double-click to reset"
           />
+          <AgentIdentityCard />
           <TelemetryColumn tele={tele} />
         </div>
       </div>
