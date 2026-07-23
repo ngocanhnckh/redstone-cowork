@@ -1,6 +1,6 @@
 import { app, dialog, BrowserWindow } from "electron";
 import { promises as fs } from "node:fs";
-import { statSync, readFileSync } from "node:fs";
+import { statSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 // Custom background image support + the macOS "keep wallpaper in fullscreen" fix.
@@ -74,19 +74,34 @@ export async function clearBgImage(): Promise<void> {
  */
 export function setSimpleFullscreen(win: BrowserWindow | undefined, on: boolean): boolean {
   if (!win) return false;
+  let state: boolean;
   if (process.platform !== "darwin") {
     win.setFullScreen(on);
-    return win.isFullScreen();
+    state = win.isFullScreen();
+  } else {
+    if (on && win.isFullScreen()) win.setFullScreen(false); // leave native first
+    win.setSimpleFullScreen(on);
+    state = win.isSimpleFullScreen();
   }
-  if (on && win.isFullScreen()) win.setFullScreen(false); // leave native first
-  win.setSimpleFullScreen(on);
-  return win.isSimpleFullScreen();
+  saveFullscreenPref(state); // remember so the next launch opens the same way
+  return state;
 }
 
 /** Whether the window is in either native or simple fullscreen right now. */
 export function isFullscreen(win: BrowserWindow | undefined): boolean {
   if (!win) return false;
   return win.isFullScreen() || win.isSimpleFullScreen();
+}
+
+// Persist the fullscreen preference so the app reopens the way it was last left.
+function fullscreenStorePath(): string {
+  return path.join(app.getPath("userData"), "fullscreen.txt");
+}
+export function saveFullscreenPref(on: boolean): void {
+  try { writeFileSync(fullscreenStorePath(), on ? "1" : "0"); } catch { /* best effort */ }
+}
+export function loadFullscreenPref(): boolean {
+  try { return readFileSync(fullscreenStorePath(), "utf8").trim() === "1"; } catch { return false; }
 }
 
 // ---------------------------------------------------------------------------

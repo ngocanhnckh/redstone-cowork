@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useRef, useDeferredValue } from "react";
+import { playSfx } from "../sfx";
 import FileSearch from "./FileSearch";
 import { createPortal } from "react-dom";
 import Editor from "@monaco-editor/react";
@@ -226,6 +227,7 @@ export default function FilesPanel({ sessionId, cwd, machine }: Props) {
       } else {
         // Only spin when we have nothing to show for this dir.
         setLoadingDirs((s) => new Set(s).add(dir));
+        playSfx("scan"); // hi-tech scan cue while a folder loads (rate-limited)
       }
       const res = await fetchDir(cwd, machine, dir);
       if (scopeRef.current === scope) {

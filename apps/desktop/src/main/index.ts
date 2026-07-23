@@ -29,7 +29,7 @@ import {
 import { sshSetup, type SshSetupArgs } from "./ssh-setup";
 import { listDir, readFileAt, writeFileAt, writeFileBase64, deletePath, makeDir, createFile, uploadLocalFile, searchFiles, searchFilesStream, downloadFileTo } from "./files";
 import { gitInfo } from "./git";
-import { chooseBgImage, getBgImage, clearBgImage, setSimpleFullscreen, isFullscreen, setVibrancy, chooseBgVideo, getBgVideoUrl, clearBgVideo, currentBgVideoPath } from "./appearance";
+import { chooseBgImage, getBgImage, clearBgImage, setSimpleFullscreen, isFullscreen, loadFullscreenPref, setVibrancy, chooseBgVideo, getBgVideoUrl, clearBgVideo, currentBgVideoPath } from "./appearance";
 import { registerSessionBrowser, unregisterSessionBrowser, startInspect, stopInspect, stopAllInspectors, getResponseBody } from "./devtools";
 import { loadEnabledExtensions, listExtensions, chooseAndAddExtension, installFromWebStore, setExtensionEnabled, removeExtension, browserSession } from "./browser-extensions";
 import { vaultAvailable, listCredentials, getCredentialForOrigin, saveCredential, deleteCredential } from "./browser-vault";
@@ -199,7 +199,12 @@ function createWindow(): void {
   // macOS/Electron combos, but setVibrancy after creation reliably applies it.
   if (process.platform === "darwin") win.setVibrancy("under-window");
 
-  win.on("ready-to-show", () => win.show());
+  win.on("ready-to-show", () => {
+    // Reopen the way it was last left: if the app was in (keep-wallpaper) fullscreen,
+    // restore it before showing so it doesn't flash windowed first.
+    if (loadFullscreenPref()) { try { setSimpleFullscreen(win, true); } catch { /* ignore */ } }
+    win.show();
+  });
 
   // This is the cockpit window that runs the shortcut dispatcher; capture its keys at
   // the input layer so shortcuts fire no matter which panel/editor has focus.

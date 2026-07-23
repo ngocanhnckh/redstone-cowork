@@ -270,7 +270,7 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, isAct
   useEffect(() => {
     const wv = webviewRef.current;
     if (!wv) return;
-    const start = () => setLoading(true);
+    const start = () => { setLoading(true); playSfx("scan"); }; // hi-tech scan cue while loading
     const stop = () => setLoading(false);
     // Play the hi-tech "done" chime once the page finishes loading (not while loading).
     const done = () => { setLoading(false); playSfx("pageloaded"); };
