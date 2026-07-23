@@ -633,6 +633,40 @@ ipcMain.handle(IPC.appSetTransparent, (_e, a: { webContentsId: number; on: boole
   return { ok: true };
 });
 
+// Inject the theme stylesheet into EVERY frame of a custom-app guest — not just the top
+// document (which webview.insertCSS covers) but nested iframes too (e.g. Jira plugin
+// panels like BigPicture), which are often cross-origin and can only be scripted from
+// main. Re-injects on each frame load so late/async iframes get themed as well.
+const themeCssByGuest = new Map<number, string>();
+const themeWiredGuests = new WeakSet<object>();
+function frameInjectorJs(css: string): string {
+  return `(function(c){try{var i='__rcw_theme__';var e=document.getElementById(i);`
+    + `if(!c){if(e)e.remove();return;}`
+    + `if(!e){e=document.createElement('style');e.id=i;(document.head||document.documentElement).appendChild(e);}`
+    + `e.textContent=c;}catch(_){}})(${JSON.stringify(css)});`;
+}
+function injectThemeAllFrames(wc: Electron.WebContents): void {
+  const css = themeCssByGuest.get(wc.id) ?? "";
+  const js = frameInjectorJs(css);
+  try {
+    for (const f of wc.mainFrame.framesInSubtree) {
+      f.executeJavaScript(js, true).catch(() => {});
+    }
+  } catch { /* frame tree gone */ }
+}
+ipcMain.handle(IPC.appInjectCss, (_e, a: { webContentsId: number; css: string }) => {
+  const wc = typeof a?.webContentsId === "number" ? webContentsModule.fromId(a.webContentsId) : null;
+  if (!wc) return { ok: false };
+  themeCssByGuest.set(a.webContentsId, a.css ?? "");
+  if (!themeWiredGuests.has(wc)) {
+    themeWiredGuests.add(wc);
+    wc.on("did-frame-finish-load", () => injectThemeAllFrames(wc)); // catches late iframes
+    wc.once("destroyed", () => themeCssByGuest.delete(a.webContentsId));
+  }
+  injectThemeAllFrames(wc);
+  return { ok: true };
+});
+
 // Appearance: custom background image + macOS "keep wallpaper in fullscreen".
 const senderWindow = (e: Electron.IpcMainInvokeEvent): BrowserWindow | undefined =>
   BrowserWindow.fromWebContents(e.sender) ?? BrowserWindow.getAllWindows()[0] ?? undefined;

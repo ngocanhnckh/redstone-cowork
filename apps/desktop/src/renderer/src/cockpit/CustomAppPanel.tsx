@@ -150,31 +150,25 @@ export default function CustomAppPanel({ app, onFavicon }: { app: CustomApp; onF
   // Theme injection: restyle the guest page to match the cockpit. The inserted-CSS
   // key is kept so we can swap it out live when the theme/customCss change (no reload)
   // and re-apply on every fresh document (dom-ready). All guarded — never throws.
-  const cssKeyRef = useRef<string | null>(null);
   const css = themeCss(app.theme, app.customCss);
   const themed = isThemed(app.theme);
   useEffect(() => {
     const wv = ref.current;
     if (!wv) return;
-    let disposed = false;
-    const apply = async () => {
+    const apply = () => {
       try {
+        const id = wv.getWebContentsId();
         // Composite the guest transparently while themed so the cockpit glass shows
         // through the (CSS-transparent) page; opaque again when the theme is off.
-        try { window.cowork.setAppTransparent(wv.getWebContentsId(), themed).catch(() => {}); } catch { /* not ready */ }
-        const prev = cssKeyRef.current;
-        cssKeyRef.current = null;
-        if (prev) { try { await wv.removeInsertedCSS(prev); } catch { /* stale doc */ } }
-        if (!disposed && css) cssKeyRef.current = await wv.insertCSS(css);
+        window.cowork.setAppTransparent(id, themed).catch(() => {});
+        // Inject into EVERY frame (nested iframes / plugin panels included) — done in
+        // main because cross-origin subframes can't be styled from the renderer.
+        window.cowork.injectAppCss(id, css).catch(() => {});
       } catch { /* guest not ready — dom-ready will fire again */ }
     };
-    // Apply now (theme/customCss changed on an already-loaded page) and on each new doc.
-    void apply();
-    wv.addEventListener("dom-ready", apply as EventListener);
-    return () => {
-      disposed = true;
-      wv.removeEventListener("dom-ready", apply as EventListener);
-    };
+    apply(); // theme/customCss changed on an already-loaded page
+    wv.addEventListener("dom-ready", apply as EventListener); // and on each new document
+    return () => wv.removeEventListener("dom-ready", apply as EventListener);
   }, [app.id, css, themed]);
 
   // Keep the mini-app pinned to its own domain: register this guest's home URL so

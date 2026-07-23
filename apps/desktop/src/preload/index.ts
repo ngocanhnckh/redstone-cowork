@@ -253,6 +253,8 @@ contextBridge.exposeInMainWorld("cowork", {
     ipcRenderer.invoke(IPC.appGuestUnregister, { webContentsId }),
   setAppTransparent: (webContentsId: number, on: boolean): Promise<{ ok: boolean }> =>
     ipcRenderer.invoke(IPC.appSetTransparent, { webContentsId, on }),
+  injectAppCss: (webContentsId: number, css: string): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke(IPC.appInjectCss, { webContentsId, css }),
   // Main asks the renderer to open a URL in the focused session's workspace browser
   // (a custom app tried to leave its domain). Returns an unsubscribe fn.
   onOpenInWorkspaceBrowser: (cb: (a: { url: string }) => void): (() => void) => {
