@@ -46,6 +46,16 @@ export type DockerHostView = { hostId: string; machine: string; at: string; avai
 export type CapItem = { name: string; description: string | null; source: string };
 export type CapsHostView = { hostId: string; machine: string; at: string; skills: CapItem[]; commands: CapItem[] };
 
+export type NetPeer = {
+  ip: string; port: number | null; proc: string | null; domain: string | null; service: string | null;
+  count: number; lat: number | null; lon: number | null; city: string | null; country: string | null;
+};
+export type NetworkMap = {
+  ok: boolean; geo: boolean;
+  host: { ip: string | null; lat: number | null; lon: number | null; city: string | null; country: string | null };
+  peers: NetPeer[];
+};
+
 export type Commit = { hash: string; author: string; relative: string; date: string; subject: string };
 export type GitInfo = { ok: boolean; repo: boolean; branch: string | null; ahead: number; behind: number; dirty: number; commits: Commit[]; error?: string; remoteUrl?: string | null; webUrl?: string | null };
 

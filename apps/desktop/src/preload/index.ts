@@ -138,6 +138,11 @@ contextBridge.exposeInMainWorld("cowork", {
     ipcRenderer.invoke(IPC.hostProcesses, { machine }),
   calendarEvents: (): Promise<{ ok: boolean; denied: boolean; events: { title: string; start: string; end: string; allDay: boolean; calendar: string }[] }> =>
     ipcRenderer.invoke(IPC.calendarEvents),
+  networkMap: (machine: string): Promise<{
+    ok: boolean; geo: boolean;
+    host: { ip: string | null; lat: number | null; lon: number | null; city: string | null; country: string | null };
+    peers: { ip: string; port: number | null; proc: string | null; domain: string | null; service: string | null; count: number; lat: number | null; lon: number | null; city: string | null; country: string | null }[];
+  }> => ipcRenderer.invoke(IPC.networkMap, { machine }),
 
   // Passwordless SSH onboarding
   sshSetup: (a: {

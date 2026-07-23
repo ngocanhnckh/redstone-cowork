@@ -28,6 +28,14 @@ files:
 asarUnpack:
   - "**/node_modules/node-pty/**"
 
+# The offline GeoIP database (DB-IP City Lite, CC BY 4.0) for the Network Map widget.
+# Fetched by `pnpm --filter @rcw/desktop geoip` (gitignored, not in the repo), copied
+# into the packaged app's resources dir so main/geoip.ts can read it at process.resourcesPath.
+extraResources:
+  - from: resources/geoip
+    to: geoip
+    filter: ["*.mmdb"]
+
 # DON'T recompile native modules. node-pty ships N-API prebuilds (one pty.node per
 # platform, ABI-stable across Node AND Electron) for darwin + win32, so recompiling
 # is unnecessary — and recompiling is the ONLY thing that needs a per-platform C++

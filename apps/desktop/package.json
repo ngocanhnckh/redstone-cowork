@@ -17,12 +17,14 @@
     "start": "electron-vite preview",
     "rebuild": "electron-rebuild -f -w node-pty",
     "dist": "electron-vite build && electron-builder --config electron-builder.yml",
-    "dist:dir": "electron-vite build && electron-builder --config electron-builder.yml --dir"
+    "dist:dir": "electron-vite build && electron-builder --config electron-builder.yml --dir",
+    "geoip": "node scripts/fetch-geoip.mjs"
   },
   "dependencies": {
+    "maxmind": "^5.0.6",
     "node-pty": "^1.0.0"
   },
-  "//deps": "Only node-pty ships at runtime (it's a native module, externalized in electron.vite.config). Everything else is bundled into out/ by vite, so it's build-time only — keeping it out of `dependencies` stops electron-builder from packaging (and, for @rcw/shared, choking on) the workspace tree.",
+  "//deps": "Only node-pty ships at runtime (it's a native module, externalized in electron.vite.config). Everything else is bundled into out/ by vite, so it's build-time only \u2014 keeping it out of `dependencies` stops electron-builder from packaging (and, for @rcw/shared, choking on) the workspace tree.",
   "devDependencies": {
     "@blocknote/core": "^0.51.4",
     "@blocknote/mantine": "^0.51.4",

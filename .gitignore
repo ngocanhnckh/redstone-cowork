@@ -35,3 +35,6 @@ coverage/
 # Raw source audio (huge originals). Processed/cropped assets live bundled in
 # apps/desktop/src/renderer/src/assets/sfx/ and ARE committed.
 /sound-effects/
+
+# bundled offline GeoIP DB (fetched via 'pnpm --filter @rcw/desktop geoip')
+apps/desktop/resources/geoip/*.mmdb

@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "../store";
+import NetMap from "./NetMap";
 
 // A free-floating widget canvas over the HUD desktop (behind the app windows). Widgets
 // are draggable/resizable, glanceable, and persist their placement globally. Every
 // widget here is NEW — none duplicate the fixed telemetry deck or the left column.
 
-export type WidgetKind = "attention" | "burn" | "ticker" | "timer" | "scratch" | "throughput" | "radar" | "reactor" | "agenda";
+export type WidgetKind = "attention" | "burn" | "ticker" | "timer" | "scratch" | "throughput" | "radar" | "reactor" | "agenda" | "netmap";
 export type WidgetInst = { id: string; kind: WidgetKind; x: number; y: number; w: number; h: number; text?: string };
 
 const KEY = "rcw.widgets";
@@ -21,8 +22,9 @@ const CATALOG: Record<WidgetKind, Meta> = {
   radar:      { label: "Recon Radar",     icon: "◎", w: 244, h: 244, minW: 190, minH: 190 },
   reactor:    { label: "Top Processes",   icon: "⚛", w: 264, h: 190, minW: 210, minH: 140 },
   agenda:     { label: "Agenda",          icon: "▦", w: 286, h: 214, minW: 220, minH: 150 },
+  netmap:     { label: "Network Map",     icon: "🛰", w: 440, h: 340, minW: 320, minH: 250 },
 };
-const ORDER: WidgetKind[] = ["attention", "agenda", "reactor", "radar", "burn", "throughput", "ticker", "timer", "scratch"];
+const ORDER: WidgetKind[] = ["attention", "netmap", "agenda", "reactor", "radar", "burn", "throughput", "ticker", "timer", "scratch"];
 
 function loadWidgets(): WidgetInst[] | null {
   try {
@@ -176,6 +178,7 @@ function WidgetBody({ inst, onChange }: { inst: WidgetInst; onChange: (p: Partia
     case "radar": return <ReconRadar />;
     case "reactor": return <Reactor />;
     case "agenda": return <Agenda />;
+    case "netmap": return <NetMap />;
     default: return null;
   }
 }
