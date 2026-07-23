@@ -81,7 +81,9 @@ export default function ActionFeed({ active = true }: { sessionId?: string; acti
   // Suppress replay while the agent is actively working OR the user is scrolling.
   const [scrolling, setScrolling] = useState(false);
   const scrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const relay = useRelay(relayItems, active && !!session, working || scrolling);
+  // Loop the replay continuously while idle; it stops the moment a new event or the
+  // user interacting suppresses it.
+  const relay = useRelay(relayItems, active && !!session, working || scrolling, { loop: true });
 
   const bodyRef = useRef<HTMLDivElement>(null);
   const stick = useRef(true);

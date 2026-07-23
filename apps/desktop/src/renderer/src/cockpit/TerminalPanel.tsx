@@ -5,32 +5,56 @@ import "@xterm/xterm/css/xterm.css";
 import ConnectionBar from "./ConnectionBar";
 import { playSfx } from "../sfx";
 
-// xterm theme tuned to the liquid-glass tokens: a transparent background so the
-// terminal sits on the warm-ink glass panel (not a solid black box), with a warm
-// ANSI palette (amber accent / sage green) instead of the harsh defaults.
+// xterm theme: a transparent background so the terminal sits on the glass panel (not a
+// solid black box), with a vivid, cyan-forward neon ANSI palette so command output is
+// colourful and hi-tech (paired with the scanline/grid frame + CRT glow in CSS below).
 const THEME = {
   background: "rgba(0,0,0,0)",
-  foreground: "#F0ECE1",
-  cursor: "#E4A672",
-  cursorAccent: "#15110D",
-  selectionBackground: "rgba(228,166,114,0.24)",
-  black: "#2A2118",
-  brightBlack: "#6B6052",
-  red: "#E0736A",
-  brightRed: "#EE8A80",
-  green: "#9DBFA8",
-  brightGreen: "#B4D3BD",
-  yellow: "#D8A76A",
-  brightYellow: "#E4A672",
-  blue: "#8FB0C8",
-  brightBlue: "#A9C6DA",
-  magenta: "#C8A0C0",
-  brightMagenta: "#D8B4D0",
-  cyan: "#8FC4C0",
-  brightCyan: "#A9D4D0",
-  white: "#E8E0D2",
-  brightWhite: "#FBF7EE",
+  foreground: "#E8F4F2",
+  cursor: "#54E6FF",
+  cursorAccent: "#06121A",
+  selectionBackground: "rgba(84,230,255,0.24)",
+  black: "#12242A",
+  brightBlack: "#5F7D84",
+  red: "#FF6B6B",
+  brightRed: "#FF8F8F",
+  green: "#5EF2B0",
+  brightGreen: "#8BFFCF",
+  yellow: "#FFD166",
+  brightYellow: "#FFE08A",
+  blue: "#54B6FF",
+  brightBlue: "#8FD0FF",
+  magenta: "#C792FF",
+  brightMagenta: "#DCB6FF",
+  cyan: "#54E6FF",
+  brightCyan: "#8FF2FF",
+  white: "#DFEEF0",
+  brightWhite: "#FFFFFF",
 };
+
+// The HUD frame + CRT glow for the terminal surface — grid, travelling scanline, corner
+// brackets, a soft text glow. All decorative layers are pointer-events:none so the
+// terminal stays fully interactive. Parked while the window is hidden (rcw-hidden).
+const TERM_CSS = `
+.rcw-term-wrap { position:relative; }
+.rcw-term-grid { position:absolute; inset:0; z-index:1; pointer-events:none; opacity:.5;
+  background-image: linear-gradient(rgb(var(--primary-soft) / 0.05) 1px, transparent 1px), linear-gradient(90deg, rgb(var(--primary-soft) / 0.05) 1px, transparent 1px);
+  background-size: 32px 32px;
+  mask-image: radial-gradient(120% 100% at 50% 0%, #000 55%, transparent 100%);
+  -webkit-mask-image: radial-gradient(120% 100% at 50% 0%, #000 55%, transparent 100%); }
+.rcw-term-scan { position:absolute; left:0; right:0; height:2px; z-index:3; pointer-events:none; opacity:.4;
+  background: linear-gradient(90deg, transparent, rgb(var(--primary-soft) / 0.6), transparent);
+  box-shadow: 0 0 14px 2px rgb(var(--primary-soft) / 0.35); animation: rcw-term-scan 4.4s linear infinite; }
+@keyframes rcw-term-scan { 0% { top:-2%; } 100% { top:102%; } }
+.rcw-term-wrap .xterm { position:relative; z-index:2; }
+.rcw-term-wrap .xterm .xterm-rows { text-shadow: 0 0 3px rgb(var(--primary-soft) / 0.28); }
+.rcw-term-cnr { position:absolute; width:13px; height:13px; z-index:4; pointer-events:none; }
+.rcw-term-cnr.tl { top:6px; left:8px; border-top:1.5px solid rgb(var(--primary-soft) / 0.55); border-left:1.5px solid rgb(var(--primary-soft) / 0.55); }
+.rcw-term-cnr.tr { top:6px; right:8px; border-top:1.5px solid rgb(var(--primary-soft) / 0.55); border-right:1.5px solid rgb(var(--primary-soft) / 0.55); }
+.rcw-term-cnr.bl { bottom:8px; left:8px; border-bottom:1.5px solid rgb(var(--primary-soft) / 0.55); border-left:1.5px solid rgb(var(--primary-soft) / 0.55); }
+.rcw-term-cnr.br { bottom:8px; right:8px; border-bottom:1.5px solid rgb(var(--primary-soft) / 0.55); border-right:1.5px solid rgb(var(--primary-soft) / 0.55); }
+body.rcw-hidden .rcw-term-scan { animation-play-state: paused !important; }
+`;
 
 export default function TerminalPanel({
   sessionId,
@@ -262,6 +286,7 @@ export default function TerminalPanel({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+      <style>{TERM_CSS}</style>
       {!hideChrome && <ConnectionBar sessionId={sessionId} machine={machine} onHostChange={() => restart()} />}
       {!hideChrome && (
         <div
@@ -302,16 +327,22 @@ export default function TerminalPanel({
           </div>
         </div>
       ) : null}
-      <div style={{ flex: 1, minHeight: 0, position: "relative", display: error ? "none" : "flex" }}>
+      <div className="rcw-term-wrap" style={{ flex: 1, minHeight: 0, position: "relative", display: error ? "none" : "flex" }}>
+        <span className="rcw-term-grid" />
+        <span className="rcw-term-scan" />
+        <span className="rcw-term-cnr tl" />
+        <span className="rcw-term-cnr tr" />
+        <span className="rcw-term-cnr bl" />
+        <span className="rcw-term-cnr br" />
         <div
           ref={containerRef}
           style={{
             flex: 1,
             minHeight: 0,
             padding: "10px 16px 12px",
-            // Warm-ink glass instead of a flat black box; the transparent xterm bg
-            // lets this show through.
-            background: "rgb(var(--primary) / 0.04)",
+            // Glass instead of a flat black box; the transparent xterm bg lets a faint
+            // cyan wash + the frame layers show through.
+            background: "rgb(var(--primary) / 0.05)",
             overflow: "hidden",
           }}
         />

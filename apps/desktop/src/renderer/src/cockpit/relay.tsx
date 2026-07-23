@@ -51,19 +51,23 @@ export function DecodeLine({ text }: { text: string }) {
  * (scrolling). Becoming suppressed also cancels a replay already in progress. A quick
  * kickoff makes it feel live shortly after the panel opens. Parked while `active` false.
  */
-export function useRelay(items: RelayItem[], active: boolean, suppressed: boolean) {
+export function useRelay(items: RelayItem[], active: boolean, suppressed: boolean, opts?: { loop?: boolean }) {
+  const loop = !!opts?.loop;
   const [queue, setQueue] = useState<RelayItem[]>([]);
   const [idx, setIdx] = useState(0);
   const [secs, setSecs] = useState(RELAY_MS / 1000);
   const itemsRef = useRef(items); itemsRef.current = items;
   const suppRef = useRef(suppressed); suppRef.current = suppressed;
+  const loopRef = useRef(loop); loopRef.current = loop;
   const playingRef = useRef(false);
   playingRef.current = queue.length > 0 && !!queue[idx];
 
   // New activity or user interaction cancels any running replay immediately.
   useEffect(() => { if (suppressed && playingRef.current) setQueue([]); }, [suppressed]);
 
-  // 1s heartbeat: countdown + a gated fire every 30s (plus a kickoff). Parked when hidden.
+  // 1s heartbeat. In loop mode the replay runs continuously whenever the panel is
+  // quiet (restarting each cycle) until a new event/interaction suppresses it; in
+  // once mode it fires on the 30s boundary. Parked when hidden.
   useEffect(() => {
     if (!active) return;
     const tryFire = () => {
@@ -75,20 +79,26 @@ export function useRelay(items: RelayItem[], active: boolean, suppressed: boolea
     let s = RELAY_MS / 1000;
     const id = setInterval(() => {
       s = s <= 1 ? RELAY_MS / 1000 : s - 1;
-      if (s === RELAY_MS / 1000) tryFire();
+      // Loop: keep it running whenever idle & quiet. Once: only at the 30s boundary.
+      if (loopRef.current ? !playingRef.current : s === RELAY_MS / 1000) tryFire();
       setSecs(s);
     }, 1000);
     return () => { clearInterval(id); clearTimeout(kickoff); };
   }, [active]);
 
-  // Step through the queue; each line lingers briefly after decoding.
+  // Step through the queue; each line lingers briefly after decoding. At the end, loop
+  // mode immediately re-runs with the latest snapshot (unless suppressed); once mode idles.
   useEffect(() => {
     if (!queue.length) return;
     const item = queue[idx];
     if (!item) return;
     const t = setTimeout(() => {
-      if (idx + 1 < queue.length) setIdx((i) => i + 1);
-      else setQueue([]);
+      if (idx + 1 < queue.length) { setIdx((i) => i + 1); return; }
+      if (loopRef.current && !suppRef.current) {
+        const recent = itemsRef.current.slice(-RELAY_COUNT);
+        if (recent.length) { setQueue(recent); setIdx(0); return; }
+      }
+      setQueue([]);
     }, decodeMs(item.detail) + 900);
     return () => clearTimeout(t);
   }, [queue, idx]);
