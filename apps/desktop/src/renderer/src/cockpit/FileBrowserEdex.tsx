@@ -14,19 +14,47 @@ const dirName = (p: string): string => p.replace(/\/+$/, "").split("/").filter(B
 const parentOf = (p: string): string => { const t = p.replace(/\/+$/, ""); const i = t.lastIndexOf("/"); return i <= 0 ? "/" : t.slice(0, i); };
 const ext = (n: string): string => (n.includes(".") ? n.split(".").pop()!.toLowerCase() : "");
 
-function iconFor(e: DirEntry): string {
-  if (e.kind === "dir") return "▸";
+// Colored per-type icons (the file-icons look, our own glyph/colour map). Learned from
+// eDEX which colours icons by file type; we key on extension groups.
+type Ico = { ch: string; c: string };
+const IMG = ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "ico", "avif", "heic"];
+const VIDEO = ["mp4", "mov", "mkv", "webm", "avi", "m4v"];
+const AUDIO = ["mp3", "wav", "flac", "ogg", "m4a", "aac"];
+const CODE = ["js", "ts", "tsx", "jsx", "mjs", "cjs", "py", "go", "rs", "c", "h", "cpp", "hpp", "cc", "java", "kt", "rb", "php", "swift", "scala", "lua", "dart", "vue", "svelte"];
+const SHELL = ["sh", "bash", "zsh", "fish", "ps1", "bat", "cmd"];
+const CONFIG = ["json", "yml", "yaml", "toml", "ini", "cfg", "conf", "xml", "env", "properties"];
+const DOC = ["md", "markdown", "txt", "rst", "pdf", "doc", "docx", "rtf"];
+const SHEET = ["csv", "tsv", "xls", "xlsx", "ods"];
+const ARCHIVE = ["zip", "tar", "gz", "tgz", "bz2", "xz", "7z", "rar"];
+const STYLE = ["css", "scss", "sass", "less"];
+const WEB = ["html", "htm"];
+const LOCK = ["lock", "sum"];
+
+function iconFor(e: DirEntry): Ico {
+  if (e.kind === "dir") return { ch: "▸", c: "rgb(var(--accent))" };
   const x = ext(e.name);
-  if (["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "ico"].includes(x)) return "▦";
-  if (["md", "markdown", "txt", "rst"].includes(x)) return "≣";
-  if (["js", "ts", "tsx", "jsx", "py", "go", "rs", "c", "cpp", "java", "rb", "sh"].includes(x)) return "‹›";
-  if (["json", "yml", "yaml", "toml", "xml", "env"].includes(x)) return "⚙";
-  return "◈";
+  const name = e.name.toLowerCase();
+  if (name.startsWith(".git") || name === ".gitignore") return { ch: "⎇", c: "#e0736a" };
+  if (name.startsWith("dockerfile") || name === "docker-compose.yml") return { ch: "❒", c: "#59a7e0" };
+  if (IMG.includes(x)) return { ch: "▦", c: "#7fd18b" };
+  if (VIDEO.includes(x)) return { ch: "▶", c: "#c8a0f0" };
+  if (AUDIO.includes(x)) return { ch: "♪", c: "#e58fc4" };
+  if (STYLE.includes(x)) return { ch: "❖", c: "#59a7e0" };
+  if (WEB.includes(x)) return { ch: "◍", c: "#e0a24a" };
+  if (CODE.includes(x)) return { ch: "‹›", c: "rgb(var(--primary-soft))" };
+  if (SHELL.includes(x)) return { ch: "❯", c: "#7fd18b" };
+  if (CONFIG.includes(x)) return { ch: "⚙", c: "#e0a24a" };
+  if (SHEET.includes(x)) return { ch: "▦", c: "#7fd18b" };
+  if (DOC.includes(x)) return { ch: "≣", c: "var(--text-soft)" };
+  if (ARCHIVE.includes(x)) return { ch: "▤", c: "#e0a24a" };
+  if (LOCK.includes(x)) return { ch: "⎉", c: "var(--text-faint)" };
+  return { ch: "◈", c: "rgb(var(--primary-soft))" };
 }
 
 const CSS = `
 @keyframes rcw-fb-in { from { opacity:0; transform: translateY(6px) scale(.98); } to { opacity:1; transform:none; } }
 @keyframes rcw-fb-scan { 0% { top:-4%; } 100% { top:104%; } }
+@keyframes rcw-fb-blink { 0%,100% { background: rgb(var(--primary) / 0); } 50% { background: rgb(var(--primary) / 0.7); } }
 .rcw-fb { display:flex; flex-direction:column; height:100%; min-height:0; position:relative; }
 .rcw-fb-bar { display:flex; align-items:center; gap:6px; padding:8px 12px; border-bottom:1px solid var(--border); flex-shrink:0; font-family:var(--font-mono); font-size:11px; overflow-x:auto; }
 .rcw-fb-crumb { cursor:pointer; color:var(--text-soft); white-space:nowrap; }
@@ -134,18 +162,21 @@ export default function FileBrowserEdex({ cwd, machine, active = true }: { sessi
         {loading && entries.length === 0 && <span className="mono faint" style={{ fontSize: 11.5, gridColumn: "1/-1", padding: "10px 2px" }}>Scanning…</span>}
         {error && <span className="mono" style={{ color: "#e0736a", fontSize: 11.5, gridColumn: "1/-1", padding: "10px 2px" }}>{error}</span>}
         {!loading && !error && entries.length === 0 && <span className="mono faint" style={{ fontSize: 11.5, gridColumn: "1/-1", padding: "10px 2px" }}>Empty folder.</span>}
-        {entries.map((e, i) => (
-          <div
-            key={e.path}
-            className={`rcw-fb-tile ${e.kind}`}
-            style={{ animationDelay: `${Math.min(i, 40) * 18}ms` }}
-            onClick={() => enter(e)}
-            title={e.name}
-          >
-            <span className="rcw-fb-ico" style={{ color: e.kind === "dir" ? "rgb(var(--accent))" : "rgb(var(--primary-soft))" }}>{iconFor(e)}</span>
-            <span className="rcw-fb-name">{e.name}</span>
-          </div>
-        ))}
+        {entries.map((e, i) => {
+          const ico = iconFor(e);
+          return (
+            <div
+              key={e.path}
+              className={`rcw-fb-tile ${e.kind}`}
+              style={{ animationDelay: `${Math.min(i, 40) * 18}ms` }}
+              onClick={() => enter(e)}
+              title={e.name}
+            >
+              <span className="rcw-fb-ico" style={{ color: ico.c }}>{ico.ch}</span>
+              <span className="rcw-fb-name">{e.name}</span>
+            </div>
+          );
+        })}
       </div>
 
       {openFile !== null && (
