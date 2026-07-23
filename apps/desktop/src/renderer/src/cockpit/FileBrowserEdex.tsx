@@ -1,0 +1,189 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import Editor from "@monaco-editor/react";
+import { ensureMonaco, languageForFile, RCW_MONACO_THEME } from "./monaco-setup";
+import { playSfx } from "../sfx";
+
+ensureMonaco();
+
+// An eDEX-style file browser: a single-directory navigator of glowing tiles (folders
+// first) that reveal with a stagger + a scan cue when a directory loads. Clicking a
+// FOLDER descends into it (with the folder cue); clicking a FILE opens a preview/editor
+// pane. Separate from the tree-style Files panel — a "mode" you can use instead.
+
+const dirName = (p: string): string => p.replace(/\/+$/, "").split("/").filter(Boolean).pop() || "/";
+const parentOf = (p: string): string => { const t = p.replace(/\/+$/, ""); const i = t.lastIndexOf("/"); return i <= 0 ? "/" : t.slice(0, i); };
+const ext = (n: string): string => (n.includes(".") ? n.split(".").pop()!.toLowerCase() : "");
+
+function iconFor(e: DirEntry): string {
+  if (e.kind === "dir") return "▸";
+  const x = ext(e.name);
+  if (["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "ico"].includes(x)) return "▦";
+  if (["md", "markdown", "txt", "rst"].includes(x)) return "≣";
+  if (["js", "ts", "tsx", "jsx", "py", "go", "rs", "c", "cpp", "java", "rb", "sh"].includes(x)) return "‹›";
+  if (["json", "yml", "yaml", "toml", "xml", "env"].includes(x)) return "⚙";
+  return "◈";
+}
+
+const CSS = `
+@keyframes rcw-fb-in { from { opacity:0; transform: translateY(6px) scale(.98); } to { opacity:1; transform:none; } }
+@keyframes rcw-fb-scan { 0% { top:-4%; } 100% { top:104%; } }
+.rcw-fb { display:flex; flex-direction:column; height:100%; min-height:0; position:relative; }
+.rcw-fb-bar { display:flex; align-items:center; gap:6px; padding:8px 12px; border-bottom:1px solid var(--border); flex-shrink:0; font-family:var(--font-mono); font-size:11px; overflow-x:auto; }
+.rcw-fb-crumb { cursor:pointer; color:var(--text-soft); white-space:nowrap; }
+.rcw-fb-crumb:hover { color: rgb(var(--primary-soft)); }
+.rcw-fb-grid { flex:1; min-height:0; overflow-y:auto; padding:12px; display:grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap:10px; align-content:start; position:relative; }
+.rcw-fb-scan { position:absolute; left:0; right:0; height:2px; z-index:2; pointer-events:none; opacity:.6;
+  background: linear-gradient(90deg, transparent, rgb(var(--primary-soft) / 0.6), transparent); box-shadow:0 0 14px 2px rgb(var(--primary-soft)/0.35); animation: rcw-fb-scan .7s linear; }
+.rcw-fb-tile { display:flex; flex-direction:column; align-items:center; gap:7px; padding:14px 8px 11px; border-radius:11px; cursor:pointer;
+  border:1px solid var(--border); background: rgb(var(--primary) / 0.04); transition: transform .12s, border-color .12s, box-shadow .12s; animation: rcw-fb-in .2s both; }
+.rcw-fb-tile:hover { transform: translateY(-2px); border-color: rgb(var(--primary) / 0.5); box-shadow: 0 0 22px -8px rgb(var(--primary) / 0.7); }
+.rcw-fb-tile.dir { border-color: rgb(var(--accent) / 0.28); }
+.rcw-fb-tile.dir:hover { border-color: rgb(var(--accent) / 0.6); box-shadow: 0 0 22px -8px rgb(var(--accent) / 0.7); }
+.rcw-fb-ico { font-family:var(--font-mono); font-size:24px; line-height:1; text-shadow:0 0 14px currentColor; }
+.rcw-fb-name { font-family:var(--font-mono); font-size:10.5px; text-align:center; word-break:break-all; line-height:1.35; max-height:2.7em; overflow:hidden; }
+.rcw-fb-preview { position:absolute; inset:0; z-index:5; display:flex; flex-direction:column; background: color-mix(in srgb, var(--app-panel) 96%, transparent); animation: rcw-fb-in .18s ease both; }
+.rcw-fb-phd { display:flex; align-items:center; gap:8px; padding:8px 12px; border-bottom:1px solid var(--border); flex-shrink:0; }
+`;
+
+export default function FileBrowserEdex({ cwd, machine, active = true }: { sessionId?: string; cwd: string; machine: string; active?: boolean }) {
+  const [dir, setDir] = useState(cwd);
+  const [entries, setEntries] = useState<DirEntry[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [scanKey, setScanKey] = useState(0);
+
+  const [openFile, setOpenFile] = useState<string | null>(null);
+  const [read, setRead] = useState<FileRead | null>(null);
+  const [reading, setReading] = useState(false);
+  const [draft, setDraft] = useState<string | null>(null);
+  const [saving, setSaving] = useState<"idle" | "saving" | "ok" | "err">("idle");
+  const gridRef = useRef<HTMLDivElement>(null);
+
+  const load = useCallback(async (d: string) => {
+    setLoading(true); setError(null);
+    playSfx("scan");
+    setScanKey((k) => k + 1);
+    try {
+      const r = await window.cowork.listFiles({ cwd, machine, dir: d });
+      if (r.ok) {
+        const es = [...r.entries].sort((a, b) => (a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind === "dir" ? -1 : 1));
+        setEntries(es);
+      } else setError(r.error);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally { setLoading(false); }
+  }, [cwd, machine]);
+
+  useEffect(() => { if (active) load(dir); }, [dir, active, load]);
+  useEffect(() => { if (gridRef.current) gridRef.current.scrollTop = 0; }, [dir]);
+
+  const enter = (e: DirEntry) => {
+    if (e.kind === "dir") { playSfx("folder"); setDir(e.path); return; }
+    void openTheFile(e.path);
+  };
+
+  async function openTheFile(path: string) {
+    setOpenFile(path); setReading(true); setRead(null); setDraft(null); setSaving("idle");
+    try {
+      const r = await window.cowork.readFile({ cwd, machine, file: path });
+      setRead(r);
+      if (r.ok && r.encoding === "text") setDraft(r.content);
+    } catch (e) {
+      setRead({ ok: false, error: e instanceof Error ? e.message : String(e) });
+    } finally { setReading(false); }
+  }
+
+  async function save() {
+    if (openFile === null || draft === null) return;
+    setSaving("saving");
+    try {
+      const r = await window.cowork.writeFile({ cwd, machine, file: openFile, content: draft });
+      setSaving(r.ok ? "ok" : "err");
+      setTimeout(() => setSaving("idle"), 1400);
+    } catch { setSaving("err"); setTimeout(() => setSaving("idle"), 1400); }
+  }
+
+  // Breadcrumb segments from cwd (root) down to the current dir.
+  const rel = dir.startsWith(cwd) ? dir.slice(cwd.length).replace(/^\/+/, "") : dir;
+  const segs = rel ? rel.split("/") : [];
+  const crumb = (i: number) => setDir(i < 0 ? cwd : cwd + "/" + segs.slice(0, i + 1).join("/"));
+
+  return (
+    <div className="rcw-fb">
+      <style>{CSS}</style>
+      <div className="rcw-fb-bar no-scrollbar">
+        <button
+          onClick={() => dir !== cwd && setDir(parentOf(dir))}
+          disabled={dir === cwd}
+          title="Up one folder"
+          style={{ flexShrink: 0, padding: "3px 9px", borderRadius: 7, cursor: dir === cwd ? "not-allowed" : "pointer", opacity: dir === cwd ? 0.4 : 1, border: "1px solid var(--border)", background: "transparent", color: "inherit", fontFamily: "var(--font-mono)", fontSize: 11 }}
+        >↑ ..</button>
+        <span className="rcw-fb-crumb" onClick={() => crumb(-1)} style={{ color: "rgb(var(--primary-soft))" }}>{dirName(cwd)}</span>
+        {segs.map((s, i) => (
+          <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <span style={{ opacity: 0.4 }}>/</span>
+            <span className="rcw-fb-crumb" onClick={() => crumb(i)}>{s}</span>
+          </span>
+        ))}
+        <span style={{ flex: 1 }} />
+        <span className="mono faint" style={{ fontSize: 9.5, flexShrink: 0 }}>{entries.length} items</span>
+      </div>
+
+      <div className="rcw-fb-grid no-scrollbar" ref={gridRef}>
+        <span key={scanKey} className="rcw-fb-scan" />
+        {loading && entries.length === 0 && <span className="mono faint" style={{ fontSize: 11.5, gridColumn: "1/-1", padding: "10px 2px" }}>Scanning…</span>}
+        {error && <span className="mono" style={{ color: "#e0736a", fontSize: 11.5, gridColumn: "1/-1", padding: "10px 2px" }}>{error}</span>}
+        {!loading && !error && entries.length === 0 && <span className="mono faint" style={{ fontSize: 11.5, gridColumn: "1/-1", padding: "10px 2px" }}>Empty folder.</span>}
+        {entries.map((e, i) => (
+          <div
+            key={e.path}
+            className={`rcw-fb-tile ${e.kind}`}
+            style={{ animationDelay: `${Math.min(i, 40) * 18}ms` }}
+            onClick={() => enter(e)}
+            title={e.name}
+          >
+            <span className="rcw-fb-ico" style={{ color: e.kind === "dir" ? "rgb(var(--accent))" : "rgb(var(--primary-soft))" }}>{iconFor(e)}</span>
+            <span className="rcw-fb-name">{e.name}</span>
+          </div>
+        ))}
+      </div>
+
+      {openFile !== null && (
+        <div className="rcw-fb-preview">
+          <div className="rcw-fb-phd">
+            <button onClick={() => setOpenFile(null)} title="Back to files" style={{ padding: "3px 10px", borderRadius: 7, cursor: "pointer", border: "1px solid var(--border)", background: "transparent", color: "inherit", fontFamily: "var(--font-mono)", fontSize: 11 }}>← files</button>
+            <span className="mono" style={{ fontSize: 11.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{openFile.split("/").pop()}</span>
+            <span style={{ flex: 1 }} />
+            {read?.ok && read.encoding === "text" && (
+              <button onClick={save} className="glass-btn--clay" style={{ padding: "4px 14px", borderRadius: 8, fontSize: 11.5, fontWeight: 600, border: "none", cursor: "pointer" }}>
+                {saving === "saving" ? "Saving…" : saving === "ok" ? "✓ Saved" : saving === "err" ? "✗ Error" : "Save"}
+              </button>
+            )}
+          </div>
+          <div style={{ flex: 1, minHeight: 0 }}>
+            {reading ? (
+              <span className="mono faint" style={{ fontSize: 11.5, padding: 14, display: "block" }}>Reading…</span>
+            ) : !read?.ok ? (
+              <span className="mono" style={{ color: "#e0736a", fontSize: 12, padding: 14, display: "block" }}>{read?.error ?? "Failed to read."}</span>
+            ) : read.encoding === "base64" ? (
+              <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", padding: 16, overflow: "auto" }}>
+                <img src={`data:${read.mime};base64,${read.content}`} style={{ maxWidth: "100%", maxHeight: "100%", borderRadius: 8, boxShadow: "0 0 40px -12px rgb(var(--primary)/0.6)" }} />
+              </div>
+            ) : read.encoding === "binary" ? (
+              <span className="mono faint" style={{ fontSize: 12, padding: 14, display: "block" }}>Binary file · {(read.size / 1024).toFixed(1)} KB · {read.mime}</span>
+            ) : (
+              <Editor
+                height="100%"
+                theme={RCW_MONACO_THEME}
+                language={languageForFile(openFile)}
+                value={draft ?? read.content}
+                onChange={(v) => setDraft(v ?? "")}
+                options={{ fontSize: 12.5, minimap: { enabled: false }, scrollBeyondLastLine: false, fontFamily: "var(--font-mono)", padding: { top: 10 } }}
+              />
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
