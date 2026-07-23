@@ -26,16 +26,29 @@ const CATALOG: Record<WidgetKind, Meta> = {
 };
 const ORDER: WidgetKind[] = ["attention", "netmap", "agenda", "reactor", "radar", "burn", "throughput", "ticker", "timer", "scratch"];
 
+function sanitize(p: unknown): WidgetInst[] {
+  return Array.isArray(p) ? p.filter((w) => w && typeof w.id === "string" && CATALOG[w.kind as WidgetKind]) : [];
+}
 function loadWidgets(): WidgetInst[] | null {
   try {
     const raw = localStorage.getItem(KEY);
     if (raw == null) return null; // never initialised → caller seeds defaults
-    const p = JSON.parse(raw);
-    if (!Array.isArray(p)) return [];
-    return p.filter((w) => w && typeof w.id === "string" && CATALOG[w.kind as WidgetKind]);
+    return sanitize(JSON.parse(raw));
   } catch {
     return [];
   }
+}
+
+/** Read the current widget composition (for snapshotting into a layout template). */
+export function readWidgets(): WidgetInst[] {
+  return loadWidgets() ?? [];
+}
+/** Replace the live widget composition (when applying a layout template): persist it
+ *  and notify the mounted WidgetLayer to swap in the new set immediately. */
+export function applyWidgets(widgets: WidgetInst[]): void {
+  const clean = sanitize(widgets);
+  try { localStorage.setItem(KEY, JSON.stringify(clean)); } catch { /* ignore */ }
+  try { window.dispatchEvent(new CustomEvent("rcw-widgets-apply", { detail: clean })); } catch { /* ignore */ }
 }
 
 // First-run seed: a couple of high-value widgets so the canvas isn't empty.
@@ -58,6 +71,13 @@ export default function WidgetLayer() {
   useEffect(() => {
     try { localStorage.setItem(KEY, JSON.stringify(widgets)); } catch { /* ignore */ }
   }, [widgets]);
+
+  // A layout template being applied replaces the widget composition live.
+  useEffect(() => {
+    const on = (e: Event) => { const d = (e as CustomEvent).detail; if (Array.isArray(d)) setWidgets(d); };
+    window.addEventListener("rcw-widgets-apply", on as EventListener);
+    return () => window.removeEventListener("rcw-widgets-apply", on as EventListener);
+  }, []);
 
   const patch = useCallback((id: string, p: Partial<WidgetInst>) => {
     setWidgets((ws) => ws.map((w) => (w.id === id ? { ...w, ...p } : w)));

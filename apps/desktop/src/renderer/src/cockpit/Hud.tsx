@@ -26,7 +26,7 @@ import ContextGauge from "./ContextGauge";
 import ModeSelect from "./ModeSelect";
 import TokenSpendWidget from "./TokenSpendWidget";
 import SessionInfoWidget from "./SessionInfoWidget";
-import WidgetLayer from "./WidgetLayer";
+import WidgetLayer, { readWidgets, applyWidgets, type WidgetInst } from "./WidgetLayer";
 import { GitInfo } from "../types";
 import { useAppearance, type DockPos } from "../appearance";
 import { loadAutoLayout, screenClass, resolveTemplate, useAutoLayout, loadTemplateNames, saveAutoLayout, type ScreenClass } from "../autoLayout";
@@ -794,6 +794,17 @@ function loadTemplates(): Record<string, SessionConsole> {
   }
 }
 const cloneConsole = (c: SessionConsole): SessionConsole => JSON.parse(JSON.stringify(c));
+
+// Widget compositions saved ALONGSIDE each layout template (kept in a parallel map so
+// the SessionConsole template shape — and its many consumers — stay untouched). Applying
+// a template restores its windows AND its widgets; older templates simply have no entry.
+const TEMPLATE_WIDGETS_KEY = "rcw.hud.templateWidgets.v1";
+function loadTemplateWidgets(): Record<string, WidgetInst[]> {
+  try {
+    const p = JSON.parse(localStorage.getItem(TEMPLATE_WIDGETS_KEY) || "{}");
+    return p && typeof p === "object" ? p : {};
+  } catch { return {}; }
+}
 function loadConsoles(): Record<string, SessionConsole> {
   try {
     const raw = localStorage.getItem(CONSOLE_KEY);
@@ -986,6 +997,9 @@ function HudConsole() {
   // Saved window-layout templates + the save/load menu.
   const [templates, setTemplates] = useState<Record<string, SessionConsole>>(loadTemplates);
   useEffect(() => { try { localStorage.setItem(TEMPLATES_KEY, JSON.stringify(templates)); } catch { /* ignore */ } }, [templates]);
+  // Widget composition saved with each template (parallel map — see TEMPLATE_WIDGETS_KEY).
+  const [templateWidgets, setTemplateWidgets] = useState<Record<string, WidgetInst[]>>(loadTemplateWidgets);
+  useEffect(() => { try { localStorage.setItem(TEMPLATE_WIDGETS_KEY, JSON.stringify(templateWidgets)); } catch { /* ignore */ } }, [templateWidgets]);
   const [tplMenu, setTplMenu] = useState(false);
   const [tplName, setTplName] = useState("");
   // Custom apps: a user-global list (persisted); window geometry is per session.
@@ -1046,6 +1060,8 @@ function HudConsole() {
     const name = tplName.trim();
     if (!name) return;
     setTemplates((t) => ({ ...t, [name]: cloneConsole(cur) }));
+    // Snapshot the current widget composition alongside the window layout.
+    setTemplateWidgets((tw) => ({ ...tw, [name]: readWidgets() }));
     setTplName("");
   };
   const applyTemplate = (name: string) => {
@@ -1053,9 +1069,15 @@ function HudConsole() {
     if (!tpl) return;
     const k = focusKeyRef.current;
     setConsoles((all) => ({ ...all, [k]: cloneConsole(tpl) }));
+    // Restore the template's widgets too (if it was saved with any).
+    const w = templateWidgets[name];
+    if (w) applyWidgets(w);
     setTplMenu(false);
   };
-  const deleteTemplate = (name: string) => setTemplates((t) => { const n = { ...t }; delete n[name]; return n; });
+  const deleteTemplate = (name: string) => {
+    setTemplates((t) => { const n = { ...t }; delete n[name]; return n; });
+    setTemplateWidgets((tw) => { const n = { ...tw }; delete n[name]; return n; });
+  };
 
   // ── Auto-layout ──────────────────────────────────────────────────────────
   // Apply the screen-class-appropriate saved template to EVERY session: resolve
@@ -1608,6 +1630,9 @@ function HudConsole() {
                       <div key={name} className="hud-rail-row" style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 8px", borderRadius: 7 }}>
                         <span onClick={() => applyTemplate(name)} title="Apply this layout"
                           style={{ flex: 1, minWidth: 0, cursor: "pointer", fontFamily: "var(--font-mono)", fontSize: 11.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
+                        {templateWidgets[name]?.length ? (
+                          <span className="mono" title={`Includes ${templateWidgets[name].length} widget(s)`} style={{ fontSize: 8, color: "rgb(var(--accent))", border: "1px solid color-mix(in srgb, rgb(var(--accent)) 35%, transparent)", borderRadius: 999, padding: "0 5px" }}>◧ {templateWidgets[name].length}</span>
+                        ) : null}
                         <span className="mono faint" style={{ fontSize: 9 }}>{templates[name].layout === "windows" ? "win" : "grid"}</span>
                         <span onClick={() => deleteTemplate(name)} title="Delete" style={{ cursor: "pointer", color: "var(--text-faint)", fontSize: 12 }}>✕</span>
                       </div>
