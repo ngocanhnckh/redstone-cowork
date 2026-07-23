@@ -137,6 +137,19 @@ export class AccountsService implements OnModuleInit {
     await this.store.revokeToken(sha256(token), new Date());
   }
 
+  /** Quick-unlock PIN (scrypt-hashed). The account/session is the real credential;
+   *  the PIN just gates the local lock screen on restart / away. */
+  async setPin(accountId: string, pin: string): Promise<void> {
+    await this.store.setPin(accountId, await hashPassword(pin));
+  }
+  async verifyPin(accountId: string, pin: string): Promise<boolean> {
+    const hash = await this.store.getPinHash(accountId);
+    return !!hash && verifyPassword(pin, hash);
+  }
+  async hasPin(accountId: string): Promise<boolean> {
+    return !!(await this.store.getPinHash(accountId));
+  }
+
   /** Mint a long-lived HOST token for an account — used by a provisioned redstone
    *  agent to authenticate without the interactive 30-min idle expiry. */
   async mintHostToken(accountId: string, label: string): Promise<string> {

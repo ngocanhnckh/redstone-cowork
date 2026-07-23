@@ -38,6 +38,8 @@ contextBridge.exposeInMainWorld("cowork", {
     ipcRenderer.invoke(IPC.faceEnroll, { descriptor, account }),
   faceAdminEnroll: (id: string, descriptor: number[]): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke(IPC.faceAdminEnroll, { id, descriptor }),
+  pinSet: (pin: string): Promise<{ ok: boolean }> => ipcRenderer.invoke(IPC.pinSet, { pin }),
+  pinVerify: (pin: string): Promise<{ ok: boolean }> => ipcRenderer.invoke(IPC.pinVerify, { pin }),
   faceLogin: (descriptor: number[]): Promise<{ ok: boolean; error?: string; account?: { username: string; displayName: string; role: string } }> =>
     ipcRenderer.invoke(IPC.faceLogin, { descriptor }),
   deviceTrust: (): Promise<{ serverUrl: string; username: string; displayName: string; photo: string | null } | null> =>

@@ -26,6 +26,8 @@ declare global {
       jiraOAuthLogin(serverUrl: string): Promise<{ ok: boolean; error?: string; account?: { username: string; displayName: string; role: string } }>;
       faceEnroll(descriptor: number[], account: { username: string; displayName: string; photo?: string | null }): Promise<{ ok: boolean; error?: string }>;
       faceAdminEnroll(id: string, descriptor: number[]): Promise<{ ok: boolean; error?: string }>;
+      pinSet(pin: string): Promise<{ ok: boolean }>;
+      pinVerify(pin: string): Promise<{ ok: boolean }>;
       faceLogin(descriptor: number[]): Promise<{ ok: boolean; error?: string; account?: { username: string; displayName: string; role: string } }>;
       deviceTrust(): Promise<{ serverUrl: string; username: string; displayName: string; photo: string | null } | null>;
       serversList(): Promise<import("../../shared/servers").ServerView[]>;
@@ -46,7 +48,7 @@ declare global {
         username: string,
         password: string,
       ): Promise<{ ok: boolean; error?: string; account?: { username: string; displayName: string; role: string } }>;
-      accountsMe(): Promise<AgentAccount | { id: null; role: string; username: null; kind?: string }>;
+      accountsMe(): Promise<(AgentAccount & { hasPin?: boolean }) | { id: null; role: string; username: null; kind?: string }>;
       accountsList(): Promise<AgentAccount[]>;
       accountCreate(input: {
         username: string; password: string; displayName?: string; role?: "admin" | "member";

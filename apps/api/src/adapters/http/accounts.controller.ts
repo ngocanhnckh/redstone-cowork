@@ -29,10 +29,32 @@ export class AccountsController {
   constructor(private readonly accounts: AccountsService) {}
 
   @Get("me")
-  me(@Req() req: GuardedRequest) {
-    if (req.authKind === "account" && req.account) return req.account;
+  async me(@Req() req: GuardedRequest) {
+    if (req.authKind === "account" && req.account) {
+      return { ...req.account, hasPin: await this.accounts.hasPin(req.account.id) };
+    }
     // Instance-token (or other privileged) callers aren't a person; say so explicitly.
     return { id: null, role: "admin", username: null, kind: req.authKind };
+  }
+
+  /** Set/replace the current agent's quick-unlock PIN (4–8 digits). */
+  @Post("me/pin")
+  @HttpCode(200)
+  async setPin(@Req() req: GuardedRequest, @Body() body: { pin?: string }) {
+    if (req.authKind !== "account" || !req.account) throw new ForbiddenException("sign in as an agent first");
+    const pin = String(body?.pin ?? "");
+    if (!/^[0-9]{4,8}$/.test(pin)) throw new BadRequestException("PIN must be 4–8 digits");
+    await this.accounts.setPin(req.account.id, pin);
+    return { ok: true };
+  }
+
+  /** Verify the PIN to unlock the app (the session token is already stored locally). */
+  @Post("me/pin/verify")
+  @HttpCode(200)
+  async verifyPin(@Req() req: GuardedRequest, @Body() body: { pin?: string }) {
+    if (req.authKind !== "account" || !req.account) throw new ForbiddenException("sign in first");
+    const ok = await this.accounts.verifyPin(req.account.id, String(body?.pin ?? ""));
+    return { ok };
   }
 
   @Get()

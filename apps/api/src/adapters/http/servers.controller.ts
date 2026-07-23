@@ -42,10 +42,14 @@ export class ServersController {
    *  the caller, so the installed redstone agent authenticates as this account. */
   @Post(":id/provision")
   @HttpCode(200)
-  async provision(@Req() req: GuardedRequest, @Param("id") id: string) {
+  async provision(@Req() req: GuardedRequest, @Param("id") realId: string) {
+    // A discovered host (already reporting redstone) has no registry row — adopt it
+    // so it can be managed, then build the (re)install command.
+    const id = await this.adoptIfDiscovered(realId, req);
     await this.requireManage(req, id);
     const server = await this.servers.get(id);
     if (!server) throw new NotFoundException();
+    const alreadyInstalled = realId.startsWith("host:");
     const accountId = req.account?.id;
     // Instance-token callers (no account) fall back to the instance token itself.
     const token = accountId
@@ -55,6 +59,7 @@ export class ServersController {
     const direct = `curl -fsSL ${base}/install.sh | bash -s -- --server ${base} --token ${token}`;
     return {
       serverUrl: base,
+      alreadyInstalled, // true when adopted from a host already reporting a redstone agent
       // Directly-reachable host: install + agent, no relay.
       installCommand: direct,
       // Closed/NAT'd host (no inbound SSH): opt into the reverse-SSH relay.
@@ -104,14 +109,33 @@ export class ServersController {
     return { ok: true };
   }
 
-  /** Admin grants/revokes an agent's access to a company server. */
+  /** Admin grants/revokes an agent's access to a company server. Granting a
+   *  DISCOVERED host (id "host:<machine>") first adopts it into the registry. */
   @Post(":id/access")
   @HttpCode(200)
   async grant(@Req() req: GuardedRequest, @Param("id") id: string, @Body() body: { accountId?: string; username?: string }) {
     if (!isAdminScope(req)) throw new ForbiddenException("admin only");
     const accountId = await this.resolveAccountId(body);
-    await this.servers.grant(id, accountId);
-    return { ok: true };
+    const serverId = await this.adoptIfDiscovered(id, req);
+    await this.servers.grant(serverId, accountId);
+    return { ok: true, serverId };
+  }
+
+  /** Turn a discovered host into a real registry server so it can be assigned/managed.
+   *  No-op for real ids. Returns the registry server id to operate on. */
+  private async adoptIfDiscovered(id: string, req: GuardedRequest): Promise<string> {
+    if (!id.startsWith("host:")) return id;
+    const machine = id.slice("host:".length);
+    // Already adopted under a real id? Match by host/name.
+    const existing = (await this.servers.listAllWithAccess()).find(
+      (s) => s.host.toLowerCase() === machine.toLowerCase() || s.name.toLowerCase() === machine.toLowerCase(),
+    );
+    if (existing) return existing.id;
+    const created = await this.servers.createCompany(
+      { name: machine, host: machine, sshUser: "root", sshPort: 22, description: "adopted from a reporting redstone agent" },
+      req.account?.id ?? "",
+    );
+    return created.id;
   }
   @Delete(":id/access/:accountId")
   @HttpCode(200)

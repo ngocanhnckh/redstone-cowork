@@ -9,6 +9,8 @@ export const IPC = {
   faceEnroll: "api:face:enroll",
   faceAdminEnroll: "api:face:admin-enroll",
   faceLogin: "auth:face:login",
+  pinSet: "auth:pin:set",
+  pinVerify: "auth:pin:verify",
   serversList: "api:servers:list",
   serverCreate: "api:servers:create",
   serverUpdate: "api:servers:update",

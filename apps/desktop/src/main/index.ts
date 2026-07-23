@@ -393,6 +393,8 @@ ipcMain.handle(IPC.faceAdminEnroll, async (_e, a: { id: string; descriptor: numb
   try { return await api.faceAdminEnroll(a.id, a.descriptor); }
   catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
 });
+ipcMain.handle(IPC.pinSet, (_e, a: { pin: string }) => api.pinSet(a.pin));
+ipcMain.handle(IPC.pinVerify, (_e, a: { pin: string }) => api.pinVerify(a.pin));
 ipcMain.handle(IPC.faceLogin, async (_e, a: { descriptor: number[] }) => {
   try {
     const trust = loadDeviceTrust();

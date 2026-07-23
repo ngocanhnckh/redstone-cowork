@@ -94,7 +94,7 @@ export class PostgresAccountStore implements AccountStore {
   async findDeviceAccount(secretHash: string, now: Date): Promise<Account | null> {
     const { rows } = await this.pool.query(
       `SELECT a.id, a.username, a.display_name AS "displayName", a.role, a.photo, a.level, a.division,
-              a.email, a.jira, a.mattermost, a.phone, a.webhook, a.created_at AS "createdAt", a.disabled_at AS "disabledAt"
+              a.email, a.jira, a.mattermost, a.phone, a.created_at AS "createdAt", a.disabled_at AS "disabledAt"
        FROM device_trust t JOIN accounts a ON a.id = t.account_id
        WHERE t.secret_hash=$1 AND t.revoked_at IS NULL AND a.disabled_at IS NULL`,
       [secretHash]
@@ -122,6 +122,14 @@ export class PostgresAccountStore implements AccountStore {
   async setPassword(id: string, passwordHash: string): Promise<boolean> {
     const r = await this.pool.query(`UPDATE accounts SET password_hash=$2 WHERE id=$1`, [id, passwordHash]);
     return (r.rowCount ?? 0) > 0;
+  }
+  async setPin(id: string, pinHash: string): Promise<boolean> {
+    const r = await this.pool.query(`UPDATE accounts SET pin_hash=$2 WHERE id=$1`, [id, pinHash]);
+    return (r.rowCount ?? 0) > 0;
+  }
+  async getPinHash(id: string): Promise<string | null> {
+    const { rows } = await this.pool.query(`SELECT pin_hash FROM accounts WHERE id=$1`, [id]);
+    return rows[0]?.pin_hash ?? null;
   }
 
   async addJiraNotification(n: JiraNotification): Promise<void> {
@@ -175,8 +183,8 @@ export class PostgresAccountStore implements AccountStore {
     // Idle expiry: a token unused for maxIdleMs is dead (the user walked away).
     const cutoff = new Date(now.getTime() - maxIdleMs);
     const { rows } = await this.pool.query(
-      `SELECT a.id, a.username, a.display_name AS "displayName", a.role,
-              a.created_at AS "createdAt", a.disabled_at AS "disabledAt"
+      `SELECT a.id, a.username, a.display_name AS "displayName", a.role, a.photo, a.level, a.division,
+              a.email, a.jira, a.mattermost, a.phone, a.created_at AS "createdAt", a.disabled_at AS "disabledAt"
        FROM account_tokens t JOIN accounts a ON a.id = t.account_id
        WHERE t.token_hash=$1 AND t.revoked_at IS NULL AND a.disabled_at IS NULL
          AND (t.kind = 'host' OR COALESCE(t.last_used_at, t.created_at) > $2)`,

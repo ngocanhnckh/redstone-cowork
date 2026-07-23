@@ -116,6 +116,9 @@ export async function serverRevoke(id: string, accountId: string): Promise<unkno
 export async function serverCoworkKey(): Promise<{ publicKey: string | null }> { return (await req("/servers/cowork-key")).json(); }
 export async function serverProvision(id: string): Promise<{ serverUrl: string; installCommand: string; installCommandRelay: string }> { return (await req(`/servers/${encodeURIComponent(id)}/provision`, { method: "POST" })).json(); }
 
+export async function pinSet(pin: string): Promise<{ ok: boolean }> { return (await req("/accounts/me/pin", { method: "POST", body: JSON.stringify({ pin }) })).json(); }
+export async function pinVerify(pin: string): Promise<{ ok: boolean }> { return (await req("/accounts/me/pin/verify", { method: "POST", body: JSON.stringify({ pin }) })).json(); }
+
 /** Enroll the current agent's face on this device → returns a one-time device secret. */
 export async function faceEnroll(descriptor: number[], deviceLabel: string): Promise<{ deviceSecret: string }> {
   return (await req("/accounts/me/face/enroll", { method: "POST", body: JSON.stringify({ descriptor, deviceLabel }) })).json();

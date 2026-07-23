@@ -45,6 +45,8 @@ export interface AccountStore {
   count(): Promise<number>;
   setDisabled(id: string, at: Date | null): Promise<boolean>;
   setPassword(id: string, passwordHash: string): Promise<boolean>;
+  setPin(id: string, pinHash: string): Promise<boolean>;
+  getPinHash(id: string): Promise<string | null>;
   /** Merge admin-editable profile fields; returns the updated account (null = unknown id). */
   updateProfile(id: string, patch: AccountProfilePatch): Promise<Account | null>;
 

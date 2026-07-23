@@ -1,7 +1,7 @@
 import type { Account, AccountProfilePatch, JiraNotification, LoginAuditEntry } from "@rcw/shared";
 import type { AccountStore, AccountTokenRecord, NewAccountRecord } from "../../domain/accounts/account-store.port";
 
-type Row = NewAccountRecord & { disabledAt: Date | null; jiraBaseUrl?: string; jiraPatEnc?: string | null; faceDescriptors?: number[][] };
+type Row = NewAccountRecord & { disabledAt: Date | null; jiraBaseUrl?: string; jiraPatEnc?: string | null; faceDescriptors?: number[][]; pinHash?: string | null };
 type DeviceRow = { id: string; accountId: string; secretHash: string; label: string; createdAt: Date; lastUsedAt: Date | null; revokedAt: Date | null };
 type TokenRow = AccountTokenRecord & { lastUsedAt: Date | null; revokedAt: Date | null };
 
@@ -99,6 +99,15 @@ export class InMemoryAccountStore implements AccountStore {
     if (!row) return false;
     row.passwordHash = passwordHash;
     return true;
+  }
+  async setPin(id: string, pinHash: string): Promise<boolean> {
+    const row = this.rows.get(id);
+    if (!row) return false;
+    row.pinHash = pinHash;
+    return true;
+  }
+  async getPinHash(id: string): Promise<string | null> {
+    return this.rows.get(id)?.pinHash ?? null;
   }
 
   async updateProfile(id: string, patch: AccountProfilePatch): Promise<Account | null> {
