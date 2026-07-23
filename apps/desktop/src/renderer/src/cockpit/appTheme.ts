@@ -18,6 +18,8 @@ const CYAN = "#54e6ff";    // hi-tech accent (matches [data-theme="hitech"])
 // slightly translucent, so where the webview IS transparent the cockpit glass bleeds
 // through for the hi-tech look. Media (img/video/canvas/svg) keep their own paint.
 const BASE = `
+/* TEMP DIAGNOSTIC — a cyan frame proves the theme CSS reached the page. Remove once confirmed. */
+html { outline: 4px solid #54e6ff !important; outline-offset: -4px !important; }
 html { background-color: rgba(9,12,16,0.82) !important; background-image: none !important; }
 body { background: transparent !important; background-image: none !important; }
 body *:not(img):not(video):not(canvas):not(svg):not(svg *):not(picture) {
