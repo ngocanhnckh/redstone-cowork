@@ -796,3 +796,33 @@ body {
     background: radial-gradient(circle at 50% 44%, rgb(var(--primary-soft) / 0.95), rgb(var(--primary) / 0.5) 58%, transparent 80%);
     animation: rcw-flash 0.48s ease-out forwards;
 }
+
+/* =====================================================================
+   FONT THEME — Settings › Appearance › Font. data-font="futura" swaps the
+   display + body fonts to the bundled SFU Futura family (the mono stays).
+   ===================================================================== */
+@font-face { font-family: "SFU Futura"; src: url("../assets/fonts/SFUFuturaBook.ttf") format("truetype"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "SFU Futura"; src: url("../assets/fonts/SFUFuturaBold.ttf") format("truetype"); font-weight: 700; font-display: swap; }
+@font-face { font-family: "SFU Futura"; src: url("../assets/fonts/SFUFuturaHeavy.ttf") format("truetype"); font-weight: 800; font-display: swap; }
+:root[data-font="futura"] {
+    --font-display: "SFU Futura", "Space Grotesk", ui-sans-serif, system-ui;
+    --font-body: "SFU Futura", "Space Grotesk", ui-sans-serif, system-ui;
+}
+
+/* =====================================================================
+   SCI-FI TEXTBOXES — a themed underscore caret (cyan in hi-tech, clay in
+   warm) + a focus glow, so inputs/textareas read hi-tech in every window.
+   caret-shape is supported in the app's Chromium; degrades to a bar if not.
+   ===================================================================== */
+input, textarea, [contenteditable="true"] {
+    caret-color: rgb(var(--primary-soft));
+    caret-shape: underscore;
+}
+input:focus, textarea:focus {
+    box-shadow: 0 0 16px -8px rgb(var(--primary) / 0.85);
+}
+:root[data-theme="hitech"] input:focus,
+:root[data-theme="hitech"] textarea:focus {
+    border-color: rgb(var(--primary) / 0.5) !important;
+    box-shadow: 0 0 20px -7px rgb(var(--primary) / 0.95), inset 0 0 12px -9px rgb(var(--primary-soft));
+}

@@ -10,8 +10,12 @@ import { useEffect, useState } from "react";
 export type DockPos = "top" | "bottom" | "bottom-left" | "bottom-right" | "left" | "right";
 
 export type Theme = "warm" | "hitech";
+export type FontChoice = "default" | "futura";
 
 export type Appearance = {
+  /** Display/body font. "default" = Instrument Serif + Space Grotesk; "futura" = the
+   *  bundled SFU Futura family. Applied as a `data-font` attribute on the root. */
+  font: FontChoice;
   /** Visual theme. "warm" = the default clay/amber liquid-glass look; "hitech" =
    *  cyan holographic HUD (dark navy, cyan glow, grid texture, mono labels). Applied
    *  as a `data-theme` attribute on the document root that overrides the CSS tokens. */
@@ -40,7 +44,7 @@ export type Appearance = {
   videoMuted: boolean;
 };
 
-export const DEFAULT_APPEARANCE: Appearance = { theme: "warm", sfxVolume: 50, ambientVolume: 30, veil: 6, blur: 28, bgAnim: true, dockPos: "bottom", dockScale: 1, hudClear: false, glass: 94, videoMuted: false };
+export const DEFAULT_APPEARANCE: Appearance = { font: "default", theme: "warm", sfxVolume: 50, ambientVolume: 30, veil: 6, blur: 28, bgAnim: true, dockPos: "bottom", dockScale: 1, hudClear: false, glass: 94, videoMuted: false };
 
 const KEY = "rcw.appearance";
 
@@ -48,6 +52,7 @@ export function loadAppearance(): Appearance {
   try {
     const raw = JSON.parse(localStorage.getItem(KEY) || "{}");
     return {
+      font: raw.font === "futura" ? "futura" : DEFAULT_APPEARANCE.font,
       theme: raw.theme === "hitech" ? "hitech" : DEFAULT_APPEARANCE.theme,
       sfxVolume: clampNum(raw.sfxVolume, 0, 100, DEFAULT_APPEARANCE.sfxVolume),
       ambientVolume: clampNum(raw.ambientVolume, 0, 100, DEFAULT_APPEARANCE.ambientVolume),
@@ -79,6 +84,8 @@ export function applyAppearance(a: Appearance): void {
   r.setAttribute("data-dock", a.dockPos);
   // The theme swaps the whole CSS-token set (see globals.css [data-theme="hitech"]).
   r.setAttribute("data-theme", a.theme);
+  // The font choice swaps --font-display/--font-body (see globals.css [data-font]).
+  r.setAttribute("data-font", a.font);
   // Let live consumers (e.g. the HUD dock, sfx.ts volume) react without prop-threading.
   window.dispatchEvent(new CustomEvent("rcw-appearance", { detail: a }));
 }

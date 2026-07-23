@@ -261,6 +261,29 @@ export default function SettingsPanel() {
           ))}
         </div>
 
+        <label className="soft" style={labelStyle}>Font</label>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 18 }}>
+          {([
+            { id: "default", label: "Default", sub: "serif · grotesk" },
+            { id: "futura", label: "Futura", sub: "SFU Futura" },
+          ] as const).map((f) => (
+            <button
+              key={f.id}
+              onClick={() => patchAppr({ font: f.id })}
+              style={{
+                padding: "10px 8px", fontSize: 12.5, fontWeight: 600, cursor: "pointer", borderRadius: 9,
+                display: "flex", flexDirection: "column", gap: 2, alignItems: "center",
+                border: appr.font === f.id ? "1px solid rgb(var(--accent) / 0.6)" : "1px solid var(--border)",
+                background: appr.font === f.id ? "rgb(var(--primary) / 0.28)" : "transparent",
+                color: appr.font === f.id ? "#fff" : "var(--text-soft)",
+              }}
+            >
+              {f.label}
+              <span className="mono" style={{ fontSize: 9.5, opacity: 0.7, letterSpacing: "0.06em" }}>{f.sub}</span>
+            </button>
+          ))}
+        </div>
+
         <SwitchRow
           label="Background animation"
           hint="The drifting aurora glow behind the app."

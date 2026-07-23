@@ -1,9 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Editor from "@monaco-editor/react";
 import { ensureMonaco, languageForFile, RCW_MONACO_THEME } from "./monaco-setup";
+import OfficeViewer, { isOfficeFile } from "./OfficeViewer";
+import Markdown from "./Markdown";
 import { playSfx } from "../sfx";
 
 ensureMonaco();
+
+const isMarkdown = (n: string): boolean => /\.(md|markdown)$/i.test(n);
 
 // An eDEX-style file browser: a single-directory navigator of glowing tiles (folders
 // first) that reveal with a stagger + a scan cue when a directory loads. Clicking a
@@ -80,11 +84,14 @@ export default function FileBrowserEdex({ cwd, machine, active = true }: { sessi
   const [error, setError] = useState<string | null>(null);
   const [scanKey, setScanKey] = useState(0);
 
+  const [query, setQuery] = useState("");
+
   const [openFile, setOpenFile] = useState<string | null>(null);
   const [read, setRead] = useState<FileRead | null>(null);
   const [reading, setReading] = useState(false);
   const [draft, setDraft] = useState<string | null>(null);
   const [saving, setSaving] = useState<"idle" | "saving" | "ok" | "err">("idle");
+  const [mdMode, setMdMode] = useState<"preview" | "edit">("preview");
   const gridRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async (d: string) => {
@@ -112,6 +119,7 @@ export default function FileBrowserEdex({ cwd, machine, active = true }: { sessi
 
   async function openTheFile(path: string) {
     setOpenFile(path); setReading(true); setRead(null); setDraft(null); setSaving("idle");
+    setMdMode(isMarkdown(path) ? "preview" : "edit");
     try {
       const r = await window.cowork.readFile({ cwd, machine, file: path });
       setRead(r);
@@ -136,6 +144,9 @@ export default function FileBrowserEdex({ cwd, machine, active = true }: { sessi
   const segs = rel ? rel.split("/") : [];
   const crumb = (i: number) => setDir(i < 0 ? cwd : cwd + "/" + segs.slice(0, i + 1).join("/"));
 
+  const q = query.trim().toLowerCase();
+  const shown = q ? entries.filter((e) => e.name.toLowerCase().includes(q)) : entries;
+
   return (
     <div className="rcw-fb">
       <style>{CSS}</style>
@@ -154,7 +165,14 @@ export default function FileBrowserEdex({ cwd, machine, active = true }: { sessi
           </span>
         ))}
         <span style={{ flex: 1 }} />
-        <span className="mono faint" style={{ fontSize: 9.5, flexShrink: 0 }}>{entries.length} items</span>
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="filter…"
+          autoCapitalize="off" autoCorrect="off" spellCheck={false}
+          style={{ flexShrink: 0, width: 120, padding: "3px 9px", borderRadius: 7, fontFamily: "var(--font-mono)", fontSize: 11, border: "1px solid var(--border)", background: "rgb(0,0,0,0.18)", color: "inherit", outline: "none" }}
+        />
+        <span className="mono faint" style={{ fontSize: 9.5, flexShrink: 0 }}>{shown.length}{q ? `/${entries.length}` : ""} items</span>
       </div>
 
       <div className="rcw-fb-grid no-scrollbar" ref={gridRef}>
@@ -162,7 +180,8 @@ export default function FileBrowserEdex({ cwd, machine, active = true }: { sessi
         {loading && entries.length === 0 && <span className="mono faint" style={{ fontSize: 11.5, gridColumn: "1/-1", padding: "10px 2px" }}>Scanning…</span>}
         {error && <span className="mono" style={{ color: "#e0736a", fontSize: 11.5, gridColumn: "1/-1", padding: "10px 2px" }}>{error}</span>}
         {!loading && !error && entries.length === 0 && <span className="mono faint" style={{ fontSize: 11.5, gridColumn: "1/-1", padding: "10px 2px" }}>Empty folder.</span>}
-        {entries.map((e, i) => {
+        {!loading && !error && entries.length > 0 && shown.length === 0 && <span className="mono faint" style={{ fontSize: 11.5, gridColumn: "1/-1", padding: "10px 2px" }}>No match for “{query}”.</span>}
+        {shown.map((e, i) => {
           const ico = iconFor(e);
           return (
             <div
@@ -179,12 +198,20 @@ export default function FileBrowserEdex({ cwd, machine, active = true }: { sessi
         })}
       </div>
 
-      {openFile !== null && (
+      {openFile !== null && (() => {
+        const name = openFile.split("/").pop() ?? openFile;
+        const md = isMarkdown(name);
+        return (
         <div className="rcw-fb-preview">
           <div className="rcw-fb-phd">
             <button onClick={() => setOpenFile(null)} title="Back to files" style={{ padding: "3px 10px", borderRadius: 7, cursor: "pointer", border: "1px solid var(--border)", background: "transparent", color: "inherit", fontFamily: "var(--font-mono)", fontSize: 11 }}>← files</button>
-            <span className="mono" style={{ fontSize: 11.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{openFile.split("/").pop()}</span>
+            <span className="mono" style={{ fontSize: 11.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
             <span style={{ flex: 1 }} />
+            {read?.ok && read.encoding === "text" && md && (
+              <button onClick={() => setMdMode((m) => (m === "preview" ? "edit" : "preview"))} style={{ padding: "3px 10px", borderRadius: 7, cursor: "pointer", border: "1px solid var(--border)", background: "transparent", color: "inherit", fontFamily: "var(--font-mono)", fontSize: 11 }}>
+                {mdMode === "preview" ? "✎ edit" : "▤ preview"}
+              </button>
+            )}
             {read?.ok && read.encoding === "text" && (
               <button onClick={save} className="glass-btn--clay" style={{ padding: "4px 14px", borderRadius: 8, fontSize: 11.5, fontWeight: 600, border: "none", cursor: "pointer" }}>
                 {saving === "saving" ? "Saving…" : saving === "ok" ? "✓ Saved" : saving === "err" ? "✗ Error" : "Save"}
@@ -196,12 +223,22 @@ export default function FileBrowserEdex({ cwd, machine, active = true }: { sessi
               <span className="mono faint" style={{ fontSize: 11.5, padding: 14, display: "block" }}>Reading…</span>
             ) : !read?.ok ? (
               <span className="mono" style={{ color: "#e0736a", fontSize: 12, padding: 14, display: "block" }}>{read?.error ?? "Failed to read."}</span>
-            ) : read.encoding === "base64" ? (
+            ) : isOfficeFile(name) && read.encoding === "base64" ? (
+              <OfficeViewer cwd={cwd} machine={machine} path={openFile} base64={read.content} name={name} />
+            ) : read.encoding === "base64" && read.mime === "application/pdf" ? (
+              <iframe src={`data:application/pdf;base64,${read.content}`} title={name} style={{ width: "100%", height: "100%", border: 0 }} />
+            ) : read.encoding === "base64" && read.mime.startsWith("image/") ? (
               <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", padding: 16, overflow: "auto" }}>
                 <img src={`data:${read.mime};base64,${read.content}`} style={{ maxWidth: "100%", maxHeight: "100%", borderRadius: 8, boxShadow: "0 0 40px -12px rgb(var(--primary)/0.6)" }} />
               </div>
+            ) : read.encoding === "base64" ? (
+              <span className="mono faint" style={{ fontSize: 12, padding: 14, display: "block" }}>No inline preview · {(read.size / 1024).toFixed(1)} KB · {read.mime}</span>
             ) : read.encoding === "binary" ? (
               <span className="mono faint" style={{ fontSize: 12, padding: 14, display: "block" }}>Binary file · {(read.size / 1024).toFixed(1)} KB · {read.mime}</span>
+            ) : md && mdMode === "preview" ? (
+              <div className="md no-scrollbar" style={{ height: "100%", overflowY: "auto", padding: "12px 16px" }}>
+                <Markdown>{draft ?? read.content}</Markdown>
+              </div>
             ) : (
               <Editor
                 height="100%"
@@ -214,7 +251,8 @@ export default function FileBrowserEdex({ cwd, machine, active = true }: { sessi
             )}
           </div>
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
