@@ -280,7 +280,12 @@ export const useStore = create<State>((set, get) => ({
   queue: [],
   decisions: [],
   focusId: null,
-  mode: "flow",
+  // Restore the last-used cockpit mode (HUD/Flow/Grid) across launches; a last-viewed
+  // "history" reopens to Flow (it's a transient browse view, not a home).
+  mode: ((): "flow" | "grid" | "history" | "hud" => {
+    try { const m = localStorage.getItem("rcw.mode"); if (m === "hud" || m === "grid" || m === "flow") return m; } catch { /* ignore */ }
+    return "flow";
+  })(),
   detailId: null,
   hosts: [],
   inventory: [],
@@ -461,6 +466,7 @@ export const useStore = create<State>((set, get) => ({
 
   setMode: (mode: "flow" | "grid" | "history" | "hud") => {
     set({ mode, detailId: null });
+    try { localStorage.setItem("rcw.mode", mode); } catch { /* ignore */ }
     if (mode === "history") get().fetchInventory();
   },
 

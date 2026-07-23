@@ -44,7 +44,9 @@ export default function Cockpit() {
   // by and the sound plays over an already-loaded cockpit. First launch only (the
   // timer runs once at mount; a later reconnect just uses hasLoaded).
   const [bootHeld, setBootHeld] = useState(true);
-  useEffect(() => { const t = setTimeout(() => setBootHeld(false), 3000); return () => clearTimeout(t); }, []);
+  // Boot: the title settles at the "dang" (~1.6s) then holds static ~3s before the
+  // cockpit loads in (its widgets animate via the HUD entrance choreography).
+  useEffect(() => { const t = setTimeout(() => setBootHeld(false), 4600); return () => clearTimeout(t); }, []);
   const showBoot = !hasLoaded || bootHeld;
 
   // Quick "keep-wallpaper" fullscreen toggle (mirrors Settings › Appearance).

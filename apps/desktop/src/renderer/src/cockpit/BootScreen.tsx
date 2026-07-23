@@ -133,33 +133,38 @@ export default function BootScreen() {
     if (!bootChimePlayed) { bootChimePlayed = true; playSfx("boot"); }
   }, []);
 
-  // The boot log types out fast; then at IMPACT_MS — the "dang" hit in edex-theme.wav
-  // (~1.59s in, measured) — the screen FLASHES and the glitch title lands, in sync with
-  // the sound. Freezes on error (the log stays; the footer shows why).
+  // Boot log types out → the title fades in GLITCHING (leading up to the beat) → at
+  // IMPACT_MS, the "dang" hit in edex-theme.wav (~1.59s in, measured), the screen
+  // FLASHES and the glitch SETTLES to a clean static title, which then holds for ~3s
+  // (the Cockpit min-hold) before the cockpit loads in. Freezes on error.
   useEffect(() => {
     if (failed) return;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout>;
-    const IMPACT_MS = 1590;
+    const TITLE_MS = 1180;  // title appears (glitching) just before the beat
+    const IMPACT_MS = 1590; // the dang — flash + settle to static
     const step = () => {
       if (cancelled || done.current) return;
       const i = iRef.current;
-      if (i >= BOOT_LOG.length) return; // hold at end until the impact fires
+      if (i >= BOOT_LOG.length) return;
       iRef.current = i + 1;
       setLog((cur) => [...cur, BOOT_LOG[i]]);
       timer = setTimeout(step, BOOT_LOG[i].d);
     };
     step();
-    // The impact: flash + glitch title, synced to the dang.
-    const impact = setTimeout(() => {
+    const title = setTimeout(() => {
       if (cancelled) return;
       done.current = true;
       setPhase("title");
-      setGlitch(true);
+      setGlitch(true); // glitch while approaching the beat
+    }, TITLE_MS);
+    const impact = setTimeout(() => {
+      if (cancelled) return;
+      setGlitch(false); // SETTLE: stop glitching → clean static title
       setFlash(true);
       setTimeout(() => { if (!cancelled) setFlash(false); }, 520);
     }, IMPACT_MS);
-    return () => { cancelled = true; clearTimeout(timer); clearTimeout(impact); };
+    return () => { cancelled = true; clearTimeout(timer); clearTimeout(title); clearTimeout(impact); };
   }, [failed]);
 
   // Keep retrying on a NETWORK/server error so the app recovers when it's back. Don't
