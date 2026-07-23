@@ -832,38 +832,34 @@ input:focus, textarea:focus {
    while the session is thinking, instead of an inline loader eating the
    card's width (the session name keeps full width). Masked to the ring.
    ===================================================================== */
-/* Animate the conic gradient's START ANGLE (not a transform) so the bright arc
-   travels around the fixed ring smoothly — rotating the masked element instead
-   just spins the rounded rectangle and reads as frozen. Needs @property (supported
-   in the app's Chromium). */
-@property --rcw-orbit-a {
-    syntax: "<angle>";
-    initial-value: 0deg;
-    inherits: false;
-}
-@keyframes rcw-card-orbit { to { --rcw-orbit-a: 360deg; } }
-.rcw-card-working { position: relative; }
-.rcw-card-working::before {
-    content: "";
+/* Bulletproof orbit: a child <span class="rcw-orbit"> masked to a FIXED ring, with a
+   ::before gradient layer that spins via plain transform:rotate (which always
+   animates). The ring stays put; the bright arc sweeps around it. */
+@keyframes rcw-orbit-spin { to { transform: rotate(360deg); } }
+.rcw-orbit {
     position: absolute;
     inset: -1px;
     border-radius: 14px;
-    padding: 1.5px;
-    pointer-events: none;
+    padding: 1.6px;
     z-index: 0;
-    background: conic-gradient(
-        from var(--rcw-orbit-a),
-        transparent 0deg,
-        transparent 232deg,
-        rgb(var(--primary-soft) / 0.65) 300deg,
-        rgb(var(--accent)) 344deg,
-        rgb(var(--primary-soft) / 0.65) 356deg,
-        transparent 360deg
-    );
+    pointer-events: none;
     -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
     -webkit-mask-composite: xor;
     mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
     mask-composite: exclude;
-    animation: rcw-card-orbit 1.9s linear infinite;
 }
-.rcw-no-anim .rcw-card-working::before { animation: none; }
+.rcw-orbit::before {
+    content: "";
+    position: absolute;
+    inset: -60%;
+    background: conic-gradient(
+        from 0deg,
+        transparent 0deg 244deg,
+        rgb(var(--primary-soft) / 0.7) 306deg,
+        rgb(var(--accent)) 344deg,
+        rgb(var(--primary-soft) / 0.7) 356deg,
+        transparent 360deg
+    );
+    animation: rcw-orbit-spin 1.9s linear infinite;
+}
+.rcw-no-anim .rcw-orbit::before { animation: none; }

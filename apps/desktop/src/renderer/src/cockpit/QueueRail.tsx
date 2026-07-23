@@ -145,7 +145,7 @@ export default function QueueRail() {
         return (
           <div
             key={session.id}
-            className={`${focused ? "glass-inset" : "glass-inset glass-inset-hover"}${kind === "working" ? " rcw-card-working" : ""}`}
+            className={focused ? "glass-inset" : "glass-inset glass-inset-hover"}
             draggable
             onClick={() => setFocus(session.id)}
             onMouseEnter={() => setHoverId(session.id)}
@@ -163,6 +163,8 @@ export default function QueueRail() {
               boxShadow: overId === session.id && dragId && dragId !== session.id ? "inset 0 2px 0 rgb(var(--accent))" : undefined,
             }}
           >
+            {/* Orbiting glow while the session is thinking (a light circling the border). */}
+            {kind === "working" && <span className="rcw-orbit" aria-hidden />}
             {focused && (
               <span style={{ position: "absolute", left: 0, top: 14, bottom: 14, width: 3, borderRadius: 9, background: `linear-gradient(rgb(var(--primary-soft)), rgb(var(--accent)))` }} />
             )}

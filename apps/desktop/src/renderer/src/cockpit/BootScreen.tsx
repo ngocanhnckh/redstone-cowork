@@ -141,8 +141,9 @@ export default function BootScreen() {
     if (failed) return;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout>;
-    const TITLE_MS = 1180;  // title appears (glitching) just before the beat
-    const IMPACT_MS = 1590; // the dang — flash + settle to static
+    const TITLE_MS = 850;    // title appears (glitching) during the log
+    const IMPACT_MS = 1590;  // the "dang" hit — flash lands here
+    const SETTLE_MS = 2280;  // glitch keeps running THROUGH the dang, then resolves
     const step = () => {
       if (cancelled || done.current) return;
       const i = iRef.current;
@@ -154,13 +155,13 @@ export default function BootScreen() {
     step();
     const timers: ReturnType<typeof setTimeout>[] = [];
     const at = (ms: number, fn: () => void) => timers.push(setTimeout(() => { if (!cancelled) fn(); }, ms));
-    // Title fades in glitching, briefly settles, then GLITCHES AGAIN + flashes exactly
-    // on the "dang" (IMPACT_MS), and finally settles to a clean static title.
+    // The title fades in and glitches CONTINUOUSLY (no calm before the beat, so it's
+    // never static when the dang lands), FLASHES on the dang, then resolves to a clean
+    // static logo shortly after — with margin for audio-start latency.
     at(TITLE_MS, () => { done.current = true; setPhase("title"); setGlitch(true); });
-    at(TITLE_MS + 300, () => setGlitch(false));          // brief calm before the beat
-    at(IMPACT_MS, () => { setGlitch(true); setFlash(true); }); // re-glitch burst + flash on the dang
+    at(IMPACT_MS, () => setFlash(true));            // flash on the dang; glitch still running
     at(IMPACT_MS + 520, () => setFlash(false));
-    at(IMPACT_MS + 430, () => setGlitch(false));         // settle to clean static
+    at(SETTLE_MS, () => setGlitch(false));          // resolve to clean static after the dang
     return () => { cancelled = true; clearTimeout(timer); timers.forEach(clearTimeout); };
   }, [failed]);
 
