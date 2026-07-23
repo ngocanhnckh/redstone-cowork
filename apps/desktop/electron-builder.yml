@@ -25,8 +25,11 @@ files:
 # node-pty ships a compiled .node binary that cannot live inside the asar archive
 # — it must be unpacked so the OS can dlopen it at runtime. Scope it to node-pty
 # (a broad **/*.node glob traverses the pnpm workspace and errors).
+# node-mac-permissions (macOS-only; requests the app-attributed Calendar TCC prompt)
+# likewise ships a compiled permissions.node that must be dlopen-able outside the asar.
 asarUnpack:
   - "**/node_modules/node-pty/**"
+  - "**/node_modules/node-mac-permissions/**"
 
 # The offline GeoIP database (DB-IP City Lite, CC BY 4.0) for the Network Map widget.
 # Fetched by `pnpm --filter @rcw/desktop geoip` (gitignored, not in the repo), copied

@@ -8,6 +8,7 @@ import * as api from "./api";
 import { getWorkspaceConfig, saveWorkspaceConfig, getSshHost, setSshHost, isLocalMachine, setServerHosts, warmSshMaster } from "./workspace";
 import { getHostIps, getHostConnections, getHostProcesses } from "./host-info";
 import { getCalendarEvents } from "./calendar";
+import { requestCalendarPermission } from "./calendar-permission";
 import { getNetworkMap } from "./network";
 import { getWeather } from "./weather";
 import {
@@ -1367,9 +1368,10 @@ app.whenReady().then(async () => {
 
 // On first launch, proactively trigger the macOS calendar permission prompt so the
 // user grants (or declines) up front rather than only when they first add the Agenda
-// widget. getCalendarEvents() runs the EventKit access request when status is
-// "not determined"; macOS shows the prompt at most once, so a one-time marker keeps
-// us from re-priming on every launch (the widget still requests later if needed).
+// widget. requestCalendarPermission() asks EventKit IN-PROCESS (via node-mac-
+// permissions) so the prompt — and the Privacy › Calendars entry — is attributed to
+// "Redstone Cowork", not to osascript. macOS shows the prompt at most once, so a
+// one-time marker keeps us from re-priming on every launch.
 function primeCalendarPermission(): void {
   if (process.platform !== "darwin") return;
   const marker = join(app.getPath("userData"), ".calendar-permission-primed");
@@ -1381,7 +1383,7 @@ function primeCalendarPermission(): void {
   }
   // Delay slightly so the main window is on screen before the prompt appears.
   setTimeout(() => {
-    getCalendarEvents().catch(() => {
+    requestCalendarPermission().catch(() => {
       /* best-effort; never block startup on calendar access */
     });
   }, 2500);

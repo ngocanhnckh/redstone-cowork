@@ -47,8 +47,17 @@ jobs:
       - name: Fetch GeoIP database
         run: pnpm --filter @rcw/desktop geoip
 
-      # No native compilation: node-pty ships N-API prebuilds and npmRebuild is off,
-      # so no C++ toolchain / Python / MSVC is needed on any runner.
+      # node-mac-permissions (macOS-only) has no prebuild — it compiles a native addon
+      # that requests the app-attributed Calendar TCC prompt. pnpm 10 gates dependency
+      # build scripts behind an approval list, so build it explicitly here (the Mac
+      # runners have Xcode; `pnpm rebuild` bypasses the approval gate). It's N-API, so
+      # this one build is ABI-compatible with the Electron runtime. No-op on Win/Linux.
+      - name: Build native macOS addons
+        if: runner.os == 'macOS'
+        run: pnpm rebuild node-mac-permissions
+
+      # node-pty ships N-API prebuilds (npmRebuild is off), so no toolchain is needed
+      # for it on any runner; the only native compile is the macOS step above.
       - name: Build and package
         run: pnpm --filter @rcw/desktop run dist
         env:

@@ -8,8 +8,9 @@ export default defineConfig({
     build: {
       rollupOptions: {
         input: { index: resolve(__dirname, "src/main/index.ts") },
-        // node-pty is a native module — never bundle it; resolve from node_modules at runtime.
-        external: ["node-pty"],
+        // node-pty and node-mac-permissions are native modules — never bundle them;
+        // resolve from node_modules at runtime.
+        external: ["node-pty", "node-mac-permissions"],
       },
     },
   },
