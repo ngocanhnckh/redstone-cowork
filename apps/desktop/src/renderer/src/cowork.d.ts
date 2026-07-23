@@ -87,6 +87,7 @@ declare global {
       warmHost(machine: string): Promise<{ ok: boolean }>;
       hostIps(machine: string): Promise<{ local: string | null; public: string | null }>;
       hostConnections(machine: string): Promise<{ ip: string; port: number | null; count: number }[]>;
+      hostProcesses(machine: string): Promise<{ pid: number; name: string; cpu: number; mem: number }[]>;
 
       // Passwordless SSH onboarding
       sshSetup(a: {

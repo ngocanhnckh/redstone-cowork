@@ -79,6 +79,66 @@ export function parsePeers(raw: string): HostPeer[] {
     .slice(0, 40);
 }
 
+export type HostProc = { pid: number; name: string; cpu: number; mem: number };
+
+// Top resource-consuming processes on the host — the "who's eating the box" feed
+// behind the Reactor widget. `-eo … --sort` is procps (full Linux); the `ps aux`
+// fallback covers busybox-ish hosts (parsed the same way: last two numeric columns).
+const PROC_SCRIPT =
+  `ps -eo pid=,comm=,pcpu=,pmem= --sort=-pcpu 2>/dev/null | head -n 14 || ps aux 2>/dev/null | head -n 15`;
+
+/** Parse a `ps` table into processes. Handles both `ps -eo pid,comm,pcpu,pmem`
+ * (PID first, cpu/mem last two, name in the middle) and the `ps aux` fallback
+ * (USER PID %CPU %MEM … COMMAND). Header rows and non-numeric lines are skipped.
+ * Sorted by cpu descending, capped at 12. */
+export function parseProcesses(raw: string): HostProc[] {
+  const out: HostProc[] = [];
+  for (const line of raw.split("\n")) {
+    const t = line.trim().split(/\s+/).filter(Boolean);
+    if (t.length < 4) continue;
+    let pid: number, name: string, cpu: number, mem: number;
+    if (isInt(t[0])) {
+      // `ps -eo pid=,comm=,pcpu=,pmem=` → PID COMM … %CPU %MEM
+      pid = Number(t[0]);
+      cpu = Number(t[t.length - 2]);
+      mem = Number(t[t.length - 1]);
+      name = baseName(t.slice(1, t.length - 2).join(" "));
+    } else if (isInt(t[1]) && isNum(t[2]) && isNum(t[3])) {
+      // `ps aux` → USER PID %CPU %MEM … COMMAND (skips the "USER PID …" header, whose
+      // %CPU column is the non-numeric word "%CPU").
+      pid = Number(t[1]);
+      cpu = Number(t[2]);
+      mem = Number(t[3]);
+      // `ps aux` has 10 fixed columns then COMMAND (index 10). Use the executable
+      // token, not the last arg. Falls back to the final token if the row is short.
+      name = baseName(t[10] ?? t[t.length - 1]);
+    } else {
+      continue;
+    }
+    if (!Number.isFinite(cpu) || !Number.isFinite(mem) || !name) continue;
+    out.push({ pid, name, cpu, mem });
+  }
+  return out.sort((a, b) => b.cpu - a.cpu).slice(0, 12);
+}
+function isNum(s: string): boolean { return /^\d+(\.\d+)?$/.test(s); }
+function isInt(s: string): boolean { return /^\d+$/.test(s); }
+function baseName(s: string): string { const b = s.split(/[\/\s]/).filter(Boolean).pop() ?? s; return b.slice(0, 24); }
+
+export async function getHostProcesses(machine: string): Promise<HostProc[]> {
+  try {
+    let raw = "";
+    if (isLocalMachine(machine)) {
+      raw = await run("/bin/sh", ["-c", PROC_SCRIPT]);
+    } else {
+      const target = await getSshTarget(machine);
+      raw = await run("ssh", [...sshMuxOpts(), ...target.opts, target.host, PROC_SCRIPT]);
+    }
+    return parseProcesses(raw);
+  } catch {
+    return [];
+  }
+}
+
 export async function getHostConnections(machine: string): Promise<HostPeer[]> {
   try {
     let raw = "";

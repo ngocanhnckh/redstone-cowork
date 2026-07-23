@@ -5,7 +5,7 @@ import { useStore } from "../store";
 // are draggable/resizable, glanceable, and persist their placement globally. Every
 // widget here is NEW — none duplicate the fixed telemetry deck or the left column.
 
-export type WidgetKind = "attention" | "burn" | "ticker" | "timer" | "scratch" | "throughput" | "radar";
+export type WidgetKind = "attention" | "burn" | "ticker" | "timer" | "scratch" | "throughput" | "radar" | "reactor";
 export type WidgetInst = { id: string; kind: WidgetKind; x: number; y: number; w: number; h: number; text?: string };
 
 const KEY = "rcw.widgets";
@@ -19,8 +19,9 @@ const CATALOG: Record<WidgetKind, Meta> = {
   scratch:    { label: "Scratch Note",    icon: "✎", w: 224, h: 158, minW: 160, minH: 110 },
   throughput: { label: "Throughput",      icon: "▚", w: 224, h: 128, minW: 180, minH: 108 },
   radar:      { label: "Recon Radar",     icon: "◎", w: 244, h: 244, minW: 190, minH: 190 },
+  reactor:    { label: "Top Processes",   icon: "⚛", w: 264, h: 190, minW: 210, minH: 140 },
 };
-const ORDER: WidgetKind[] = ["attention", "radar", "burn", "throughput", "ticker", "timer", "scratch"];
+const ORDER: WidgetKind[] = ["attention", "reactor", "radar", "burn", "throughput", "ticker", "timer", "scratch"];
 
 function loadWidgets(): WidgetInst[] | null {
   try {
@@ -172,6 +173,7 @@ function WidgetBody({ inst, onChange }: { inst: WidgetInst; onChange: (p: Partia
     case "scratch": return <ScratchNote text={inst.text ?? ""} onChange={(t) => onChange({ text: t })} />;
     case "throughput": return <Throughput />;
     case "radar": return <ReconRadar />;
+    case "reactor": return <Reactor />;
     default: return null;
   }
 }
@@ -507,6 +509,72 @@ function ReconRadar() {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// ── Widget: Reactor (top processes on the remote host) ────────────────────────
+type Proc = { pid: number; name: string; cpu: number; mem: number };
+// A hot→cold colour for a load percentage: cyan (idle) → amber → red (pegged).
+function loadColor(pct: number): string {
+  if (pct >= 80) return "#ff5c4d";
+  if (pct >= 45) return "#ffb454";
+  return "rgb(var(--accent))";
+}
+function Reactor() {
+  const focusId = useStore((s) => s.focusId);
+  const sessions = useStore((s) => s.sessions);
+  const queue = useStore((s) => s.queue);
+  const machine = useMemo(() => [...sessions, ...queue].find((x) => x.id === focusId)?.machine ?? null, [focusId, sessions, queue]);
+  const [procs, setProcs] = useState<Proc[]>([]);
+  const [by, setBy] = useState<"cpu" | "mem">("cpu");
+
+  useEffect(() => {
+    if (!machine) { setProcs([]); return; }
+    let alive = true;
+    const load = () => { window.cowork.hostProcesses(machine).then((p) => { if (alive) setProcs(p); }).catch(() => { if (alive) setProcs([]); }); };
+    load();
+    const id = setInterval(load, 3500);
+    return () => { alive = false; clearInterval(id); };
+  }, [machine]);
+
+  const rows = useMemo(() => [...procs].sort((a, b) => (by === "cpu" ? b.cpu - a.cpu : b.mem - a.mem)).slice(0, 8), [procs, by]);
+  const tabBtn = (k: "cpu" | "mem") => ({
+    border: "none", cursor: "pointer", padding: "1px 7px", fontSize: 9.5, borderRadius: 6,
+    fontFamily: "var(--font-mono)", letterSpacing: "0.06em", textTransform: "uppercase" as const,
+    background: by === k ? "rgb(var(--primary) / 0.26)" : "transparent", color: by === k ? "var(--text)" : "var(--text-soft)",
+  });
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 6 }}>
+        <span className="mono" style={{ fontSize: 9.5, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-soft)" }}>Reactor</span>
+        <span className="mono faint" style={{ fontSize: 9.5, minWidth: 0, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{machine ?? "no host"}</span>
+        <div style={{ display: "inline-flex", gap: 2, border: "1px solid var(--border)", borderRadius: 7, padding: 1 }}>
+          <button style={tabBtn("cpu")} onClick={() => setBy("cpu")}>cpu</button>
+          <button style={tabBtn("mem")} onClick={() => setBy("mem")}>mem</button>
+        </div>
+      </div>
+      {rows.length === 0 ? (
+        <div className="mono faint" style={{ fontSize: 11, margin: "auto" }}>{machine ? "reading…" : "focus a session"}</div>
+      ) : (
+        <div className="no-scrollbar" style={{ display: "flex", flexDirection: "column", gap: 4, overflowY: "auto", minHeight: 0 }}>
+          {rows.map((p, i) => {
+            const v = by === "cpu" ? p.cpu : p.mem;
+            const c = loadColor(v);
+            const hot = i === 0 && v >= 80;
+            return (
+              <div key={p.pid} title={`pid ${p.pid} · ${p.name} · cpu ${p.cpu}% · mem ${p.mem}%`} style={{ position: "relative", display: "flex", alignItems: "center", gap: 8, height: 17 }}>
+                {/* load bar behind the label */}
+                <span style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${Math.min(100, v)}%`, background: `linear-gradient(90deg, ${c}44, ${c}14)`, borderLeft: `2px solid ${c}`, borderRadius: 3, boxShadow: hot ? `0 0 10px ${c}` : "none", transition: "width .6s ease", animation: hot ? "rcw-w-pulse 1s ease-in-out infinite" : "none" }} />
+                <span style={{ position: "relative", fontSize: 11.5, minWidth: 0, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", paddingLeft: 6 }}>{p.name}</span>
+                <span className="mono faint" style={{ position: "relative", fontSize: 8.5 }}>{p.pid}</span>
+                <span className="mono" style={{ position: "relative", fontSize: 11, color: c, fontVariantNumeric: "tabular-nums", minWidth: 38, textAlign: "right" }}>{v.toFixed(1)}%</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
