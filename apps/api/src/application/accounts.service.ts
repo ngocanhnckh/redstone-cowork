@@ -126,14 +126,23 @@ export class AccountsService implements OnModuleInit {
     return (Number.isFinite(min) && min > 0 ? min : 30) * 60_000;
   }
 
-  /** Resolve a bearer to its account (null = unknown / revoked / disabled / idled out). */
+  /** Resolve a bearer to its account (null = unknown / revoked / disabled / idled out).
+   *  Accepts interactive session tokens (rcwa_) and long-lived host tokens (rcwh_). */
   async verify(token: string): Promise<Account | null> {
-    if (!token.startsWith("rcwa_")) return null;
+    if (!token.startsWith("rcwa_") && !token.startsWith("rcwh_")) return null;
     return this.store.findByTokenHash(sha256(token), new Date(), AccountsService.idleMs());
   }
 
   async logout(token: string): Promise<void> {
     await this.store.revokeToken(sha256(token), new Date());
+  }
+
+  /** Mint a long-lived HOST token for an account — used by a provisioned redstone
+   *  agent to authenticate without the interactive 30-min idle expiry. */
+  async mintHostToken(accountId: string, label: string): Promise<string> {
+    const token = "rcwh_" + randomBytes(24).toString("hex");
+    await this.store.addToken({ tokenHash: sha256(token), accountId, label: label.slice(0, 120), createdAt: new Date(), kind: "host" });
+    return token;
   }
 
   async create(input: NewAccount): Promise<Account> {

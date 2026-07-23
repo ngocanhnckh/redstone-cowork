@@ -37,6 +37,7 @@ declare global {
       serverGrant(id: string, username: string): Promise<{ ok: boolean }>;
       serverRevoke(id: string, accountId: string): Promise<{ ok: boolean }>;
       serverCoworkKey(): Promise<{ publicKey: string | null }>;
+      serverProvision(id: string): Promise<{ serverUrl: string; installCommand: string; installCommandRelay: string }>;
       accountsAnalytics(): Promise<Array<{ accountId: string; username: string; displayName: string; role: string; photo: string | null; level: string; division: string; sessions: number; activeSessions: number; tokensInput: number; tokensOutput: number; estCostUsd: number; lastActiveAt: string | null }>>;
       accountSessions(id: string): Promise<Array<{ id: string; machine: string; cwd: string; model: string | null; tokensInput: number; tokensOutput: number; estCostUsd: number; attachedAt: string; lastSeenAt: string; closed: boolean }>>;
       redstoneLogin(serverUrl: string, username: string, password: string): Promise<{ ok: boolean; error?: string }>;

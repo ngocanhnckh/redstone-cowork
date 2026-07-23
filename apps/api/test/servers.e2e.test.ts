@@ -89,6 +89,23 @@ describe("server registry & ACL", () => {
     expect(forbidden.status).toBe(403);
   });
 
+  it("provision returns install commands (direct + relay) with a long-lived host token", async () => {
+    process.env.COWORK_PUBLIC_URL = "https://cowork.test";
+    const adminTok = await login("anh.nguyen", "admin-pass");
+    const srv = await request(app.getHttpServer()).post("/servers").set("Authorization", `Bearer ${adminTok}`).send({ name: "Prov", host: "h" });
+    const prov = await request(app.getHttpServer()).post(`/servers/${srv.body.id}/provision`).set("Authorization", `Bearer ${adminTok}`);
+    expect(prov.status).toBe(200);
+    expect(prov.body.installCommand).toContain("https://cowork.test/install.sh");
+    expect(prov.body.installCommand).toMatch(/--token rcwh_[0-9a-f]{48}/);
+    expect(prov.body.installCommandRelay).toContain("--relay");
+
+    // the minted host token authenticates AND does not idle-expire
+    const hostTok = /--token (rcwh_[0-9a-f]+)/.exec(prov.body.installCommand)![1];
+    const me = await request(app.getHttpServer()).get("/accounts/me").set("Authorization", `Bearer ${hostTok}`);
+    expect(me.status).toBe(200);
+    delete process.env.COWORK_PUBLIC_URL;
+  });
+
   it("exposes the cowork public key endpoint", async () => {
     process.env.COWORK_SSH_PUBKEY = "ssh-ed25519 AAAAtest cowork";
     const adminTok = await login("anh.nguyen", "admin-pass");

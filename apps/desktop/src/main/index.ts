@@ -371,6 +371,7 @@ ipcMain.handle(IPC.serverDelete, (_e, a: { id: string }) => api.serverDelete(a.i
 ipcMain.handle(IPC.serverGrant, (_e, a: { id: string; username: string }) => api.serverGrant(a.id, a.username));
 ipcMain.handle(IPC.serverRevoke, (_e, a: { id: string; accountId: string }) => api.serverRevoke(a.id, a.accountId));
 ipcMain.handle(IPC.serverCoworkKey, () => api.serverCoworkKey());
+ipcMain.handle(IPC.serverProvision, (_e, a: { id: string }) => api.serverProvision(a.id));
 ipcMain.handle(IPC.accountsAnalytics, () => api.accountsAnalytics());
 ipcMain.handle(IPC.accountSessions, (_e, a: { id: string }) => api.accountSessions(a.id));
 ipcMain.handle(IPC.faceEnroll, async (_e, a: { descriptor: number[]; account: { username: string; displayName: string; photo?: string | null } }) => {

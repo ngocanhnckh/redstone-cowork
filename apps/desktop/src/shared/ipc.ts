@@ -16,6 +16,7 @@ export const IPC = {
   serverGrant: "api:servers:grant",
   serverRevoke: "api:servers:revoke",
   serverCoworkKey: "api:servers:cowork-key",
+  serverProvision: "api:servers:provision",
   accountsAnalytics: "api:accounts:analytics",
   accountSessions: "api:accounts:sessions",
   deviceSecretGet: "device:secret:get",

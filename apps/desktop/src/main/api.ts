@@ -112,6 +112,7 @@ export async function serverDelete(id: string): Promise<unknown> { return (await
 export async function serverGrant(id: string, username: string): Promise<unknown> { return (await req(`/servers/${encodeURIComponent(id)}/access`, { method: "POST", body: JSON.stringify({ username }) })).json(); }
 export async function serverRevoke(id: string, accountId: string): Promise<unknown> { return (await req(`/servers/${encodeURIComponent(id)}/access/${encodeURIComponent(accountId)}`, { method: "DELETE" })).json(); }
 export async function serverCoworkKey(): Promise<{ publicKey: string | null }> { return (await req("/servers/cowork-key")).json(); }
+export async function serverProvision(id: string): Promise<{ serverUrl: string; installCommand: string; installCommandRelay: string }> { return (await req(`/servers/${encodeURIComponent(id)}/provision`, { method: "POST" })).json(); }
 
 /** Enroll the current agent's face on this device → returns a one-time device secret. */
 export async function faceEnroll(descriptor: number[], deviceLabel: string): Promise<{ deviceSecret: string }> {

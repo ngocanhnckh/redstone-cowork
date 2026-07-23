@@ -23,6 +23,31 @@ export class ServersController {
     return { publicKey: this.servers.coworkPublicKey() };
   }
 
+  /** Provisioning bundle for a server: ready-to-paste install commands (direct &
+   *  reverse-relay for closed hosts) carrying a fresh long-lived host token bound to
+   *  the caller, so the installed redstone agent authenticates as this account. */
+  @Post(":id/provision")
+  @HttpCode(200)
+  async provision(@Req() req: GuardedRequest, @Param("id") id: string) {
+    await this.requireManage(req, id);
+    const server = await this.servers.get(id);
+    if (!server) throw new NotFoundException();
+    const accountId = req.account?.id;
+    // Instance-token callers (no account) fall back to the instance token itself.
+    const token = accountId
+      ? await this.accounts.mintHostToken(accountId, `host:${server.name}`)
+      : process.env.INSTANCE_TOKEN ?? "";
+    const base = (process.env.COWORK_PUBLIC_URL ?? "https://cowork.chatredstone.com").replace(/\/$/, "");
+    const direct = `curl -fsSL ${base}/install.sh | bash -s -- --server ${base} --token ${token}`;
+    return {
+      serverUrl: base,
+      // Directly-reachable host: install + agent, no relay.
+      installCommand: direct,
+      // Closed/NAT'd host (no inbound SSH): opt into the reverse-SSH relay.
+      installCommandRelay: direct + " --relay",
+    };
+  }
+
   /** Admin registers a shared company server; an agent self-adds their own VPS. */
   @Post()
   @HttpCode(201)

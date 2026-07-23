@@ -60,7 +60,7 @@ export class InstanceTokenGuard implements CanActivate {
     if (token === loadConfig().INSTANCE_TOKEN) { req.authKind = "instance"; return true; }
     // Employee/admin account bearer (enterprise mode). Prefix-routed so the two
     // hashed-token lookups below never race a legitimate account token.
-    if (token.startsWith("rcwa_")) {
+    if (token.startsWith("rcwa_") || token.startsWith("rcwh_")) {
       const account = await this.accounts.verify(token);
       if (account) { req.authKind = "account"; req.account = account; return true; }
       throw new UnauthorizedException();

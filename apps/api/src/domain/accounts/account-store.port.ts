@@ -23,6 +23,7 @@ export type AccountTokenRecord = {
   accountId: string;
   label: string;
   createdAt: Date;
+  kind?: "session" | "host";
 };
 
 export interface AccountStore {

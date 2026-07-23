@@ -29,6 +29,7 @@ contextBridge.exposeInMainWorld("cowork", {
   serverGrant: (id: string, username: string): Promise<{ ok: boolean }> => ipcRenderer.invoke(IPC.serverGrant, { id, username }),
   serverRevoke: (id: string, accountId: string): Promise<{ ok: boolean }> => ipcRenderer.invoke(IPC.serverRevoke, { id, accountId }),
   serverCoworkKey: (): Promise<{ publicKey: string | null }> => ipcRenderer.invoke(IPC.serverCoworkKey),
+  serverProvision: (id: string): Promise<{ serverUrl: string; installCommand: string; installCommandRelay: string }> => ipcRenderer.invoke(IPC.serverProvision, { id }),
   accountsAnalytics: (): Promise<Array<Record<string, unknown>>> => ipcRenderer.invoke(IPC.accountsAnalytics),
   accountSessions: (id: string): Promise<Array<Record<string, unknown>>> => ipcRenderer.invoke(IPC.accountSessions, { id }),
   faceEnroll: (descriptor: number[], account: { username: string; displayName: string; photo?: string | null }): Promise<{ ok: boolean; error?: string }> =>

@@ -59,6 +59,7 @@ services:
       JIRA_OAUTH_REDIRECT: ${JIRA_OAUTH_REDIRECT:-https://cowork.chatredstone.com/auth/jira/callback}
       JIRA_WEBHOOK_SECRET: ${JIRA_WEBHOOK_SECRET:-}
       COWORK_SSH_PUBKEY: ${COWORK_SSH_PUBKEY:-}
+      COWORK_PUBLIC_URL: ${COWORK_PUBLIC_URL:-https://cowork.chatredstone.com}
       # NAT'd-host SSH relay (reverse tunnel via cowork server).
       RELAY_HOST: ${RELAY_HOST:-}
       RELAY_SSH_PORT: ${RELAY_SSH_PORT:-22}

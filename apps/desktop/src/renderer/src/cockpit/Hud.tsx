@@ -9,6 +9,7 @@ import ActionFeed from "./ActionFeed";
 import FileBrowserEdex from "./FileBrowserEdex";
 import AgentsPanel from "./AgentsPanel";
 import ServersPanel from "./ServersPanel";
+import NewSessionWizard from "./NewSessionWizard";
 import { playSfx } from "../sfx";
 import FilesPanel from "./FilesPanel";
 import BrowserStack from "./BrowserStack";
@@ -1008,7 +1009,8 @@ function HudConsole() {
   const dockScale = appr.dockScale;
   const canvasRef = useRef<HTMLDivElement>(null);
   const none = <div className="mono faint" style={{ padding: 14, fontSize: 11 }}>no session</div>;
-  const [dockerMenu, setDockerMenu] = useState(false); // Docker dock icon right-click menu
+  const [dockerMenu, setDockerMenu] = useState(false);
+  const [newSessionOpen, setNewSessionOpen] = useState(false); // Docker dock icon right-click menu
   // Saved window-layout templates + the save/load menu.
   const [templates, setTemplates] = useState<Record<string, SessionConsole>>(loadTemplates);
   useEffect(() => { try { localStorage.setItem(TEMPLATES_KEY, JSON.stringify(templates)); } catch { /* ignore */ } }, [templates]);
@@ -1707,6 +1709,7 @@ function HudConsole() {
         {/* Floating widget canvas — sits over the backdrop, behind every app window
             (windows render at zIndex ≥ 1). Windows mode only. */}
         {!grid && <WidgetLayer />}
+      {newSessionOpen && <NewSessionWizard onClose={() => setNewSessionOpen(false)} />}
         {windowList.map((p) => (
           <PanelShell
             key={p.id}
@@ -1742,6 +1745,13 @@ function HudConsole() {
                 </button>
               );
             })}
+            {/* Guided New Session wizard launcher. */}
+            <button onClick={() => setNewSessionOpen(true)} title="New session — pick a server, resume or create, choose folder & mode"
+              style={dockBtnStyle(false, false)}>
+              <span style={{ fontSize: 15, lineHeight: 1 }}>＋</span>
+              <span style={{ fontSize: 8, letterSpacing: "0.08em", textTransform: "uppercase" }}>Session</span>
+              <span style={{ width: 4, height: 4, borderRadius: 999, marginTop: 1, background: "transparent" }} />
+            </button>
             {/* Single Docker app icon: left-click focuses/minimizes; right-click opens
                 a menu to create a new window or jump to an existing one. */}
             <div style={{ position: "relative" }}>

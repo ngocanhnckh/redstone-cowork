@@ -131,12 +131,11 @@ export function installGlobalSfx(): void {
     }
     if (clickable) playSfx("button");
   }, { capture: true });
-  // Per-keystroke cue (eDEX keyboard sound). Skips auto-repeat (held keys) and bare
-  // modifiers so it's one tap per key, not a machine-gun; rate-limited + volume-gated.
+  // Keyboard cue ONLY on Enter (sending a message / submitting) — not on every
+  // keystroke, which is noisy. Skips auto-repeat (held Enter).
   window.addEventListener("keydown", (e) => {
-    if (e.repeat || MODIFIER_KEYS.has(e.key)) return;
+    if (e.repeat || e.key !== "Enter") return;
     playSfx("keystroke");
   }, { capture: true });
 }
 
-const MODIFIER_KEYS = new Set(["Shift", "Control", "Alt", "Meta", "CapsLock", "Fn", "Dead"]);

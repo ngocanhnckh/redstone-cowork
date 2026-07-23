@@ -144,8 +144,8 @@ export class PostgresAccountStore implements AccountStore {
 
   async addToken(rec: AccountTokenRecord): Promise<void> {
     await this.pool.query(
-      `INSERT INTO account_tokens (token_hash, account_id, label, created_at) VALUES ($1,$2,$3,$4)`,
-      [rec.tokenHash, rec.accountId, rec.label, rec.createdAt]
+      `INSERT INTO account_tokens (token_hash, account_id, label, created_at, kind) VALUES ($1,$2,$3,$4,$5)`,
+      [rec.tokenHash, rec.accountId, rec.label, rec.createdAt, rec.kind ?? "session"]
     );
   }
 
@@ -157,14 +157,14 @@ export class PostgresAccountStore implements AccountStore {
               a.created_at AS "createdAt", a.disabled_at AS "disabledAt"
        FROM account_tokens t JOIN accounts a ON a.id = t.account_id
        WHERE t.token_hash=$1 AND t.revoked_at IS NULL AND a.disabled_at IS NULL
-         AND COALESCE(t.last_used_at, t.created_at) > $2`,
+         AND (t.kind = 'host' OR COALESCE(t.last_used_at, t.created_at) > $2)`,
       [tokenHash, cutoff]
     );
     if (!rows[0]) {
       // Best-effort tombstone so an idled-out token can't be resurrected later.
       await this.pool.query(
         `UPDATE account_tokens SET revoked_at=$2 WHERE token_hash=$1 AND revoked_at IS NULL
-           AND COALESCE(last_used_at, created_at) <= $3`,
+           AND kind <> 'host' AND COALESCE(last_used_at, created_at) <= $3`,
         [tokenHash, now, cutoff]
       );
       return null;
