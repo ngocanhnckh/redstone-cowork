@@ -5,15 +5,11 @@ import { playSfx } from "../sfx";
 // Play the boot chime once per app launch (BootScreen can remount on reconnects).
 let bootChimePlayed = false;
 
-// The boot sequence shown until the FIRST session fetch succeeds. It doubles as an
-// honest connection monitor: it streams a fast boot log while connecting; if the
-// fetch fails it freezes and shows the REAL reason + a retry — so a connection error
-// is never masked by a misleading "All clear" empty state.
+// A two-phase boot sequence (log → glitch title), paced to run for several seconds of
+// CONTINUOUS motion so it matches the boot chime instead of flashing by. It also
+// doubles as an honest connection monitor: on a fetch failure it freezes and shows the
+// REAL reason + a retry, so an error is never masked by a misleading "All clear".
 
-// req() throws bare HTTP statuses ("401") / fetch failures ("Failed to fetch"), but
-// the renderer sees them WRAPPED by Electron IPC as
-//   "Error invoking remote method 'api:queue': Error: 401"
-// so we scan for the status code ANYWHERE in the string, not an exact match.
 function statusOf(e: string): number | null {
   const m = (e || "").match(/\b(4\d\d|5\d\d)\b/);
   return m ? Number(m[1]) : null;
@@ -28,48 +24,46 @@ function humanizeError(e: string): string {
 }
 
 type Kind = "" | "ok" | "hl" | "warn";
-type Line = { t: string; k: Kind };
+type Line = { t: string; k: Kind; d: number }; // d = delay (ms) after this line
 
-// A short pseudo-hex token for the fast "data" lines between milestones.
 function hex(n: number): string {
   let s = "";
   for (let i = 0; i < n; i++) s += "0123456789ABCDEF"[Math.floor(Math.random() * 16)];
   return s;
 }
 
-// Our OWN boot log — a plausible cold-boot sequence, branded for Redstone. Interleaves
-// milestone lines (ok/hl) with fast "probe" lines so it scrolls like a system booting.
+// Our OWN boot log — a cold-boot sequence branded for Redstone. Per-line delays are
+// mostly fast with deliberate pauses at section boundaries, so it scrolls with rhythm.
 function buildBootLog(): Line[] {
   const out: Line[] = [];
-  const push = (t: string, k: Kind = "") => out.push({ t, k });
-  const fill = (n: number) => { for (let i = 0; i < n; i++) push(`  · 0x${hex(4)}  ${hex(2)} ${hex(2)} ${hex(2)} ${hex(2)}  ok`); };
+  const push = (t: string, k: Kind = "", d = 18) => out.push({ t, k, d });
+  const probe = (n: number) => { for (let i = 0; i < n; i++) push(`  · 0x${hex(4)}  ${hex(2)} ${hex(2)} ${hex(2)} ${hex(2)}  ok`, "", 13); };
 
-  push("REDSTONE bootrom v4.8 — power-on self test", "hl");
+  push("REDSTONE bootrom v4.8 — power-on self test", "hl", 110);
   push("  cpu: 8 logical cores online @ 3.2GHz", "ok");
   push("  mem: mapping 32768M ................ ok", "ok");
   push("  dma: 64 channels armed", "ok");
-  push("  crypto: aes-ni · curve25519 · sha3 ready", "ok");
-  fill(3);
-  push("[core] loading cockpit.core", "hl");
+  push("  crypto: aes-ni · curve25519 · sha3 ready", "ok", 95);
+  probe(4);
+  push("[core] loading cockpit.core", "hl", 90);
   push("[core] loading render.pipeline");
   push("[core] loading focus.theater");
   push("[core] loading session.grid");
   push("[core] loading hud.compositor");
-  push("[core] loading telemetry.probe");
-  fill(4);
-  push("[ fs ] mounting workspace overlay ....... ok", "ok");
+  push("[core] loading telemetry.probe", "", 90);
+  probe(5);
+  push("[ fs ] mounting workspace overlay ....... ok", "ok", 90);
   push("[ fs ] scanning virtual apps");
-  fill(2);
-  push("[ net] bringing up uplink0", "hl");
-  push("[ net] resolving cowork gateway");
-  fill(3);
-  push("[ tls] negotiating secure channel");
-  push("[ tls] handshake ............ established", "ok");
-  push("[auth] presenting instance token", "hl");
-  fill(2);
-  push("[sync] subscribing to session stream");
-  push("[scan] enumerating active sessions");
-  fill(3);
+  probe(3);
+  push("[ net] bringing up uplink0", "hl", 90);
+  push("[ net] resolving cowork gateway", "", 95);
+  probe(4);
+  push("[ tls] negotiating secure channel", "", 90);
+  push("[ tls] handshake ............ established", "ok", 90);
+  push("[auth] presenting instance token", "hl", 95);
+  probe(3);
+  push("[sync] subscribing to session stream", "", 90);
+  push("[scan] enumerating active sessions", "", 140);
   return out;
 }
 const BOOT_LOG = buildBootLog();
@@ -78,25 +72,45 @@ const CSS = `
 @keyframes rcw-boot-line { from { opacity: 0; transform: translateX(-7px); } to { opacity: 1; transform: none; } }
 @keyframes rcw-boot-caret { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
 @keyframes rcw-boot-scan { 0% { top: -6%; } 100% { top: 106%; } }
-@keyframes rcw-boot-title { 0% { opacity: 0; transform: translateY(8px); letter-spacing: 0.5em; filter: blur(5px); } 100% { opacity: 1; transform: none; filter: none; } }
 @keyframes rcw-boot-grid { to { background-position: 0 -34px, -34px 0; } }
+@keyframes rcw-boot-fadein { from { opacity: 0; } to { opacity: 1; } }
+@keyframes rcw-boot-titlein { 0% { opacity: 0; transform: scale(1.06); filter: blur(6px); letter-spacing: .5em; } 100% { opacity: 1; transform: none; filter: none; } }
+/* derez glitch — the title splits into top/bottom halves that jitter with a colour offset */
+@keyframes rcw-derez-top { from { transform: translateX(-1.5%); } to { transform: translateX(-5%); } }
+@keyframes rcw-derez-bot { from { transform: translateX(1.5%); } to { transform: translateX(4%); } }
+
 .rcw-boot { position:absolute; inset:0; overflow:hidden; display:flex; flex-direction:column;
-  background: radial-gradient(120% 90% at 50% 30%, rgb(var(--primary) / 0.08), transparent 70%); }
+  background: radial-gradient(120% 90% at 50% 32%, rgb(var(--primary) / 0.08), transparent 70%); }
 .rcw-boot-grid { position:absolute; inset:0; pointer-events:none; opacity:.5;
   background-image: linear-gradient(rgb(var(--primary-soft) / 0.06) 1px, transparent 1px), linear-gradient(90deg, rgb(var(--primary-soft) / 0.06) 1px, transparent 1px);
   background-size: 34px 34px, 34px 34px; animation: rcw-boot-grid 3.4s linear infinite;
-  -webkit-mask-image: radial-gradient(80% 70% at 50% 40%, #000 40%, transparent 85%); mask-image: radial-gradient(80% 70% at 50% 40%, #000 40%, transparent 85%); }
+  -webkit-mask-image: radial-gradient(80% 70% at 50% 45%, #000 40%, transparent 85%); mask-image: radial-gradient(80% 70% at 50% 45%, #000 40%, transparent 85%); }
 .rcw-boot-scan { position:absolute; left:0; right:0; height:2px; z-index:3; pointer-events:none; opacity:.55;
   background: linear-gradient(90deg, transparent, rgb(var(--primary-soft) / 0.6), transparent); box-shadow: 0 0 16px 2px rgb(var(--primary-soft) / 0.35); animation: rcw-boot-scan 2.6s linear infinite; }
-.rcw-boot-title { text-align:center; padding: 26px 20px 10px; position:relative; z-index:2; animation: rcw-boot-title 0.9s ease both; }
-.rcw-boot-log { flex:1; min-height:0; overflow:hidden; position:relative; z-index:2;
-  font-family: var(--font-mono); font-size: 12px; line-height: 1.62; padding: 4px 26px 18px; color: var(--text-faint);
-  -webkit-mask-image: linear-gradient(transparent, #000 12%); mask-image: linear-gradient(transparent, #000 12%); }
+
+/* Phase 1: boot log, anchored to the BOTTOM like a terminal boot (top clips off). */
+.rcw-boot-log { flex:1; min-height:0; overflow:hidden; position:relative; z-index:2; display:flex; flex-direction:column; justify-content:flex-end;
+  font-family: var(--font-mono); font-size: 12px; line-height: 1.62; padding: 4px 28px 20px; color: var(--text-faint);
+  -webkit-mask-image: linear-gradient(transparent, #000 14%); mask-image: linear-gradient(transparent, #000 14%); }
 .rcw-boot-log .l { white-space:pre; animation: rcw-boot-line .1s ease both; }
 .rcw-boot-log .ok { color: rgb(var(--accent)); }
 .rcw-boot-log .hl { color: rgb(var(--primary-soft)); text-shadow: 0 0 10px rgb(var(--primary-soft) / 0.4); }
 .rcw-boot-log .warn { color: #e0a24a; }
-.rcw-boot-foot { position:relative; z-index:2; padding: 12px 26px 22px; }
+
+/* Phase 2: centered glitch title. */
+.rcw-boot-titlewrap { flex:1; min-height:0; z-index:2; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; animation: rcw-boot-fadein .25s ease both; }
+.rcw-boot-h1 { position:relative; font-family: var(--font-display); font-weight:600; font-size: clamp(40px, 9vw, 92px); line-height:1; letter-spacing:.06em;
+  padding-bottom: 14px; border-bottom: 2px solid rgb(var(--primary) / 0.7); text-shadow: 0 0 34px rgb(var(--primary-soft) / 0.6);
+  animation: rcw-boot-titlein .32s linear both; }
+.rcw-boot-h1.rcw-glitch { border-color: transparent; color: transparent; }
+.rcw-boot-h1.rcw-glitch::before, .rcw-boot-h1.rcw-glitch::after {
+  content: attr(data-text); position:absolute; left:0; right:0; top:0; }
+.rcw-boot-h1.rcw-glitch::before { color: rgb(var(--primary-soft)); clip-path: polygon(0 0, 100% 0, 100% 46%, 0 46%);
+  animation: rcw-derez-top 52ms linear infinite alternate-reverse; }
+.rcw-boot-h1.rcw-glitch::after { color: rgb(var(--accent)); clip-path: polygon(0 54%, 100% 54%, 100% 100%, 0 100%);
+  animation: rcw-derez-bot 52ms linear infinite alternate-reverse; }
+
+.rcw-boot-foot { position:relative; z-index:2; padding: 12px 28px 22px; }
 `;
 
 export default function BootScreen() {
@@ -107,37 +121,50 @@ export default function BootScreen() {
   const failed = !!error;
 
   const [log, setLog] = useState<Line[]>([]);
-  const logRef = useRef<HTMLDivElement>(null);
+  const [phase, setPhase] = useState<"log" | "title">("log");
+  const [glitch, setGlitch] = useState(false);
+  const iRef = useRef(0);
   const accent = failed ? "#e0736a" : "rgb(var(--accent))";
 
-  // Boot chime — once per launch.
+  // Boot chime — once per launch, at the very start of the sequence.
   useEffect(() => {
     if (!bootChimePlayed) { bootChimePlayed = true; playSfx("boot"); }
   }, []);
 
-  // Stream the boot log fast while connecting; hold at the end (still "establishing
-  // uplink"); freeze immediately on error so the failure reads clearly.
+  // Phase 1: stream the boot log with per-line delays; when done, hand off to the
+  // glitch title. Freezes immediately on error (the log stays; the footer shows why).
   useEffect(() => {
     if (failed) return;
-    let i = 0;
-    const id = setInterval(() => {
-      setLog((cur) => (i >= BOOT_LOG.length ? cur : [...cur, BOOT_LOG[i++]].slice(-140)));
-    }, 55);
-    return () => clearInterval(id);
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const step = () => {
+      if (cancelled) return;
+      const i = iRef.current;
+      if (i >= BOOT_LOG.length) {
+        timer = setTimeout(() => {
+          if (cancelled) return;
+          setPhase("title");
+          timer = setTimeout(() => { if (!cancelled) setGlitch(true); }, 440);
+        }, 240);
+        return;
+      }
+      iRef.current = i + 1;
+      setLog((cur) => [...cur, BOOT_LOG[i]]);
+      timer = setTimeout(step, BOOT_LOG[i].d);
+    };
+    step();
+    return () => { cancelled = true; clearTimeout(timer); };
   }, [failed]);
 
-  // Auto-scroll to the newest line.
-  useEffect(() => {
-    if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
-  }, [log]);
-
-  // Keep retrying on a NETWORK/server error so the app recovers when the server/proxy
-  // comes back. Don't auto-retry an auth rejection — the token won't fix itself.
+  // Keep retrying on a NETWORK/server error so the app recovers when it's back. Don't
+  // auto-retry an auth rejection — the token won't fix itself.
   useEffect(() => {
     if (!failed || authRejected) return;
     const t = setInterval(() => refresh(), 5000);
     return () => clearInterval(t);
   }, [failed, authRejected, refresh]);
+
+  const showTitle = phase === "title" && !failed;
 
   return (
     <div className="rcw-boot">
@@ -145,25 +172,25 @@ export default function BootScreen() {
       <span className="rcw-boot-grid" />
       <span className="rcw-boot-scan" />
 
-      <div className="rcw-boot-title">
-        <div className="display" style={{ fontSize: 34, letterSpacing: "0.14em", lineHeight: 1, textShadow: `0 0 26px ${accent}` }}>
-          REDSTONE<span style={{ color: accent }}> COWORK</span>
-        </div>
-        <div className="mono" style={{ fontSize: 10, letterSpacing: "0.4em", textTransform: "uppercase", color: "var(--text-faint)", marginTop: 8 }}>
-          Session Control Plane
-        </div>
-      </div>
-
-      <div className="rcw-boot-log no-scrollbar" ref={logRef}>
-        {log.map((l, i) => (
-          <div key={i} className={`l ${l.k}`}>{l.t}</div>
-        ))}
-        {!failed && (
-          <div className="l hl">
-            {"[sync] establishing uplink"}<span style={{ animation: "rcw-boot-caret 1s step-end infinite" }}> █</span>
+      {showTitle ? (
+        <div className="rcw-boot-titlewrap">
+          <h1 className={`rcw-boot-h1${glitch ? " rcw-glitch" : ""}`} data-text="REDSTONE COWORK">REDSTONE COWORK</h1>
+          <div className="mono" style={{ fontSize: 11, letterSpacing: "0.42em", textTransform: "uppercase", color: "var(--text-faint)" }}>
+            Session Control Plane
           </div>
-        )}
-      </div>
+        </div>
+      ) : (
+        <div className="rcw-boot-log">
+          {log.map((l, i) => (
+            <div key={i} className={`l ${l.k}`}>{l.t}</div>
+          ))}
+          {!failed && (
+            <div className="l hl">
+              {"[sync] establishing uplink"}<span style={{ animation: "rcw-boot-caret 1s step-end infinite" }}> █</span>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="rcw-boot-foot">
         {failed ? (
@@ -177,7 +204,7 @@ export default function BootScreen() {
                 </button>
               )}
               <button
-                onClick={() => { setLog([]); refresh(); }}
+                onClick={() => { iRef.current = 0; setLog([]); setPhase("log"); setGlitch(false); refresh(); }}
                 className={authRejected ? "" : "glass-btn--clay"}
                 style={{ padding: "9px 20px", fontSize: 13, fontWeight: 600, ...(authRejected ? { background: "transparent", border: "1px solid var(--border)", color: "var(--text-soft)", borderRadius: 10, cursor: "pointer" } : {}) }}
               >
@@ -186,8 +213,8 @@ export default function BootScreen() {
             </div>
           </div>
         ) : (
-          <div className="mono" style={{ fontSize: 11, color: "var(--text-faint)", letterSpacing: "0.14em", textTransform: "uppercase" }}>
-            Connecting to cowork…
+          <div className="mono" style={{ fontSize: 11, color: showTitle ? accent : "var(--text-faint)", letterSpacing: "0.14em", textTransform: "uppercase", transition: "color .3s" }}>
+            {showTitle ? "◈ uplink established" : "Connecting to cowork…"}
           </div>
         )}
       </div>
