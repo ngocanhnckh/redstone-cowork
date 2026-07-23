@@ -1,4 +1,4 @@
-import type { Account, AccountRole, LoginAuditEntry } from "@rcw/shared";
+import type { Account, AccountProfilePatch, AccountRole, LoginAuditEntry } from "@rcw/shared";
 
 export type NewAccountRecord = {
   id: string;
@@ -7,6 +7,14 @@ export type NewAccountRecord = {
   role: AccountRole;
   passwordHash: string;
   createdAt: Date;
+  photo?: string | null;
+  level?: string;
+  division?: string;
+  email?: string;
+  jira?: string;
+  mattermost?: string;
+  phone?: string;
+  webhook?: string;
 };
 
 export type AccountTokenRecord = {
@@ -24,6 +32,8 @@ export interface AccountStore {
   count(): Promise<number>;
   setDisabled(id: string, at: Date | null): Promise<boolean>;
   setPassword(id: string, passwordHash: string): Promise<boolean>;
+  /** Merge admin-editable profile fields; returns the updated account (null = unknown id). */
+  updateProfile(id: string, patch: AccountProfilePatch): Promise<Account | null>;
 
   recordLogin(entry: LoginAuditEntry): Promise<void>;
   /** Newest-first audit entries; accountId narrows to one account. */

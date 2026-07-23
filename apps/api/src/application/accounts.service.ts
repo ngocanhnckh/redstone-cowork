@@ -1,6 +1,6 @@
 import { createHash, randomBytes, randomUUID, scrypt as scryptCb, timingSafeEqual, type ScryptOptions } from "node:crypto";
 import { Inject, Injectable, type OnModuleInit } from "@nestjs/common";
-import type { Account, AccountSession, LoginAuditEntry, NewAccount } from "@rcw/shared";
+import type { Account, AccountProfilePatch, AccountSession, LoginAuditEntry, NewAccount } from "@rcw/shared";
 import { ACCOUNT_STORE, type AccountStore } from "../domain/accounts/account-store.port";
 import { SESSION_STORE, type SessionStore } from "../domain/sessions/session-store.port";
 
@@ -131,7 +131,19 @@ export class AccountsService implements OnModuleInit {
       role: input.role,
       passwordHash: await hashPassword(input.password),
       createdAt: new Date(),
+      photo: input.photo ?? null,
+      level: input.level ?? "",
+      division: input.division ?? "",
+      email: input.email ?? "",
+      jira: input.jira ?? "",
+      mattermost: input.mattermost ?? "",
+      phone: input.phone ?? "",
+      webhook: input.webhook ?? "",
     });
+  }
+
+  async updateProfile(id: string, patch: AccountProfilePatch): Promise<Account | null> {
+    return this.store.updateProfile(id, patch);
   }
 
   async list(): Promise<Account[]> {

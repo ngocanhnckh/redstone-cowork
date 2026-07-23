@@ -1,5 +1,22 @@
 export {};
 declare global {
+  /** Enterprise agent account (YITEC roster). Mirrors @rcw/shared Account. */
+  interface AgentAccount {
+    id: string;
+    username: string;
+    displayName: string;
+    role: "admin" | "member";
+    photo: string | null;
+    level: string;
+    division: string;
+    email: string;
+    jira: string;
+    mattermost: string;
+    phone: string;
+    webhook: string;
+    createdAt: string;
+    disabledAt: string | null;
+  }
   interface Window {
     cowork: {
       // Config
@@ -13,6 +30,18 @@ declare global {
         username: string,
         password: string,
       ): Promise<{ ok: boolean; error?: string; account?: { username: string; displayName: string; role: string } }>;
+      accountsMe(): Promise<AgentAccount | { id: null; role: string; username: null; kind?: string }>;
+      accountsList(): Promise<AgentAccount[]>;
+      accountCreate(input: {
+        username: string; password: string; displayName?: string; role?: "admin" | "member";
+        photo?: string | null; level?: string; division?: string; email?: string;
+        jira?: string; mattermost?: string; phone?: string; webhook?: string;
+      }): Promise<AgentAccount>;
+      accountUpdateProfile(id: string, patch: Partial<Omit<AgentAccount, "id" | "username" | "createdAt" | "disabledAt">>): Promise<AgentAccount>;
+      accountSetDisabled(id: string, disabled: boolean): Promise<{ ok: boolean }>;
+      accountsAudit(accountId?: string, limit?: number): Promise<Array<{
+        id: string; accountId: string | null; username: string; ok: boolean; ip: string; device: string; at: string;
+      }>>;
 
       // Data
       getSessions(): Promise<unknown[]>;

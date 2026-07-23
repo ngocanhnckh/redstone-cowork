@@ -362,6 +362,12 @@ ipcMain.handle(IPC.redstoneLogin, async (_e, a: { serverUrl: string; username: s
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 });
+ipcMain.handle(IPC.accountsMe, () => api.accountsMe());
+ipcMain.handle(IPC.accountsList, () => api.accountsList());
+ipcMain.handle(IPC.accountCreate, (_e, a: { input: unknown }) => api.accountCreate(a.input));
+ipcMain.handle(IPC.accountUpdateProfile, (_e, a: { id: string; patch: unknown }) => api.accountUpdateProfile(a.id, a.patch));
+ipcMain.handle(IPC.accountSetDisabled, (_e, a: { id: string; disabled: boolean }) => api.accountSetDisabled(a.id, a.disabled));
+ipcMain.handle(IPC.accountsAudit, (_e, a: { accountId?: string; limit?: number }) => api.accountsAudit(a.accountId, a.limit));
 ipcMain.handle(IPC.accountLogin, async (_e, a: { serverUrl: string; username: string; password: string }) => {
   try {
     const device = `${hostname()} · ${process.platform} · Redstone Cowork ${app.getVersion()}`;

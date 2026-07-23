@@ -23,7 +23,7 @@ describe("desktop config store", () => {
   });
   it("saves + reports hasToken without leaking the token, and round-trips getToken", () => {
     saveConfig("https://cowork.example.com", "secret-tok");
-    expect(loadConfig()).toEqual({ serverUrl: "https://cowork.example.com", hasToken: true, isOrg: false });
+    expect(loadConfig()).toEqual({ serverUrl: "https://cowork.example.com", hasToken: true, isOrg: false, isAccount: false });
     expect(getToken()).toBe("secret-tok");
   });
   it("clearConfig wipes it", () => {

@@ -9,10 +9,36 @@ export const AccountSchema = z.object({
   username: z.string().min(1),
   displayName: z.string().default(""),
   role: AccountRoleSchema,
+  /** Agent profile (admin-managed in the roster dashboard). photo is a data URL and
+   *  doubles as the pre-enrollment face source for face sign-in. */
+  photo: z.string().nullable().default(null),
+  level: z.string().default(""),
+  division: z.string().default(""),
+  email: z.string().default(""),
+  jira: z.string().default(""),
+  mattermost: z.string().default(""),
+  phone: z.string().default(""),
+  /** Personal webhook URL — Jira task/mission notifications for this agent are forwarded here. */
+  webhook: z.string().default(""),
   createdAt: z.coerce.date(),
   disabledAt: z.coerce.date().nullable().default(null),
 });
 export type Account = z.infer<typeof AccountSchema>;
+
+/** Admin-editable profile fields (PATCH /accounts/:id). */
+export const AccountProfilePatchSchema = z.object({
+  displayName: z.string().max(120).optional(),
+  photo: z.string().max(1_500_000, "photo too large — resize below ~1MB").nullable().optional(),
+  level: z.string().max(60).optional(),
+  division: z.string().max(120).optional(),
+  email: z.string().max(200).optional(),
+  jira: z.string().max(120).optional(),
+  mattermost: z.string().max(120).optional(),
+  phone: z.string().max(40).optional(),
+  webhook: z.string().max(500).optional(),
+  role: AccountRoleSchema.optional(),
+});
+export type AccountProfilePatch = z.infer<typeof AccountProfilePatchSchema>;
 
 export const NewAccountSchema = z.object({
   username: z
@@ -23,6 +49,14 @@ export const NewAccountSchema = z.object({
   password: z.string().min(8, "at least 8 characters"),
   displayName: z.string().max(120).optional(),
   role: AccountRoleSchema.default("member"),
+  photo: z.string().max(1_500_000).nullable().optional(),
+  level: z.string().max(60).optional(),
+  division: z.string().max(120).optional(),
+  email: z.string().max(200).optional(),
+  jira: z.string().max(120).optional(),
+  mattermost: z.string().max(120).optional(),
+  phone: z.string().max(40).optional(),
+  webhook: z.string().max(500).optional(),
 });
 export type NewAccount = z.infer<typeof NewAccountSchema>;
 

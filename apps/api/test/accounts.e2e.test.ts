@@ -225,6 +225,72 @@ describe("accounts (enterprise auth)", () => {
     });
   });
 
+  describe("agent profiles", () => {
+    it("admin sets photo/level/division/contacts/webhook; member cannot", async () => {
+      const login = async (u: string, p: string) =>
+        (await request(app.getHttpServer()).post("/auth/account/login").send({ username: u, password: p })).body.token as string;
+      const adminTok = await login("anh.nguyen", "test-admin-password");
+      const created = await request(app.getHttpServer())
+        .post("/accounts").set("Authorization", `Bearer ${adminTok}`)
+        .send({ username: "agent.x", password: "password-x1", displayName: "Agent X", level: "L3", division: "Cyber Ops" });
+      expect(created.status).toBe(201);
+      expect(created.body.level).toBe("L3");
+
+      const patched = await request(app.getHttpServer())
+        .post(`/accounts/${created.body.id}/profile`).set("Authorization", `Bearer ${adminTok}`)
+        .send({
+          photo: "data:image/jpeg;base64,/9j/AAAA", level: "L4", division: "Signals",
+          email: "x@yitec.dev", jira: "agent.x", mattermost: "agentx", phone: "+84 90 000 0000",
+          webhook: "https://hooks.example.com/agent-x",
+        });
+      expect(patched.status).toBe(200);
+      expect(patched.body).toMatchObject({ level: "L4", division: "Signals", email: "x@yitec.dev", webhook: "https://hooks.example.com/agent-x" });
+      expect(patched.body.photo).toContain("data:image/jpeg");
+
+      const memberTok = await login("agent.x", "password-x1");
+      const forbidden = await request(app.getHttpServer())
+        .post(`/accounts/${created.body.id}/profile`).set("Authorization", `Bearer ${memberTok}`)
+        .send({ level: "L9" });
+      expect(forbidden.status).toBe(403);
+
+      // profile fields ride /accounts/me for the signed-in agent
+      const me = await request(app.getHttpServer()).get("/accounts/me").set("Authorization", `Bearer ${memberTok}`);
+      expect(me.body.division).toBe("Signals");
+    });
+  });
+
+  describe("jira inbound webhook", () => {
+    it("routes an assigned-issue event to the matching agent (secret-gated)", async () => {
+      process.env.JIRA_WEBHOOK_SECRET = "hook-secret-1";
+      const login = async (u: string, p: string) =>
+        (await request(app.getHttpServer()).post("/auth/account/login").send({ username: u, password: p })).body.token as string;
+      const adminTok = await login("anh.nguyen", "test-admin-password");
+      await request(app.getHttpServer())
+        .post("/accounts").set("Authorization", `Bearer ${adminTok}`)
+        .send({ username: "agent.j", password: "password-j1", jira: "jdoe", webhook: "https://hooks.invalid/agent-j" });
+
+      const payload = {
+        webhookEvent: "jira:issue_updated",
+        issue_event_type_name: "issue_assigned",
+        user: { name: "anh.nguyen", displayName: "Anh Nguyen" },
+        issue: { key: "RCW-99", fields: { summary: "Infiltrate staging", status: { name: "In Progress" }, assignee: { name: "JDOE" }, project: { key: "RCW" } } },
+      };
+      const noSecret = await request(app.getHttpServer()).post("/hooks/jira").send(payload);
+      expect(noSecret.status).toBe(401);
+      const wrong = await request(app.getHttpServer()).post("/hooks/jira?secret=nope").send(payload);
+      expect(wrong.status).toBe(401);
+      const ok = await request(app.getHttpServer()).post("/hooks/jira?secret=hook-secret-1").send(payload);
+      expect(ok.status).toBe(200);
+      expect(ok.body.forwarded).toBe(true); // matched agent.j via case-insensitive jira username
+
+      const unmatched = await request(app.getHttpServer())
+        .post("/hooks/jira?secret=hook-secret-1")
+        .send({ ...payload, issue: { ...payload.issue, fields: { ...payload.issue.fields, assignee: { name: "ghost" } } } });
+      expect(unmatched.body.forwarded).toBe(false);
+      delete process.env.JIRA_WEBHOOK_SECRET;
+    });
+  });
+
   describe("audit endpoint", () => {
     it("member sees only their own logins; admin sees everyone", async () => {
       const adminRes = await request(app.getHttpServer())

@@ -1,8 +1,9 @@
 import type { Pool } from "pg";
-import { AccountSchema, LoginAuditEntrySchema, type Account, type LoginAuditEntry } from "@rcw/shared";
+import { AccountSchema, LoginAuditEntrySchema, type Account, type AccountProfilePatch, type LoginAuditEntry } from "@rcw/shared";
 import type { AccountStore, AccountTokenRecord, NewAccountRecord } from "../../domain/accounts/account-store.port";
 
-const ROW = `id, username, display_name AS "displayName", role, created_at AS "createdAt", disabled_at AS "disabledAt"`;
+const ROW = `id, username, display_name AS "displayName", role, photo, level, division, email, jira, mattermost, phone, webhook,
+             created_at AS "createdAt", disabled_at AS "disabledAt"`;
 const AUDIT_ROW = `id, account_id AS "accountId", username, ok, ip, device, at`;
 
 export class PostgresAccountStore implements AccountStore {
@@ -10,11 +11,38 @@ export class PostgresAccountStore implements AccountStore {
 
   async create(rec: NewAccountRecord): Promise<Account> {
     const { rows } = await this.pool.query(
-      `INSERT INTO accounts (id, username, display_name, role, password_hash, created_at)
-       VALUES ($1,$2,$3,$4,$5,$6) RETURNING ${ROW}`,
-      [rec.id, rec.username, rec.displayName, rec.role, rec.passwordHash, rec.createdAt]
+      `INSERT INTO accounts (id, username, display_name, role, password_hash, created_at,
+                             photo, level, division, email, jira, mattermost, phone, webhook)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING ${ROW}`,
+      [rec.id, rec.username, rec.displayName, rec.role, rec.passwordHash, rec.createdAt,
+       rec.photo ?? null, rec.level ?? "", rec.division ?? "", rec.email ?? "",
+       rec.jira ?? "", rec.mattermost ?? "", rec.phone ?? "", rec.webhook ?? ""]
     );
     return AccountSchema.parse(rows[0]);
+  }
+
+  async updateProfile(id: string, patch: AccountProfilePatch): Promise<Account | null> {
+    // Column-mapped, undefined-skipping merge — only sent fields change.
+    const cols: Record<string, string> = {
+      displayName: "display_name", photo: "photo", level: "level", division: "division",
+      email: "email", jira: "jira", mattermost: "mattermost", phone: "phone",
+      webhook: "webhook", role: "role",
+    };
+    const sets: string[] = [];
+    const vals: unknown[] = [id];
+    for (const [k, col] of Object.entries(cols)) {
+      const v = (patch as Record<string, unknown>)[k];
+      if (v !== undefined) {
+        vals.push(v);
+        sets.push(`${col}=$${vals.length}`);
+      }
+    }
+    if (!sets.length) return this.findById(id);
+    const { rows } = await this.pool.query(
+      `UPDATE accounts SET ${sets.join(", ")} WHERE id=$1 RETURNING ${ROW}`,
+      vals
+    );
+    return rows[0] ? AccountSchema.parse(rows[0]) : null;
   }
 
   async findByUsername(username: string): Promise<(Account & { passwordHash: string }) | null> {

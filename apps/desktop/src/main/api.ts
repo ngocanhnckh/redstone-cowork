@@ -213,6 +213,29 @@ export async function deleteUserTodo(sessionId: string, todoId: string): Promise
   ).json();
 }
 
+/** ——— Agent roster (enterprise accounts) ——— */
+export async function accountsMe(): Promise<unknown> {
+  return (await req("/accounts/me")).json();
+}
+export async function accountsList(): Promise<unknown[]> {
+  return (await req("/accounts")).json();
+}
+export async function accountCreate(input: unknown): Promise<unknown> {
+  return (await req("/accounts", { method: "POST", body: JSON.stringify(input) })).json();
+}
+export async function accountUpdateProfile(id: string, patch: unknown): Promise<unknown> {
+  return (await req(`/accounts/${encodeURIComponent(id)}/profile`, { method: "POST", body: JSON.stringify(patch) })).json();
+}
+export async function accountSetDisabled(id: string, disabled: boolean): Promise<unknown> {
+  return (await req(`/accounts/${encodeURIComponent(id)}/${disabled ? "disable" : "enable"}`, { method: "POST" })).json();
+}
+export async function accountsAudit(accountId?: string, limit = 100): Promise<unknown[]> {
+  const q = new URLSearchParams();
+  if (accountId) q.set("accountId", accountId);
+  q.set("limit", String(limit));
+  return (await req(`/accounts/audit/logins?${q}`)).json();
+}
+
 export async function listAccessKeys(): Promise<unknown[]> {
   return (await req("/access-keys")).json();
 }

@@ -13,7 +13,7 @@ import {
 } from "@nestjs/common";
 import { BadRequestException } from "@nestjs/common";
 import { ZodError } from "zod";
-import { NewAccountSchema } from "@rcw/shared";
+import { AccountProfilePatchSchema, NewAccountSchema } from "@rcw/shared";
 import { AccountsService } from "../../application/accounts.service";
 import { InstanceTokenGuard, isAdminScope, type GuardedRequest } from "./instance-token.guard";
 
@@ -51,6 +51,21 @@ export class AccountsController {
       if (e instanceof Error && /exists|unique|duplicate/i.test(e.message)) {
         throw new BadRequestException("username already exists");
       }
+      throw e;
+    }
+  }
+
+  /** Admin: edit an agent's profile (name, photo, level, division, contacts, webhook, role). */
+  @Post(":id/profile")
+  @HttpCode(200)
+  async updateProfile(@Req() req: GuardedRequest, @Param("id") id: string, @Body() body: unknown) {
+    requireAdmin(req);
+    try {
+      const updated = await this.accounts.updateProfile(id, AccountProfilePatchSchema.parse(body));
+      if (!updated) throw new NotFoundException();
+      return updated;
+    } catch (e) {
+      if (e instanceof ZodError) throw new BadRequestException(e.issues);
       throw e;
     }
   }

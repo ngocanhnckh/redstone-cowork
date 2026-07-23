@@ -20,6 +20,12 @@ contextBridge.exposeInMainWorld("cowork", {
     ipcRenderer.invoke(IPC.authConfig, { serverUrl }),
   redstoneLogin: (serverUrl: string, username: string, password: string): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke(IPC.redstoneLogin, { serverUrl, username, password }),
+  accountsMe: (): Promise<unknown> => ipcRenderer.invoke(IPC.accountsMe),
+  accountsList: (): Promise<unknown[]> => ipcRenderer.invoke(IPC.accountsList),
+  accountCreate: (input: unknown): Promise<unknown> => ipcRenderer.invoke(IPC.accountCreate, { input }),
+  accountUpdateProfile: (id: string, patch: unknown): Promise<unknown> => ipcRenderer.invoke(IPC.accountUpdateProfile, { id, patch }),
+  accountSetDisabled: (id: string, disabled: boolean): Promise<unknown> => ipcRenderer.invoke(IPC.accountSetDisabled, { id, disabled }),
+  accountsAudit: (accountId?: string, limit?: number): Promise<unknown[]> => ipcRenderer.invoke(IPC.accountsAudit, { accountId, limit }),
   accountLogin: (
     serverUrl: string,
     username: string,

@@ -1,4 +1,4 @@
-import type { Account, LoginAuditEntry } from "@rcw/shared";
+import type { Account, AccountProfilePatch, LoginAuditEntry } from "@rcw/shared";
 import type { AccountStore, AccountTokenRecord, NewAccountRecord } from "../../domain/accounts/account-store.port";
 
 type Row = NewAccountRecord & { disabledAt: Date | null };
@@ -9,6 +9,14 @@ const toAccount = (r: Row): Account => ({
   username: r.username,
   displayName: r.displayName,
   role: r.role,
+  photo: r.photo ?? null,
+  level: r.level ?? "",
+  division: r.division ?? "",
+  email: r.email ?? "",
+  jira: r.jira ?? "",
+  mattermost: r.mattermost ?? "",
+  phone: r.phone ?? "",
+  webhook: r.webhook ?? "",
   createdAt: r.createdAt,
   disabledAt: r.disabledAt,
 });
@@ -56,6 +64,13 @@ export class InMemoryAccountStore implements AccountStore {
     if (!row) return false;
     row.passwordHash = passwordHash;
     return true;
+  }
+
+  async updateProfile(id: string, patch: AccountProfilePatch): Promise<Account | null> {
+    const row = this.rows.get(id);
+    if (!row) return null;
+    Object.assign(row, Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined)));
+    return toAccount(row);
   }
 
   private audit: LoginAuditEntry[] = [];

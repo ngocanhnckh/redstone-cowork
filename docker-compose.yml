@@ -50,6 +50,12 @@ services:
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       ADMIN_DISPLAY_NAME: ${ADMIN_DISPLAY_NAME:-}
       ORG_NAME: ${ORG_NAME:-}
+      ACCOUNT_IDLE_MINUTES: ${ACCOUNT_IDLE_MINUTES:-30}
+      # Jira DC OAuth 2.0 (employee sign-in via the org Jira; Slice 2b).
+      JIRA_OAUTH_BASE_URL: ${JIRA_OAUTH_BASE_URL:-}
+      JIRA_OAUTH_CLIENT_ID: ${JIRA_OAUTH_CLIENT_ID:-}
+      JIRA_OAUTH_CLIENT_SECRET: ${JIRA_OAUTH_CLIENT_SECRET:-}
+      JIRA_WEBHOOK_SECRET: ${JIRA_WEBHOOK_SECRET:-}
       # NAT'd-host SSH relay (reverse tunnel via cowork server).
       RELAY_HOST: ${RELAY_HOST:-}
       RELAY_SSH_PORT: ${RELAY_SSH_PORT:-22}

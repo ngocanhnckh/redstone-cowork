@@ -21,6 +21,8 @@ const nextConfig: NextConfig = {
       // Enterprise accounts: admin CRUD, whoami, login audit, logout.
       { source: "/accounts", destination: `${API_URL}/accounts` },
       { source: "/accounts/:path*", destination: `${API_URL}/accounts/:path*` },
+      // Inbound Jira webhook (secret-gated in the API) → agent mission notifications.
+      { source: "/hooks/:path*", destination: `${API_URL}/hooks/:path*` },
       { source: "/sessions", destination: `${API_URL}/sessions` },
       { source: "/sessions/:path*", destination: `${API_URL}/sessions/:path*` },
       { source: "/decisions", destination: `${API_URL}/decisions` },

@@ -7,6 +7,7 @@ import TerminalStack from "./TerminalStack";
 import MultiTerminal from "./MultiTerminal";
 import ActionFeed from "./ActionFeed";
 import FileBrowserEdex from "./FileBrowserEdex";
+import AgentsPanel from "./AgentsPanel";
 import { playSfx } from "../sfx";
 import FilesPanel from "./FilesPanel";
 import BrowserStack from "./BrowserStack";
@@ -613,7 +614,7 @@ function ChatPane({ sessionId }: { sessionId?: string } = {}) {
 // Fixed singleton windows. chat/term/files/browser also participate in the tiled
 // grid; tasks is windows-mode only. Docker Log windows are DYNAMIC (ids "docker:N")
 // and can be spawned more than once, so they live outside this union.
-type FixedKey = "chat" | "term" | "files" | "browser" | "tasks" | "notes" | "ports" | "devtools" | "activity" | "explorer";
+type FixedKey = "chat" | "term" | "files" | "browser" | "tasks" | "notes" | "ports" | "devtools" | "activity" | "explorer" | "agents";
 type GridKey = "chat" | "term" | "files" | "browser";
 type ConsoleView = "ctf" | "cb" | "ctb" | "fb";
 type HudLayout = "grid" | "windows";
@@ -629,6 +630,7 @@ const FIXED: { key: FixedKey; title: string; icon: string }[] = [
   { key: "devtools", title: "Inspector", icon: "◫" },
   { key: "activity", title: "Activity", icon: "⚡" },
   { key: "explorer", title: "Explorer", icon: "◲" },
+  { key: "agents", title: "Agents", icon: "⛨" },
 ];
 const GRID_PANELS: GridKey[] = ["chat", "term", "files", "browser"];
 const isDockerId = (id: string): boolean => id.startsWith("docker:");
@@ -707,12 +709,13 @@ function defaultWins(): WinMap {
       devtools: { x: 160, y: 110, w: 760, h: 480, min: true },
       activity: { x: 180, y: 120, w: 560, h: 520, min: true },
       explorer: { x: 140, y: 90, w: 720, h: 540, min: true },
+      agents: { x: 160, y: 100, w: 880, h: 600, min: true },
     },
     dockerIds: [],
     sessIds: [],
     termIds: [],
     termHosts: {},
-    z: ["chat", "term", "files", "browser", "tasks", "notes", "ports", "devtools", "activity", "explorer"],
+    z: ["chat", "term", "files", "browser", "tasks", "notes", "ports", "devtools", "activity", "explorer", "agents"],
     seq: 0,
     _init: false,
   };
@@ -1489,6 +1492,7 @@ function HudConsole() {
       case "ports": return session ? <SessionSettingsPanel key={`${session.id}-hud-settings`} sessionId={session.id} cwd={session.cwd} machine={session.machine} /> : none;
       case "devtools": return <DevToolsPanel sessionId={session?.id} active={!grid && !wins.wins.devtools?.min} />;
       case "activity": return <ActionFeed sessionId={session?.id} active={!grid && !wins.wins.activity?.min} />;
+      case "agents": return <AgentsPanel />;
       case "explorer": return session ? <FileBrowserEdex key={`${session.id}-explorer`} sessionId={session.id} cwd={session.cwd} machine={session.machine} active={!grid && !wins.wins.explorer?.min} /> : none;
       default:
         if (isDockerId(id)) return <DockerLogPanel streamId={id} active={!grid && !wins.wins[id]?.min} />;
