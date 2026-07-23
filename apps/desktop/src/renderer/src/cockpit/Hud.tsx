@@ -7,6 +7,7 @@ import TerminalStack from "./TerminalStack";
 import MultiTerminal from "./MultiTerminal";
 import ActionFeed from "./ActionFeed";
 import FileBrowserEdex from "./FileBrowserEdex";
+import { playSfx } from "../sfx";
 import FilesPanel from "./FilesPanel";
 import BrowserStack from "./BrowserStack";
 import DockerLogPanel from "./DockerLogPanel";
@@ -1241,6 +1242,7 @@ function HudConsole() {
   // different containers at once. Reached only via the Docker dock icon's
   // right-click menu ("New window").
   const createDocker = () => {
+    playSfx("panels");
     setLayout("windows");
     setWins((w) => {
       const n = w.seq + 1;
@@ -1262,6 +1264,7 @@ function HudConsole() {
   // to the currently-focused session's host — each gets a unique id so its PTYs don't
   // collide with the main terminal or other terminal windows.
   const createTermWindow = () => {
+    playSfx("panels");
     if (!session) return; // a terminal needs a host; no focused session → nothing to open
     setLayout("windows");
     setWins((w) => {
@@ -1291,6 +1294,7 @@ function HudConsole() {
   // Pop a session's chat into its own floating window (side-by-side sessions). If a
   // window for that session already exists, just un-minimize + raise it.
   const createSessionWindow = (sid: string) => {
+    playSfx("panels");
     setLayout("windows");
     setWins((w) => {
       const sessIds = w.sessIds ?? [];
@@ -1379,6 +1383,10 @@ function HudConsole() {
     // The keybinding path always passes a built-in key, so use it directly; using
     // appWinId here targeted a phantom "app:browser" window, so shortcuts did nothing.
     const wid = appId;
+    // Panels cue when the window is about to be SHOWN (created or restored) — not when
+    // the toggle is about to minimise it.
+    const cur0 = wins.wins[wid];
+    if (!cur0 || cur0.min || wins.z[wins.z.length - 1] !== wid) playSfx("panels");
     setLayout("windows");
     setWins((w) => {
       const cur = w.wins[wid];

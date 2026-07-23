@@ -12,12 +12,13 @@ import bootUrl from "./assets/sfx/boot.mp3?url";
 import outputUrl from "./assets/sfx/output.wav?url";
 import scanUrl from "./assets/sfx/scan.wav?url";
 import folderUrl from "./assets/sfx/folder.wav?url";
+import panelsUrl from "./assets/sfx/panels.wav?url";
 import thinkingUrl from "./assets/sfx/thinking.mp3?url";
 import { loadAppearance } from "./appearance";
 
-export type SfxName = "button" | "message" | "loading" | "pageloaded" | "keystroke" | "boot" | "output" | "scan" | "folder";
+export type SfxName = "button" | "message" | "loading" | "pageloaded" | "keystroke" | "boot" | "output" | "scan" | "folder" | "panels";
 
-const SRC: Record<SfxName, string> = { button: buttonUrl, message: messageUrl, loading: loadingUrl, pageloaded: pageloadedUrl, keystroke: keystrokeUrl, boot: bootUrl, output: outputUrl, scan: scanUrl, folder: folderUrl };
+const SRC: Record<SfxName, string> = { button: buttonUrl, message: messageUrl, loading: loadingUrl, pageloaded: pageloadedUrl, keystroke: keystrokeUrl, boot: bootUrl, output: outputUrl, scan: scanUrl, folder: folderUrl, panels: panelsUrl };
 
 // One decoded element per sound, cloned per play so overlapping triggers (e.g. rapid
 // clicks) don't cut each other off.
@@ -78,7 +79,7 @@ export function setThinking(on: boolean): void {
 // Rate-limit each sound so a burst (e.g. many sessions completing at once, or a
 // flurry of clicks) can't stack into noise. Per-name last-played timestamp.
 const lastAt: Partial<Record<SfxName, number>> = {};
-const MIN_GAP_MS: Record<SfxName, number> = { button: 40, message: 400, loading: 600, pageloaded: 300, keystroke: 20, boot: 4000, output: 180, scan: 500, folder: 80 };
+const MIN_GAP_MS: Record<SfxName, number> = { button: 40, message: 400, loading: 600, pageloaded: 300, keystroke: 20, boot: 4000, output: 180, scan: 500, folder: 80, panels: 120 };
 
 function playAt(name: SfxName, vol: number): void {
   if (vol <= 0) return;
