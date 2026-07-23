@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import Login from "./Login";
+import LockScreen from "./LockScreen";
 import Cockpit from "./cockpit/Cockpit";
 import BgVideo from "./cockpit/BgVideo";
 
@@ -12,6 +13,9 @@ const AWAY_LOCK_MS = 30 * 60_000;
 
 export default function App() {
   const [configState, setConfigState] = useState<ConfigState>("loading");
+  // Account sessions start LOCKED — the app re-verifies with face/PIN before showing
+  // the cockpit, on every launch and after the away-timeout. The session token stays.
+  const [locked, setLocked] = useState(true);
 
   const recheck = useCallback(async () => {
     const cfg = await window.cowork.getConfig();
@@ -22,15 +26,12 @@ export default function App() {
     recheck();
   }, [recheck]);
 
-  // Away-lock: enterprise account sessions sign out after 30 min unfocused.
   const isAccount = configState !== "loading" && !!configState?.isAccount && !!configState?.hasToken;
+  // Away-lock: enterprise account sessions LOCK (require face/PIN) after 30 min unfocused.
   useEffect(() => {
     if (!isAccount) return;
     let awaySince: number | null = document.hasFocus() ? null : Date.now();
-    const lock = async () => {
-      await window.cowork.clearConfig();
-      await recheck(); // token gone → login (face + credentials) screen
-    };
+    const lock = () => setLocked(true);
     const check = () => {
       if (awaySince !== null && Date.now() - awaySince > AWAY_LOCK_MS) void lock();
     };
@@ -75,10 +76,18 @@ export default function App() {
       </div>
     );
   } else if (!(configState !== null && configState.hasToken)) {
-    // Not configured — show login
-    content = <Login onConnected={recheck} />;
+    // Not configured — show login. A fresh full login unlocks (just authenticated).
+    content = <Login onConnected={() => { setLocked(false); recheck(); }} />;
+  } else if (isAccount && locked) {
+    // Account session stored but locked — re-verify with face/PIN before the cockpit.
+    content = (
+      <LockScreen
+        onUnlock={() => setLocked(false)}
+        onSignOut={async () => { await window.cowork.clearConfig(); setLocked(false); await recheck(); }}
+      />
+    );
   } else {
-    // Configured — show Focus Theater
+    // Configured + unlocked — show Focus Theater
     content = <Cockpit />;
   }
 
