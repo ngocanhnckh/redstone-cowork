@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, Notification, she
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join, basename, extname, normalize, sep } from "node:path";
 import { readFile } from "node:fs/promises";
+import { existsSync, writeFileSync } from "node:fs";
 import { saveConfig, loadConfig, clearConfig } from "./config";
 import * as api from "./api";
 import { getWorkspaceConfig, saveWorkspaceConfig, getSshHost, setSshHost, isLocalMachine, setServerHosts, warmSshMaster } from "./workspace";
@@ -1358,10 +1359,33 @@ app.whenReady().then(async () => {
   if (loadConfig()?.hasToken) {
     startForwarding();
   }
+  primeCalendarPermission();
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 });
+
+// On first launch, proactively trigger the macOS calendar permission prompt so the
+// user grants (or declines) up front rather than only when they first add the Agenda
+// widget. getCalendarEvents() runs the EventKit access request when status is
+// "not determined"; macOS shows the prompt at most once, so a one-time marker keeps
+// us from re-priming on every launch (the widget still requests later if needed).
+function primeCalendarPermission(): void {
+  if (process.platform !== "darwin") return;
+  const marker = join(app.getPath("userData"), ".calendar-permission-primed");
+  if (existsSync(marker)) return;
+  try {
+    writeFileSync(marker, new Date().toISOString());
+  } catch {
+    /* userData not writable — skip; the widget will prompt on demand instead */
+  }
+  // Delay slightly so the main window is on screen before the prompt appears.
+  setTimeout(() => {
+    getCalendarEvents().catch(() => {
+      /* best-effort; never block startup on calendar access */
+    });
+  }, 2500);
+}
 
 app.on("window-all-closed", () => {
   stopStream?.();

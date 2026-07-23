@@ -53,6 +53,13 @@ mac:
     - zip
   # Unsigned builds: allow the app to run without a hardened-runtime signature.
   identity: null
+  # Usage strings shown in the macOS permission prompts. The Agenda widget reads the
+  # system calendar via EventKit; without these the prompt has no rationale (and on
+  # recent macOS the request can be denied outright). Both the legacy and the
+  # Sonoma+ "full access" keys are provided so the prompt appears on every version.
+  extendInfo:
+    NSCalendarsUsageDescription: Redstone Cowork shows your upcoming events in the Agenda widget.
+    NSCalendarsFullAccessUsageDescription: Redstone Cowork shows your upcoming events in the Agenda widget.
 
 win:
   target:
