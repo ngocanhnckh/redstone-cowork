@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import yiaSealUrl from "./assets/yia-seal.png?url";
 
 interface LoginProps {
   onConnected: () => void;
@@ -187,11 +188,27 @@ export default function Login({ onConnected }: LoginProps) {
     <div data-app className="yia-root" style={{ background: "radial-gradient(ellipse 120% 90% at 50% 0%, #0a1620 0%, #050a10 55%, #030608 100%)" }}>
       <style>{CSS}</style>
       <div className="yia-grid" />
+      {/* Agency seal — giant translucent watermark behind the terminal card. */}
+      <img
+        src={yiaSealUrl}
+        alt=""
+        aria-hidden
+        style={{
+          position: "absolute", left: "50%", top: "50%", transform: "translate(-50%, -50%)",
+          width: "min(78vh, 820px)", opacity: 0.06, pointerEvents: "none", userSelect: "none",
+          filter: "drop-shadow(0 0 60px rgb(84 230 255 / 0.25))",
+        }}
+      />
 
       <div className="yia-card">
         <Corners />
 
         <div style={{ textAlign: "center" }}>
+          <img
+            src={yiaSealUrl}
+            alt="YITEC Intelligence Agency seal"
+            style={{ width: 88, height: 88, margin: "0 auto 10px", display: "block", filter: "drop-shadow(0 0 18px rgb(84 230 255 / 0.45))" }}
+          />
           <span className="yia-kicker">{orgName?.toUpperCase() ?? "YITEC INTELLIGENCE AGENCY"}</span>
           <div className="yia-title">SECURE ACCESS TERMINAL</div>
           <div className="yia-sub">REDSTONE COWORK · CLEARANCE REQUIRED</div>
