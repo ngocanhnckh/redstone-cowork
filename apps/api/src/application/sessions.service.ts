@@ -28,7 +28,7 @@ export class SessionsService {
     private readonly bus: EventsBus,
   ) {}
 
-  async attach(input: unknown): Promise<AgentSession> {
+  async attach(input: unknown, accountId?: string | null): Promise<AgentSession> {
     const parsed = NewAgentSessionSchema.parse(input);
     const now = new Date();
     // Latch auto-capability: once a session is launched with --enable-auto-mode or is
@@ -56,6 +56,8 @@ export class SessionsService {
       tokensInput: existing?.tokensInput ?? 0,
       tokensOutput: existing?.tokensOutput ?? 0,
       tokenSeries: existing?.tokenSeries ?? [],
+      // First owner wins; sessions attached while signed in belong to that account.
+      accountId: existing?.accountId ?? accountId ?? null,
       pinned: false,
       snoozedUntil: null,
       closedAt: null, // a fresh attach reopens a previously-reaped/dismissed session
@@ -114,13 +116,28 @@ export class SessionsService {
     };
   }
 
-  async listViews(pendingBySession: Record<string, number>, oldestPendingAt: Record<string, Date>): Promise<SessionView[]> {
+  async listViews(
+    pendingBySession: Record<string, number>,
+    oldestPendingAt: Record<string, Date>,
+    forAccount?: string,
+  ): Promise<SessionView[]> {
     const now = new Date();
-    return (await this.store.list()).map((s) => this.toView(s, pendingBySession[s.id] ?? 0, oldestPendingAt, now));
+    return (await this.list(forAccount)).map((s) => this.toView(s, pendingBySession[s.id] ?? 0, oldestPendingAt, now));
   }
 
-  async queue(pendingBySession: Record<string, number>, oldestPendingAt: Record<string, Date>, now = new Date()): Promise<SessionView[]> {
-    const views = (await this.store.list())
+  /** All open sessions, or only those owned by `forAccount` (member visibility). */
+  async list(forAccount?: string): Promise<AgentSession[]> {
+    const all = await this.store.list();
+    return forAccount ? all.filter((s) => s.accountId === forAccount) : all;
+  }
+
+  async queue(
+    pendingBySession: Record<string, number>,
+    oldestPendingAt: Record<string, Date>,
+    now = new Date(),
+    forAccount?: string,
+  ): Promise<SessionView[]> {
+    const views = (await this.list(forAccount))
       .map((s) => this.toView(s, pendingBySession[s.id] ?? 0, oldestPendingAt, now))
       .filter((v) => v.status === "waiting")
       .filter((v) => !v.snoozedUntil || v.snoozedUntil.getTime() <= now.getTime());

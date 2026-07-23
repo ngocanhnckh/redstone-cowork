@@ -69,15 +69,36 @@ async function req(path: string, init?: RequestInit): Promise<Response> {
   return res;
 }
 
-/** Public discovery so the login screen can decide whether to offer Redstone sign-in. */
-export async function authConfig(serverUrl: string): Promise<{ redstone: boolean; issuer: string | null }> {
+/** Public discovery so the login screen can decide which sign-in options to offer. */
+export async function authConfig(
+  serverUrl: string,
+): Promise<{ redstone: boolean; issuer: string | null; accounts?: boolean; orgName?: string | null }> {
   try {
     const r = await fetchImpl(`${trimUrl(serverUrl)}/auth/config`);
     if (!r.ok) return { redstone: false, issuer: null };
-    return (await r.json()) as { redstone: boolean; issuer: string | null };
+    return (await r.json()) as { redstone: boolean; issuer: string | null; accounts?: boolean; orgName?: string | null };
   } catch {
     return { redstone: false, issuer: null };
   }
+}
+
+/** Enterprise employee sign-in: username+password → rcwa_ bearer + account profile. */
+export async function accountLogin(
+  serverUrl: string,
+  username: string,
+  password: string,
+  device: string,
+): Promise<{ token: string; account: { username: string; displayName: string; role: string } }> {
+  const r = await fetchImpl(`${trimUrl(serverUrl)}/auth/account/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password, device }),
+  });
+  const j = (await r.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!r.ok || !j.token) {
+    throw new Error(String((j as { error_description?: string }).error_description ?? `Sign-in failed (HTTP ${r.status}).`));
+  }
+  return j as { token: string; account: { username: string; displayName: string; role: string } };
 }
 
 /** Org sign-in: exchange Redstone username+password for tokens (caller persists them). */

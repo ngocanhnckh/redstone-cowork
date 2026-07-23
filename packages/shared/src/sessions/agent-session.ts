@@ -78,6 +78,8 @@ export const AgentSessionSchema = z.object({
   tokensInput: z.coerce.number().int().nonnegative().default(0),
   tokensOutput: z.coerce.number().int().nonnegative().default(0),
   tokenSeries: z.array(TokenSampleSchema).default([]),
+  /** Owning account (enterprise mode). Null only until claimed at seed/attach. */
+  accountId: z.string().nullable().default(null),
   pinned: z.boolean().default(false),
   snoozedUntil: z.coerce.date().nullable().default(null),
   /** Soft-close timestamp: closed sessions keep their history but drop out of the cockpit. */

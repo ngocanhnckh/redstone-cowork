@@ -6,7 +6,8 @@ const ROW = `id, machine, cwd, git_branch AS "gitBranch", attached_at AS "attach
              wrapper_id AS "wrapperId", permission_mode AS "permissionMode", auto_mode_enabled AS "autoModeEnabled",
              latest_answer AS "latestAnswer", summary, todos, user_todos AS "userTodos", tags, transcript, working,
              context_tokens AS "contextTokens", model, token_input AS "tokensInput", token_output AS "tokensOutput",
-             token_series AS "tokenSeries", pinned, snoozed_until AS "snoozedUntil", closed_at AS "closedAt", jira`;
+             token_series AS "tokenSeries", pinned, snoozed_until AS "snoozedUntil", closed_at AS "closedAt", jira,
+             account_id AS "accountId"`;
 
 export class PostgresSessionStore implements SessionStore {
   constructor(private readonly pool: Pool) {}
@@ -14,17 +15,18 @@ export class PostgresSessionStore implements SessionStore {
   async upsert(s: AgentSession): Promise<AgentSession> {
     const { rows } = await this.pool.query(
       `INSERT INTO sessions (id, machine, cwd, git_branch, attached_at, last_seen_at, wrapper_id, permission_mode, auto_mode_enabled,
-         latest_answer, summary, todos, transcript, pinned, snoozed_until, jira)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13::jsonb,$14,$15,$16::jsonb)
+         latest_answer, summary, todos, transcript, pinned, snoozed_until, jira, account_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13::jsonb,$14,$15,$16::jsonb,$17)
        ON CONFLICT (id) DO UPDATE SET machine=$2, git_branch=$4, last_seen_at=$6, wrapper_id=$7,
          permission_mode = COALESCE($8, sessions.permission_mode),
          auto_mode_enabled = $9,
-         closed_at = NULL
+         closed_at = NULL,
+         account_id = COALESCE(sessions.account_id, $17)
        RETURNING ${ROW}`,
       [s.id, s.machine, s.cwd, s.gitBranch, s.attachedAt, s.lastSeenAt, s.wrapperId ?? null,
        s.permissionMode ?? null, s.autoModeEnabled ?? false,
        s.latestAnswer ?? null, s.summary ?? null, JSON.stringify(s.todos ?? []), JSON.stringify(s.transcript ?? []), s.pinned ?? false, s.snoozedUntil ?? null,
-       s.jira ? JSON.stringify(s.jira) : null]
+       s.jira ? JSON.stringify(s.jira) : null, s.accountId ?? null]
     );
     return AgentSessionSchema.parse(rows[0]);
   }
@@ -92,5 +94,12 @@ export class PostgresSessionStore implements SessionStore {
   async close(id: string, at: Date): Promise<void> {
     // Idempotent — only stamps the first close, so a re-reap keeps the original time.
     await this.pool.query(`UPDATE sessions SET closed_at = $2 WHERE id = $1 AND closed_at IS NULL`, [id, at]);
+  }
+  async setAccount(id: string, accountId: string): Promise<void> {
+    await this.pool.query(`UPDATE sessions SET account_id = $2 WHERE id = $1`, [id, accountId]);
+  }
+  async claimUnowned(accountId: string): Promise<number> {
+    const r = await this.pool.query(`UPDATE sessions SET account_id = $1 WHERE account_id IS NULL`, [accountId]);
+    return r.rowCount ?? 0;
   }
 }

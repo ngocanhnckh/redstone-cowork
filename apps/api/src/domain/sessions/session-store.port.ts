@@ -14,5 +14,9 @@ export interface SessionStore {
   setTags(id: string, tags: string[]): Promise<AgentSession | null>;
   /** Soft-close: stamp closedAt=now (idempotent — keeps the first close time). */
   close(id: string, at: Date): Promise<void>;
+  /** Assign a session to an account (enterprise ownership). */
+  setAccount(id: string, accountId: string): Promise<void>;
+  /** Claim every unowned session (accountId=null) for the given account. Returns count. */
+  claimUnowned(accountId: string): Promise<number>;
 }
 export const SESSION_STORE = Symbol("SessionStore");

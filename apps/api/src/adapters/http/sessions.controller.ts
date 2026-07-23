@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, NotFoundException, Param, Post, Query, Res, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, NotFoundException, Param, Post, Query, Req, Res, UseGuards } from "@nestjs/common";
 import { BadRequestException } from "@nestjs/common";
 import type { Response } from "express";
 import { z, ZodError } from "zod";
@@ -6,7 +6,7 @@ import { SessionsService } from "../../application/sessions.service";
 import { DecisionsService } from "../../application/decisions.service";
 import { SshResultStore } from "../../application/ssh-result-store";
 import { EventsBus } from "../../application/events-bus";
-import { InstanceTokenGuard } from "./instance-token.guard";
+import { InstanceTokenGuard, isAdminScope, type GuardedRequest } from "./instance-token.guard";
 
 @Controller("sessions")
 @UseGuards(InstanceTokenGuard)
@@ -19,9 +19,10 @@ export class SessionsController {
   ) {}
 
   @Post()
-  async attach(@Body() body: unknown) {
+  async attach(@Body() body: unknown, @Req() req: GuardedRequest) {
     try {
-      return await this.sessions.attach(body);
+      // Sessions attached while signed in as an employee belong to that account.
+      return await this.sessions.attach(body, req.account?.id ?? null);
     } catch (e) {
       if (e instanceof ZodError) throw new BadRequestException(e.issues);
       throw e;
@@ -30,12 +31,12 @@ export class SessionsController {
 
   // NOTE: static segments (queue, by-wrapper) must be declared BEFORE :id routes
   @Get("queue")
-  async queue() {
+  async queue(@Req() req: GuardedRequest) {
     const [pending, oldest] = await Promise.all([
       this.decisions.countPendingBySession(),
       this.decisions.oldestPendingAtBySession(),
     ]);
-    return this.sessions.queue(pending, oldest);
+    return this.sessions.queue(pending, oldest, new Date(), isAdminScope(req) ? undefined : req.account?.id);
   }
 
   @Get("by-wrapper/:wrapperId")
@@ -251,11 +252,11 @@ export class SessionsController {
   }
 
   @Get()
-  async list() {
+  async list(@Req() req: GuardedRequest) {
     const [pending, oldest] = await Promise.all([
       this.decisions.countPendingBySession(),
       this.decisions.oldestPendingAtBySession(),
     ]);
-    return this.sessions.listViews(pending, oldest);
+    return this.sessions.listViews(pending, oldest, isAdminScope(req) ? undefined : req.account?.id);
   }
 }

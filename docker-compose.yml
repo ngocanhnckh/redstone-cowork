@@ -45,6 +45,11 @@ services:
       REDSTONE_ISSUER: ${REDSTONE_ISSUER:-}
       REDSTONE_CLIENT_ID: ${REDSTONE_CLIENT_ID:-}
       REDSTONE_CLIENT_SECRET: ${REDSTONE_CLIENT_SECRET:-}
+      # Enterprise accounts (first-boot admin seed + login-screen branding).
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      ADMIN_DISPLAY_NAME: ${ADMIN_DISPLAY_NAME:-}
+      ORG_NAME: ${ORG_NAME:-}
       # NAT'd-host SSH relay (reverse tunnel via cowork server).
       RELAY_HOST: ${RELAY_HOST:-}
       RELAY_SSH_PORT: ${RELAY_SSH_PORT:-22}

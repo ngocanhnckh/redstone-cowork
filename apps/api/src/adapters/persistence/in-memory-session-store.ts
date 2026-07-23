@@ -29,6 +29,8 @@ export class InMemorySessionStore implements SessionStore {
           pinned: existing.pinned,
           snoozedUntil: existing.snoozedUntil,
           jira: existing.jira,
+          // Ownership never changes on re-attach; first owner (or seed claim) wins.
+          accountId: existing.accountId ?? s.accountId,
         }
       : s;
     this.sessions.set(s.id, merged);
@@ -98,5 +100,19 @@ export class InMemorySessionStore implements SessionStore {
   async close(id: string, at: Date): Promise<void> {
     const s = this.sessions.get(id);
     if (s) this.sessions.set(id, { ...s, closedAt: s.closedAt ?? at });
+  }
+  async setAccount(id: string, accountId: string): Promise<void> {
+    const s = this.sessions.get(id);
+    if (s) this.sessions.set(id, { ...s, accountId });
+  }
+  async claimUnowned(accountId: string): Promise<number> {
+    let n = 0;
+    for (const [id, s] of this.sessions) {
+      if (!s.accountId) {
+        this.sessions.set(id, { ...s, accountId });
+        n++;
+      }
+    }
+    return n;
   }
 }

@@ -1,0 +1,39 @@
+import type { Account, AccountRole, LoginAuditEntry } from "@rcw/shared";
+
+export type NewAccountRecord = {
+  id: string;
+  username: string;
+  displayName: string;
+  role: AccountRole;
+  passwordHash: string;
+  createdAt: Date;
+};
+
+export type AccountTokenRecord = {
+  tokenHash: string;
+  accountId: string;
+  label: string;
+  createdAt: Date;
+};
+
+export interface AccountStore {
+  create(rec: NewAccountRecord): Promise<Account>;
+  findByUsername(username: string): Promise<(Account & { passwordHash: string }) | null>;
+  findById(id: string): Promise<Account | null>;
+  list(): Promise<Account[]>;
+  count(): Promise<number>;
+  setDisabled(id: string, at: Date | null): Promise<boolean>;
+  setPassword(id: string, passwordHash: string): Promise<boolean>;
+
+  recordLogin(entry: LoginAuditEntry): Promise<void>;
+  /** Newest-first audit entries; accountId narrows to one account. */
+  listLoginAudit(opts?: { accountId?: string; limit?: number }): Promise<LoginAuditEntry[]>;
+
+  addToken(rec: AccountTokenRecord): Promise<void>;
+  /** Resolve a token hash to its (enabled) account; touches last_used_at. */
+  findByTokenHash(tokenHash: string, now: Date): Promise<Account | null>;
+  revokeToken(tokenHash: string, at: Date): Promise<boolean>;
+  revokeAllTokens(accountId: string, at: Date): Promise<number>;
+}
+
+export const ACCOUNT_STORE = Symbol("AccountStore");

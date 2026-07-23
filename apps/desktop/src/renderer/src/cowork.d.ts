@@ -6,8 +6,13 @@ declare global {
       getConfig(): Promise<{ serverUrl: string; hasToken: boolean; isOrg: boolean } | null>;
       saveConfig(serverUrl: string, token: string): Promise<{ ok: boolean }>;
       clearConfig(): Promise<void>;
-      authConfig(serverUrl: string): Promise<{ redstone: boolean; issuer: string | null }>;
+      authConfig(serverUrl: string): Promise<{ redstone: boolean; issuer: string | null; accounts?: boolean; orgName?: string | null }>;
       redstoneLogin(serverUrl: string, username: string, password: string): Promise<{ ok: boolean; error?: string }>;
+      accountLogin(
+        serverUrl: string,
+        username: string,
+        password: string,
+      ): Promise<{ ok: boolean; error?: string; account?: { username: string; displayName: string; role: string } }>;
 
       // Data
       getSessions(): Promise<unknown[]>;

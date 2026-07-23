@@ -1,51 +1,150 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 interface LoginProps {
   onConnected: () => void;
 }
 
-type Mode = "token" | "redstone";
+type Mode = "agency" | "redstone" | "token";
+type ScanPhase = "idle" | "acquiring" | "scanning" | "locked" | "denied";
 
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  boxSizing: "border-box",
-  padding: "12px 14px",
-  borderRadius: 10,
-  border: "1px solid var(--border, rgba(255,255,255,0.12))",
-  background: "rgba(255,255,255,.03)",
-  color: "inherit",
-  fontSize: 14,
-  outline: "none",
-};
+// ————— YITEC INTELLIGENCE AGENCY login —————
+// A sci-fi credential gate: camera face-scan sequence (identification visual — the
+// biometric MATCH ships with the enrollment slice; auth is always account+password),
+// then agent credentials. Falls back to Redstone SSO / instance-token modes.
+
+const CSS = `
+@keyframes yia-in { from { opacity:0; transform: translateY(10px); } to { opacity:1; transform:none; } }
+@keyframes yia-flicker { 0%,100% { opacity:1; } 92% { opacity:1; } 94% { opacity:.55; } 96% { opacity:1; } }
+@keyframes yia-sweep { 0% { top:-6%; } 100% { top:104%; } }
+@keyframes yia-ring { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@keyframes yia-ring-rev { from { transform: rotate(0deg); } to { transform: rotate(-360deg); } }
+@keyframes yia-pulse { 0%,100% { opacity:.35; } 50% { opacity:.9; } }
+@keyframes yia-grid-drift { from { background-position: 0 0; } to { background-position: 0 44px; } }
+.yia-root { min-height:100vh; display:flex; align-items:center; justify-content:center; position:relative; overflow:hidden;
+  font-family: var(--font-mono, "SF Mono", ui-monospace, monospace); }
+.yia-grid { position:absolute; inset:0; pointer-events:none; opacity:.16;
+  background-image: linear-gradient(rgb(84 230 255 / .25) 1px, transparent 1px), linear-gradient(90deg, rgb(84 230 255 / .25) 1px, transparent 1px);
+  background-size: 44px 44px; animation: yia-grid-drift 6s linear infinite;
+  mask-image: radial-gradient(ellipse 90% 75% at 50% 45%, black 30%, transparent 75%); -webkit-mask-image: radial-gradient(ellipse 90% 75% at 50% 45%, black 30%, transparent 75%); }
+.yia-card { position:relative; z-index:2; width:480px; max-width:94vw; padding:34px 38px 30px; border-radius:16px;
+  border:1px solid rgb(84 230 255 / .28); background: rgb(8 14 20 / .72);
+  -webkit-backdrop-filter: blur(26px) saturate(1.3); backdrop-filter: blur(26px) saturate(1.3);
+  box-shadow: 0 0 60px -18px rgb(84 230 255 / .5), inset 0 0 40px -30px rgb(84 230 255 / .6);
+  animation: yia-in .5s ease both; }
+.yia-corner { position:absolute; width:16px; height:16px; border-color: rgb(84 230 255 / .85); border-style:solid; }
+.yia-kicker { font-size:10px; letter-spacing:.42em; color: rgb(84 230 255 / .8); animation: yia-flicker 7s linear infinite; }
+.yia-title { font-size:21px; font-weight:700; letter-spacing:.14em; color:#e6f2f4; margin:6px 0 2px; }
+.yia-sub { font-size:10.5px; letter-spacing:.2em; color: rgb(230 242 244 / .45); }
+.yia-scanwrap { position:relative; width:168px; height:168px; margin:20px auto 6px; }
+.yia-ring { position:absolute; inset:0; border-radius:50%; border:1px dashed rgb(84 230 255 / .5); animation: yia-ring 14s linear infinite; }
+.yia-ring2 { position:absolute; inset:10px; border-radius:50%; border:1px solid rgb(84 230 255 / .25);
+  border-top-color: rgb(84 230 255 / .9); animation: yia-ring-rev 3.2s linear infinite; }
+.yia-cam { position:absolute; inset:20px; border-radius:50%; overflow:hidden; border:1px solid rgb(84 230 255 / .45);
+  background:#03080c; display:flex; align-items:center; justify-content:center; }
+.yia-cam video { width:100%; height:100%; object-fit:cover; transform: scaleX(-1); filter: saturate(.7) contrast(1.1) brightness(.95); }
+.yia-sweepline { position:absolute; left:6%; right:6%; height:2px; z-index:3; border-radius:2px;
+  background: linear-gradient(90deg, transparent, rgb(84 230 255 / .95), transparent);
+  box-shadow: 0 0 18px 3px rgb(84 230 255 / .55); animation: yia-sweep 1.15s ease-in-out infinite alternate; }
+.yia-status { text-align:center; font-size:10.5px; letter-spacing:.24em; min-height:16px; margin-bottom:14px; }
+.yia-label { display:block; font-size:9.5px; letter-spacing:.3em; color: rgb(84 230 255 / .75); margin: 0 0 6px 2px; }
+.yia-input { width:100%; box-sizing:border-box; padding:11px 14px; border-radius:8px; font-size:14px; letter-spacing:.06em;
+  border:1px solid rgb(84 230 255 / .3); background: rgb(84 230 255 / .05); color:#e6f2f4; outline:none;
+  font-family: inherit; transition: border-color .15s, box-shadow .15s; }
+.yia-input:focus { border-color: rgb(84 230 255 / .8); box-shadow: 0 0 0 1px rgb(84 230 255 / .35), 0 0 22px -6px rgb(84 230 255 / .5); }
+.yia-btn { width:100%; padding:13px 0; margin-top:18px; border-radius:9px; border:1px solid rgb(84 230 255 / .7);
+  background: linear-gradient(180deg, rgb(84 230 255 / .22), rgb(84 230 255 / .1)); color:#d9f7ff;
+  font-family:inherit; font-size:13px; font-weight:700; letter-spacing:.3em; cursor:pointer;
+  text-shadow: 0 0 12px rgb(84 230 255 / .8); transition: box-shadow .15s, background .15s; }
+.yia-btn:hover:not(:disabled) { box-shadow: 0 0 30px -6px rgb(84 230 255 / .8); background: linear-gradient(180deg, rgb(84 230 255 / .3), rgb(84 230 255 / .14)); }
+.yia-btn:disabled { opacity:.4; cursor:not-allowed; }
+.yia-alt { background:none; border:none; color: rgb(230 242 244 / .4); font-family:inherit; font-size:10px;
+  letter-spacing:.18em; cursor:pointer; padding:4px 8px; }
+.yia-alt:hover { color: rgb(84 230 255 / .85); }
+.yia-err { color:#ff7d72; font-size:11.5px; letter-spacing:.06em; margin-top:12px; line-height:1.5; }
+`;
+
+const CYAN = "rgb(84 230 255)";
+
+function Corners() {
+  return (
+    <>
+      <span className="yia-corner" style={{ top: -1, left: -1, borderWidth: "2px 0 0 2px", borderTopLeftRadius: 6 }} />
+      <span className="yia-corner" style={{ top: -1, right: -1, borderWidth: "2px 2px 0 0", borderTopRightRadius: 6 }} />
+      <span className="yia-corner" style={{ bottom: -1, left: -1, borderWidth: "0 0 2px 2px", borderBottomLeftRadius: 6 }} />
+      <span className="yia-corner" style={{ bottom: -1, right: -1, borderWidth: "0 2px 2px 0", borderBottomRightRadius: 6 }} />
+    </>
+  );
+}
 
 export default function Login({ onConnected }: LoginProps) {
   const [serverUrl, setServerUrl] = useState("https://cowork.example.com");
-  const [mode, setMode] = useState<Mode>("token");
+  const [mode, setMode] = useState<Mode>("agency");
   const [redstoneOn, setRedstoneOn] = useState(false);
+  const [accountsOn, setAccountsOn] = useState(false);
+  const [orgName, setOrgName] = useState<string | null>(null);
   const [token, setToken] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState("");
+  const [showServer, setShowServer] = useState(false);
 
-  // Ask the server (as the URL changes) whether it offers Redstone org sign-in.
+  // — face-scan sequence —
+  const [scan, setScan] = useState<ScanPhase>("idle");
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+
+  const stopCam = useCallback(() => {
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+  }, []);
+
+  const startScan = useCallback(async () => {
+    setScan("acquiring");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 480, height: 480 }, audio: false });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play().catch(() => {});
+      }
+      setScan("scanning");
+      // Sweep for ~2.6s, then lock. (Real embedding match lands with enrollment.)
+      setTimeout(() => setScan((s) => (s === "scanning" ? "locked" : s)), 2600);
+    } catch {
+      setScan("denied"); // no camera / permission refused — credentials still work
+    }
+  }, []);
+
+  useEffect(() => () => stopCam(), [stopCam]);
+
+  // Ask the server (as the URL changes) which sign-in modes it offers.
   useEffect(() => {
     const url = serverUrl.trim();
-    if (!url) { setRedstoneOn(false); return; }
+    if (!url) { setRedstoneOn(false); setAccountsOn(false); return; }
     let cancelled = false;
     const t = setTimeout(() => {
       window.cowork.authConfig(url).then((c) => {
         if (cancelled) return;
         setRedstoneOn(!!c.redstone);
-        if (c.redstone) setMode("redstone");
+        setAccountsOn(!!c.accounts);
+        setOrgName(c.orgName ?? null);
+        if (c.accounts) setMode("agency");
+        else if (c.redstone) setMode("redstone");
+        else setMode("token");
       }).catch(() => {});
     }, 350);
     return () => { cancelled = true; clearTimeout(t); };
   }, [serverUrl]);
 
+  // Kick the scan once when agency mode becomes active.
+  useEffect(() => {
+    if (mode === "agency" && scan === "idle") void startScan();
+    if (mode !== "agency") { stopCam(); setScan("idle"); }
+  }, [mode, scan, startScan, stopCam]);
+
   const canSubmit =
-    serverUrl.trim().length > 0 &&
-    !connecting &&
+    serverUrl.trim().length > 0 && !connecting &&
     (mode === "token" ? token.trim().length > 0 : username.trim().length > 0 && password.length > 0);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -54,14 +153,16 @@ export default function Login({ onConnected }: LoginProps) {
     setConnecting(true);
     setError("");
     try {
-      if (mode === "redstone") {
+      if (mode === "agency") {
+        const r = await window.cowork.accountLogin(serverUrl.trim(), username.trim(), password);
+        if (r.ok) { stopCam(); return onConnected(); }
+        setError(r.error ?? "ACCESS DENIED — credentials rejected.");
+      } else if (mode === "redstone") {
         const r = await window.cowork.redstoneLogin(serverUrl.trim(), username.trim(), password);
         if (r.ok) return onConnected();
-        // A server_error / 5xx usually means the Redstone identity provider is down or
-        // misconfigured (not your credentials) — nudge to the working Personal path.
         const msg = r.error ?? "Sign-in failed.";
         setError(/server[_ ]?error|unexpected|500|502|503|504/i.test(msg)
-          ? `${msg} — the Redstone sign-in service looks unavailable. Use the “Personal” tab with your instance token instead.`
+          ? `${msg} — the Redstone sign-in service looks unavailable. Use instance-token access instead.`
           : msg);
       } else {
         await window.cowork.saveConfig(serverUrl.trim(), token.trim());
@@ -74,64 +175,97 @@ export default function Login({ onConnected }: LoginProps) {
     }
   }
 
-  const tabStyle = (active: boolean): React.CSSProperties => ({
-    flex: 1, padding: "8px 0", fontSize: 13, fontWeight: 600, textAlign: "center", cursor: "pointer",
-    borderRadius: 9, border: 0,
-    background: active ? "rgba(var(--primary), 0.2)" : "transparent",
-    color: active ? "inherit" : "var(--text-soft, rgba(255,255,255,0.55))",
-  });
+  const scanStatus: Record<ScanPhase, { text: string; color: string }> = {
+    idle: { text: "", color: CYAN },
+    acquiring: { text: "▲ ACQUIRING OPTICS…", color: CYAN },
+    scanning: { text: "SCANNING BIOMETRIC SIGNATURE…", color: CYAN },
+    locked: { text: "◈ IDENTITY CAPTURED — ENTER CREDENTIALS", color: "#7fd18b" },
+    denied: { text: "OPTICS OFFLINE — CREDENTIAL ACCESS ONLY", color: "#e0a24a" },
+  };
 
   return (
-    <div data-app className="grain" style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div className="atmosphere">
-        <div className="blob blob--a" />
-        <div className="blob blob--b" />
-        <div className="blob blob--c" />
-      </div>
+    <div data-app className="yia-root" style={{ background: "radial-gradient(ellipse 120% 90% at 50% 0%, #0a1620 0%, #050a10 55%, #030608 100%)" }}>
+      <style>{CSS}</style>
+      <div className="yia-grid" />
 
-      <div className="glass-surface" style={{ position: "relative", zIndex: 2, width: 420, padding: "40px 36px", borderRadius: 18 }}>
-        <span className="kicker" style={{ display: "block", marginBottom: 10 }}>Connect</span>
-        <h2 style={{ fontSize: 28, fontWeight: 700, margin: "0 0 24px", color: "rgb(var(--text-primary, 255 245 230))" }}>
-          Connect to your cowork server
-        </h2>
+      <div className="yia-card">
+        <Corners />
+
+        <div style={{ textAlign: "center" }}>
+          <span className="yia-kicker">{orgName?.toUpperCase() ?? "YITEC INTELLIGENCE AGENCY"}</span>
+          <div className="yia-title">SECURE ACCESS TERMINAL</div>
+          <div className="yia-sub">REDSTONE COWORK · CLEARANCE REQUIRED</div>
+        </div>
 
         <form onSubmit={handleSubmit}>
-          <div style={{ marginBottom: 16 }}>
-            <label className="soft" style={{ display: "block", marginBottom: 6, fontSize: 13 }}>Server URL</label>
-            <input type="url" value={serverUrl} onChange={(e) => setServerUrl(e.target.value)} placeholder="https://cowork.example.com" style={inputStyle} />
-          </div>
-
-          {redstoneOn && (
-            <div style={{ display: "flex", gap: 6, padding: 4, marginBottom: 18, border: "1px solid var(--border, rgba(255,255,255,0.12))", borderRadius: 11 }}>
-              <button type="button" style={tabStyle(mode === "redstone")} onClick={() => { setMode("redstone"); setError(""); }}>Organization</button>
-              <button type="button" style={tabStyle(mode === "token")} onClick={() => { setMode("token"); setError(""); }}>Personal</button>
-            </div>
-          )}
-
-          {mode === "redstone" && redstoneOn ? (
+          {mode === "agency" ? (
             <>
-              <div style={{ marginBottom: 14 }}>
-                <label className="soft" style={{ display: "block", marginBottom: 6, fontSize: 13 }}>Redstone username</label>
-                <input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="you@yourorg" autoCapitalize="off" autoCorrect="off" spellCheck={false} style={inputStyle} />
+              <div className="yia-scanwrap">
+                <span className="yia-ring" />
+                <span className="yia-ring2" style={{ animationPlayState: scan === "scanning" || scan === "acquiring" ? "running" : "paused" }} />
+                <div className="yia-cam">
+                  {scan === "denied" ? (
+                    <span style={{ fontSize: 34, opacity: 0.35 }}>⎚</span>
+                  ) : (
+                    <video ref={videoRef} muted playsInline />
+                  )}
+                  {scan === "scanning" && <span className="yia-sweepline" />}
+                </div>
+                {scan === "locked" && (
+                  <span style={{ position: "absolute", inset: 16, borderRadius: "50%", border: "2px solid rgb(127 209 139 / .75)", boxShadow: "0 0 26px -4px rgb(127 209 139 / .8)", animation: "yia-pulse 2.2s ease infinite" }} />
+                )}
               </div>
-              <div style={{ marginBottom: 24 }}>
-                <label className="soft" style={{ display: "block", marginBottom: 6, fontSize: 13 }}>Password</label>
-                <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Your Redstone password" autoComplete="current-password" style={inputStyle} />
+              <div className="yia-status" style={{ color: scanStatus[scan].color }}>{scanStatus[scan].text}</div>
+
+              <div style={{ marginBottom: 13 }}>
+                <label className="yia-label">AGENT ID</label>
+                <input className="yia-input" value={username} onChange={(e) => setUsername(e.target.value)}
+                  placeholder="firstname.lastname" autoCapitalize="off" autoCorrect="off" spellCheck={false} />
+              </div>
+              <div>
+                <label className="yia-label">ACCESS CODE</label>
+                <input className="yia-input" type="password" value={password} onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••••••" autoComplete="current-password" />
+              </div>
+            </>
+          ) : mode === "redstone" ? (
+            <>
+              <div style={{ margin: "22px 0 13px" }}>
+                <label className="yia-label">REDSTONE USERNAME</label>
+                <input className="yia-input" value={username} onChange={(e) => setUsername(e.target.value)}
+                  placeholder="you@yourorg" autoCapitalize="off" autoCorrect="off" spellCheck={false} />
+              </div>
+              <div>
+                <label className="yia-label">PASSWORD</label>
+                <input className="yia-input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
               </div>
             </>
           ) : (
-            <div style={{ marginBottom: 24 }}>
-              <label className="soft" style={{ display: "block", marginBottom: 6, fontSize: 13 }}>Instance token</label>
-              <input type="password" value={token} onChange={(e) => setToken(e.target.value)} placeholder="Your INSTANCE_TOKEN" style={inputStyle} />
+            <div style={{ margin: "22px 0 0" }}>
+              <label className="yia-label">INSTANCE TOKEN</label>
+              <input className="yia-input" type="password" value={token} onChange={(e) => setToken(e.target.value)} placeholder="INSTANCE_TOKEN" />
             </div>
           )}
 
-          <button type="submit" className="glass-btn--clay" disabled={!canSubmit}
-            style={{ width: "100%", padding: "13px 0", borderRadius: 10, fontSize: 15, fontWeight: 600, cursor: canSubmit ? "pointer" : "not-allowed", opacity: canSubmit ? 1 : 0.5, border: "none" }}>
-            {connecting ? (mode === "redstone" ? "Signing in…" : "Connecting…") : mode === "redstone" ? "Sign in with Redstone" : "Connect"}
+          {showServer && (
+            <div style={{ marginTop: 13 }}>
+              <label className="yia-label">SERVER ENDPOINT</label>
+              <input className="yia-input" type="url" value={serverUrl} onChange={(e) => setServerUrl(e.target.value)} placeholder="https://cowork.example.com" />
+            </div>
+          )}
+
+          <button type="submit" className="yia-btn" disabled={!canSubmit}>
+            {connecting ? "AUTHENTICATING…" : mode === "agency" ? "REQUEST ACCESS" : mode === "redstone" ? "SIGN IN" : "CONNECT"}
           </button>
-          {error && <p className="mono" style={{ color: "#e0736a", fontSize: 12.5, marginTop: 14 }}>{error}</p>}
+          {error && <p className="yia-err">⚠ {error}</p>}
         </form>
+
+        <div style={{ display: "flex", justifyContent: "center", gap: 4, marginTop: 16 }}>
+          {accountsOn && mode !== "agency" && <button className="yia-alt" onClick={() => { setMode("agency"); setError(""); }}>AGENT LOGIN</button>}
+          {redstoneOn && mode !== "redstone" && <button className="yia-alt" onClick={() => { setMode("redstone"); setError(""); }}>REDSTONE SSO</button>}
+          {mode !== "token" && <button className="yia-alt" onClick={() => { setMode("token"); setError(""); }}>INSTANCE TOKEN</button>}
+          <button className="yia-alt" onClick={() => setShowServer((s) => !s)}>{showServer ? "HIDE SERVER" : "SERVER"}</button>
+        </div>
       </div>
     </div>
   );

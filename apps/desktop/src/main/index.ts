@@ -3,6 +3,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join, basename, extname, normalize, sep } from "node:path";
 import { readFile } from "node:fs/promises";
 import { existsSync, writeFileSync } from "node:fs";
+import { hostname } from "node:os";
 import { saveConfig, loadConfig, clearConfig } from "./config";
 import * as api from "./api";
 import { getWorkspaceConfig, saveWorkspaceConfig, getSshHost, setSshHost, isLocalMachine, setServerHosts, warmSshMaster } from "./workspace";
@@ -357,6 +358,19 @@ ipcMain.handle(IPC.redstoneLogin, async (_e, a: { serverUrl: string; username: s
     saveConfig(a.serverUrl, access_token, refresh_token ?? undefined);
     startForwarding();
     return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+});
+ipcMain.handle(IPC.accountLogin, async (_e, a: { serverUrl: string; username: string; password: string }) => {
+  try {
+    const device = `${hostname()} · ${process.platform} · Redstone Cowork ${app.getVersion()}`;
+    const { token, account } = await api.accountLogin(a.serverUrl, a.username, a.password, device);
+    // The rcwa_ bearer rides the same config slot as the instance token — every
+    // existing request path just works, and the API guard scopes it per-account.
+    saveConfig(a.serverUrl, token);
+    startForwarding();
+    return { ok: true, account };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }

@@ -16,10 +16,16 @@ contextBridge.exposeInMainWorld("cowork", {
     ipcRenderer.invoke(IPC.configSave, { serverUrl, token }),
   clearConfig: (): Promise<void> =>
     ipcRenderer.invoke(IPC.configClear),
-  authConfig: (serverUrl: string): Promise<{ redstone: boolean; issuer: string | null }> =>
+  authConfig: (serverUrl: string): Promise<{ redstone: boolean; issuer: string | null; accounts?: boolean; orgName?: string | null }> =>
     ipcRenderer.invoke(IPC.authConfig, { serverUrl }),
   redstoneLogin: (serverUrl: string, username: string, password: string): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke(IPC.redstoneLogin, { serverUrl, username, password }),
+  accountLogin: (
+    serverUrl: string,
+    username: string,
+    password: string,
+  ): Promise<{ ok: boolean; error?: string; account?: { username: string; displayName: string; role: string } }> =>
+    ipcRenderer.invoke(IPC.accountLogin, { serverUrl, username, password }),
 
   // Data
   getSessions: (): Promise<unknown[]> =>

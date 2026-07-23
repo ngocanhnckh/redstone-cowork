@@ -1,8 +1,19 @@
-import { Body, Controller, Get, HttpCode, HttpException, Post } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, HttpException, Post, Req, UnauthorizedException } from "@nestjs/common";
 import { BadRequestException } from "@nestjs/common";
+import type { Request } from "express";
 import { z, ZodError } from "zod";
+import { AccountLoginSchema } from "@rcw/shared";
+import { AccountAuthError, AccountsService } from "../../application/accounts.service";
 import { RedstoneService, RedstoneAuthError } from "../../application/redstone.service";
 import { SettingsService } from "../../application/settings.service";
+
+/** Source IP for the login audit: first X-Forwarded-For hop (we sit behind the web
+ *  proxy + cloudflared) falling back to the socket address. */
+export function clientIp(req: Request): string {
+  const fwd = req.headers["x-forwarded-for"];
+  const first = (Array.isArray(fwd) ? fwd[0] : fwd)?.split(",")[0]?.trim();
+  return first || req.socket?.remoteAddress || "";
+}
 
 /**
  * Public (unguarded) auth endpoints. Personal mode still authenticates with the
@@ -16,12 +27,38 @@ export class AuthController {
   constructor(
     private readonly redstone: RedstoneService,
     private readonly settings: SettingsService,
+    private readonly accounts: AccountsService,
   ) {}
 
-  /** Lets the login UI decide whether to offer the "Sign in with Redstone" option. */
+  /** Lets the login UI decide which sign-in options to offer: Redstone org SSO,
+   *  employee accounts (enterprise mode), and the branding to show. */
   @Get("config")
-  config() {
-    return { redstone: this.redstone.enabled(), issuer: this.redstone.issuer() };
+  async config() {
+    const accountCount = await this.accounts.list().then((l) => l.length).catch(() => 0);
+    return {
+      redstone: this.redstone.enabled(),
+      issuer: this.redstone.issuer(),
+      accounts: accountCount > 0,
+      orgName: process.env.ORG_NAME ?? null,
+    };
+  }
+
+  /** Employee/admin account sign-in (enterprise mode). Every attempt — success or
+   *  failure — lands in the login audit with source IP + device label. */
+  @Post("account/login")
+  @HttpCode(200)
+  async accountLogin(@Body() body: unknown, @Req() req: Request) {
+    try {
+      const { username, password } = AccountLoginSchema.parse(body);
+      const device = z.string().max(200).optional().catch(undefined).parse((body as Record<string, unknown>)?.device)
+        ?? req.headers["user-agent"] ?? "";
+      return await this.accounts.login(username, password, { ip: clientIp(req), device: String(device) });
+    } catch (e) {
+      if (e instanceof AccountAuthError) {
+        throw new UnauthorizedException({ error: "invalid_credentials", error_description: "Wrong username or password." });
+      }
+      throw toHttp(e);
+    }
   }
 
   @Post("redstone/login")
