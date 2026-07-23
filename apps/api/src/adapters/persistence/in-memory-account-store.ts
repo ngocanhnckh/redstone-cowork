@@ -1,7 +1,8 @@
 import type { Account, AccountProfilePatch, LoginAuditEntry } from "@rcw/shared";
 import type { AccountStore, AccountTokenRecord, NewAccountRecord } from "../../domain/accounts/account-store.port";
 
-type Row = NewAccountRecord & { disabledAt: Date | null; jiraBaseUrl?: string; jiraPatEnc?: string | null };
+type Row = NewAccountRecord & { disabledAt: Date | null; jiraBaseUrl?: string; jiraPatEnc?: string | null; faceDescriptors?: number[][] };
+type DeviceRow = { id: string; accountId: string; secretHash: string; label: string; createdAt: Date; lastUsedAt: Date | null; revokedAt: Date | null };
 type TokenRow = AccountTokenRecord & { lastUsedAt: Date | null; revokedAt: Date | null };
 
 const toAccount = (r: Row): Account => ({
@@ -57,6 +58,26 @@ export class InMemoryAccountStore implements AccountStore {
   async getJiraPatEncrypted(id: string): Promise<{ baseUrl: string; patEncrypted: string } | null> {
     const row = this.rows.get(id);
     return row?.jiraPatEnc ? { baseUrl: row.jiraBaseUrl ?? "", patEncrypted: row.jiraPatEnc } : null;
+  }
+
+  private devices = new Map<string, DeviceRow>();
+  async addFaceDescriptor(accountId: string, descriptor: number[]): Promise<void> {
+    const row = this.rows.get(accountId);
+    if (row) row.faceDescriptors = [...(row.faceDescriptors ?? []), descriptor];
+  }
+  async getFaceDescriptors(accountId: string): Promise<number[][]> {
+    return this.rows.get(accountId)?.faceDescriptors ?? [];
+  }
+  async trustDevice(rec: { id: string; accountId: string; secretHash: string; label: string; createdAt: Date }): Promise<void> {
+    this.devices.set(rec.secretHash, { ...rec, lastUsedAt: null, revokedAt: null });
+  }
+  async findDeviceAccount(secretHash: string, now: Date): Promise<Account | null> {
+    const d = this.devices.get(secretHash);
+    if (!d || d.revokedAt) return null;
+    const row = this.rows.get(d.accountId);
+    if (!row || row.disabledAt) return null;
+    d.lastUsedAt = now;
+    return toAccount(row);
   }
 
   async list(): Promise<Account[]> {

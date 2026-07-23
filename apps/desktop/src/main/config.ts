@@ -76,3 +76,49 @@ export function clearConfig(): void {
     if (err?.code !== "ENOENT") throw err;
   }
 }
+
+// ——— Device trust for face sign-in ———
+// Kept in a SEPARATE file from the session so the away-lock (which clears the
+// session token) leaves the device paired: face unlock re-mints a session from
+// the device secret + a live biometric match. One trusted agent per device.
+function devicePath(): string {
+  return path.join(app.getPath("userData"), "cowork-device.json");
+}
+interface DeviceTrust {
+  serverUrl: string;
+  username: string;
+  displayName: string;
+  photo?: string | null; // small avatar shown on the face-unlock screen
+  secretEnc: string;
+}
+
+export function saveDeviceTrust(t: { serverUrl: string; username: string; displayName: string; photo?: string | null; deviceSecret: string }): void {
+  const data: DeviceTrust = {
+    serverUrl: t.serverUrl, username: t.username, displayName: t.displayName,
+    photo: t.photo ?? null, secretEnc: enc(t.deviceSecret),
+  };
+  fs.writeFileSync(devicePath(), JSON.stringify(data), "utf8");
+}
+
+/** The paired agent for face unlock on this device (no secret exposed to the renderer). */
+export function loadDeviceTrust(): { serverUrl: string; username: string; displayName: string; photo: string | null } | null {
+  try {
+    const d = JSON.parse(fs.readFileSync(devicePath(), "utf8")) as DeviceTrust;
+    return { serverUrl: d.serverUrl, username: d.username, displayName: d.displayName, photo: d.photo ?? null };
+  } catch {
+    return null;
+  }
+}
+
+export function getDeviceSecret(): string | null {
+  try {
+    const d = JSON.parse(fs.readFileSync(devicePath(), "utf8")) as DeviceTrust;
+    return d.secretEnc ? dec(d.secretEnc) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function clearDeviceTrust(): void {
+  try { fs.unlinkSync(devicePath()); } catch { /* already gone */ }
+}

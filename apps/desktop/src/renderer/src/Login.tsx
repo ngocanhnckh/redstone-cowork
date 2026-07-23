@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import yiaSealUrl from "./assets/yia-seal.png?url";
+import { describeFace, loadFaceModels } from "./faceEngine";
 
 interface LoginProps {
   onConnected: () => void;
 }
 
-type Mode = "agency" | "redstone" | "token";
+type Mode = "agency" | "redstone" | "token" | "faceunlock";
 type ScanPhase = "idle" | "acquiring" | "scanning" | "locked" | "denied";
 
 // ————— YITEC INTELLIGENCE AGENCY login —————
@@ -105,6 +106,11 @@ export default function Login({ onConnected }: LoginProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
+  // — face biometric unlock (this device is paired to an agent) —
+  const [deviceAgent, setDeviceAgent] = useState<{ username: string; displayName: string; photo: string | null } | null>(null);
+  const [faceMsg, setFaceMsg] = useState("LOOK AT THE CAMERA");
+  const faceTriedRef = useRef(false);
+
   const stopCam = useCallback(() => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
@@ -149,22 +155,83 @@ export default function Login({ onConnected }: LoginProps) {
     return () => { cancelled = true; clearTimeout(t); };
   }, [serverUrl]);
 
-  // Kick the scan once when agency mode becomes active.
+  // Kick the scan once when agency mode becomes active. Camera also runs in
+  // faceunlock mode (its own effect drives it) — only stop it for the text modes.
   useEffect(() => {
     if (mode === "agency" && scan === "idle") void startScan();
-    if (mode !== "agency") { stopCam(); setScan("idle"); }
+    if (mode === "redstone" || mode === "token") { stopCam(); setScan("idle"); }
   }, [mode, scan, startScan, stopCam]);
 
   const canSubmit =
     serverUrl.trim().length > 0 && !connecting &&
     (mode === "token" ? token.trim().length > 0 : username.trim().length > 0 && password.length > 0);
 
+  // On mount: is this device paired for face unlock? If so, default to that mode.
+  useEffect(() => {
+    window.cowork.deviceTrust().then((t) => {
+      if (t) {
+        setDeviceAgent({ username: t.username, displayName: t.displayName, photo: t.photo });
+        setServerUrl(t.serverUrl);
+        setMode("faceunlock");
+        void loadFaceModels().catch(() => {});
+      }
+    }).catch(() => {});
+  }, []);
+
+  // Face unlock: once the scan visual locks, grab a frame, describe it, sign in.
+  const attemptFaceUnlock = useCallback(async () => {
+    if (faceTriedRef.current || !videoRef.current) return;
+    faceTriedRef.current = true;
+    setFaceMsg("MATCHING BIOMETRIC SIGNATURE…");
+    try {
+      await loadFaceModels();
+      let descriptor: number[] | null = null;
+      for (let i = 0; i < 5 && !descriptor; i++) {
+        descriptor = await describeFace(videoRef.current);
+        if (!descriptor) await new Promise((r) => setTimeout(r, 400));
+      }
+      if (!descriptor) { setFaceMsg("NO FACE DETECTED — center your face, or use credentials"); faceTriedRef.current = false; return; }
+      const r = await window.cowork.faceLogin(descriptor);
+      if (r.ok) { setFaceMsg("◈ IDENTITY CONFIRMED"); stopCam(); return onConnected(); }
+      setFaceMsg(`⚠ ${r.error === "face_no-match" ? "FACE NOT RECOGNIZED" : (r.error ?? "unlock failed")} — try again or use credentials`);
+      faceTriedRef.current = false;
+    } catch (e) {
+      setFaceMsg(`⚠ ${e instanceof Error ? e.message : "unlock error"} — use credentials`);
+      faceTriedRef.current = false;
+    }
+  }, [onConnected, stopCam]);
+
+  // Drive the scan sequence in face-unlock mode, then attempt the match.
+  useEffect(() => {
+    if (mode !== "faceunlock") return;
+    faceTriedRef.current = false;
+    void startScan();
+    const t = setTimeout(() => void attemptFaceUnlock(), 2800);
+    return () => clearTimeout(t);
+  }, [mode, startScan, attemptFaceUnlock]);
+
+  // After a full login, silently enroll the live face so next time is face-only.
+  async function maybeEnrollFace(account: { username: string; displayName: string }) {
+    try {
+      const existing = await window.cowork.deviceTrust();
+      if (existing?.username === account.username) return; // already paired
+      if (!videoRef.current) return;
+      await loadFaceModels();
+      let descriptor: number[] | null = null;
+      for (let i = 0; i < 4 && !descriptor; i++) {
+        descriptor = await describeFace(videoRef.current);
+        if (!descriptor) await new Promise((r) => setTimeout(r, 350));
+      }
+      if (descriptor) await window.cowork.faceEnroll(descriptor, { username: account.username, displayName: account.displayName });
+    } catch { /* enrollment is best-effort — never blocks sign-in */ }
+  }
+
   async function signInWithJira() {
     setJiraBusy(true);
     setError("");
     try {
       const r = await window.cowork.jiraOAuthLogin(serverUrl.trim());
-      if (r.ok) { stopCam(); return onConnected(); }
+      if (r.ok) { await maybeEnrollFace(r.account ?? { username: "agent", displayName: "Agent" }); stopCam(); return onConnected(); }
       setError(r.error ?? "Jira sign-in failed.");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -181,7 +248,7 @@ export default function Login({ onConnected }: LoginProps) {
     try {
       if (mode === "agency") {
         const r = await window.cowork.accountLogin(serverUrl.trim(), username.trim(), password);
-        if (r.ok) { stopCam(); return onConnected(); }
+        if (r.ok) { await maybeEnrollFace(r.account ?? { username: username.trim(), displayName: username.trim() }); stopCam(); return onConnected(); }
         setError(r.error ?? "ACCESS DENIED — credentials rejected.");
       } else if (mode === "redstone") {
         const r = await window.cowork.redstoneLogin(serverUrl.trim(), username.trim(), password);
@@ -239,6 +306,27 @@ export default function Login({ onConnected }: LoginProps) {
           <div className="yia-sub">REDSTONE COWORK · CLEARANCE REQUIRED</div>
         </div>
 
+        {mode === "faceunlock" && deviceAgent ? (
+          <div>
+            <div className="yia-scanwrap">
+              <span className="yia-ring" />
+              <span className="yia-ring2" style={{ animationPlayState: scan === "scanning" || scan === "acquiring" ? "running" : "paused" }} />
+              <div className="yia-cam">
+                {scan === "denied" ? <span style={{ fontSize: 34, opacity: 0.35 }}>⎚</span> : <video ref={videoRef} muted playsInline />}
+                {scan === "scanning" && <span className="yia-sweepline" />}
+              </div>
+            </div>
+            <div style={{ textAlign: "center", marginTop: 4 }}>
+              <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: ".08em", color: "#e6f2f4" }}>{deviceAgent.displayName}</div>
+              <div className="yia-sub" style={{ marginTop: 2 }}>@{deviceAgent.username}</div>
+            </div>
+            <div className="yia-status" style={{ marginTop: 14, color: faceMsg.startsWith("⚠") ? "#e0a24a" : faceMsg.startsWith("◈") ? "#7fd18b" : CYAN }}>{faceMsg}</div>
+            <button type="button" className="yia-btn" onClick={() => { faceTriedRef.current = false; void attemptFaceUnlock(); }}>RESCAN</button>
+            <div style={{ textAlign: "center", marginTop: 12 }}>
+              <button type="button" className="yia-alt" onClick={() => { setMode("agency"); setError(""); }}>USE CREDENTIALS INSTEAD</button>
+            </div>
+          </div>
+        ) : (
         <form onSubmit={handleSubmit}>
           {mode === "agency" ? (
             <>
@@ -311,8 +399,10 @@ export default function Login({ onConnected }: LoginProps) {
           )}
           {error && <p className="yia-err">⚠ {error}</p>}
         </form>
+        )}
 
-        <div style={{ display: "flex", justifyContent: "center", gap: 4, marginTop: 16 }}>
+        <div style={{ display: "flex", justifyContent: "center", gap: 4, marginTop: 16, flexWrap: "wrap" }}>
+          {deviceAgent && mode !== "faceunlock" && <button className="yia-alt" onClick={() => { setMode("faceunlock"); setError(""); }}>◈ FACE UNLOCK</button>}
           {accountsOn && mode !== "agency" && <button className="yia-alt" onClick={() => { setMode("agency"); setError(""); }}>AGENT LOGIN</button>}
           {redstoneOn && mode !== "redstone" && <button className="yia-alt" onClick={() => { setMode("redstone"); setError(""); }}>REDSTONE SSO</button>}
           {mode !== "token" && <button className="yia-alt" onClick={() => { setMode("token"); setError(""); }}>INSTANCE TOKEN</button>}

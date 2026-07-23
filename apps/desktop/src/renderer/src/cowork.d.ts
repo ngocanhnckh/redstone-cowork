@@ -25,6 +25,10 @@ declare global {
       clearConfig(): Promise<void>;
       authConfig(serverUrl: string): Promise<{ redstone: boolean; issuer: string | null; accounts?: boolean; jira?: boolean; orgName?: string | null }>;
       jiraOAuthLogin(serverUrl: string): Promise<{ ok: boolean; error?: string; account?: { username: string; displayName: string; role: string } }>;
+      faceEnroll(descriptor: number[], account: { username: string; displayName: string; photo?: string | null }): Promise<{ ok: boolean; error?: string }>;
+      faceAdminEnroll(id: string, descriptor: number[]): Promise<{ ok: boolean; error?: string }>;
+      faceLogin(descriptor: number[]): Promise<{ ok: boolean; error?: string; account?: { username: string; displayName: string; role: string } }>;
+      deviceTrust(): Promise<{ serverUrl: string; username: string; displayName: string; photo: string | null } | null>;
       redstoneLogin(serverUrl: string, username: string, password: string): Promise<{ ok: boolean; error?: string }>;
       accountLogin(
         serverUrl: string,

@@ -4,7 +4,7 @@ import { dirname, join, basename, extname, normalize, sep } from "node:path";
 import { readFile } from "node:fs/promises";
 import { existsSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
-import { saveConfig, loadConfig, clearConfig } from "./config";
+import { saveConfig, loadConfig, clearConfig, saveDeviceTrust, loadDeviceTrust, getDeviceSecret, clearDeviceTrust } from "./config";
 import * as api from "./api";
 import { getWorkspaceConfig, saveWorkspaceConfig, getSshHost, setSshHost, isLocalMachine, setServerHosts, warmSshMaster } from "./workspace";
 import { getHostIps, getHostConnections, getHostProcesses } from "./host-info";
@@ -362,6 +362,43 @@ ipcMain.handle(IPC.redstoneLogin, async (_e, a: { serverUrl: string; username: s
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 });
+// Face enrollment: the renderer computes the descriptor; we relay it + persist the
+// returned device secret locally so face unlock survives the away-lock.
+ipcMain.handle(IPC.faceEnroll, async (_e, a: { descriptor: number[]; account: { username: string; displayName: string; photo?: string | null } }) => {
+  try {
+    const label = `${hostname()} · ${process.platform}`;
+    const { deviceSecret } = await api.faceEnroll(a.descriptor, label);
+    const cfg = loadConfig();
+    if (cfg?.serverUrl) {
+      saveDeviceTrust({ serverUrl: cfg.serverUrl, username: a.account.username, displayName: a.account.displayName, photo: a.account.photo ?? null, deviceSecret });
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+});
+ipcMain.handle(IPC.faceAdminEnroll, async (_e, a: { id: string; descriptor: number[] }) => {
+  try { return await api.faceAdminEnroll(a.id, a.descriptor); }
+  catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
+});
+ipcMain.handle(IPC.faceLogin, async (_e, a: { descriptor: number[] }) => {
+  try {
+    const trust = loadDeviceTrust();
+    const secret = getDeviceSecret();
+    if (!trust || !secret) return { ok: false, error: "no trusted device" };
+    const r = await api.faceLogin(trust.serverUrl, secret, a.descriptor);
+    if (r.ok && r.token) {
+      saveConfig(trust.serverUrl, r.token);
+      startForwarding();
+      return { ok: true, account: r.account };
+    }
+    return { ok: false, error: r.error ?? "face sign-in failed" };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+});
+ipcMain.handle(IPC.deviceSecretGet, () => loadDeviceTrust());
+ipcMain.handle(IPC.deviceSecretSet, (_e, _a) => ({ ok: true })); // reserved; set happens in faceEnroll
 ipcMain.handle(IPC.jiraOAuthLogin, async (_e, a: { serverUrl: string }) => {
   try {
     const started = await api.jiraOAuthStart(a.serverUrl);

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { describeFaceFromImageUrl } from "../faceEngine";
 
 // ——— AGENT ROSTER — YITEC INTELLIGENCE AGENCY personnel dashboard ———
 // Admin-only management of employee accounts: recruit agents, edit profiles
@@ -164,6 +165,21 @@ export default function AgentsPanel() {
     } finally { setBusy(false); }
   }
 
+  async function enrollFaceFromPhoto() {
+    if (!sel?.photo) { setErr("This agent has no photo to enroll."); return; }
+    setBusy(true);
+    setErr("");
+    try {
+      flash("COMPUTING FACE SIGNATURE…");
+      const descriptor = await describeFaceFromImageUrl(sel.photo);
+      if (!descriptor) { setErr("No face found in the photo — upload a clear frontal portrait."); return; }
+      const r = await window.cowork.faceAdminEnroll(sel.id, descriptor);
+      flash(r.ok ? "FACE ENROLLED — agent can face-unlock once device-paired" : "Enroll failed");
+    } catch (e) {
+      setErr(`Face enroll failed (${e instanceof Error ? e.message : e})`);
+    } finally { setBusy(false); }
+  }
+
   async function toggleDisabled() {
     if (!sel) return;
     setBusy(true);
@@ -273,6 +289,7 @@ export default function AgentsPanel() {
                     {field("WEBHOOK URL", "webhook")}
                     <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
                       <button className="rcw-ag-btn" disabled={busy} onClick={saveProfile}>{busy ? "…" : "SAVE DOSSIER"}</button>
+                      <button className="rcw-ag-btn" disabled={busy || !sel.photo} onClick={enrollFaceFromPhoto} title="Compute a face signature from the photo so this agent can face-unlock">◈ ENROLL FACE</button>
                       <button className="rcw-ag-btn warn" disabled={busy} onClick={toggleDisabled}>
                         {sel.disabledAt ? "REACTIVATE" : "SUSPEND"}
                       </button>

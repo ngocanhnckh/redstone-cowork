@@ -22,6 +22,14 @@ contextBridge.exposeInMainWorld("cowork", {
     ipcRenderer.invoke(IPC.redstoneLogin, { serverUrl, username, password }),
   jiraOAuthLogin: (serverUrl: string): Promise<{ ok: boolean; error?: string; account?: { username: string; displayName: string; role: string } }> =>
     ipcRenderer.invoke(IPC.jiraOAuthLogin, { serverUrl }),
+  faceEnroll: (descriptor: number[], account: { username: string; displayName: string; photo?: string | null }): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke(IPC.faceEnroll, { descriptor, account }),
+  faceAdminEnroll: (id: string, descriptor: number[]): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke(IPC.faceAdminEnroll, { id, descriptor }),
+  faceLogin: (descriptor: number[]): Promise<{ ok: boolean; error?: string; account?: { username: string; displayName: string; role: string } }> =>
+    ipcRenderer.invoke(IPC.faceLogin, { descriptor }),
+  deviceTrust: (): Promise<{ serverUrl: string; username: string; displayName: string; photo: string | null } | null> =>
+    ipcRenderer.invoke(IPC.deviceSecretGet),
   accountsMe: (): Promise<unknown> => ipcRenderer.invoke(IPC.accountsMe),
   accountsList: (): Promise<unknown[]> => ipcRenderer.invoke(IPC.accountsList),
   accountCreate: (input: unknown): Promise<unknown> => ipcRenderer.invoke(IPC.accountCreate, { input }),

@@ -80,3 +80,22 @@ export const LoginAuditEntrySchema = z.object({
   at: z.coerce.date(),
 });
 export type LoginAuditEntry = z.infer<typeof LoginAuditEntrySchema>;
+
+/** A 128-float face embedding (face-api.js descriptor). */
+export const FaceDescriptorSchema = z.array(z.number()).length(128);
+export type FaceDescriptor = z.infer<typeof FaceDescriptorSchema>;
+
+/** Opt into face unlock on THIS device after a full login: enroll a live descriptor,
+ *  receive a device secret (shown once) that pairs with the face for later sign-in. */
+export const FaceEnrollSchema = z.object({
+  descriptor: FaceDescriptorSchema,
+  deviceLabel: z.string().max(200).optional(),
+});
+export type FaceEnroll = z.infer<typeof FaceEnrollSchema>;
+
+/** Face sign-in: the device secret (possession) + a fresh live descriptor (biometric). */
+export const FaceLoginSchema = z.object({
+  deviceSecret: z.string().min(10),
+  descriptor: FaceDescriptorSchema,
+});
+export type FaceLogin = z.infer<typeof FaceLoginSchema>;

@@ -74,6 +74,36 @@ export class PostgresAccountStore implements AccountStore {
     return rows[0]?.patEncrypted ? { baseUrl: rows[0].baseUrl ?? "", patEncrypted: rows[0].patEncrypted } : null;
   }
 
+  async addFaceDescriptor(accountId: string, descriptor: number[]): Promise<void> {
+    await this.pool.query(
+      `UPDATE accounts SET face_descriptors = face_descriptors || $2::jsonb WHERE id=$1`,
+      [accountId, JSON.stringify([descriptor])]
+    );
+  }
+  async getFaceDescriptors(accountId: string): Promise<number[][]> {
+    const { rows } = await this.pool.query(`SELECT face_descriptors AS d FROM accounts WHERE id=$1`, [accountId]);
+    return (rows[0]?.d as number[][]) ?? [];
+  }
+  async trustDevice(rec: { id: string; accountId: string; secretHash: string; label: string; createdAt: Date }): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO device_trust (id, account_id, secret_hash, label, created_at) VALUES ($1,$2,$3,$4,$5)
+       ON CONFLICT (secret_hash) DO NOTHING`,
+      [rec.id, rec.accountId, rec.secretHash, rec.label, rec.createdAt]
+    );
+  }
+  async findDeviceAccount(secretHash: string, now: Date): Promise<Account | null> {
+    const { rows } = await this.pool.query(
+      `SELECT a.id, a.username, a.display_name AS "displayName", a.role, a.photo, a.level, a.division,
+              a.email, a.jira, a.mattermost, a.phone, a.webhook, a.created_at AS "createdAt", a.disabled_at AS "disabledAt"
+       FROM device_trust t JOIN accounts a ON a.id = t.account_id
+       WHERE t.secret_hash=$1 AND t.revoked_at IS NULL AND a.disabled_at IS NULL`,
+      [secretHash]
+    );
+    if (!rows[0]) return null;
+    await this.pool.query(`UPDATE device_trust SET last_used_at=$2 WHERE secret_hash=$1`, [secretHash, now]);
+    return AccountSchema.parse(rows[0]);
+  }
+
   async list(): Promise<Account[]> {
     const { rows } = await this.pool.query(`SELECT ${ROW} FROM accounts ORDER BY username`);
     return rows.map((r) => AccountSchema.parse(r));

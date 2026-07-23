@@ -34,6 +34,13 @@ export interface AccountStore {
   setJiraCredentials(id: string, baseUrl: string, patEncrypted: string): Promise<void>;
   /** The encrypted Jira PAT for this account (null = none linked). */
   getJiraPatEncrypted(id: string): Promise<{ baseUrl: string; patEncrypted: string } | null>;
+
+  // ——— Face biometrics + device trust ———
+  addFaceDescriptor(accountId: string, descriptor: number[]): Promise<void>;
+  getFaceDescriptors(accountId: string): Promise<number[][]>;
+  trustDevice(rec: { id: string; accountId: string; secretHash: string; label: string; createdAt: Date }): Promise<void>;
+  /** Resolve a device secret hash → its account (enabled + not revoked); touches last_used. */
+  findDeviceAccount(secretHash: string, now: Date): Promise<Account | null>;
   list(): Promise<Account[]>;
   count(): Promise<number>;
   setDisabled(id: string, at: Date | null): Promise<boolean>;

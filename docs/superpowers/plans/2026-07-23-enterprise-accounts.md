@@ -45,13 +45,17 @@ Jira mapping (Slice 5). Desktop login UI update lands with Slice 2.
    embedding match picks the account; after a first full login (password or Jira
    OAuth) the face unlocks a saved session. Face is identification/UX, never the
    sole stored secret.
-2b. **Jira DC OAuth sign-in** — employees authenticate against the org's Jira
-   Data Center (OAuth 2.0 authorization-code + PKCE, incoming link). On success
-   the API mints a Jira PAT for the user (Jira DC /rest/pat), stores it encrypted
-   with the account, and issues the normal rcwa_ session. Needs the admin to
-   register an incoming OAuth 2.0 application in Jira (client id/secret → server
-   env JIRA_OAUTH_CLIENT_ID / JIRA_OAUTH_CLIENT_SECRET / JIRA_OAUTH_BASE_URL;
-   redirect URI https://cowork.chatredstone.com/auth/jira/callback).
+2b. **Jira DC OAuth sign-in** — DONE. Authorization-code + PKCE against org Jira;
+   /auth/jira/{start,callback,poll}; upsert account by Jira username, mint PAT AS
+   the user, store AES-256-GCM encrypted (migration 029), issue rcwa_ session;
+   cinematic callback page; desktop "SIGN IN WITH JIRA". Env: JIRA_OAUTH_BASE_URL
+   / CLIENT_ID / CLIENT_SECRET (set), SCOPE (WRITE), REDIRECT.
+
+**Agent roster (DONE):** admin dashboard (desktop ⛨) — profiles: Agent Name,
+Photo (face-enrollment source), Level, Division, Email, Jira, Mattermost, Phone,
+personal Webhook. Migration 028. POST /accounts/:id/profile.
+**Jira mission webhook (DONE):** /hooks/jira?secret= → routes assigned-issue
+events to the matching agent's personal webhook.
 3. **Server registry & ACL** — machines table, admin assignment, employee-added
    VPS with automatic cowork public-key install, per-account visibility.
 4. **Admin console** — per-employee token spend, session history, live view.

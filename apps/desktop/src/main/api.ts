@@ -101,6 +101,25 @@ export async function accountLogin(
   return j as { token: string; account: { username: string; displayName: string; role: string } };
 }
 
+/** Enroll the current agent's face on this device → returns a one-time device secret. */
+export async function faceEnroll(descriptor: number[], deviceLabel: string): Promise<{ deviceSecret: string }> {
+  return (await req("/accounts/me/face/enroll", { method: "POST", body: JSON.stringify({ descriptor, deviceLabel }) })).json();
+}
+/** Admin: pre-enroll a descriptor computed from an agent's roster photo. */
+export async function faceAdminEnroll(id: string, descriptor: number[]): Promise<{ ok: boolean }> {
+  return (await req(`/accounts/${encodeURIComponent(id)}/face`, { method: "POST", body: JSON.stringify({ descriptor }) })).json();
+}
+/** Face sign-in: device secret + live descriptor → session (public endpoint). */
+export async function faceLogin(serverUrl: string, deviceSecret: string, descriptor: number[]): Promise<{ ok: boolean; token?: string; account?: { username: string; displayName: string; role: string }; error?: string }> {
+  const r = await fetchImpl(`${trimUrl(serverUrl)}/auth/face/login`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ deviceSecret, descriptor }),
+  });
+  const j = (await r.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!r.ok || !j.token) return { ok: false, error: String((j as { error?: string }).error ?? `HTTP ${r.status}`) };
+  return { ok: true, token: String(j.token), account: j.account as { username: string; displayName: string; role: string } };
+}
+
 /** Jira OAuth: ask the server for the authorize URL + a state to poll on. */
 export async function jiraOAuthStart(
   serverUrl: string,
