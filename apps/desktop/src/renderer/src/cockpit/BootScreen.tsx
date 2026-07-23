@@ -152,19 +152,16 @@ export default function BootScreen() {
       timer = setTimeout(step, BOOT_LOG[i].d);
     };
     step();
-    const title = setTimeout(() => {
-      if (cancelled) return;
-      done.current = true;
-      setPhase("title");
-      setGlitch(true); // glitch while approaching the beat
-    }, TITLE_MS);
-    const impact = setTimeout(() => {
-      if (cancelled) return;
-      setGlitch(false); // SETTLE: stop glitching → clean static title
-      setFlash(true);
-      setTimeout(() => { if (!cancelled) setFlash(false); }, 520);
-    }, IMPACT_MS);
-    return () => { cancelled = true; clearTimeout(timer); clearTimeout(title); clearTimeout(impact); };
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    const at = (ms: number, fn: () => void) => timers.push(setTimeout(() => { if (!cancelled) fn(); }, ms));
+    // Title fades in glitching, briefly settles, then GLITCHES AGAIN + flashes exactly
+    // on the "dang" (IMPACT_MS), and finally settles to a clean static title.
+    at(TITLE_MS, () => { done.current = true; setPhase("title"); setGlitch(true); });
+    at(TITLE_MS + 300, () => setGlitch(false));          // brief calm before the beat
+    at(IMPACT_MS, () => { setGlitch(true); setFlash(true); }); // re-glitch burst + flash on the dang
+    at(IMPACT_MS + 520, () => setFlash(false));
+    at(IMPACT_MS + 430, () => setGlitch(false));         // settle to clean static
+    return () => { cancelled = true; clearTimeout(timer); timers.forEach(clearTimeout); };
   }, [failed]);
 
   // Keep retrying on a NETWORK/server error so the app recovers when it's back. Don't
