@@ -220,7 +220,7 @@ export default function CustomAppPanel({ app, onFavicon }: { app: CustomApp; onF
         </span>
         <button style={navBtn} title="Open in real browser" onClick={() => window.cowork.openExternal(app.url).catch(() => {})}>⧉</button>
       </div>
-      <div style={{ flex: 1, minHeight: 0, position: "relative", background: themed ? "color-mix(in srgb, var(--app-panel) 24%, transparent)" : "rgba(0,0,0,0.18)", backdropFilter: themed ? "blur(16px) saturate(1.3)" : undefined, WebkitBackdropFilter: themed ? "blur(16px) saturate(1.3)" : undefined }}>
+      <div style={{ flex: 1, minHeight: 0, position: "relative", background: themed ? "color-mix(in srgb, var(--app-panel) 24%, transparent)" : "rgba(0,0,0,0.18)", backdropFilter: themed ? "blur(32px) saturate(1.4)" : undefined, WebkitBackdropFilter: themed ? "blur(32px) saturate(1.4)" : undefined }}>
         {/* In-page find bar (Cmd/Ctrl+F) — floats over the top-right of the app */}
         {findOpen && (
           <div

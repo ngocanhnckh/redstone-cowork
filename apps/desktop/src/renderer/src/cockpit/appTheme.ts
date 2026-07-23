@@ -25,6 +25,23 @@ body *:not(img):not(video):not(canvas):not(svg):not(svg *):not(picture) {
 }
 body, body *:not(svg):not(svg *):not(path) { color: ${LIGHT} !important; }
 body *:not(svg):not(svg *) { border-color: rgba(230,242,244,0.14) !important; }
+/* Overlay surfaces (menus, dropdowns, popovers, tooltips, dialogs) must stay readable
+   since they FLOAT over other content — give them a SOLID frosted-dark background
+   instead of the stripped-transparent one. Matched broadly by role / class / data-attr
+   / id across common UI frameworks (Atlaskit, MUI, Radix, etc.). Class/attr selectors
+   win over the strip rule on specificity, so this always takes effect. */
+[role="menu"], [role="listbox"], [role="dialog"], [role="tooltip"], [role="alertdialog"], [role="combobox"], [role="grid"][aria-label],
+[class*="menu" i]:not([class*="menubar" i]):not([class*="menu-bar" i]), [class*="dropdown" i], [class*="popover" i], [class*="popup" i],
+[class*="flyout" i], [class*="submenu" i], [class*="tooltip" i], [class*="dialog" i], [class*="modal" i],
+[class*="picker" i], [class*="combobox" i], [class*="autocomplete" i], [class*="typeahead" i], [class*="layer" i], [class*="portal" i],
+[class*="context" i][class*="menu" i], [class*="select__menu" i], [class*="dropdown-menu" i], [class*="MenuList" i], [class*="Popper" i],
+[data-testid*="menu" i], [data-testid*="dropdown" i], [data-testid*="popup" i], [data-testid*="popover" i], [data-testid*="dialog" i],
+[data-ds--menu], [data-focus-lock], [id*="menu" i][role], [id*="popup" i], [id*="dropdown" i] {
+  background-color: rgba(11,15,21,0.96) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(1.3);
+  backdrop-filter: blur(16px) saturate(1.3);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.55) !important;
+}
 input, textarea, select, [contenteditable="true"], [role="textbox"] {
   background-color: rgba(255,255,255,0.06) !important;
   color: ${LIGHT} !important;
