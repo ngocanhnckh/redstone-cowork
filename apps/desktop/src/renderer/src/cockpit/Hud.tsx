@@ -5,6 +5,7 @@ import { HostTelemetryView } from "../types";
 import QueueRail from "./QueueRail";
 import TerminalStack from "./TerminalStack";
 import MultiTerminal from "./MultiTerminal";
+import ActionFeed from "./ActionFeed";
 import FilesPanel from "./FilesPanel";
 import BrowserStack from "./BrowserStack";
 import DockerLogPanel from "./DockerLogPanel";
@@ -608,7 +609,7 @@ function ChatPane({ sessionId }: { sessionId?: string } = {}) {
 // Fixed singleton windows. chat/term/files/browser also participate in the tiled
 // grid; tasks is windows-mode only. Docker Log windows are DYNAMIC (ids "docker:N")
 // and can be spawned more than once, so they live outside this union.
-type FixedKey = "chat" | "term" | "files" | "browser" | "tasks" | "notes" | "ports" | "devtools";
+type FixedKey = "chat" | "term" | "files" | "browser" | "tasks" | "notes" | "ports" | "devtools" | "activity";
 type GridKey = "chat" | "term" | "files" | "browser";
 type ConsoleView = "ctf" | "cb" | "ctb" | "fb";
 type HudLayout = "grid" | "windows";
@@ -622,6 +623,7 @@ const FIXED: { key: FixedKey; title: string; icon: string }[] = [
   { key: "notes", title: "Notes", icon: "✎" },
   { key: "ports", title: "Settings", icon: "⚙" },
   { key: "devtools", title: "Inspector", icon: "◫" },
+  { key: "activity", title: "Activity", icon: "⚡" },
 ];
 const GRID_PANELS: GridKey[] = ["chat", "term", "files", "browser"];
 const isDockerId = (id: string): boolean => id.startsWith("docker:");
@@ -698,12 +700,13 @@ function defaultWins(): WinMap {
       notes: { x: 170, y: 96, w: 760, h: 540, min: true },
       ports: { x: 150, y: 90, w: 560, h: 460, min: true },
       devtools: { x: 160, y: 110, w: 760, h: 480, min: true },
+      activity: { x: 180, y: 120, w: 560, h: 520, min: true },
     },
     dockerIds: [],
     sessIds: [],
     termIds: [],
     termHosts: {},
-    z: ["chat", "term", "files", "browser", "tasks", "notes", "ports", "devtools"],
+    z: ["chat", "term", "files", "browser", "tasks", "notes", "ports", "devtools", "activity"],
     seq: 0,
     _init: false,
   };
@@ -1440,6 +1443,7 @@ function HudConsole() {
       case "notes": return <NotesPanel active={!grid && !wins.wins.notes?.min} />;
       case "ports": return session ? <SessionSettingsPanel key={`${session.id}-hud-settings`} sessionId={session.id} cwd={session.cwd} machine={session.machine} /> : none;
       case "devtools": return <DevToolsPanel sessionId={session?.id} active={!grid && !wins.wins.devtools?.min} />;
+      case "activity": return <ActionFeed sessionId={session?.id} active={!grid && !wins.wins.activity?.min} />;
       default:
         if (isDockerId(id)) return <DockerLogPanel streamId={id} active={!grid && !wins.wins[id]?.min} />;
         if (isTermWinId(id)) { const h = wins.termHosts?.[id]; return h ? <MultiTerminal idPrefix={id} sessionId={h.sessionId} cwd={h.cwd} machine={h.machine} /> : null; }
