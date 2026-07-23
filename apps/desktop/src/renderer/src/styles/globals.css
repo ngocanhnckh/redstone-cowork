@@ -785,3 +785,14 @@ body {
     background: rgb(var(--primary) / 0.5);
     color: #04060d;
 }
+
+/* Boot → cockpit hand-off flash (fired by Cockpit when the splash finishes). */
+@keyframes rcw-flash { 0% { opacity: 0.6; } 100% { opacity: 0; } }
+.rcw-flash-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9000;
+    pointer-events: none;
+    background: radial-gradient(circle at 50% 44%, rgb(var(--primary-soft) / 0.95), rgb(var(--primary) / 0.5) 58%, transparent 80%);
+    animation: rcw-flash 0.48s ease-out forwards;
+}
