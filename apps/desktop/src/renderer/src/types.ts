@@ -56,6 +56,10 @@ export type NetworkMap = {
   peers: NetPeer[];
 };
 
+export type WeatherCurrent = { tempC: number; feelsC: number; code: number; windKmh: number; humidity: number; isDay: boolean };
+export type WeatherDay = { date: string; maxC: number; minC: number; code: number };
+export type Weather = { ok: boolean; city: string | null; country: string | null; current: WeatherCurrent | null; daily: WeatherDay[] };
+
 export type Commit = { hash: string; author: string; relative: string; date: string; subject: string };
 export type GitInfo = { ok: boolean; repo: boolean; branch: string | null; ahead: number; behind: number; dirty: number; commits: Commit[]; error?: string; remoteUrl?: string | null; webUrl?: string | null };
 

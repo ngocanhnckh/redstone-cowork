@@ -143,6 +143,11 @@ contextBridge.exposeInMainWorld("cowork", {
     host: { ip: string | null; lat: number | null; lon: number | null; city: string | null; country: string | null };
     peers: { ip: string; port: number | null; proc: string | null; domain: string | null; service: string | null; count: number; lat: number | null; lon: number | null; city: string | null; country: string | null }[];
   }> => ipcRenderer.invoke(IPC.networkMap, { machine }),
+  weather: (): Promise<{
+    ok: boolean; city: string | null; country: string | null;
+    current: { tempC: number; feelsC: number; code: number; windKmh: number; humidity: number; isDay: boolean } | null;
+    daily: { date: string; maxC: number; minC: number; code: number }[];
+  }> => ipcRenderer.invoke(IPC.weather),
 
   // Passwordless SSH onboarding
   sshSetup: (a: {

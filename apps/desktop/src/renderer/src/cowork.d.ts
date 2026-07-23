@@ -90,6 +90,7 @@ declare global {
       hostProcesses(machine: string): Promise<{ pid: number; name: string; cpu: number; mem: number }[]>;
       calendarEvents(): Promise<{ ok: boolean; denied: boolean; events: { title: string; start: string; end: string; allDay: boolean; calendar: string }[] }>;
       networkMap(machine: string): Promise<import("./types").NetworkMap>;
+      weather(): Promise<import("./types").Weather>;
 
       // Passwordless SSH onboarding
       sshSetup(a: {

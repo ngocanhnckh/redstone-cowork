@@ -7,6 +7,7 @@ import { getWorkspaceConfig, saveWorkspaceConfig, getSshHost, setSshHost, isLoca
 import { getHostIps, getHostConnections, getHostProcesses } from "./host-info";
 import { getCalendarEvents } from "./calendar";
 import { getNetworkMap } from "./network";
+import { getWeather } from "./weather";
 import {
   ensureTerminal,
   writeTerminal,
@@ -465,6 +466,7 @@ ipcMain.handle(IPC.hostConnections, (_e, a: { machine: string }) => getHostConne
 ipcMain.handle(IPC.hostProcesses, (_e, a: { machine: string }) => getHostProcesses(a.machine));
 ipcMain.handle(IPC.calendarEvents, () => getCalendarEvents());
 ipcMain.handle(IPC.networkMap, (_e, a: { machine: string }) => getNetworkMap(a.machine));
+ipcMain.handle(IPC.weather, () => getWeather());
 // Warm the SSH master for a remote host when its file/terminal UI opens, so the
 // first file read doesn't pay the (relay-amplified) connection handshake.
 ipcMain.handle(IPC.warmHost, (_e, a: { machine: string }) => { warmSshMaster(a.machine); return { ok: true }; });
