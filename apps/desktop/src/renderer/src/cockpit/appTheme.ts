@@ -12,11 +12,14 @@ export type AppTheme = "off" | "dark" | "hitech";
 const LIGHT = "#e6f2f4";   // readable light text on the dark cockpit backdrop
 const CYAN = "#54e6ff";    // hi-tech accent (matches [data-theme="hitech"])
 
-// Base "see-through dark": strip page backgrounds so our panel shows through, and force
-// text light. Media (img/video/canvas/svg) keep their own paint. Inputs get a faint
-// fill + border so fields stay visible on the glass.
+// Base "see-through dark": put a mostly-opaque dark base on <html> (so the page is dark
+// even if the webview can't composite transparently), STRIP every element's own
+// background so that dark base shows through, and force text light. The html base is
+// slightly translucent, so where the webview IS transparent the cockpit glass bleeds
+// through for the hi-tech look. Media (img/video/canvas/svg) keep their own paint.
 const BASE = `
-html, body { background: transparent !important; background-image: none !important; }
+html { background-color: rgba(9,12,16,0.82) !important; background-image: none !important; }
+body { background: transparent !important; background-image: none !important; }
 body *:not(img):not(video):not(canvas):not(svg):not(svg *):not(picture) {
   background-color: transparent !important;
 }
