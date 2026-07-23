@@ -5,7 +5,7 @@ import { useStore } from "../store";
 // are draggable/resizable, glanceable, and persist their placement globally. Every
 // widget here is NEW — none duplicate the fixed telemetry deck or the left column.
 
-export type WidgetKind = "attention" | "burn" | "ticker" | "timer" | "scratch" | "throughput" | "radar" | "reactor";
+export type WidgetKind = "attention" | "burn" | "ticker" | "timer" | "scratch" | "throughput" | "radar" | "reactor" | "agenda";
 export type WidgetInst = { id: string; kind: WidgetKind; x: number; y: number; w: number; h: number; text?: string };
 
 const KEY = "rcw.widgets";
@@ -20,8 +20,9 @@ const CATALOG: Record<WidgetKind, Meta> = {
   throughput: { label: "Throughput",      icon: "▚", w: 224, h: 128, minW: 180, minH: 108 },
   radar:      { label: "Recon Radar",     icon: "◎", w: 244, h: 244, minW: 190, minH: 190 },
   reactor:    { label: "Top Processes",   icon: "⚛", w: 264, h: 190, minW: 210, minH: 140 },
+  agenda:     { label: "Agenda",          icon: "▦", w: 286, h: 214, minW: 220, minH: 150 },
 };
-const ORDER: WidgetKind[] = ["attention", "reactor", "radar", "burn", "throughput", "ticker", "timer", "scratch"];
+const ORDER: WidgetKind[] = ["attention", "agenda", "reactor", "radar", "burn", "throughput", "ticker", "timer", "scratch"];
 
 function loadWidgets(): WidgetInst[] | null {
   try {
@@ -174,6 +175,7 @@ function WidgetBody({ inst, onChange }: { inst: WidgetInst; onChange: (p: Partia
     case "throughput": return <Throughput />;
     case "radar": return <ReconRadar />;
     case "reactor": return <Reactor />;
+    case "agenda": return <Agenda />;
     default: return null;
   }
 }
@@ -573,6 +575,95 @@ function Reactor() {
               </div>
             );
           })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Widget: Agenda (macOS system calendar) ────────────────────────────────────
+type CalEvent = { title: string; start: string; end: string; allDay: boolean; calendar: string };
+// Stable per-calendar accent so each account reads as its own colour dot.
+const CAL_HUES = ["#54e6ff", "#7ee081", "#ffb454", "#c78bff", "#ff8fa3", "#6fb8ff", "#f0d264"];
+function calColor(name: string): string { return CAL_HUES[Math.floor(hash01(name) * CAL_HUES.length) % CAL_HUES.length]; }
+function dayLabel(d: Date, now: Date): string {
+  const a = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const b = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const days = Math.round((a.getTime() - b.getTime()) / 86400000);
+  if (days <= 0) return "Today";
+  if (days === 1) return "Tomorrow";
+  return d.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
+}
+function hhmm(d: Date): string { return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }); }
+
+function Agenda() {
+  const [state, setState] = useState<{ ok: boolean; denied: boolean; events: CalEvent[] } | null>(null);
+  const now = useNow(60_000); // re-render each minute so "now" / past-dimming stays fresh
+
+  useEffect(() => {
+    let alive = true;
+    const load = () => { window.cowork.calendarEvents().then((r) => { if (alive) setState(r); }).catch(() => { if (alive) setState({ ok: false, denied: false, events: [] }); }); };
+    load();
+    const id = setInterval(load, 5 * 60_000);
+    return () => { alive = false; clearInterval(id); };
+  }, []);
+
+  // Group upcoming (not-yet-ended) events by day.
+  const groups = useMemo(() => {
+    if (!state) return [];
+    const nd = new Date(now);
+    const evs = state.events
+      .map((e) => ({ e, s: new Date(e.start), end: e.end ? new Date(e.end) : new Date(e.start) }))
+      .filter((x) => x.end.getTime() >= nd.getTime() - 60_000)
+      .sort((a, b) => a.s.getTime() - b.s.getTime());
+    const by = new Map<string, { label: string; items: typeof evs }>();
+    for (const x of evs) {
+      const key = new Date(x.s.getFullYear(), x.s.getMonth(), x.s.getDate()).toDateString();
+      if (!by.has(key)) by.set(key, { label: dayLabel(x.s, nd), items: [] });
+      by.get(key)!.items.push(x);
+    }
+    return [...by.values()];
+  }, [state, now]);
+
+  const nextStart = groups[0]?.items[0]?.s.getTime() ?? null;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 6 }}>
+        <span style={{ fontSize: 12 }}>▦</span>
+        <span className="mono" style={{ fontSize: 9.5, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--text-soft)" }}>Agenda</span>
+        <span style={{ flex: 1 }} />
+        {nextStart && <span className="mono faint" style={{ fontSize: 9.5 }}>next {hhmm(new Date(nextStart))}</span>}
+      </div>
+      {!state ? (
+        <div className="mono faint" style={{ fontSize: 11, margin: "auto" }}>reading calendar…</div>
+      ) : state.denied ? (
+        <div className="mono faint" style={{ fontSize: 10.5, margin: "auto", textAlign: "center", lineHeight: 1.5 }}>Calendar access denied.<br />Grant it in System Settings ›<br />Privacy › Calendars.</div>
+      ) : !state.ok ? (
+        <div className="mono faint" style={{ fontSize: 10.5, margin: "auto", textAlign: "center" }}>calendar unavailable<br />(macOS only)</div>
+      ) : groups.length === 0 ? (
+        <div className="mono faint" style={{ fontSize: 11, margin: "auto" }}>◇ nothing scheduled</div>
+      ) : (
+        <div className="no-scrollbar" style={{ display: "flex", flexDirection: "column", gap: 8, overflowY: "auto", minHeight: 0 }}>
+          {groups.map((g) => (
+            <div key={g.label}>
+              <div className="mono faint" style={{ fontSize: 8.5, letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 4 }}>{g.label}</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                {g.items.map((x, i) => {
+                  const soon = x.s.getTime() === nextStart;
+                  return (
+                    <div key={i} title={`${x.e.title}\n${x.e.calendar}`} style={{ display: "flex", alignItems: "baseline", gap: 7, opacity: soon ? 1 : 0.92 }}>
+                      <span style={{ width: 6, height: 6, borderRadius: "50%", flexShrink: 0, alignSelf: "center", background: calColor(x.e.calendar), boxShadow: soon ? `0 0 8px 1px ${calColor(x.e.calendar)}` : "none" }} />
+                      <span className="mono" style={{ fontSize: 10, flexShrink: 0, color: soon ? "rgb(var(--accent))" : "var(--text-soft)", fontVariantNumeric: "tabular-nums", minWidth: 46 }}>
+                        {x.e.allDay ? "all-day" : hhmm(x.s)}
+                      </span>
+                      <span style={{ fontSize: 11.5, minWidth: 0, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{x.e.title}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>

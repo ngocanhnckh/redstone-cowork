@@ -59,6 +59,7 @@ export const IPC = {
   hostIps: "api:host:ips",
   hostConnections: "api:host:connections",
   hostProcesses: "api:host:processes",
+  calendarEvents: "api:calendar:events",
   sshSetup: "api:ssh:setup",
   sshResultGet: "api:ssh:result:get",
   terminalStart: "api:terminal:start",

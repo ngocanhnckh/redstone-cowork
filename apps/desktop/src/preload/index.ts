@@ -136,6 +136,8 @@ contextBridge.exposeInMainWorld("cowork", {
     ipcRenderer.invoke(IPC.hostConnections, { machine }),
   hostProcesses: (machine: string): Promise<{ pid: number; name: string; cpu: number; mem: number }[]> =>
     ipcRenderer.invoke(IPC.hostProcesses, { machine }),
+  calendarEvents: (): Promise<{ ok: boolean; denied: boolean; events: { title: string; start: string; end: string; allDay: boolean; calendar: string }[] }> =>
+    ipcRenderer.invoke(IPC.calendarEvents),
 
   // Passwordless SSH onboarding
   sshSetup: (a: {
