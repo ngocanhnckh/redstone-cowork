@@ -4,6 +4,7 @@ import type { Request } from "express";
 import { z, ZodError } from "zod";
 import { AccountLoginSchema } from "@rcw/shared";
 import { AccountAuthError, AccountsService } from "../../application/accounts.service";
+import { JiraOAuthService } from "../../application/jira-oauth.service";
 import { RedstoneService, RedstoneAuthError } from "../../application/redstone.service";
 import { SettingsService } from "../../application/settings.service";
 
@@ -28,6 +29,7 @@ export class AuthController {
     private readonly redstone: RedstoneService,
     private readonly settings: SettingsService,
     private readonly accounts: AccountsService,
+    private readonly jiraOAuth: JiraOAuthService,
   ) {}
 
   /** Lets the login UI decide which sign-in options to offer: Redstone org SSO,
@@ -39,6 +41,7 @@ export class AuthController {
       redstone: this.redstone.enabled(),
       issuer: this.redstone.issuer(),
       accounts: accountCount > 0,
+      jira: this.jiraOAuth.enabled(),
       orgName: process.env.ORG_NAME ?? null,
     };
   }

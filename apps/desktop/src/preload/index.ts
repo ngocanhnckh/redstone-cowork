@@ -20,6 +20,8 @@ contextBridge.exposeInMainWorld("cowork", {
     ipcRenderer.invoke(IPC.authConfig, { serverUrl }),
   redstoneLogin: (serverUrl: string, username: string, password: string): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke(IPC.redstoneLogin, { serverUrl, username, password }),
+  jiraOAuthLogin: (serverUrl: string): Promise<{ ok: boolean; error?: string; account?: { username: string; displayName: string; role: string } }> =>
+    ipcRenderer.invoke(IPC.jiraOAuthLogin, { serverUrl }),
   accountsMe: (): Promise<unknown> => ipcRenderer.invoke(IPC.accountsMe),
   accountsList: (): Promise<unknown[]> => ipcRenderer.invoke(IPC.accountsList),
   accountCreate: (input: unknown): Promise<unknown> => ipcRenderer.invoke(IPC.accountCreate, { input }),

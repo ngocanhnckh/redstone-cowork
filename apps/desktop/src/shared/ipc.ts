@@ -5,6 +5,7 @@ export const IPC = {
   authConfig: "auth:config",
   redstoneLogin: "auth:redstone:login",
   accountLogin: "auth:account:login",
+  jiraOAuthLogin: "auth:jira:oauth:login",
   accountsMe: "api:accounts:me",
   accountsList: "api:accounts:list",
   accountCreate: "api:accounts:create",

@@ -1,7 +1,7 @@
 import type { Account, AccountProfilePatch, LoginAuditEntry } from "@rcw/shared";
 import type { AccountStore, AccountTokenRecord, NewAccountRecord } from "../../domain/accounts/account-store.port";
 
-type Row = NewAccountRecord & { disabledAt: Date | null };
+type Row = NewAccountRecord & { disabledAt: Date | null; jiraBaseUrl?: string; jiraPatEnc?: string | null };
 type TokenRow = AccountTokenRecord & { lastUsedAt: Date | null; revokedAt: Date | null };
 
 const toAccount = (r: Row): Account => ({
@@ -42,6 +42,21 @@ export class InMemoryAccountStore implements AccountStore {
   async findById(id: string): Promise<Account | null> {
     const row = this.rows.get(id);
     return row ? toAccount(row) : null;
+  }
+
+  async findByJiraUsername(jira: string): Promise<Account | null> {
+    const row = [...this.rows.values()].find((r) => (r.jira ?? "").toLowerCase() === jira.toLowerCase());
+    return row ? toAccount(row) : null;
+  }
+
+  async setJiraCredentials(id: string, baseUrl: string, patEncrypted: string): Promise<void> {
+    const row = this.rows.get(id);
+    if (row) { row.jiraBaseUrl = baseUrl; row.jiraPatEnc = patEncrypted; }
+  }
+
+  async getJiraPatEncrypted(id: string): Promise<{ baseUrl: string; patEncrypted: string } | null> {
+    const row = this.rows.get(id);
+    return row?.jiraPatEnc ? { baseUrl: row.jiraBaseUrl ?? "", patEncrypted: row.jiraPatEnc } : null;
   }
 
   async list(): Promise<Account[]> {

@@ -101,6 +101,27 @@ export async function accountLogin(
   return j as { token: string; account: { username: string; displayName: string; role: string } };
 }
 
+/** Jira OAuth: ask the server for the authorize URL + a state to poll on. */
+export async function jiraOAuthStart(
+  serverUrl: string,
+): Promise<{ ok: boolean; authUrl?: string; state?: string; error?: string }> {
+  const r = await fetchImpl(`${trimUrl(serverUrl)}/auth/jira/start`, { method: "POST", headers: { "Content-Type": "application/json" } });
+  return (await r.json().catch(() => ({ ok: false, error: `HTTP ${r.status}` }))) as {
+    ok: boolean; authUrl?: string; state?: string; error?: string;
+  };
+}
+
+/** Poll the Jira OAuth outcome by state until the browser leg completes. */
+export async function jiraOAuthPoll(
+  serverUrl: string,
+  state: string,
+): Promise<{ status: "pending" | "ok" | "error"; session?: { token: string; account: { username: string; displayName: string; role: string } }; error?: string }> {
+  const r = await fetchImpl(`${trimUrl(serverUrl)}/auth/jira/poll?state=${encodeURIComponent(state)}`);
+  return (await r.json().catch(() => ({ status: "error", error: `HTTP ${r.status}` }))) as {
+    status: "pending" | "ok" | "error"; session?: { token: string; account: { username: string; displayName: string; role: string } }; error?: string;
+  };
+}
+
 /** Org sign-in: exchange Redstone username+password for tokens (caller persists them). */
 export async function redstoneLogin(
   serverUrl: string,

@@ -60,6 +60,20 @@ export class PostgresAccountStore implements AccountStore {
     return rows[0] ? AccountSchema.parse(rows[0]) : null;
   }
 
+  async findByJiraUsername(jira: string): Promise<Account | null> {
+    const { rows } = await this.pool.query(`SELECT ${ROW} FROM accounts WHERE lower(jira)=lower($1) AND jira<>''`, [jira]);
+    return rows[0] ? AccountSchema.parse(rows[0]) : null;
+  }
+
+  async setJiraCredentials(id: string, baseUrl: string, patEncrypted: string): Promise<void> {
+    await this.pool.query(`UPDATE accounts SET jira_base_url=$2, jira_pat_enc=$3 WHERE id=$1`, [id, baseUrl, patEncrypted]);
+  }
+
+  async getJiraPatEncrypted(id: string): Promise<{ baseUrl: string; patEncrypted: string } | null> {
+    const { rows } = await this.pool.query(`SELECT jira_base_url AS "baseUrl", jira_pat_enc AS "patEncrypted" FROM accounts WHERE id=$1`, [id]);
+    return rows[0]?.patEncrypted ? { baseUrl: rows[0].baseUrl ?? "", patEncrypted: rows[0].patEncrypted } : null;
+  }
+
   async list(): Promise<Account[]> {
     const { rows } = await this.pool.query(`SELECT ${ROW} FROM accounts ORDER BY username`);
     return rows.map((r) => AccountSchema.parse(r));

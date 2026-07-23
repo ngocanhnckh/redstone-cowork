@@ -28,6 +28,12 @@ export interface AccountStore {
   create(rec: NewAccountRecord): Promise<Account>;
   findByUsername(username: string): Promise<(Account & { passwordHash: string }) | null>;
   findById(id: string): Promise<Account | null>;
+  /** Find an account by its Jira DC username (case-insensitive). */
+  findByJiraUsername(jira: string): Promise<Account | null>;
+  /** Store the encrypted Jira PAT + base URL minted during Jira OAuth sign-in. */
+  setJiraCredentials(id: string, baseUrl: string, patEncrypted: string): Promise<void>;
+  /** The encrypted Jira PAT for this account (null = none linked). */
+  getJiraPatEncrypted(id: string): Promise<{ baseUrl: string; patEncrypted: string } | null>;
   list(): Promise<Account[]>;
   count(): Promise<number>;
   setDisabled(id: string, at: Date | null): Promise<boolean>;

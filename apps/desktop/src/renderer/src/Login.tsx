@@ -58,6 +58,14 @@ const CSS = `
   text-shadow: 0 0 12px rgb(84 230 255 / .8); transition: box-shadow .15s, background .15s; }
 .yia-btn:hover:not(:disabled) { box-shadow: 0 0 30px -6px rgb(84 230 255 / .8); background: linear-gradient(180deg, rgb(84 230 255 / .3), rgb(84 230 255 / .14)); }
 .yia-btn:disabled { opacity:.4; cursor:not-allowed; }
+.yia-jira { width:100%; padding:11px 0; margin-top:12px; border-radius:9px; border:1px solid rgb(38 132 255 / .6);
+  background: linear-gradient(180deg, rgb(38 132 255 / .22), rgb(38 132 255 / .1)); color:#cfe4ff;
+  font-family:inherit; font-size:12px; font-weight:700; letter-spacing:.22em; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:9px;
+  text-shadow:0 0 12px rgb(38 132 255 / .7); transition: box-shadow .15s, background .15s; }
+.yia-jira:hover:not(:disabled) { box-shadow:0 0 28px -6px rgb(38 132 255 / .85); background: linear-gradient(180deg, rgb(38 132 255 / .3), rgb(38 132 255 / .14)); }
+.yia-jira:disabled { opacity:.5; cursor:progress; }
+.yia-or { display:flex; align-items:center; gap:10px; margin:14px 0 2px; color: rgb(230 242 244 / .3); font-size:9px; letter-spacing:.3em; }
+.yia-or::before, .yia-or::after { content:""; flex:1; height:1px; background: rgb(84 230 255 / .18); }
 .yia-alt { background:none; border:none; color: rgb(230 242 244 / .4); font-family:inherit; font-size:10px;
   letter-spacing:.18em; cursor:pointer; padding:4px 8px; }
 .yia-alt:hover { color: rgb(84 230 255 / .85); }
@@ -82,6 +90,8 @@ export default function Login({ onConnected }: LoginProps) {
   const [mode, setMode] = useState<Mode>("agency");
   const [redstoneOn, setRedstoneOn] = useState(false);
   const [accountsOn, setAccountsOn] = useState(false);
+  const [jiraOn, setJiraOn] = useState(false);
+  const [jiraBusy, setJiraBusy] = useState(false);
   const [orgName, setOrgName] = useState<string | null>(null);
   const [token, setToken] = useState("");
   const [username, setUsername] = useState("");
@@ -129,6 +139,7 @@ export default function Login({ onConnected }: LoginProps) {
         if (cancelled) return;
         setRedstoneOn(!!c.redstone);
         setAccountsOn(!!c.accounts);
+        setJiraOn(!!c.jira);
         setOrgName(c.orgName ?? null);
         if (c.accounts) setMode("agency");
         else if (c.redstone) setMode("redstone");
@@ -147,6 +158,20 @@ export default function Login({ onConnected }: LoginProps) {
   const canSubmit =
     serverUrl.trim().length > 0 && !connecting &&
     (mode === "token" ? token.trim().length > 0 : username.trim().length > 0 && password.length > 0);
+
+  async function signInWithJira() {
+    setJiraBusy(true);
+    setError("");
+    try {
+      const r = await window.cowork.jiraOAuthLogin(serverUrl.trim());
+      if (r.ok) { stopCam(); return onConnected(); }
+      setError(r.error ?? "Jira sign-in failed.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setJiraBusy(false);
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -274,6 +299,16 @@ export default function Login({ onConnected }: LoginProps) {
           <button type="submit" className="yia-btn" disabled={!canSubmit}>
             {connecting ? "AUTHENTICATING…" : mode === "agency" ? "REQUEST ACCESS" : mode === "redstone" ? "SIGN IN" : "CONNECT"}
           </button>
+
+          {jiraOn && mode === "agency" && (
+            <>
+              <div className="yia-or">OR</div>
+              <button type="button" className="yia-jira" onClick={signInWithJira} disabled={jiraBusy || connecting}>
+                <svg width="15" height="15" viewBox="0 0 32 32" fill="currentColor" aria-hidden><path d="M16.4 2 6 12.4a1.4 1.4 0 0 0 0 2l10.4 10.4 4-4-8.4-8.4 4-4a1.4 1.4 0 0 0 0-2L16.4 2z"/><path opacity=".7" d="M25.6 11.2 20 16.8l-4 4 5.6 5.6a1.4 1.4 0 0 0 2 0l6-6a1.4 1.4 0 0 0 0-2l-4-7.2z"/></svg>
+                {jiraBusy ? "AWAITING JIRA CONSENT…" : "SIGN IN WITH JIRA"}
+              </button>
+            </>
+          )}
           {error && <p className="yia-err">⚠ {error}</p>}
         </form>
 

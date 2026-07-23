@@ -95,6 +95,8 @@ import { InMemoryAccessKeyStore } from "./adapters/persistence/in-memory-access-
 import { PostgresAccessKeyStore } from "./adapters/persistence/postgres-access-key-store";
 import { AccountsController } from "./adapters/http/accounts.controller";
 import { JiraHooksController } from "./adapters/http/jira-hooks.controller";
+import { JiraOAuthController } from "./adapters/http/jira-oauth.controller";
+import { JiraOAuthService } from "./application/jira-oauth.service";
 import { AccountsService } from "./application/accounts.service";
 import { ACCOUNT_STORE } from "./domain/accounts/account-store.port";
 import { InMemoryAccountStore } from "./adapters/persistence/in-memory-account-store";
@@ -118,7 +120,7 @@ import { PromptLoader } from "./infrastructure/prompts/prompt-loader";
 import type { Pool } from "pg";
 
 @Module({
-  controllers: [HealthController, EventsController, SessionsController, DecisionsController, StreamController, PushController, ConnectionsController, OAuthController, MicrosoftOAuthController, DevicesController, InstallController, LlmController, AuthController, HostsController, InventoryController, AccessKeysController, TelemetryController, SkillsController, TunnelController, ClaudeConfigsController, JiraController, AccountsController, JiraHooksController],
+  controllers: [HealthController, EventsController, SessionsController, DecisionsController, StreamController, PushController, ConnectionsController, OAuthController, MicrosoftOAuthController, DevicesController, InstallController, LlmController, AuthController, HostsController, InventoryController, AccessKeysController, TelemetryController, SkillsController, TunnelController, ClaudeConfigsController, JiraController, AccountsController, JiraHooksController, JiraOAuthController],
   providers: [
     RecordEventUseCase,
     SessionsService,
@@ -235,6 +237,7 @@ import type { Pool } from "pg";
         pool ? new PostgresAccountStore(pool) : new InMemoryAccountStore(),
     },
     AccountsService,
+    JiraOAuthService,
     SettingsService,
     ExternalApiGuard,
     {

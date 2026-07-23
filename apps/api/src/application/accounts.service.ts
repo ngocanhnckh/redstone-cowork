@@ -35,7 +35,7 @@ export async function verifyPassword(password: string, stored: string): Promise<
 const sha256 = (s: string): string => createHash("sha256").update(s).digest("hex");
 
 /** Context captured at the HTTP edge for the login audit trail. */
-export type LoginContext = { ip?: string; device?: string };
+export type LoginContext = { ip?: string; device?: string; method?: string };
 
 export class AccountAuthError extends Error {
   constructor(public readonly reason: "bad-credentials" | "disabled") {
@@ -94,14 +94,27 @@ export class AccountsService implements OnModuleInit {
       at: new Date(),
     });
     if (!found || !ok) throw new AccountAuthError(found?.disabledAt ? "disabled" : "bad-credentials");
+    const { passwordHash: _drop, ...account } = found;
+    return this.issueSession(account, ctx);
+  }
+
+  /** Mint an rcwa_ session token for an already-authenticated account (shared by the
+   *  password path and OAuth). Records a successful login-audit entry. */
+  async issueSession(account: Account, ctx: LoginContext = {}): Promise<AccountSession> {
     const token = "rcwa_" + randomBytes(24).toString("hex");
     await this.store.addToken({
       tokenHash: sha256(token),
-      accountId: found.id,
-      label: ctx.device?.slice(0, 120) ?? "",
+      accountId: account.id,
+      label: [ctx.method, ctx.device].filter(Boolean).join(" · ").slice(0, 120),
       createdAt: new Date(),
     });
-    const { passwordHash: _drop, ...account } = found;
+    // OAuth path hasn't recorded an audit entry yet (password path already did).
+    if (ctx.method && ctx.method !== "password") {
+      await this.store.recordLogin({
+        id: randomUUID(), accountId: account.id, username: account.username, ok: true,
+        ip: ctx.ip ?? "", device: [ctx.method, ctx.device].filter(Boolean).join(" · "), at: new Date(),
+      });
+    }
     return { token, account };
   }
 

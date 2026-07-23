@@ -362,6 +362,30 @@ ipcMain.handle(IPC.redstoneLogin, async (_e, a: { serverUrl: string; username: s
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 });
+ipcMain.handle(IPC.jiraOAuthLogin, async (_e, a: { serverUrl: string }) => {
+  try {
+    const started = await api.jiraOAuthStart(a.serverUrl);
+    if (!started.ok || !started.authUrl || !started.state) {
+      return { ok: false, error: started.error ?? "Jira sign-in unavailable" };
+    }
+    await shell.openExternal(started.authUrl);
+    // Poll the server for the browser leg to complete (~3 min budget).
+    const deadline = Date.now() + 180_000;
+    for (;;) {
+      await new Promise((r) => setTimeout(r, 1500));
+      const out = await api.jiraOAuthPoll(a.serverUrl, started.state).catch(() => ({ status: "pending" as const }));
+      if (out.status === "ok" && out.session) {
+        saveConfig(a.serverUrl, out.session.token);
+        startForwarding();
+        return { ok: true, account: out.session.account };
+      }
+      if (out.status === "error") return { ok: false, error: out.error ?? "Jira sign-in failed" };
+      if (Date.now() > deadline) return { ok: false, error: "Sign-in timed out — try again." };
+    }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+});
 ipcMain.handle(IPC.accountsMe, () => api.accountsMe());
 ipcMain.handle(IPC.accountsList, () => api.accountsList());
 ipcMain.handle(IPC.accountCreate, (_e, a: { input: unknown }) => api.accountCreate(a.input));
