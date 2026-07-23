@@ -12,6 +12,8 @@ const TAB_FOR: Partial<Record<ActionId, "chat" | "terminal" | "browser" | "ports
 };
 // HUD uses its own window keys ("term" not "terminal"); the rest match.
 const HUD_KEY: Record<string, string> = { chat: "chat", terminal: "term", browser: "browser", files: "files", ports: "ports" };
+// HUD-only apps (no Flow tab) — opening their shortcut switches to HUD and reveals them.
+const HUD_ONLY: Partial<Record<ActionId, string>> = { "tab.explorer": "explorer", "tab.activity": "activity" };
 
 const HOLD_KEY: Record<string, string> = { Ctrl: "Control", Meta: "Meta", Alt: "Alt" };
 /** The KeyboardEvent.key of the "hold" modifier in an accelerator (ignoring Shift,
@@ -33,6 +35,14 @@ function holdModifier(accel: string): string | null {
 function runSimpleAction(action: ActionId): boolean {
   const st = useStore.getState();
   if (action === "assistant.toggle") { st.toggleAssist(); return true; }
+  const hudOnly = HUD_ONLY[action];
+  if (hudOnly) {
+    // HUD-only apps (Explorer / Activity): switch to HUD if needed, then toggle it.
+    playSfx("message");
+    if (st.mode !== "hud") st.setMode("hud");
+    st.requestHudApp(hudOnly);
+    return true;
+  }
   const tab = TAB_FOR[action];
   if (tab) {
     playSfx("message"); // hi-tech cue when a window shortcut opens/hides an app

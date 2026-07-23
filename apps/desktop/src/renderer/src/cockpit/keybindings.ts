@@ -11,7 +11,9 @@ export type ActionId =
   | "tab.terminal"
   | "tab.browser"
   | "tab.ports"
-  | "tab.files";
+  | "tab.files"
+  | "tab.explorer"
+  | "tab.activity";
 
 export type ActionDef = { id: ActionId; label: string; group: string; default: string };
 
@@ -26,6 +28,8 @@ export const ACTIONS: ActionDef[] = [
   { id: "tab.browser", label: "Open Browser", group: "Virtual apps", default: "Ctrl+3" },
   { id: "tab.ports", label: "Open Ports / Settings", group: "Virtual apps", default: "Ctrl+4" },
   { id: "tab.files", label: "Open Files", group: "Virtual apps", default: "Ctrl+5" },
+  { id: "tab.explorer", label: "Open Explorer (HUD)", group: "Virtual apps", default: "Ctrl+6" },
+  { id: "tab.activity", label: "Open Activity (HUD)", group: "Virtual apps", default: "Ctrl+7" },
 ];
 
 const STORAGE_KEY = "rcw.keybindings.v1";
