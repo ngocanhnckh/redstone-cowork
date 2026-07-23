@@ -27,6 +27,7 @@ import ModeSelect from "./ModeSelect";
 import TokenSpendWidget from "./TokenSpendWidget";
 import SessionInfoWidget from "./SessionInfoWidget";
 import WidgetLayer, { readWidgets, applyWidgets, type WidgetInst } from "./WidgetLayer";
+import { DEFAULT_TEMPLATES, DEFAULT_TEMPLATE_WIDGETS } from "./defaultLayouts";
 import { GitInfo } from "../types";
 import { useAppearance, type DockPos } from "../appearance";
 import { loadAutoLayout, screenClass, resolveTemplate, useAutoLayout, loadTemplateNames, saveAutoLayout, type ScreenClass } from "../autoLayout";
@@ -773,22 +774,28 @@ function defaultConsole(): SessionConsole {
 // Named, reusable window-layout templates (a saved SessionConsole snapshot), shared
 // across sessions and persisted so they survive restarts.
 const TEMPLATES_KEY = "rcw.hud.templates.v1";
+// Sanitize a raw template map so older/imported templates (saved before newer window
+// kinds like dockerIds/sessIds existed) get those fields backfilled — otherwise
+// applying one would yield a console that crashes the HUD render.
+function sanitizeTemplates(p: Record<string, Partial<SessionConsole>>): Record<string, SessionConsole> {
+  const out: Record<string, SessionConsole> = {};
+  for (const [k, v] of Object.entries(p)) {
+    out[k] = {
+      view: (v.view as ConsoleView) ?? "ctf",
+      layout: (v.layout as HudLayout) ?? "grid",
+      win: sanitizeWinMap(v.win as Partial<WinMap> | undefined),
+    };
+  }
+  return out;
+}
 function loadTemplates(): Record<string, SessionConsole> {
   try {
-    const p = JSON.parse(localStorage.getItem(TEMPLATES_KEY) || "{}") as Record<string, Partial<SessionConsole>>;
+    const raw = localStorage.getItem(TEMPLATES_KEY);
+    // First run (never saved anything) → seed the built-in Laptop/Monitor presets.
+    if (raw == null) return sanitizeTemplates(DEFAULT_TEMPLATES);
+    const p = JSON.parse(raw) as Record<string, Partial<SessionConsole>>;
     if (!p || typeof p !== "object") return {};
-    const out: Record<string, SessionConsole> = {};
-    for (const [k, v] of Object.entries(p)) {
-      // Sanitize each template's window map so older templates (saved before newer
-      // window kinds like dockerIds/sessIds existed) get those fields backfilled —
-      // otherwise applying one would yield a console that crashes the HUD render.
-      out[k] = {
-        view: (v.view as ConsoleView) ?? "ctf",
-        layout: (v.layout as HudLayout) ?? "grid",
-        win: sanitizeWinMap(v.win as Partial<WinMap> | undefined),
-      };
-    }
-    return out;
+    return sanitizeTemplates(p);
   } catch {
     return {};
   }
@@ -801,7 +808,9 @@ const cloneConsole = (c: SessionConsole): SessionConsole => JSON.parse(JSON.stri
 const TEMPLATE_WIDGETS_KEY = "rcw.hud.templateWidgets.v1";
 function loadTemplateWidgets(): Record<string, WidgetInst[]> {
   try {
-    const p = JSON.parse(localStorage.getItem(TEMPLATE_WIDGETS_KEY) || "{}");
+    const raw = localStorage.getItem(TEMPLATE_WIDGETS_KEY);
+    if (raw == null) return DEFAULT_TEMPLATE_WIDGETS; // first run → built-in presets' widgets
+    const p = JSON.parse(raw);
     return p && typeof p === "object" ? p : {};
   } catch { return {}; }
 }
