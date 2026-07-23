@@ -31,6 +31,15 @@ export default function AssistPanel() {
   const [form, setForm] = useState({ label: "", baseUrl: "", model: "", apiKey: "", maxInputTokens: "", role: "" });
   const [formErr, setFormErr] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const taRef = useRef<HTMLTextAreaElement>(null);
+
+  // Focus the input the moment the assistant opens (Ctrl+J) so you can type + send
+  // right away without clicking into it.
+  useEffect(() => {
+    if (!open) return;
+    const t = setTimeout(() => taRef.current?.focus(), 60);
+    return () => clearTimeout(t);
+  }, [open]);
 
   const loadModels = useCallback(async () => {
     try {
@@ -330,6 +339,7 @@ export default function AssistPanel() {
           )}
           <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
             <textarea
+              ref={taRef}
               className="reply-input no-scrollbar"
               value={input}
               onChange={(e) => setInput(e.target.value)}

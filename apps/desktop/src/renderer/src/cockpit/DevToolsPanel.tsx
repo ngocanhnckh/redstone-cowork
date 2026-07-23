@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from "react";
+import { playSfx } from "../sfx";
 import { useStore } from "../store";
 
 // Browser Inspector: a Chrome-devtools-style Console + Network view for the
@@ -152,6 +153,7 @@ export default function DevToolsPanel({ sessionId, active }: { sessionId?: strin
           return next.length > MAX_CONSOLE ? next.slice(-MAX_CONSOLE) : next;
         });
       } else if (kind === "net-request") {
+        playSfx("output"); // edex-stdout cue on each new network event (rate-limited)
         setNet((cur) => {
           const next = [...cur, { id: String(ev.id), method: String(ev.method ?? "GET"), url: String(ev.url ?? ""), resType: String(ev.resType ?? ""), reqHeaders: (ev.reqHeaders as Headers) ?? {}, postData: ev.postData as string | undefined, ts: Number(ev.ts) || 0 }];
           return next.length > MAX_NET ? next.slice(-MAX_NET) : next;
