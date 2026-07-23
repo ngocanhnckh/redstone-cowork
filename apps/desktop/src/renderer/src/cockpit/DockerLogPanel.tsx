@@ -3,6 +3,7 @@ import { useStore } from "../store";
 import { DockerContainer, DockerHostView } from "../types";
 import { bestDockerHost } from "./dockerHost";
 import { playSfx } from "../sfx";
+import { useRelay, RelayOverlay, RelayStyles, RELAY_COUNT, type RelayItem } from "./relay";
 
 const IDLE_RETURN_MS = 60_000; // after scrolling up, resume tailing after 1 min idle
 const RETRY_MS = 30_000; // auto-reconnect this long after a log stream ends (e.g. container restarted)
@@ -107,6 +108,13 @@ export default function DockerLogPanel({ streamId, active }: { streamId: string;
   const stick = useRef(true);
   const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Replay gating: `busy` while log lines are actively arriving, `scrolling`/`atBottom`
+  // while the user is reading. Any of these suppresses / cancels the transmission replay.
+  const [busy, setBusy] = useState(false);
+  const [scrolling, setScrolling] = useState(false);
+  const [atBottom, setAtBottom] = useState(true);
+  const busyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [retryNonce, setRetryNonce] = useState(0); // bumped to re-attach after the stream ends
   const containerRef = useRef(container);
   containerRef.current = container;
@@ -199,6 +207,10 @@ export default function DockerLogPanel({ streamId, active }: { streamId: string;
       if (a.id !== streamId) return;
       bufRef.current += a.data;
       if (a.data.includes("\n")) playSfx("output"); // hi-tech output cue on new log line(s), rate-limited
+      // Mark the stream busy for a few seconds so a replay won't fire over live logs.
+      setBusy(true);
+      if (busyTimer.current) clearTimeout(busyTimer.current);
+      busyTimer.current = setTimeout(() => setBusy(false), 4000);
     });
     const offExit = window.cowork.onDockerLogExit((a) => {
       if (a.id !== streamId) return;
@@ -238,18 +250,35 @@ export default function DockerLogPanel({ streamId, active }: { streamId: string;
   const onLogScroll = () => {
     const el = preRef.current;
     if (!el) return;
-    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
-    stick.current = atBottom;
+    const bottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+    stick.current = bottom;
+    setAtBottom(bottom);
+    // User is reading → suppress the replay (active scroll + a short cooldown).
+    setScrolling(true);
+    if (scrollTimer.current) clearTimeout(scrollTimer.current);
+    scrollTimer.current = setTimeout(() => setScrolling(false), 2500);
     if (idleTimer.current) { clearTimeout(idleTimer.current); idleTimer.current = null; }
-    if (!atBottom && !finding) {
+    if (!bottom && !finding) {
       idleTimer.current = setTimeout(() => {
         stick.current = true;
+        setAtBottom(true);
         const e2 = preRef.current;
         if (e2) e2.scrollTop = e2.scrollHeight;
       }, IDLE_RETURN_MS);
     }
   };
-  useEffect(() => () => { if (idleTimer.current) clearTimeout(idleTimer.current); }, []);
+  useEffect(() => () => {
+    if (idleTimer.current) clearTimeout(idleTimer.current);
+    if (busyTimer.current) clearTimeout(busyTimer.current);
+    if (scrollTimer.current) clearTimeout(scrollTimer.current);
+  }, []);
+
+  // Recent log lines → the replay stream (a snapshot is captured when a replay fires).
+  const relayItems = useMemo<RelayItem[]>(() => {
+    const lines = text.split("\n").map((l) => l.replace(/\s+$/, "")).filter((l) => l.trim().length > 0);
+    return lines.slice(-RELAY_COUNT).map((l, i) => ({ key: `${container}-${i}`, label: "LOG", icon: "❯", color: "rgb(var(--primary-soft))", detail: l.slice(0, 400) }));
+  }, [text, container]);
+  const relay = useRelay(relayItems, active && !!container && !finding, busy || scrolling || !atBottom);
 
   // Find: rendered nodes + match count, reset to first match as the query changes,
   // and scroll the active match into view when navigating (not while streaming).
@@ -271,7 +300,8 @@ export default function DockerLogPanel({ streamId, active }: { streamId: string;
   const running = sel?.state === "running";
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+    <div style={{ position: "relative", display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+      <RelayStyles />
       {/* control row: container picker + live indicator */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 12px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
         <span style={{ fontSize: 13 }}>🐳</span>
@@ -292,6 +322,9 @@ export default function DockerLogPanel({ streamId, active }: { streamId: string;
             />
             <span className="mono faint" style={{ fontSize: 9.5 }}>-f</span>
           </span>
+        )}
+        {!relay.playing && relayItems.length > 0 && !busy && atBottom && (
+          <span className="mono faint" style={{ fontSize: 9, letterSpacing: "0.1em", flexShrink: 0 }} title="Next transmission replay">◈ {relay.secs}s</span>
         )}
         <button onClick={() => setFindOpen((v) => !v)} title="Find in log"
           style={{ ...findBtn, flexShrink: 0, background: findOpen ? "rgb(var(--primary) / 0.22)" : "transparent", color: findOpen ? "var(--text)" : "var(--text-soft)" }}>⌕</button>
@@ -361,6 +394,7 @@ export default function DockerLogPanel({ streamId, active }: { streamId: string;
           </span>
         )}
       </pre>
+      {relay.playing && <RelayOverlay queue={relay.queue} idx={relay.idx} title="Log replay" onDismiss={relay.dismiss} />}
     </div>
   );
 }
