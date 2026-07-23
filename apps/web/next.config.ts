@@ -18,6 +18,9 @@ const nextConfig: NextConfig = {
       // refresh. Used by the login page and by the desktop app talking direct.
       { source: "/auth/:path*", destination: `${API_URL}/auth/:path*` },
       // Bearer-authed API routes used by the host CLI + desktop app.
+      // Enterprise accounts: admin CRUD, whoami, login audit, logout.
+      { source: "/accounts", destination: `${API_URL}/accounts` },
+      { source: "/accounts/:path*", destination: `${API_URL}/accounts/:path*` },
       { source: "/sessions", destination: `${API_URL}/sessions` },
       { source: "/sessions/:path*", destination: `${API_URL}/sessions/:path*` },
       { source: "/decisions", destination: `${API_URL}/decisions` },
