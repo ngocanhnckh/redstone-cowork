@@ -13,6 +13,10 @@ const OVERDUE_MS = 15 * 60_000;
 const REALARM_MS = 90_000; // re-sound every 90s while a question stays overdue
 const CHECK_MS = 20_000;
 
+// A session only "needs your answer" when it has a pending question/permission
+// decision — NOT merely status:"waiting" (idle/completed sessions are not questions).
+const ACTIONABLE = new Set(["question", "permission"]);
+
 const projectName = (cwd: string): string => cwd.split("/").filter(Boolean).pop() ?? cwd;
 
 const CSS = `
@@ -42,6 +46,7 @@ const CSS = `
 export default function OverdueAlert() {
   const sessions = useStore((s) => s.sessions);
   const queue = useStore((s) => s.queue);
+  const decisions = useStore((s) => s.decisions);
   const focusId = useStore((s) => s.focusId);
   const setFocus = useStore((s) => s.setFocus);
   const snooze = useStore((s) => s.snooze);
@@ -56,15 +61,19 @@ export default function OverdueAlert() {
     return () => clearInterval(t);
   }, []);
 
-  // waitingSince comes from the queue view; fall back to the session list.
+  // ONLY sessions with a pending question/permission decision are candidates.
+  const needsAnswer = new Set(decisions.filter((d) => ACTIONABLE.has(d.kind)).map((d) => d.sessionId));
+  // waitingSince (= the oldest pending decision's time) gives the question's age.
   const waitingSince = new Map<string, string | null>();
   for (const s of [...sessions, ...queue]) if (s.waitingSince) waitingSince.set(s.id, s.waitingSince);
+  const byId = new Map([...sessions, ...queue].map((s) => [s.id, s]));
 
   const now = Date.now();
-  const overdue = [...new Map([...sessions, ...queue].map((s) => [s.id, s])).values()]
-    .filter((s) => s.status === "waiting" && s.id !== focusId && !dismissed.current.has(s.id))
-    .map((s) => {
-      const since = waitingSince.get(s.id) ?? s.waitingSince;
+  const overdue = [...needsAnswer]
+    .filter((id) => id !== focusId && !dismissed.current.has(id) && byId.has(id))
+    .map((id) => {
+      const s = byId.get(id)!;
+      const since = waitingSince.get(id);
       const waitedMs = since ? now - new Date(since).getTime() : 0;
       return { s, waitedMs };
     })
@@ -81,6 +90,9 @@ export default function OverdueAlert() {
     // Clear alarm memory for sessions no longer overdue so a future wait re-alarms.
     const live = new Set(overdue.map((o) => o.s.id));
     for (const id of [...lastAlarmAt.current.keys()]) if (!live.has(id)) lastAlarmAt.current.delete(id);
+    // Once a question is actually answered (no longer needs input), forget any
+    // snooze/dismiss so the NEXT question on that session alerts fresh.
+    for (const id of [...dismissed.current]) if (!needsAnswer.has(id)) dismissed.current.delete(id);
     if (fire) playSfx("alarm");
   }); // runs each render; guarded by REALARM_MS
 
