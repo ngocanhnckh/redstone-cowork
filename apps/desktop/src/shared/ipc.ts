@@ -18,6 +18,8 @@ export const IPC = {
   serverCoworkKey: "api:servers:cowork-key",
   serverProvision: "api:servers:provision",
   accountsAnalytics: "api:accounts:analytics",
+  jiraNotifications: "api:jira:notifications",
+  jiraNotificationsSeen: "api:jira:notifications:seen",
   accountSessions: "api:accounts:sessions",
   deviceSecretGet: "device:secret:get",
   deviceSecretSet: "device:secret:set",

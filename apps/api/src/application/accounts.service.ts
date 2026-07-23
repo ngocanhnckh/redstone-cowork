@@ -160,7 +160,6 @@ export class AccountsService implements OnModuleInit {
       jira: input.jira ?? "",
       mattermost: input.mattermost ?? "",
       phone: input.phone ?? "",
-      webhook: input.webhook ?? "",
     });
   }
 
@@ -176,6 +175,13 @@ export class AccountsService implements OnModuleInit {
     const okay = await this.store.setDisabled(id, disabled ? new Date() : null);
     if (okay && disabled) await this.store.revokeAllTokens(id, new Date());
     return okay;
+  }
+
+  async jiraNotifications(accountId: string, opts?: { unseenOnly?: boolean; limit?: number }) {
+    return this.store.listJiraNotifications(accountId, opts);
+  }
+  async markJiraNotificationsSeen(accountId: string): Promise<void> {
+    await this.store.markJiraNotificationsSeen(accountId, new Date());
   }
 
   async loginAudit(opts?: { accountId?: string; limit?: number }): Promise<LoginAuditEntry[]> {

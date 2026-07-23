@@ -1,4 +1,4 @@
-import type { Account, AccountProfilePatch, AccountRole, LoginAuditEntry } from "@rcw/shared";
+import type { Account, AccountProfilePatch, AccountRole, JiraNotification, LoginAuditEntry } from "@rcw/shared";
 
 export type NewAccountRecord = {
   id: string;
@@ -14,8 +14,6 @@ export type NewAccountRecord = {
   jira?: string;
   mattermost?: string;
   phone?: string;
-  webhook?: string;
-  jiraProject?: string;
 };
 
 export type AccountTokenRecord = {
@@ -49,6 +47,11 @@ export interface AccountStore {
   setPassword(id: string, passwordHash: string): Promise<boolean>;
   /** Merge admin-editable profile fields; returns the updated account (null = unknown id). */
   updateProfile(id: string, patch: AccountProfilePatch): Promise<Account | null>;
+
+  // Jira in-app notifications (issue assigned to the agent was updated).
+  addJiraNotification(n: JiraNotification): Promise<void>;
+  listJiraNotifications(accountId: string, opts?: { unseenOnly?: boolean; limit?: number }): Promise<JiraNotification[]>;
+  markJiraNotificationsSeen(accountId: string, at: Date): Promise<void>;
 
   recordLogin(entry: LoginAuditEntry): Promise<void>;
   /** Newest-first audit entries; accountId narrows to one account. */

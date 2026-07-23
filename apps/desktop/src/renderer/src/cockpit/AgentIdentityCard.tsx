@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 // sidebar: "SPECIAL AGENT <name>", rank (profile level), and photo. Pulls from the
 // account profile (accountsMe), falling back to the device-trust record.
 
-type Ident = { name: string; rank: string; photo: string | null };
+type Ident = { name: string; rank: string; division: string; photo: string | null };
 
 const CSS = `
 @keyframes aic-sheen { from { background-position: -140% 0; } to { background-position: 240% 0; } }
@@ -35,10 +35,11 @@ export default function AgentIdentityCard() {
         const me = await window.cowork.accountsMe();
         if (cancelled) return;
         if (me && "username" in me && me.username) {
-          const acct = me as { displayName: string; username: string; level?: string; role: string; photo?: string | null };
+          const acct = me as { displayName: string; username: string; level?: string; division?: string; role: string; photo?: string | null };
           setId({
             name: acct.displayName || acct.username,
             rank: acct.level || (acct.role === "admin" ? "DIRECTOR" : "FIELD AGENT"),
+            division: acct.division ?? "",
             photo: acct.photo ?? null,
           });
           return;
@@ -47,7 +48,7 @@ export default function AgentIdentityCard() {
       // Fallback: device-trust identity (paired agent on this machine).
       try {
         const t = await window.cowork.deviceTrust();
-        if (!cancelled && t) setId({ name: t.displayName || t.username, rank: "FIELD AGENT", photo: t.photo });
+        if (!cancelled && t) setId({ name: t.displayName || t.username, rank: "FIELD AGENT", division: "", photo: t.photo });
       } catch { /* ignore */ }
     })();
     return () => { cancelled = true; };
@@ -62,7 +63,10 @@ export default function AgentIdentityCard() {
       <div style={{ minWidth: 0 }}>
         <div className="aic-kick">SPECIAL AGENT</div>
         <div className="aic-name" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{id.name}</div>
-        <span className="aic-rank">★ {id.rank.toUpperCase()}</span>
+        <div style={{ display: "flex", gap: 6, marginTop: 5, flexWrap: "wrap" }}>
+          <span className="aic-rank">★ {id.rank.toUpperCase()}</span>
+          {id.division && <span className="aic-rank" style={{ borderColor: "rgb(84 230 255 / .45)", color: "rgb(84 230 255 / .9)" }}>{id.division.toUpperCase()}</span>}
+        </div>
       </div>
     </div>
   );

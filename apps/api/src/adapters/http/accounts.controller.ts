@@ -110,6 +110,20 @@ export class AccountsController {
     return this.accounts.sessionHistory(id);
   }
 
+  /** The signed-in agent's Jira notifications (issues assigned to them, any project). */
+  @Get("me/jira-notifications")
+  async jiraNotifications(@Req() req: GuardedRequest) {
+    if (req.authKind !== "account" || !req.account) return [];
+    return this.accounts.jiraNotifications(req.account.id, { limit: 40 });
+  }
+
+  @Post("me/jira-notifications/seen")
+  @HttpCode(200)
+  async markJiraSeen(@Req() req: GuardedRequest) {
+    if (req.authKind === "account" && req.account) await this.accounts.markJiraNotificationsSeen(req.account.id);
+    return { ok: true };
+  }
+
   @Post("logout")
   @HttpCode(200)
   async logout(@Req() req: GuardedRequest) {

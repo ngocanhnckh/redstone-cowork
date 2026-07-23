@@ -1,8 +1,8 @@
 import type { Pool } from "pg";
-import { AccountSchema, LoginAuditEntrySchema, type Account, type AccountProfilePatch, type LoginAuditEntry } from "@rcw/shared";
+import { AccountSchema, JiraNotificationSchema, LoginAuditEntrySchema, type Account, type AccountProfilePatch, type JiraNotification, type LoginAuditEntry } from "@rcw/shared";
 import type { AccountStore, AccountTokenRecord, NewAccountRecord } from "../../domain/accounts/account-store.port";
 
-const ROW = `id, username, display_name AS "displayName", role, photo, level, division, email, jira, mattermost, phone, webhook, jira_project AS "jiraProject",
+const ROW = `id, username, display_name AS "displayName", role, photo, level, division, email, jira, mattermost, phone,
              created_at AS "createdAt", disabled_at AS "disabledAt"`;
 const AUDIT_ROW = `id, account_id AS "accountId", username, ok, ip, device, at`;
 
@@ -12,11 +12,11 @@ export class PostgresAccountStore implements AccountStore {
   async create(rec: NewAccountRecord): Promise<Account> {
     const { rows } = await this.pool.query(
       `INSERT INTO accounts (id, username, display_name, role, password_hash, created_at,
-                             photo, level, division, email, jira, mattermost, phone, webhook, jira_project)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING ${ROW}`,
+                             photo, level, division, email, jira, mattermost, phone)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING ${ROW}`,
       [rec.id, rec.username, rec.displayName, rec.role, rec.passwordHash, rec.createdAt,
        rec.photo ?? null, rec.level ?? "", rec.division ?? "", rec.email ?? "",
-       rec.jira ?? "", rec.mattermost ?? "", rec.phone ?? "", rec.webhook ?? "", rec.jiraProject ?? ""]
+       rec.jira ?? "", rec.mattermost ?? "", rec.phone ?? ""]
     );
     return AccountSchema.parse(rows[0]);
   }
@@ -26,7 +26,7 @@ export class PostgresAccountStore implements AccountStore {
     const cols: Record<string, string> = {
       displayName: "display_name", photo: "photo", level: "level", division: "division",
       email: "email", jira: "jira", mattermost: "mattermost", phone: "phone",
-      webhook: "webhook", jiraProject: "jira_project", role: "role",
+      role: "role",
     };
     const sets: string[] = [];
     const vals: unknown[] = [id];
@@ -122,6 +122,28 @@ export class PostgresAccountStore implements AccountStore {
   async setPassword(id: string, passwordHash: string): Promise<boolean> {
     const r = await this.pool.query(`UPDATE accounts SET password_hash=$2 WHERE id=$1`, [id, passwordHash]);
     return (r.rowCount ?? 0) > 0;
+  }
+
+  async addJiraNotification(n: JiraNotification): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO jira_notifications (id, account_id, issue_key, summary, event, status, actor, url, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      [n.id, n.accountId, n.issueKey, n.summary, n.event, n.status, n.actor, n.url, n.createdAt]
+    );
+  }
+  async listJiraNotifications(accountId: string, opts?: { unseenOnly?: boolean; limit?: number }): Promise<JiraNotification[]> {
+    const limit = Math.min(opts?.limit ?? 50, 200);
+    const { rows } = await this.pool.query(
+      `SELECT id, account_id AS "accountId", issue_key AS "issueKey", summary, event, status, actor, url,
+              created_at AS "createdAt", seen_at AS "seenAt"
+       FROM jira_notifications WHERE account_id=$1 ${opts?.unseenOnly ? "AND seen_at IS NULL" : ""}
+       ORDER BY created_at DESC LIMIT $2`,
+      [accountId, limit]
+    );
+    return rows.map((r) => JiraNotificationSchema.parse(r));
+  }
+  async markJiraNotificationsSeen(accountId: string, at: Date): Promise<void> {
+    await this.pool.query(`UPDATE jira_notifications SET seen_at=$2 WHERE account_id=$1 AND seen_at IS NULL`, [accountId, at]);
   }
 
   async recordLogin(entry: LoginAuditEntry): Promise<void> {

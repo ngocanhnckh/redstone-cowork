@@ -8,14 +8,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 type Account = {
   id: string; username: string; displayName: string; role: "admin" | "member";
   photo: string | null; level: string; division: string; email: string;
-  jira: string; mattermost: string; phone: string; webhook: string; jiraProject: string;
+  jira: string; mattermost: string; phone: string;
   disabledAt: string | null;
 };
 type Analytics = { accountId: string; username: string; displayName: string; sessions: number; activeSessions: number; tokensInput: number; tokensOutput: number; estCostUsd: number; lastActiveAt: string | null };
 
 const api = (p: string, init?: RequestInit) => fetch(`/api/proxy/${p}`, { ...init, headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) }, cache: "no-store" });
 const fmtK = (n: number) => (n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1e3 ? (n / 1e3).toFixed(0) + "k" : String(n));
-const EMPTY = { username: "", password: "", displayName: "", level: "", division: "", email: "", jira: "", mattermost: "", phone: "", webhook: "", jiraProject: "", photo: null as string | null };
+const EMPTY = { username: "", password: "", displayName: "", level: "", division: "", email: "", jira: "", mattermost: "", phone: "", photo: null as string | null };
 
 function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -174,10 +174,8 @@ export default function Admin() {
               {field("DIVISION", "division", "e.g. Cyber Ops")}
               {field("EMAIL", "email")}
               {field("JIRA USERNAME", "jira")}
-              {field("JIRA PROJECT KEY", "jiraProject", "e.g. RCW")}
               {field("MATTERMOST", "mattermost")}
               {field("PHONE", "phone")}
-              {field("WEBHOOK URL", "webhook", "Jira mission notifications")}
               <div className="row">
                 {recruit ? (
                   <>

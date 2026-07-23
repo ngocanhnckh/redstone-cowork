@@ -241,10 +241,9 @@ describe("accounts (enterprise auth)", () => {
         .send({
           photo: "data:image/jpeg;base64,/9j/AAAA", level: "L4", division: "Signals",
           email: "x@yitec.dev", jira: "agent.x", mattermost: "agentx", phone: "+84 90 000 0000",
-          webhook: "https://hooks.example.com/agent-x",
         });
       expect(patched.status).toBe(200);
-      expect(patched.body).toMatchObject({ level: "L4", division: "Signals", email: "x@yitec.dev", webhook: "https://hooks.example.com/agent-x" });
+      expect(patched.body).toMatchObject({ level: "L4", division: "Signals", email: "x@yitec.dev" });
       expect(patched.body.photo).toContain("data:image/jpeg");
 
       const memberTok = await login("agent.x", "password-x1");
@@ -293,10 +292,6 @@ describe("accounts (enterprise auth)", () => {
       const hist = await request(app.getHttpServer()).get(`/accounts/${created.body.id}/sessions`).set("Authorization", `Bearer ${agentTok}`);
       expect(hist.body.map((h: { id: string }) => h.id)).toContain("stat-sess");
 
-      // admin maps a Jira project onto the agent
-      const mapped = await request(app.getHttpServer()).post(`/accounts/${created.body.id}/profile`)
-        .set("Authorization", `Bearer ${adminTok}`).send({ jiraProject: "RCW" });
-      expect(mapped.body.jiraProject).toBe("RCW");
     });
   });
 
@@ -308,7 +303,7 @@ describe("accounts (enterprise auth)", () => {
       const adminTok = await login("anh.nguyen", "test-admin-password");
       await request(app.getHttpServer())
         .post("/accounts").set("Authorization", `Bearer ${adminTok}`)
-        .send({ username: "agent.j", password: "password-j1", jira: "jdoe", webhook: "https://hooks.invalid/agent-j" });
+        .send({ username: "agent.j", password: "password-j1", jira: "jdoe" });
 
       const payload = {
         webhookEvent: "jira:issue_updated",
@@ -322,12 +317,12 @@ describe("accounts (enterprise auth)", () => {
       expect(wrong.status).toBe(401);
       const ok = await request(app.getHttpServer()).post("/hooks/jira?secret=hook-secret-1").send(payload);
       expect(ok.status).toBe(200);
-      expect(ok.body.forwarded).toBe(true); // matched agent.j via case-insensitive jira username
+      expect(ok.body.notified).toBe(true); // matched agent.j via case-insensitive jira username
 
       const unmatched = await request(app.getHttpServer())
         .post("/hooks/jira?secret=hook-secret-1")
         .send({ ...payload, issue: { ...payload.issue, fields: { ...payload.issue.fields, assignee: { name: "ghost" } } } });
-      expect(unmatched.body.forwarded).toBe(false);
+      expect(unmatched.body.notified).toBe(false);
       delete process.env.JIRA_WEBHOOK_SECRET;
     });
   });

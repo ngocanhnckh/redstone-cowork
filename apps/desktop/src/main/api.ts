@@ -101,6 +101,8 @@ export async function accountLogin(
   return j as { token: string; account: { username: string; displayName: string; role: string } };
 }
 
+export async function jiraNotifications(): Promise<unknown[]> { return (await req("/accounts/me/jira-notifications")).json(); }
+export async function jiraNotificationsSeen(): Promise<unknown> { return (await req("/accounts/me/jira-notifications/seen", { method: "POST" })).json(); }
 export async function accountsAnalytics(): Promise<unknown[]> { return (await req("/accounts/analytics")).json(); }
 export async function accountSessions(id: string): Promise<unknown[]> { return (await req(`/accounts/${encodeURIComponent(id)}/sessions`)).json(); }
 

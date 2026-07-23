@@ -1,4 +1,4 @@
-import type { Account, AccountProfilePatch, LoginAuditEntry } from "@rcw/shared";
+import type { Account, AccountProfilePatch, JiraNotification, LoginAuditEntry } from "@rcw/shared";
 import type { AccountStore, AccountTokenRecord, NewAccountRecord } from "../../domain/accounts/account-store.port";
 
 type Row = NewAccountRecord & { disabledAt: Date | null; jiraBaseUrl?: string; jiraPatEnc?: string | null; faceDescriptors?: number[][] };
@@ -17,8 +17,6 @@ const toAccount = (r: Row): Account => ({
   jira: r.jira ?? "",
   mattermost: r.mattermost ?? "",
   phone: r.phone ?? "",
-  webhook: r.webhook ?? "",
-  jiraProject: r.jiraProject ?? "",
   createdAt: r.createdAt,
   disabledAt: r.disabledAt,
 });
@@ -108,6 +106,18 @@ export class InMemoryAccountStore implements AccountStore {
     if (!row) return null;
     Object.assign(row, Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined)));
     return toAccount(row);
+  }
+
+  private jiraNotifs: JiraNotification[] = [];
+  async addJiraNotification(n: JiraNotification): Promise<void> { this.jiraNotifs.push(n); }
+  async listJiraNotifications(accountId: string, opts?: { unseenOnly?: boolean; limit?: number }): Promise<JiraNotification[]> {
+    return this.jiraNotifs
+      .filter((n) => n.accountId === accountId && (!opts?.unseenOnly || !n.seenAt))
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .slice(0, opts?.limit ?? 50);
+  }
+  async markJiraNotificationsSeen(accountId: string, at: Date): Promise<void> {
+    for (const n of this.jiraNotifs) if (n.accountId === accountId && !n.seenAt) n.seenAt = at;
   }
 
   private audit: LoginAuditEntry[] = [];

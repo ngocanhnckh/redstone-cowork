@@ -70,7 +70,7 @@ function fileToDataUrl(file: File): Promise<string> {
   });
 }
 
-const EMPTY = { username: "", password: "", displayName: "", level: "", division: "", email: "", jira: "", mattermost: "", phone: "", webhook: "", jiraProject: "", photo: null as string | null };
+const EMPTY = { username: "", password: "", displayName: "", level: "", division: "", email: "", jira: "", mattermost: "", phone: "", photo: null as string | null };
 
 type Analytics = { accountId: string; username: string; displayName: string; sessions: number; activeSessions: number; tokensInput: number; tokensOutput: number; estCostUsd: number; lastActiveAt: string | null };
 const fmtK = (n: number) => n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1e3 ? (n / 1e3).toFixed(0) + "k" : String(n);
@@ -162,7 +162,7 @@ export default function AgentsPanel() {
         username: form.username.trim(), password: form.password,
         displayName: form.displayName || form.username, photo: form.photo,
         level: form.level, division: form.division, email: form.email,
-        jira: form.jira, mattermost: form.mattermost, phone: form.phone, webhook: form.webhook,
+        jira: form.jira, mattermost: form.mattermost, phone: form.phone,
       });
       await reload();
       setSelId(created.id);
@@ -301,7 +301,6 @@ export default function AgentsPanel() {
                 {field("JIRA USERNAME", "jira")}
                 {field("MATTERMOST HANDLE", "mattermost")}
                 {field("PHONE", "phone", "+84 …")}
-                {field("WEBHOOK URL", "webhook", "https://… (Jira mission notifications)")}
                 <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
                   <button className="rcw-ag-btn" disabled={busy || form.username.trim().length < 2 || form.password.length < 8} onClick={recruit}>
                     {busy ? "…" : "COMMISSION"}
@@ -327,8 +326,6 @@ export default function AgentsPanel() {
                     {field("JIRA USERNAME", "jira")}
                     {field("MATTERMOST HANDLE", "mattermost")}
                     {field("PHONE", "phone")}
-                    {field("WEBHOOK URL", "webhook")}
-                    {field("JIRA PROJECT KEY", "jiraProject", "e.g. RCW — maps this agent's missions")}
                     <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
                       <button className="rcw-ag-btn" disabled={busy} onClick={saveProfile}>{busy ? "…" : "SAVE DOSSIER"}</button>
                       <button className="rcw-ag-btn" disabled={busy || !sel.photo} onClick={enrollFaceFromPhoto} title="Compute a face signature from the photo so this agent can face-unlock">◈ ENROLL FACE</button>

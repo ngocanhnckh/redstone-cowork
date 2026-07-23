@@ -15,6 +15,9 @@ export const ServerSchema = z.object({
   createdAt: z.coerce.date(),
   /** Populated for admin list views: usernames granted access (company servers). */
   access: z.array(z.string()).optional(),
+  /** True for auto-discovered hosts (a redstone agent is reporting sessions there)
+   *  that aren't yet in the curated registry — shown so you can adopt them. */
+  discovered: z.boolean().optional(),
 });
 export type Server = z.infer<typeof ServerSchema>;
 

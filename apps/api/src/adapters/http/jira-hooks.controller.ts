@@ -1,18 +1,18 @@
+import { randomUUID } from "node:crypto";
 import { Body, Controller, HttpCode, Post, Query, UnauthorizedException } from "@nestjs/common";
-import { AccountsService } from "../../application/accounts.service";
+import { ACCOUNT_STORE, type AccountStore } from "../../domain/accounts/account-store.port";
+import { Inject } from "@nestjs/common";
 
-// Inbound Jira DC webhook → per-agent mission notifications.
+// Inbound Jira DC webhook → per-agent IN-APP notifications.
 //
-// Configure in Jira: System → WebHooks → Create, URL:
-//   https://cowork.chatredstone.com/hooks/jira?secret=<JIRA_WEBHOOK_SECRET>
-// Events: issue created / updated / assigned (+ comments if wanted). Jira DC can't
-// send custom auth headers, so the shared secret rides the query string (standard
-// DC practice) and is compared against the server env.
+// Configure ONE webhook in Jira (shared org server):
+//   System → WebHooks → URL: https://cowork.chatredstone.com/hooks/jira?secret=<JIRA_WEBHOOK_SECRET>
+//   Events: issue created / updated / assigned (+ comments).
 //
-// On each event we look up the roster agent whose `jira` username matches the
-// issue's assignee and POST a compact JSON notification to their personal
-// `webhook` URL (set by the admin in the Agent Roster). Best-effort: failures are
-// swallowed — Jira must never see an error and retry-storm us.
+// On each event we find the roster agent whose `jira` username matches the issue's
+// assignee (ANY project — not locked to one) and record a notification. The agent's
+// app polls /accounts/me/jira-notifications and shows a futuristic alert. Best-effort:
+// Jira always gets its 200 so it never retry-storms us.
 
 type JiraWebhook = {
   webhookEvent?: string;
@@ -23,18 +23,14 @@ type JiraWebhook = {
     fields?: {
       summary?: string;
       status?: { name?: string };
-      priority?: { name?: string };
-      assignee?: { name?: string; displayName?: string } | null;
-      reporter?: { name?: string; displayName?: string } | null;
-      project?: { key?: string; name?: string };
+      assignee?: { name?: string } | null;
     };
   };
-  comment?: { body?: string; author?: { name?: string; displayName?: string } };
 };
 
 @Controller("hooks")
 export class JiraHooksController {
-  constructor(private readonly accounts: AccountsService) {}
+  constructor(@Inject(ACCOUNT_STORE) private readonly accounts: AccountStore) {}
 
   @Post("jira")
   @HttpCode(200)
@@ -43,48 +39,25 @@ export class JiraHooksController {
     if (!expect || secret !== expect) throw new UnauthorizedException();
 
     const assignee = body.issue?.fields?.assignee?.name;
-    if (!assignee) return { ok: true, forwarded: false }; // nothing to route
+    if (!assignee) return { ok: true, notified: false };
 
-    const agent = (await this.accounts.list()).find(
-      (a) => !a.disabledAt && a.jira && a.jira.toLowerCase() === assignee.toLowerCase(),
-    );
-    if (!agent?.webhook) return { ok: true, forwarded: false };
+    const agent = await this.accounts.findByJiraUsername(assignee);
+    if (!agent || agent.disabledAt) return { ok: true, notified: false };
 
-    const f = body.issue?.fields;
-    const note = {
-      source: "redstone-cowork",
-      kind: "jira",
-      event: body.webhookEvent ?? "unknown",
-      eventDetail: body.issue_event_type_name ?? null,
-      issue: body.issue?.key ?? null,
-      summary: f?.summary ?? null,
-      status: f?.status?.name ?? null,
-      priority: f?.priority?.name ?? null,
-      project: f?.project?.key ?? null,
-      actor: body.user?.displayName ?? body.user?.name ?? null,
-      comment: body.comment?.body?.slice(0, 500) ?? null,
-      agent: agent.username,
-      text: `🎯 MISSION UPDATE [${body.issue?.key}] ${f?.summary ?? ""} — ${body.issue_event_type_name ?? body.webhookEvent ?? "event"}${f?.status?.name ? ` · ${f.status.name}` : ""}`,
-    };
-
-    // Fire-and-forget with a hard timeout; Jira gets its 200 immediately.
-    void this.forward(agent.webhook, note);
-    return { ok: true, forwarded: true };
-  }
-
-  private async forward(url: string, payload: unknown): Promise<void> {
-    try {
-      const ctl = new AbortController();
-      const t = setTimeout(() => ctl.abort(), 5000);
-      await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-        signal: ctl.signal,
-      }).catch(() => {});
-      clearTimeout(t);
-    } catch {
-      /* personal webhook down — drop silently */
-    }
+    const key = body.issue?.key ?? "";
+    const base = (process.env.JIRA_OAUTH_BASE_URL ?? "").replace(/\/$/, "");
+    await this.accounts.addJiraNotification({
+      id: randomUUID(),
+      accountId: agent.id,
+      issueKey: key,
+      summary: body.issue?.fields?.summary ?? "",
+      event: body.issue_event_type_name ?? body.webhookEvent ?? "updated",
+      status: body.issue?.fields?.status?.name ?? "",
+      actor: body.user?.displayName ?? body.user?.name ?? "",
+      url: base && key ? `${base}/browse/${key}` : "",
+      createdAt: new Date(),
+      seenAt: null,
+    });
+    return { ok: true, notified: true, agent: agent.username };
   }
 }

@@ -31,6 +31,8 @@ contextBridge.exposeInMainWorld("cowork", {
   serverCoworkKey: (): Promise<{ publicKey: string | null }> => ipcRenderer.invoke(IPC.serverCoworkKey),
   serverProvision: (id: string): Promise<{ serverUrl: string; installCommand: string; installCommandRelay: string }> => ipcRenderer.invoke(IPC.serverProvision, { id }),
   accountsAnalytics: (): Promise<Array<Record<string, unknown>>> => ipcRenderer.invoke(IPC.accountsAnalytics),
+  jiraNotifications: (): Promise<Array<{ id: string; issueKey: string; summary: string; event: string; status: string; actor: string; url: string; createdAt: string; seenAt: string | null }>> => ipcRenderer.invoke(IPC.jiraNotifications),
+  jiraNotificationsSeen: (): Promise<{ ok: boolean }> => ipcRenderer.invoke(IPC.jiraNotificationsSeen),
   accountSessions: (id: string): Promise<Array<Record<string, unknown>>> => ipcRenderer.invoke(IPC.accountSessions, { id }),
   faceEnroll: (descriptor: number[], account: { username: string; displayName: string; photo?: string | null }): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke(IPC.faceEnroll, { descriptor, account }),

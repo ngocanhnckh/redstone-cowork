@@ -3,18 +3,32 @@ import { ZodError } from "zod";
 import { NewServerSchema } from "@rcw/shared";
 import { ServersService } from "../../application/servers.service";
 import { AccountsService } from "../../application/accounts.service";
+import { SessionsService } from "../../application/sessions.service";
 import { InstanceTokenGuard, isAdminScope, type GuardedRequest } from "./instance-token.guard";
 
 @Controller("servers")
 @UseGuards(InstanceTokenGuard)
 export class ServersController {
-  constructor(private readonly servers: ServersService, private readonly accounts: AccountsService) {}
+  constructor(private readonly servers: ServersService, private readonly accounts: AccountsService, private readonly sessions: SessionsService) {}
 
   /** Admin sees all servers (with ACL); an agent sees the servers assigned to them + their own. */
   @Get()
   async list(@Req() req: GuardedRequest) {
-    if (isAdminScope(req)) return this.servers.listAllWithAccess();
-    return this.servers.listForAccount(req.account!.id);
+    const registry = isAdminScope(req) ? await this.servers.listAllWithAccess() : await this.servers.listForAccount(req.account!.id);
+    // Also surface hosts where sessions already run (redstone agent reporting) that
+    // aren't in the curated registry yet — so connected servers aren't invisible.
+    const known = new Set(registry.map((s) => (s.host || "").toLowerCase()).concat(registry.map((s) => s.name.toLowerCase())));
+    const sessions = isAdminScope(req) ? await this.sessions.list() : await this.sessions.list(req.account!.id);
+    const machines = new Map<string, string>();
+    for (const s of sessions) if (s.machine && !machines.has(s.machine.toLowerCase())) machines.set(s.machine.toLowerCase(), s.machine);
+    const now = new Date();
+    const discovered = [...machines.values()]
+      .filter((m) => !known.has(m.toLowerCase()))
+      .map((m) => ({
+        id: `host:${m}`, name: m, host: m, sshUser: "", sshPort: 22, description: "reporting a redstone agent",
+        ownerAccountId: null, keyInstalled: true, createdBy: null, createdAt: now, discovered: true,
+      }));
+    return [...registry, ...discovered];
   }
 
   /** The cowork public key to install on a self-added VPS (null if not configured). */
