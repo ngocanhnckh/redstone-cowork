@@ -229,9 +229,12 @@ export class AccountsService implements OnModuleInit {
       row.tokensInput += s.tokensInput ?? 0;
       row.tokensOutput += s.tokensOutput ?? 0;
       row.estCostUsd += estCost(s.model, s.tokensInput ?? 0, s.tokensOutput ?? 0);
-      // Time on task: attach → last-seen span per session, summed (clamped ≥ 0).
+      // Time on task: attach → last-seen span per session, summed. A persistent session
+      // (tmux left running for days/weeks) would otherwise count its ENTIRE wall-clock
+      // lifetime as work — one session was open 28 days — so cap each session's credit at
+      // a generous single workday (8h). It's a rough proxy, not literal keystroke time.
       const span = (s.lastSeenAt?.getTime() ?? 0) - (s.attachedAt?.getTime() ?? 0);
-      if (span > 0) row.timeSpentMs += span;
+      if (span > 0) row.timeSpentMs += Math.min(span, 8 * 3.6e6);
       const seen = s.lastSeenAt?.getTime() ?? 0;
       if (!row.lastActiveAt || seen > row.lastActiveAt.getTime()) row.lastActiveAt = s.lastSeenAt ?? row.lastActiveAt;
     }
