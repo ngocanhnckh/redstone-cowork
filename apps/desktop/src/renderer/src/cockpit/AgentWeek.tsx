@@ -67,8 +67,8 @@ const CSS = `
 .aow-empty { padding:26px; color:var(--text-faint); font-size:13px; }
 `;
 
-const nf = new Intl.NumberFormat("en-US");
-const kfmt = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : nf.format(n));
+// Tokens are always shown in millions (M).
+const kfmt = (n: number) => `${(n / 1e6).toFixed(n >= 1e8 ? 0 : n >= 1e7 ? 1 : 2)}M`;
 
 /** Live countdown to the window end (or ENDED). */
 function useCountdown(endIso: string): { text: string; ended: boolean } {

@@ -128,7 +128,13 @@ export class InMemoryAccountStore implements AccountStore {
   }
 
   private jiraNotifs: JiraNotification[] = [];
-  async addJiraNotification(n: JiraNotification): Promise<void> { this.jiraNotifs.push(n); }
+  async addJiraNotification(n: JiraNotification): Promise<void> {
+    // Collapse Jira DC's repeated webhooks: skip when an UNSEEN notification for the same
+    // issue + event + status already exists (see the Postgres store for the rationale).
+    const dup = this.jiraNotifs.some((x) => x.accountId === n.accountId && x.issueKey === n.issueKey && x.event === n.event && x.status === n.status && !x.seenAt);
+    if (dup) return;
+    this.jiraNotifs.push(n);
+  }
   async listJiraNotifications(accountId: string, opts?: { unseenOnly?: boolean; limit?: number }): Promise<JiraNotification[]> {
     return this.jiraNotifs
       .filter((n) => n.accountId === accountId && (!opts?.unseenOnly || !n.seenAt))

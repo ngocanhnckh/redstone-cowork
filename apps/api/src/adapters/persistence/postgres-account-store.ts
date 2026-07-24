@@ -154,9 +154,17 @@ export class PostgresAccountStore implements AccountStore {
   }
 
   async addJiraNotification(n: JiraNotification): Promise<void> {
+    // Jira DC fires several near-identical webhooks per action — collapse them: only
+    // insert when there isn't already an UNSEEN notification for the same issue + event
+    // + status. Once the agent dismisses (marks seen), a fresh identical event can alert
+    // again.
     await this.pool.query(
       `INSERT INTO jira_notifications (id, account_id, issue_key, summary, event, status, actor, url, created_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+       SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9
+       WHERE NOT EXISTS (
+         SELECT 1 FROM jira_notifications
+         WHERE account_id=$2 AND issue_key=$3 AND event=$5 AND status=$6 AND seen_at IS NULL
+       )`,
       [n.id, n.accountId, n.issueKey, n.summary, n.event, n.status, n.actor, n.url, n.createdAt]
     );
   }

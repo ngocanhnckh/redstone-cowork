@@ -313,6 +313,7 @@ function HostCard({ t }: { t: HostTelemetryView }) {
           </div>
           <Sparkline data={t.netRxHistory} color="rgb(var(--accent))" height={28} />
         </div>
+        <div style={{ gridColumn: "1 / -1", marginTop: 4 }}><ResponsiveGlobe geo={t.latest.geo} /></div>
       </div>
     </div>
   );
@@ -453,6 +454,21 @@ function TelemetryColumn({ tele }: { tele: HostTelemetryView[] }) {
   return (
     <motion.div className="no-scrollbar" style={{ flex: 1, minWidth: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: 14, minHeight: 0 }}
       variants={STAGGER} initial="hidden" animate="show">
+      {/* System status — sits directly under the This Week widget. Only the host
+          machine of the selected session (with its live globe). */}
+      <motion.div variants={RISE}>
+        <div className="kicker" style={{ marginBottom: 8 }}>System status{session ? ` · ${session.machine}` : ""}</div>
+        <AnimatePresence mode="popLayout">
+          {hostTele ? (
+            <motion.div key={hostTele.hostId} layout initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.96 }} transition={{ type: "spring", stiffness: 240, damping: 26 }}>
+              <HostCard t={hostTele} />
+            </motion.div>
+          ) : (
+            <motion.div key="skeleton" variants={RISE} initial="hidden" animate="show" exit={{ opacity: 0 }}><HostSkeleton /></motion.div>
+          )}
+        </AnimatePresence>
+      </motion.div>
+
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 14 }}>
         <motion.div variants={RISE} className="hud-card" style={{ ...card, minWidth: 0 }}>
           <span className="hud-corner" />
@@ -469,20 +485,6 @@ function TelemetryColumn({ tele }: { tele: HostTelemetryView[] }) {
 
       {/* Session-scoped uplink: host IPs + time-on-session + prompt count */}
       <motion.div variants={RISE}><SessionInfoWidget /></motion.div>
-
-      {/* System status — only the host machine of the selected session */}
-      <motion.div variants={RISE}>
-        <div className="kicker" style={{ marginBottom: 8 }}>System status{session ? ` · ${session.machine}` : ""}</div>
-        <AnimatePresence mode="popLayout">
-          {hostTele ? (
-            <motion.div key={hostTele.hostId} layout initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.96 }} transition={{ type: "spring", stiffness: 240, damping: 26 }}>
-              <HostCard t={hostTele} />
-            </motion.div>
-          ) : (
-            <motion.div key="skeleton" variants={RISE} initial="hidden" animate="show" exit={{ opacity: 0 }}><HostSkeleton /></motion.div>
-          )}
-        </AnimatePresence>
-      </motion.div>
 
       {/* Token spend for the selected session */}
       <motion.div variants={RISE}><TokenSpendWidget /></motion.div>
@@ -508,7 +510,8 @@ function TelemetryDeck() {
   return <TelemetryColumn tele={tele} />;
 }
 
-const kfmt = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : String(n));
+// Tokens are always shown in millions (M).
+const kfmt = (n: number) => `${(n / 1e6).toFixed(n >= 1e8 ? 0 : n >= 1e7 ? 1 : 2)}M`;
 
 /** "This week" scoreboard for the signed-in agent — commits, Jira resolved and tokens
  *  burned inside the current competition window, plus their rank. Sits under the agent
@@ -552,41 +555,15 @@ function WeekWidget() {
   );
 }
 
-/** Standalone rotating globe for the rail — locks onto the first reporting host's geo. */
-function GlobeWidget() {
-  const [geo, setGeo] = useState<HostTelemetryView["latest"]["geo"]>(null);
-  useEffect(() => {
-    let alive = true;
-    const load = () => {
-      if (!alive || document.hidden) return;
-      window.cowork.getTelemetry().then((t) => {
-        if (!alive) return;
-        const g = t.map((h) => h.latest?.geo).find((x) => !!x) ?? null;
-        if (g) setGeo(g);
-      }).catch(() => {});
-    };
-    load();
-    const timer = setInterval(load, 5000);
-    return () => { alive = false; clearInterval(timer); };
-  }, []);
-  return (
-    <div className="hud-card" style={{ ...card, containerType: "inline-size" }}>
-      <span className="hud-corner" />
-      {kicker("Global Position")}
-      <div style={{ marginTop: 6 }}><ResponsiveGlobe geo={geo} /></div>
-    </div>
-  );
-}
-
 /** The shared right-hand rail — mission clock, agent identity, this-week scoreboard,
- *  globe, then live host telemetry. Used by both HUD mode and (via Cockpit) Flow mode. */
+ *  then live host telemetry (System status leads, carrying its own globe). Used by both
+ *  HUD mode and (via Cockpit) Flow mode. */
 export function RightRail() {
   return (
     <>
       <Clock />
       <AgentIdentityCard />
       <WeekWidget />
-      <GlobeWidget />
       <TelemetryDeck />
     </>
   );
