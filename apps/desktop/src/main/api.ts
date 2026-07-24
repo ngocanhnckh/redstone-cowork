@@ -535,6 +535,8 @@ export async function agencyMissionTransition(key: string, transitionId: string)
 export async function agencyMissionComment(key: string, body: string): Promise<unknown> { return (await req(`/agency/missions/${encodeURIComponent(key)}/comment`, { method: "POST", body: JSON.stringify({ body }) })).json(); }
 export async function agencyGithubStats(): Promise<unknown> { return (await req("/agency/github-stats")).json(); }
 export async function agencyMyJira(): Promise<unknown> { return (await req("/agency/my-jira")).json(); }
+export async function agencyAgent(id: string): Promise<unknown> { return (await req(`/agency/agents/${encodeURIComponent(id)}`)).json(); }
+export async function agencyGithubRoster(): Promise<unknown[]> { return (await req("/agency/github-roster")).json(); }
 export async function jiraGetBinding(sessionId: string): Promise<unknown> {
   const t = await (await req(`/sessions/${sid(sessionId)}/jira`)).text();
   return t && t.trim() ? JSON.parse(t) : null;

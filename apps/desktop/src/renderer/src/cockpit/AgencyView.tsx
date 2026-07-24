@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { findRank } from "./ranks";
 import type { AgencyMessage } from "../../../shared/agency";
 import AgencyProfile from "./AgencyProfile";
+import { Tiles, Bars, GithubHeatmap } from "./agencyCharts";
+import type { AgencyAgentDossier } from "../../../shared/agency";
 
 // ——— AGENCY — organisation-wide arena ———
 // The competitive heart of YITEC: agents ranked on a gamified "player card" (FIFA-style
@@ -16,28 +18,37 @@ export type Analytics = {
   estCostUsd: number; timeSpentMs: number; lastActiveAt: string | null;
 };
 
-// Log-scaled 1–99 rating so a single agent still gets a meaningful score (no roster-wide
-// normalisation needed). cap = the value that reads as "world class" (≈99).
-function rate(x: number, cap: number): number {
+// Rating curve: a saturating hyperbola  99·x/(x+half).  `half` is the value that scores
+// ~50; reaching 90 needs 9×half, so it APPROACHES but rarely hits 99 — a heavy performer
+// lands in the high-80s/low-90s WITH variation, not a flat wall of 99s.
+function rate(x: number, half: number): number {
   if (x <= 0) return 1;
-  const v = Math.round((99 * Math.log(1 + x)) / Math.log(1 + cap));
-  return Math.max(1, Math.min(99, v));
+  return Math.max(1, Math.min(99, Math.round((99 * x) / (x + half))));
 }
-const CAP = { output: 5_000_000, hours: 400, missions: 150, tempo: 150_000, complete: 120 };
 
-export type Stats = { OUT: number; END: number; MSN: number; TMP: number; CMP: number };
-export function ratingsFor(a: Analytics, completed: number): Stats {
-  const hours = a.timeSpentMs / 3.6e6;
-  const tempo = hours > 0.02 ? a.tokensOutput / hours : 0; // tokens/hr
+// The scorecard is built from REAL long-run signals — GitHub (contributions, consistency)
+// and Jira (delivery, workload) — with cowork tokens only a minor factor (that telemetry
+// only just started, so it can't be the backbone of ranking).
+export type Stats = { DEL: number; COD: number; CON: number; WRK: number; THR: number };
+export type StatInput = { done: number; jiraTotal: number; ghContrib: number; ghActiveDays: number; tokensOut: number };
+const HALF = { del: 45, cod: 320, con: 110, wrk: 90, thr: 2_000_000 };
+export const STAT_LABELS: Array<{ key: keyof Stats; short: string; long: string }> = [
+  { key: "DEL", short: "DEL", long: "DELIVERY" },   // Jira issues completed
+  { key: "COD", short: "COD", long: "CODE" },        // GitHub contributions (last year)
+  { key: "CON", short: "CON", long: "CONSISTENCY" }, // GitHub active days
+  { key: "WRK", short: "WRK", long: "WORKLOAD" },    // Jira issues assigned
+  { key: "THR", short: "THR", long: "THROUGHPUT" },  // cowork tokens (minor)
+];
+export function ratingsFor(x: StatInput): Stats {
   return {
-    OUT: rate(a.tokensOutput, CAP.output),
-    END: rate(hours, CAP.hours),
-    MSN: rate(a.sessions, CAP.missions),
-    TMP: rate(tempo, CAP.tempo),
-    CMP: rate(completed, CAP.complete), // Jira tasks completed
+    DEL: rate(x.done, HALF.del),
+    COD: rate(x.ghContrib, HALF.cod),
+    CON: rate(x.ghActiveDays, HALF.con),
+    WRK: rate(x.jiraTotal, HALF.wrk),
+    THR: rate(x.tokensOut, HALF.thr),
   };
 }
-export const ovrOf = (s: Stats): number => Math.round(s.OUT * 0.26 + s.END * 0.15 + s.MSN * 0.13 + s.TMP * 0.18 + s.CMP * 0.28);
+export const ovrOf = (s: Stats): number => Math.round(s.DEL * 0.28 + s.COD * 0.26 + s.CON * 0.20 + s.WRK * 0.14 + s.THR * 0.12);
 
 function fmtK(n: number): string { return n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1e3 ? (n / 1e3).toFixed(1) + "k" : String(Math.round(n)); }
 function fmtDur(ms: number): string {
@@ -69,7 +80,7 @@ const CSS = `
 .agc-grid { flex:1; min-height:0; overflow-y:auto; padding:14px 18px 26px;
   display:grid; grid-template-columns: repeat(auto-fill, minmax(232px, 1fr)); gap:16px; align-content:start; }
 
-.agc-card { position:relative; border-radius:16px; padding:2px; animation: agc-in .3s ease both; cursor:default;
+.agc-card { position:relative; border-radius:16px; padding:2px; animation: agc-in .3s ease both; cursor:pointer;
   background: linear-gradient(160deg, var(--tier-a), var(--tier-b)); box-shadow: 0 16px 40px -16px rgb(0 0 0 / .7); }
 .agc-card:hover { box-shadow: 0 20px 50px -14px var(--tier-b); }
 .agc-inner { position:relative; overflow:hidden; border-radius:14px; padding:14px 14px 15px;
@@ -116,6 +127,27 @@ const CSS = `
 .agx-send { padding:0 18px; border-radius:10px; border:1px solid rgb(var(--primary) / 0.6); cursor:pointer;
   background: rgb(var(--primary) / 0.2); color:#d9f7ff; font-family:inherit; font-size:12px; font-weight:700; letter-spacing:.18em; }
 .agx-send:disabled { opacity:.4; cursor:not-allowed; }
+
+/* Agent dossier modal (Arena card click) */
+.agc-modal { position:fixed; inset:0; z-index:420; background: rgb(2 6 10 / .74); backdrop-filter: blur(5px); display:flex; align-items:center; justify-content:center; padding:24px; }
+.agc-sheet { position:relative; width:720px; max-width:95vw; max-height:90vh; overflow-y:auto; border-radius:18px; padding:22px 24px 24px; font-family:var(--font-mono);
+  border:1px solid rgb(var(--primary) / .4); background: rgb(8 14 20 / .98); box-shadow:0 30px 90px -20px rgb(0 0 0 / .85); }
+.agc-x { position:absolute; top:14px; right:14px; width:30px; height:30px; border:1px solid var(--border); background:none; color:var(--text-soft); border-radius:8px; cursor:pointer; z-index:2; }
+.agc-x:hover { color:#fff; border-color: rgb(var(--primary) / .6); }
+.agc-dhero { display:flex; gap:18px; align-items:flex-start; margin-bottom:12px; padding-right:34px; }
+.agc-dphoto { width:96px; height:96px; border-radius:14px; object-fit:cover; border:2px solid var(--tier-b); box-shadow:0 0 22px -6px var(--tier-b); background:#05090d; flex-shrink:0; }
+.agc-dphoto.ph { display:flex; align-items:center; justify-content:center; font-size:42px; color: rgb(var(--primary-soft) / .5); }
+.agc-dchip { font-size:10px; letter-spacing:.14em; padding:3px 10px; border-radius:999px; border:1px solid rgb(224 162 74 / .5); color:#e0a24a; }
+.agc-dchip.alt { border-color: rgb(var(--primary) / .5); color: rgb(var(--primary-soft)); }
+.agc-dovr { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:6px 14px; border-radius:14px; border:1px solid var(--tier-b); background: rgb(var(--primary) / .06); flex-shrink:0; }
+.agc-dovr b { font-family:var(--font-display); font-size:40px; line-height:.9; color: var(--tier-a); text-shadow:0 0 14px var(--tier-b); }
+.agc-dovr span { font-size:8.5px; letter-spacing:.22em; color: var(--text-soft); }
+.agc-dgrid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px; }
+@media (max-width:640px){ .agc-dgrid { grid-template-columns:1fr; } }
+.agc-dpanel { border:1px solid var(--border); border-radius:14px; padding:14px 16px; background: rgb(var(--primary) / .03); min-width:0; }
+.agc-dlabel { font-size:9px; letter-spacing:.22em; color: rgb(var(--primary-soft)); margin-bottom:8px; display:block; }
+.agc-dradarnums { display:flex; flex-wrap:wrap; gap:8px 14px; justify-content:center; margin-top:8px; font-size:10px; color:var(--text-soft); }
+.agc-dradarnums b { color:#e6f2f4; }
 `;
 
 const MEDAL = ["linear-gradient(180deg,#ffe08a,#e0a24a)", "linear-gradient(180deg,#e6eef2,#9fb0bc)", "linear-gradient(180deg,#e0a878,#b5794a)"];
@@ -124,7 +156,7 @@ function StatRow({ label, val }: { label: string; val: number }) {
   return <div className="agc-stat"><b>{val}</b><span>{label}</span></div>;
 }
 
-const RADAR_KEYS: Array<keyof Stats> = ["OUT", "END", "MSN", "TMP", "CMP"];
+const RADAR_KEYS: Array<keyof Stats> = ["DEL", "COD", "CON", "WRK", "THR"];
 function polar2(cx: number, cy: number, r: number, i: number, n: number): [number, number] {
   const a = -Math.PI / 2 + (i * 2 * Math.PI) / n;
   return [cx + r * Math.cos(a), cy + r * Math.sin(a)];
@@ -144,14 +176,87 @@ function MiniRadar({ s }: { s: Stats }) {
   );
 }
 
-function PlayerCard({ a, rank, completed }: { a: Analytics; rank: number; completed: number }) {
-  const s = ratingsFor(a, completed);
+/** Full-dossier modal for any agent, opened from an Arena card. */
+function AgentDossierModal({ a, input, onClose }: { a: Analytics; input: StatInput; onClose: () => void }) {
+  const [dossier, setDossier] = useState<AgencyAgentDossier | null>(null);
+  useEffect(() => { window.cowork.agencyAgent(a.accountId).then(setDossier).catch(() => setDossier(null)); }, [a.accountId]);
+  const gh = dossier?.github;
+  const jira = dossier?.jira;
+  // Prefer freshly-fetched dossier numbers; fall back to the leaderboard's input.
+  const live: StatInput = {
+    done: jira?.completed ?? input.done,
+    jiraTotal: jira?.total ?? input.jiraTotal,
+    ghContrib: gh?.found ? gh.contribTotal : input.ghContrib,
+    ghActiveDays: gh?.found ? gh.days.filter((d) => d.count > 0).length : input.ghActiveDays,
+    tokensOut: input.tokensOut,
+  };
+  const s = ratingsFor(live);
+  const ovr = ovrOf(s);
+  const tier = tierOf(ovr);
+  const rk = findRank(a.level);
+  const acc = dossier?.account;
+  return (
+    <div className="agc-modal" onClick={onClose}>
+      <div className="agc-sheet" onClick={(e) => e.stopPropagation()} style={{ "--tier-a": tier.a, "--tier-b": tier.b } as React.CSSProperties}>
+        <button className="agc-x" onClick={onClose}>✕</button>
+        <div className="agc-dhero">
+          {a.photo ? <img className="agc-dphoto" src={a.photo} alt="" /> : <div className="agc-dphoto ph">◍</div>}
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div className="mono" style={{ fontSize: 9.5, letterSpacing: "0.3em", color: "rgb(var(--primary-soft))" }}>SPECIAL AGENT</div>
+            <div style={{ fontSize: 24, fontWeight: 700, color: "#e6f2f4", lineHeight: 1.05 }}>{a.displayName || a.username}</div>
+            <div className="mono" style={{ fontSize: 10.5, color: "var(--text-faint)" }}>@{a.username}</div>
+            {rk?.insignia && <div style={{ fontSize: 13, letterSpacing: "0.24em", color: "#ffd166", marginTop: 4 }}>{rk.insignia}</div>}
+            <div style={{ display: "flex", gap: 6, marginTop: 6, flexWrap: "wrap" }}>
+              <span className="agc-dchip">★ {a.level || rk?.name || "—"}</span>
+              {a.division && <span className="agc-dchip alt">◈ {a.division}</span>}
+              {acc?.github && <span className="agc-dchip alt">⌥ {acc.github}</span>}
+              {acc?.jira && <span className="agc-dchip alt">◇ {acc.jira}</span>}
+            </div>
+          </div>
+          <div className="agc-dovr"><b>{ovr}</b><span>OVR</span><span className="agc-tier">{tier.name}</span></div>
+        </div>
+        {acc?.bio && <div style={{ fontSize: 12.5, color: "var(--text-soft)", lineHeight: 1.6, margin: "0 2px 12px" }}>{acc.bio}</div>}
+        <Tiles items={[
+          { label: "OVERALL", value: String(ovr) },
+          { label: "JIRA DONE", value: String(live.done), hint: `${live.jiraTotal} assigned` },
+          { label: "GH CONTRIB", value: gh?.found ? gh.contribTotal.toLocaleString() : "—", hint: gh?.found ? `${live.ghActiveDays} active days` : undefined },
+          { label: "TOKENS", value: fmtK(a.tokensInput + a.tokensOutput) },
+          { label: "TIME", value: fmtDur(a.timeSpentMs) },
+          { label: "SESSIONS", value: String(a.sessions) },
+        ]} />
+        <div className="agc-dgrid">
+          <div className="agc-dpanel" style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+            <div className="mono agc-dlabel">CHARACTERISTICS</div>
+            <MiniRadar s={s} />
+            <div className="agc-dradarnums">
+              {STAT_LABELS.map(({ key, short }) => <span key={key}>{short} <b>{s[key]}</b></span>)}
+            </div>
+          </div>
+          <div className="agc-dpanel">
+            <div className="mono agc-dlabel">JIRA WORKLOAD</div>
+            {jira && jira.total > 0 ? <Bars rows={[
+              { label: "TO DO", value: jira.todo, color: "var(--text-faint)" },
+              { label: "IN PROG", value: jira.inProgress, color: "rgb(var(--accent))" },
+              { label: "DONE", value: jira.completed, color: "#5ef2b0" },
+            ]} /> : <div className="soft" style={{ fontSize: 11.5 }}>No Jira workload.</div>}
+          </div>
+        </div>
+        <div className="agc-dpanel" style={{ marginTop: 12 }}>
+          {gh?.found ? <GithubHeatmap days={gh.days} total={gh.contribTotal} /> : <div className="soft" style={{ fontSize: 11.5 }}>{acc?.github ? "No public GitHub activity found." : "No GitHub linked."}</div>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PlayerCard({ a, rank, input, onOpen }: { a: Analytics; rank: number; input: StatInput; onOpen: () => void }) {
+  const s = ratingsFor(input);
   const ovr = ovrOf(s);
   const tier = tierOf(ovr);
   const rk = findRank(a.level);
   const style = { "--tier-a": tier.a, "--tier-b": tier.b, "--tier-text": tier.text } as React.CSSProperties;
   return (
-    <div className="agc-card" style={style}>
+    <div className="agc-card" style={style} onClick={onOpen} role="button" title="View full dossier">
       {rank <= 3 && <div className="agc-rankbadge" style={{ background: MEDAL[rank - 1], color: "#1a1006" }}>{rank}</div>}
       <div className="agc-inner">
         <div className="agc-top">
@@ -167,17 +272,13 @@ function PlayerCard({ a, rank, completed }: { a: Analytics; rank: number; comple
         <div className="agc-statwrap">
           <MiniRadar s={s} />
           <div className="agc-stats">
-            <StatRow label="OUT" val={s.OUT} />
-            <StatRow label="END" val={s.END} />
-            <StatRow label="MSN" val={s.MSN} />
-            <StatRow label="TMP" val={s.TMP} />
-            <StatRow label="CMP" val={s.CMP} />
+            {STAT_LABELS.map(({ key, short }) => <StatRow key={key} label={short} val={s[key]} />)}
           </div>
         </div>
         <div className="agc-real">
+          <span><b>{input.ghContrib.toLocaleString()}</b> contrib</span>
+          <span><b>{input.done}</b> done</span>
           <span><b>{fmtK(a.tokensInput + a.tokensOutput)}</b> tok</span>
-          <span><b>{fmtDur(a.timeSpentMs)}</b> on task</span>
-          <span><b>{completed}</b> done</span>
         </div>
       </div>
     </div>
@@ -264,7 +365,17 @@ export default function AgencyView() {
   const [rows, setRows] = useState<Analytics[] | null>(null);
   const [err, setErr] = useState("");
   const [meUsername, setMeUsername] = useState<string | null>(null);
-  const [doneByAccount, setDoneByAccount] = useState<Record<string, number>>({});
+  const [jiraByAccount, setJiraByAccount] = useState<Record<string, { completed: number; total: number }>>({});
+  const [ghByAccount, setGhByAccount] = useState<Record<string, { contribTotal: number; activeDays: number }>>({});
+  const [openAgent, setOpenAgent] = useState<Analytics | null>(null);
+
+  const inputFor = (a: Analytics): StatInput => ({
+    done: jiraByAccount[a.accountId]?.completed ?? 0,
+    jiraTotal: jiraByAccount[a.accountId]?.total ?? 0,
+    ghContrib: ghByAccount[a.accountId]?.contribTotal ?? 0,
+    ghActiveDays: ghByAccount[a.accountId]?.activeDays ?? 0,
+    tokensOut: a.tokensOutput,
+  });
 
   useEffect(() => {
     window.cowork.accountsMe().then((m) => {
@@ -272,14 +383,20 @@ export default function AgencyView() {
     }).catch(() => {});
   }, []);
 
-  // Real Jira workload — completed-task counts per agent (cached server-side, ~3min).
+  // Real signals — Jira (completed + total) and GitHub (contributions + active days) per
+  // agent, both cached server-side. These, not tokens, drive the ranking.
   useEffect(() => {
     let alive = true;
-    const load = () => window.cowork.agencyJiraStats()
-      .then((stats) => { if (alive) setDoneByAccount(Object.fromEntries(stats.map((s) => [s.accountId, s.completed]))); })
-      .catch(() => {});
+    const load = () => {
+      window.cowork.agencyJiraStats()
+        .then((stats) => { if (alive) setJiraByAccount(Object.fromEntries(stats.map((s) => [s.accountId, { completed: s.completed, total: s.total }]))); })
+        .catch(() => {});
+      window.cowork.agencyGithubRoster()
+        .then((rows) => { if (alive) setGhByAccount(Object.fromEntries(rows.map((r) => [r.accountId, { contribTotal: r.contribTotal, activeDays: r.activeDays }]))); })
+        .catch(() => {});
+    };
     load();
-    const t = setInterval(load, 60000);
+    const t = setInterval(load, 120000);
     return () => { alive = false; clearInterval(t); };
   }, []);
 
@@ -294,9 +411,9 @@ export default function AgencyView() {
   }, []);
 
   const ranked = useMemo(() => {
-    const list = (rows ?? []).map((a) => ({ a, ovr: ovrOf(ratingsFor(a, doneByAccount[a.accountId] ?? 0)) }));
+    const list = (rows ?? []).map((a) => ({ a, ovr: ovrOf(ratingsFor(inputFor(a))) }));
     return list.sort((x, y) => y.ovr - x.ovr).map((x) => x.a);
-  }, [rows, doneByAccount]);
+  }, [rows, jiraByAccount, ghByAccount]); // eslint-disable-line
 
   return (
     <div className="agc-root">
@@ -321,9 +438,10 @@ export default function AgencyView() {
             <div className="soft" style={{ padding: 24, fontSize: 13 }}>No agents on the board yet.</div>
           ) : (
             <div className="agc-grid">
-              {ranked.map((a, i) => <PlayerCard key={a.accountId} a={a} rank={i + 1} completed={doneByAccount[a.accountId] ?? 0} />)}
+              {ranked.map((a, i) => <PlayerCard key={a.accountId} a={a} rank={i + 1} input={inputFor(a)} onOpen={() => setOpenAgent(a)} />)}
             </div>
           )}
+          {openAgent && <AgentDossierModal a={openAgent} input={inputFor(openAgent)} onClose={() => setOpenAgent(null)} />}
         </>
       )}
       {tab === "chat" && (

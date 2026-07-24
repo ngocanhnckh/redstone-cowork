@@ -560,6 +560,8 @@ ipcMain.handle(IPC.agencyMissionTransition, (_e, a: { key: string; transitionId:
 ipcMain.handle(IPC.agencyMissionComment, (_e, a: { key: string; body: string }) => api.agencyMissionComment(a.key, a.body));
 ipcMain.handle(IPC.agencyGithubStats, () => api.agencyGithubStats());
 ipcMain.handle(IPC.agencyMyJira, () => api.agencyMyJira());
+ipcMain.handle(IPC.agencyAgent, (_e, a: { id: string }) => api.agencyAgent(a.id));
+ipcMain.handle(IPC.agencyGithubRoster, () => api.agencyGithubRoster());
 ipcMain.handle(IPC.jiraGetBinding, (_e, a: { sessionId: string }) => api.jiraGetBinding(a.sessionId));
 ipcMain.handle(IPC.jiraSetBinding, (_e, a: { sessionId: string; binding: { profile: string; projectKey: string; boardId?: number | null } }) => api.jiraSetBinding(a.sessionId, a.binding));
 ipcMain.handle(IPC.jiraClearBinding, (_e, a: { sessionId: string }) => api.jiraClearBinding(a.sessionId));

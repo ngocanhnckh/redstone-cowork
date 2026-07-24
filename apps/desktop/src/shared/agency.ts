@@ -20,10 +20,19 @@ export type AgencyThread = { channel: string; other: AgencyPerson; lastAt: strin
 /** Per-agent Jira workload counts for the Arena leaderboard. */
 export type AgencyJiraStat = { accountId: string; completed: number; inProgress: number; todo: number; total: number };
 
-/** Public GitHub activity for an agent (recent-events window). */
+export type AgencyGithubDay = { date: string; count: number };
+/** Public GitHub activity for an agent. `days` is the real contribution calendar. */
 export type AgencyGithubStat = {
   username: string; found: boolean; publicRepos: number; followers: number;
   commits: number; prs: number; issues: number; reviews: number; activeRepos: number;
+  contribTotal: number; days: AgencyGithubDay[];
+};
+
+/** Another agent's dossier (profile + GitHub + Jira) for the Arena card detail. */
+export type AgencyAgentDossier = {
+  account: { id: string; username: string; displayName: string; photo: string | null; level: string; division: string; bio: string; github: string; jira: string; role: string };
+  github: AgencyGithubStat;
+  jira: { completed: number; inProgress: number; todo: number; total: number };
 };
 
 /** One assigned Jira issue (mission) in an agent's list. */

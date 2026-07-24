@@ -1,42 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { ratingsFor, ovrOf, type Analytics, type Stats } from "./AgencyView";
+import { ratingsFor, ovrOf, STAT_LABELS, type Analytics, type Stats } from "./AgencyView";
 import { findRank } from "./ranks";
 import type { AgencyMission, AgencyMissionDetail, AgencyMissionTransition, AgencyGithubStat } from "../../../shared/agency";
-
-function fmtK(n: number): string { return n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1e3 ? (n / 1e3).toFixed(1) + "k" : String(Math.round(n)); }
-
-/** A grid of labelled stat tiles (real numbers). */
-function Tiles({ items }: { items: Array<{ label: string; value: string; hint?: string }> }) {
-  return (
-    <div className="agp-tiles">
-      {items.map((t) => (
-        <div key={t.label} className="agp-tile">
-          <div className="agp-tile-v">{t.value}</div>
-          <div className="agp-tile-l">{t.label}</div>
-          {t.hint && <div className="agp-tile-h">{t.hint}</div>}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-/** Horizontal labelled bar chart (each row scaled to the max). */
-function Bars({ rows }: { rows: Array<{ label: string; value: number; color: string }> }) {
-  const max = Math.max(1, ...rows.map((r) => r.value));
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
-      {rows.map((r) => (
-        <div key={r.label} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ width: 78, fontSize: 10, letterSpacing: "0.08em", color: "var(--text-soft)", textAlign: "right", flexShrink: 0 }}>{r.label}</span>
-          <div style={{ flex: 1, height: 12, borderRadius: 6, background: "rgb(var(--primary) / 0.08)", overflow: "hidden" }}>
-            <div style={{ width: `${(r.value / max) * 100}%`, height: "100%", borderRadius: 6, background: r.color, minWidth: r.value > 0 ? 4 : 0, transition: "width .5s ease" }} />
-          </div>
-          <b style={{ width: 32, fontSize: 12, color: "#e6f2f4", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{r.value}</b>
-        </div>
-      ))}
-    </div>
-  );
-}
+import { Tiles, Bars, ActivityChart, GithubHeatmap, fmtK } from "./agencyCharts";
 
 // ——— AGENCY · agent dossier ———
 // The Agency main screen for the signed-in agent: profile header, a radar of the five
@@ -46,13 +12,7 @@ function Bars({ rows }: { rows: Array<{ label: string; value: number; color: str
 
 type Me = { accountId: string; username: string; displayName: string; photo: string | null; level: string; division: string; bio: string; github: string; jira: string; role: string };
 
-const AXES: Array<{ key: keyof Stats; label: string }> = [
-  { key: "OUT", label: "OUTPUT" },
-  { key: "END", label: "ENDURANCE" },
-  { key: "MSN", label: "MISSIONS" },
-  { key: "TMP", label: "TEMPO" },
-  { key: "CMP", label: "COMPLETE" },
-];
+const AXES: Array<{ key: keyof Stats; label: string }> = STAT_LABELS.map((l) => ({ key: l.key, label: l.long }));
 
 function polar(cx: number, cy: number, r: number, i: number, n: number): [number, number] {
   const ang = -Math.PI / 2 + (i * 2 * Math.PI) / n;
@@ -88,31 +48,6 @@ function Radar({ stats }: { stats: Stats }) {
 }
 
 /** Cumulative activity area chart from real session history (value over time). */
-function ActivityChart({ points, label }: { points: Array<{ t: number; v: number }>; label: string }) {
-  const W = 520, H = 130, pad = 6;
-  if (points.length < 2) return <div className="soft" style={{ fontSize: 11.5, padding: "18px 4px" }}>Not enough activity history yet for a trend.</div>;
-  const t0 = points[0].t, t1 = points[points.length - 1].t || t0 + 1;
-  const vMax = points[points.length - 1].v || 1;
-  const x = (t: number) => pad + ((t - t0) / (t1 - t0 || 1)) * (W - pad * 2);
-  const y = (v: number) => H - pad - (v / vMax) * (H - pad * 2);
-  const line = points.map((p, i) => `${i === 0 ? "M" : "L"}${x(p.t).toFixed(1)},${y(p.v).toFixed(1)}`).join(" ");
-  const area = `${line} L${x(t1).toFixed(1)},${H - pad} L${x(t0).toFixed(1)},${H - pad} Z`;
-  return (
-    <div>
-      <div className="mono" style={{ fontSize: 9, letterSpacing: "0.22em", color: "rgb(var(--primary-soft))", marginBottom: 6 }}>{label}</div>
-      <svg width="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ display: "block" }}>
-        <defs>
-          <linearGradient id="agp-fill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="rgb(var(--primary) / 0.45)" />
-            <stop offset="100%" stopColor="rgb(var(--primary) / 0.02)" />
-          </linearGradient>
-        </defs>
-        <path d={area} fill="url(#agp-fill)" />
-        <path d={line} fill="none" stroke="rgb(var(--primary))" strokeWidth={2} vectorEffect="non-scaling-stroke" />
-      </svg>
-    </div>
-  );
-}
 
 function MissionDetail({ mission, onClose, onChanged }: { mission: AgencyMission; onClose: () => void; onChanged: () => void }) {
   const [detail, setDetail] = useState<AgencyMissionDetail | null>(null);
@@ -185,8 +120,6 @@ const catColor: Record<string, string> = { todo: "var(--text-faint)", inprogress
 
 export default function AgencyProfile() {
   const [me, setMe] = useState<Me | null>(null);
-  const [stats, setStats] = useState<Stats | null>(null);
-  const [ovr, setOvr] = useState(0);
   const [series, setSeries] = useState<Array<{ t: number; v: number }>>([]);
   const [missions, setMissions] = useState<AgencyMission[]>([]);
   const [open, setOpen] = useState<AgencyMission | null>(null);
@@ -219,7 +152,7 @@ export default function AgencyProfile() {
         ?? (analytics as Analytics[]).find((r) => r.username === meObj.username);
       const done = (jstats.find((s) => s.accountId === meObj.accountId)?.completed) ?? 0;
       setCompleted(done);
-      if (mine) { setAnalyticsRow(mine); const s = ratingsFor(mine, done); setStats(s); setOvr(ovrOf(s)); }
+      if (mine) setAnalyticsRow(mine);
 
       // Real GitHub + Jira-breakdown for the extra charts (best-effort, cached server-side).
       window.cowork.agencyGithubStats().then((g) => { if (alive) setGh(g); }).catch(() => {});
@@ -240,6 +173,20 @@ export default function AgencyProfile() {
     () => [...missions].sort((a, b) => (a.statusCategory === "done" ? 1 : 0) - (b.statusCategory === "done" ? 1 : 0)),
     [missions],
   );
+
+  // Ratings are computed from GitHub + Jira + (minor) cowork — reactively, since GitHub
+  // and Jira arrive after the initial profile load.
+  const stats: Stats | null = useMemo(() => {
+    if (!analyticsRow) return null;
+    return ratingsFor({
+      done: jira?.completed ?? completed,
+      jiraTotal: jira?.total ?? 0,
+      ghContrib: gh?.found ? gh.contribTotal : 0,
+      ghActiveDays: gh?.found ? gh.days.filter((d) => d.count > 0).length : 0,
+      tokensOut: analyticsRow.tokensOutput,
+    });
+  }, [analyticsRow, jira, gh, completed]);
+  const ovr = stats ? ovrOf(stats) : 0;
 
   if (!me) return <div className="soft" style={{ padding: 24, fontSize: 13 }}>Loading your dossier…</div>;
   const rk = findRank(me.level);
@@ -274,10 +221,10 @@ export default function AgencyProfile() {
         { label: "TIME ON TASK", value: analyticsRow ? `${(analyticsRow.timeSpentMs / 3.6e6).toFixed(analyticsRow.timeSpentMs >= 3.6e7 ? 0 : 1)}h` : "—" },
         { label: "SESSIONS", value: analyticsRow ? String(analyticsRow.sessions) : "—", hint: analyticsRow ? `${analyticsRow.activeSessions} active` : undefined },
         { label: "JIRA DONE", value: jira ? String(jira.completed) : String(completed), hint: jira ? `${jira.total} total` : undefined },
-        { label: "GH COMMITS", value: gh?.found ? String(gh.commits) : (me.github ? "…" : "—"), hint: gh?.found ? "recent" : undefined },
-        { label: "GH PRs", value: gh?.found ? String(gh.prs) : (me.github ? "…" : "—") },
-        { label: "REPOS", value: gh?.found ? String(gh.publicRepos) : (me.github ? "…" : "—"), hint: gh?.found ? `${gh.activeRepos} active` : undefined },
-        { label: "FOLLOWERS", value: gh?.found ? String(gh.followers) : (me.github ? "…" : "—") },
+        { label: "GH CONTRIB", value: gh?.found ? gh.contribTotal.toLocaleString() : (me.github ? "…" : "—"), hint: gh?.found ? "last year" : undefined },
+        { label: "ACTIVE DAYS", value: gh?.found ? String(gh.days.filter((d) => d.count > 0).length) : (me.github ? "…" : "—") },
+        { label: "REPOS", value: gh?.found ? String(gh.publicRepos) : (me.github ? "…" : "—"), hint: gh?.found ? `${gh.followers} followers` : undefined },
+        { label: "OVERALL", value: String(ovr) },
       ]} />
 
       {/* Charts */}
@@ -299,15 +246,9 @@ export default function AgencyProfile() {
             ]} />
           ) : <div className="soft" style={{ fontSize: 11.5 }}>{me.jira ? "No Jira issues assigned." : "Link a Jira username to see workload."}</div>}
         </div>
-        <div className="agp-panel">
-          <div className="mono" style={{ fontSize: 9, letterSpacing: "0.22em", color: "rgb(var(--primary-soft))", marginBottom: 12 }}>GITHUB ACTIVITY · RECENT</div>
+        <div className="agp-panel" style={{ gridColumn: "1 / -1" }}>
           {gh?.found ? (
-            <Bars rows={[
-              { label: "COMMITS", value: gh.commits, color: "rgb(var(--primary))" },
-              { label: "PRs", value: gh.prs, color: "rgb(var(--primary-soft))" },
-              { label: "ISSUES", value: gh.issues, color: "rgb(var(--accent))" },
-              { label: "REVIEWS", value: gh.reviews, color: "#c792ff" },
-            ]} />
+            <GithubHeatmap days={gh.days} total={gh.contribTotal} />
           ) : <div className="soft" style={{ fontSize: 11.5 }}>{me.github ? "No public GitHub activity found (or rate-limited)." : "Add a GitHub username (ask an admin) to pull activity."}</div>}
         </div>
       </div>

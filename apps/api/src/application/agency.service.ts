@@ -6,12 +6,40 @@ import { AGENCY_MESSAGE_STORE, type AgencyAttachment, type AgencyMessageStore } 
 
 const ORG = "org";
 
-/** Public GitHub activity for an agent (unauthenticated API — recent-events window). */
+/** Public GitHub activity for an agent. `days` is the real contribution calendar (the
+ *  green-squares graph, one entry per day for ~the last year); `contribTotal` is its sum. */
+export type GithubDay = { date: string; count: number };
 export type GithubStat = {
   username: string; found: boolean; publicRepos: number; followers: number;
   commits: number; prs: number; issues: number; reviews: number; activeRepos: number;
+  contribTotal: number; days: GithubDay[];
 };
-const emptyGh = (username = ""): GithubStat => ({ username, found: false, publicRepos: 0, followers: 0, commits: 0, prs: 0, issues: 0, reviews: 0, activeRepos: 0 });
+const emptyGh = (username = ""): GithubStat => ({ username, found: false, publicRepos: 0, followers: 0, commits: 0, prs: 0, issues: 0, reviews: 0, activeRepos: 0, contribTotal: 0, days: [] });
+
+/** Parse GitHub's public contributions calendar HTML → daily counts. The page renders a
+ *  grid of <td class="ContributionCalendar-day" data-date=".." id=".."> cells whose count
+ *  lives in a matching <tool-tip for="..">N contributions on ..</tool-tip>. */
+function parseContributions(html: string): GithubDay[] {
+  const idCount = new Map<string, number>();
+  const tipRe = /<tool-tip[^>]*\bfor="([^"]+)"[^>]*>([\s\S]*?)<\/tool-tip>/g;
+  for (let m = tipRe.exec(html); m; m = tipRe.exec(html)) {
+    const text = m[2].trim();
+    const n = /^no contributions/i.test(text) ? 0 : parseInt(text.replace(/,/g, ""), 10);
+    idCount.set(m[1], Number.isFinite(n) ? n : 0);
+  }
+  const days: GithubDay[] = [];
+  const tdRe = /<td\b[^>]*class="[^"]*ContributionCalendar-day[^"]*"[^>]*>/g;
+  for (let m = tdRe.exec(html); m; m = tdRe.exec(html)) {
+    const tag = m[0];
+    const date = /data-date="([^"]+)"/.exec(tag)?.[1];
+    if (!date) continue;
+    const id = /\bid="([^"]+)"/.exec(tag)?.[1];
+    const dc = /data-count="(\d+)"/.exec(tag)?.[1]; // some renderings still carry data-count
+    const count = dc != null ? parseInt(dc, 10) : (id ? idCount.get(id) ?? 0 : 0);
+    days.push({ date, count });
+  }
+  return days.sort((a, b) => a.date.localeCompare(b.date));
+}
 
 /** Enriched message for the client: the raw record + the author's public identity. */
 export type AgencyMessageView = {
@@ -80,11 +108,15 @@ export class AgencyService {
     if (hit && Date.now() - hit.at < 600_000) return hit.data;
     try {
       const headers = { "User-Agent": "yitec-cowork", Accept: "application/vnd.github+json" };
-      const [uRes, eRes] = await Promise.all([
+      const [uRes, eRes, cRes] = await Promise.all([
         fetch(`https://api.github.com/users/${encodeURIComponent(u)}`, { headers }),
         fetch(`https://api.github.com/users/${encodeURIComponent(u)}/events/public?per_page=100`, { headers }),
+        // The real contribution calendar (green squares) — an unauthenticated HTML fragment.
+        fetch(`https://github.com/users/${encodeURIComponent(u)}/contributions`, { headers: { "User-Agent": "yitec-cowork", "X-Requested-With": "XMLHttpRequest" } }),
       ]);
       const prof = uRes.ok ? ((await uRes.json()) as { public_repos?: number; followers?: number }) : {};
+      const days = cRes.ok ? parseContributions(await cRes.text()) : [];
+      const contribTotal = days.reduce((n, d) => n + d.count, 0);
       const events = eRes.ok ? ((await eRes.json()) as Array<{ type?: string; repo?: { name?: string }; payload?: { action?: string; commits?: unknown[]; size?: number; distinct_size?: number } }>) : [];
       let commits = 0, prs = 0, issues = 0, reviews = 0;
       const repos = new Set<string>();
@@ -102,6 +134,7 @@ export class AgencyService {
       const data: GithubStat = {
         username: u, found: uRes.ok, publicRepos: prof.public_repos ?? 0, followers: prof.followers ?? 0,
         commits, prs, issues, reviews, activeRepos: repos.size,
+        contribTotal, days,
       };
       this.ghCache.set(key, { at: Date.now(), data });
       return data;

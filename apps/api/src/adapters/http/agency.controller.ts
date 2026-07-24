@@ -1,4 +1,4 @@
-import { Body, Controller, ForbiddenException, Get, HttpCode, Param, Post, Query, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, ForbiddenException, Get, HttpCode, NotFoundException, Param, Post, Query, Req, UseGuards } from "@nestjs/common";
 import { AgencyService } from "../../application/agency.service";
 import { JiraService } from "../../application/jira.service";
 import { AccountsService } from "../../application/accounts.service";
@@ -115,6 +115,17 @@ export class AgencyController {
     return this.agency.githubStats(username || agent.github || "");
   }
 
+  /** Roster-wide GitHub signal (contributions + active days per agent) for the Arena. */
+  @Get("github-roster")
+  async githubRoster(@Req() req: GuardedRequest) {
+    this.requireAgent(req);
+    const roster = (await this.accounts.list()).filter((a) => a.github);
+    return Promise.all(roster.map(async (a) => {
+      const g = await this.agency.githubStats(a.github);
+      return { accountId: a.id, found: g.found, contribTotal: g.contribTotal, activeDays: g.days.filter((d) => d.count > 0).length, commits: g.commits };
+    }));
+  }
+
   /** The current agent's own Jira workload breakdown (todo / in-progress / done). */
   @Get("my-jira")
   async myJira(@Req() req: GuardedRequest) {
@@ -122,5 +133,23 @@ export class AgencyController {
     if (!agent.jira) return { completed: 0, inProgress: 0, todo: 0, total: 0 };
     const [row] = await this.jira.rosterStats([{ accountId: agent.id, jiraUser: agent.jira }]);
     return row ? { completed: row.completed, inProgress: row.inProgress, todo: row.todo, total: row.total } : { completed: 0, inProgress: 0, todo: 0, total: 0 };
+  }
+
+  /** Any agent's public dossier (profile + GitHub + Jira) — for the Arena card detail. */
+  @Get("agents/:id")
+  async agentDossier(@Req() req: GuardedRequest, @Param("id") id: string) {
+    this.requireAgent(req);
+    const a = (await this.accounts.list()).find((x) => x.id === id);
+    if (!a) throw new NotFoundException();
+    const [gh, jrows] = await Promise.all([
+      this.agency.githubStats(a.github || ""),
+      a.jira ? this.jira.rosterStats([{ accountId: a.id, jiraUser: a.jira }]) : Promise.resolve([]),
+    ]);
+    const jr = jrows[0];
+    return {
+      account: { id: a.id, username: a.username, displayName: a.displayName, photo: a.photo, level: a.level, division: a.division, bio: a.bio, github: a.github, jira: a.jira, role: a.role },
+      github: gh,
+      jira: jr ? { completed: jr.completed, inProgress: jr.inProgress, todo: jr.todo, total: jr.total } : { completed: 0, inProgress: 0, todo: 0, total: 0 },
+    };
   }
 }
