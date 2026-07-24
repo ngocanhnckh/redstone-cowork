@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useStore } from "../store";
 import { SessionView } from "../types";
+import NewSessionWizard from "./NewSessionWizard";
 
 function initials(cwd: string): string {
   const base = cwd.split("/").filter(Boolean).pop() ?? "??";
@@ -53,6 +54,7 @@ export default function QueueRail() {
   const [order, setOrder] = useState<string[]>(loadOrder);
   const [dragId, setDragId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
+  const [newSessionOpen, setNewSessionOpen] = useState(false);
   useEffect(() => {
     const id = setInterval(() => tick((n) => n + 1), 1000);
     return () => clearInterval(id);
@@ -129,12 +131,25 @@ export default function QueueRail() {
 
   return (
     <div style={{ padding: "18px 14px", borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column", gap: 7, overflowY: "auto" }}>
-      <div className="hud-chip" style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 6 }}>
+      <div className="hud-chip" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6, gap: 8 }}>
         <span className="kicker">Sessions</span>
-        <span className="mono faint" style={{ fontSize: 11 }}>
-          {waitingCount > 0 ? `${waitingCount} waiting` : `${rows.length}`}
+        <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span className="mono faint" style={{ fontSize: 11 }}>
+            {waitingCount > 0 ? `${waitingCount} waiting` : `${rows.length}`}
+          </span>
+          <button
+            onClick={() => setNewSessionOpen(true)}
+            title="New session — pick a server, resume or create, choose folder & mode"
+            style={{
+              width: 22, height: 22, borderRadius: 7, cursor: "pointer", flexShrink: 0,
+              border: "1px solid rgb(var(--primary) / 0.45)", background: "rgb(var(--primary) / 0.12)",
+              color: "rgb(var(--primary-soft))", display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 15, lineHeight: 1, padding: 0,
+            }}
+          >＋</button>
         </span>
       </div>
+      {newSessionOpen && <NewSessionWizard onClose={() => setNewSessionOpen(false)} />}
 
       {rows.length === 0 && <span className="mono faint" style={{ fontSize: 11, padding: "6px 4px" }}>no sessions</span>}
 
