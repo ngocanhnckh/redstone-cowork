@@ -28,6 +28,18 @@ export class ServersController {
       registry.map((s) => `${(s.sshUser || "").toLowerCase()}@${(s.host || "").toLowerCase()}`),
     );
     const hosts = await this.inventory.listHosts();
+    // Which user@host AND which host machine names currently report a redstone agent —
+    // the authoritative "redstone is installed here" signal (inventory is ground truth).
+    const reportingKeys = new Set<string>();
+    const reportingMachines = new Set<string>();
+    for (const h of hosts) {
+      reportingKeys.add(`${(h.user || "").toLowerCase()}@${(h.address || h.machine).toLowerCase()}`);
+      if (h.machine) reportingMachines.add(h.machine.toLowerCase());
+    }
+    const isReporting = (sshUser: string, host: string, name: string): boolean => {
+      const key = `${(sshUser || "").toLowerCase()}@${(host || "").toLowerCase()}`;
+      return reportingKeys.has(key) || reportingMachines.has((name || "").toLowerCase()) || reportingMachines.has((host || "").toLowerCase());
+    };
     // Members only see hosts they have sessions on (by machine).
     const myMachines = isAdminScope(req)
       ? null
@@ -49,9 +61,11 @@ export class ServersController {
         sshUser: h.user || "",
         sshPort: h.sshPort ?? 22,
         description: "reporting a redstone agent",
-        ownerAccountId: null, keyInstalled: true, createdBy: null, createdAt: now, discovered: true,
+        ownerAccountId: null, keyInstalled: true, createdBy: null, createdAt: now, discovered: true, reporting: true,
       }));
-    return [...registry, ...discovered];
+    // Tag each registry server with whether a redstone agent is actually reporting from it.
+    const registryTagged = registry.map((s) => ({ ...s, reporting: isReporting(s.sshUser, s.host, s.name) }));
+    return [...registryTagged, ...discovered];
   }
 
   /** The cowork public key to install on a self-added VPS (null if not configured). */

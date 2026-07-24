@@ -82,10 +82,19 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
   }, []);
   useEffect(() => { refreshInv(); }, [refreshInv]);
 
-  // Match the chosen server to a reporting host (by address) → its discovered sessions.
-  const host = useMemo(() => server ? inv.hosts.find((h) => h.address && (h.address === server.host || h.machine === server.name)) : null, [server, inv, ]);
-  const hostSessions = useMemo(() => host ? inv.sessions.filter((s) => s.folder && inv.sessions && s.machine === host.machine) : [], [host, inv]);
-  const redstoneInstalled = !!host;
+  // Match the chosen server to a reporting host (for discovered sessions). Robust match:
+  // by user@host, machine name, or address — case-insensitive.
+  const host = useMemo(() => {
+    if (!server) return null;
+    const sh = (server.host || "").toLowerCase(), sn = (server.name || "").toLowerCase();
+    return inv.hosts.find((h) => {
+      const a = (h.address || "").toLowerCase(), m = (h.machine || "").toLowerCase();
+      return (a && (a === sh || a === sn)) || (m && (m === sn || m === sh));
+    }) ?? null;
+  }, [server, inv]);
+  const hostSessions = useMemo(() => host ? inv.sessions.filter((s) => s.folder && s.machine === host.machine) : [], [host, inv]);
+  // Authoritative install signal comes from the API (`reporting`); fall back to a local match.
+  const redstoneInstalled = !!server?.reporting || !!host;
 
   const idx = STEPS.indexOf(step);
   const go = (s: Step) => { setErr(""); setStep(s); };

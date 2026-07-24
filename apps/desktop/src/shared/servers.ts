@@ -11,4 +11,8 @@ export interface ServerView {
   createdBy: string | null;
   createdAt: string;
   access?: string[]; // ACL usernames (admin view of company servers)
+  /** A discovered host reporting a redstone agent (never a curated registry row). */
+  discovered?: boolean;
+  /** True when a redstone agent is actually reporting from this server (installed). */
+  reporting?: boolean;
 }
