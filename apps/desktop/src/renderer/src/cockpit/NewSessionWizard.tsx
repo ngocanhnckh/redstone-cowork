@@ -56,7 +56,7 @@ function FolderBrowser({ machine, value, onChange }: { machine: string; value: s
   const [err, setErr] = useState("");
   const load = useCallback((dir: string) => {
     setLoading(true); setErr("");
-    window.cowork.filesList({ machine, cwd: dir, dir }).then((r) => {
+    window.cowork.listFiles({ machine, cwd: dir, dir }).then((r) => {
       if (r.ok) { setDirs(r.entries.filter((e) => e.kind === "dir").map((e) => ({ name: e.name, path: e.path }))); setCur(dir); onChange(dir); }
       else { setErr(r.error || "can't list this folder"); }
     }).catch((e) => setErr(e instanceof Error ? e.message : "failed")).finally(() => setLoading(false));
