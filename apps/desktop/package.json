@@ -1,6 +1,6 @@
 {
   "name": "@rcw/desktop",
-  "version": "0.4.3",
+  "version": "0.4.5",
   "private": true,
   "type": "module",
   "main": "./out/main/index.js",
@@ -26,7 +26,7 @@
     "node-mac-permissions": "^2.5.0",
     "node-pty": "^1.0.0"
   },
-  "//deps": "Only node-pty ships at runtime (it's a native module, externalized in electron.vite.config). Everything else is bundled into out/ by vite, so it's build-time only — keeping it out of `dependencies` stops electron-builder from packaging (and, for @rcw/shared, choking on) the workspace tree.",
+  "//deps": "Only node-pty ships at runtime (it's a native module, externalized in electron.vite.config). Everything else is bundled into out/ by vite, so it's build-time only \u2014 keeping it out of `dependencies` stops electron-builder from packaging (and, for @rcw/shared, choking on) the workspace tree.",
   "devDependencies": {
     "@blocknote/core": "^0.51.4",
     "@blocknote/mantine": "^0.51.4",

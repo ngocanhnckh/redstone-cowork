@@ -491,6 +491,35 @@ function TelemetryColumn({ tele }: { tele: HostTelemetryView[] }) {
   );
 }
 
+/** Self-contained telemetry deck: polls host telemetry itself and renders the
+ *  TelemetryColumn. Lets non-HUD layouts (Flow) reuse the exact same widgets. */
+function TelemetryDeck() {
+  const [tele, setTele] = useState<HostTelemetryView[]>([]);
+  useEffect(() => {
+    let alive = true;
+    const load = () => {
+      if (!alive || document.hidden) return;
+      window.cowork.getTelemetry().then((t) => { if (alive) setTele(t); }).catch(() => {});
+    };
+    load();
+    const timer = setInterval(load, 3000);
+    document.addEventListener("visibilitychange", load);
+    return () => { alive = false; clearInterval(timer); document.removeEventListener("visibilitychange", load); };
+  }, []);
+  return <TelemetryColumn tele={tele} />;
+}
+
+/** The shared right-hand rail — Special Agent identity card + telemetry deck.
+ *  Used by both HUD mode and (via Cockpit) Flow mode so the widgets match. */
+export function RightRail() {
+  return (
+    <>
+      <AgentIdentityCard />
+      <TelemetryDeck />
+    </>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Center console: chat + terminal + files, split into three panes
 // ---------------------------------------------------------------------------
@@ -1902,26 +1931,6 @@ export default function Hud() {
     return () => { document.removeEventListener("visibilitychange", apply); document.body.classList.remove("rcw-hidden"); };
   }, []);
 
-  const [tele, setTele] = useState<HostTelemetryView[]>([]);
-  useEffect(() => {
-    let alive = true;
-    // Skip the round trip while the window is hidden — nobody can read the gauges,
-    // and a 3s poll that never sleeps is a real battery cost. Refresh immediately
-    // on becoming visible again so the values aren't stale when you look at them.
-    const load = () => {
-      if (!alive || document.hidden) return;
-      window.cowork.getTelemetry().then((t) => { if (alive) setTele(t); }).catch(() => {});
-    };
-    load();
-    const timer = setInterval(load, 3000);
-    document.addEventListener("visibilitychange", load);
-    return () => {
-      alive = false;
-      clearInterval(timer);
-      document.removeEventListener("visibilitychange", load);
-    };
-  }, []);
-
   // HUD = QueueRail (session switching) + a 3-pane console (chat / terminal /
   // files) + the telemetry widget deck, over an animated backdrop. The right
   // deck is drag-resizable; the center console flexes to fill what's left.
@@ -1989,8 +1998,7 @@ export default function Hud() {
             onDoubleClick={() => setRightWidth(RIGHT_DEFAULT)}
             title="Drag to resize · double-click to reset"
           />
-          <AgentIdentityCard />
-          <TelemetryColumn tele={tele} />
+          <RightRail />
         </div>
       </div>
     </div>

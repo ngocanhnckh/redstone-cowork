@@ -7,6 +7,7 @@ import { startCockpit } from "../store";
 import QueueRail from "./QueueRail";
 import FocusStage from "./FocusStage";
 import ContextColumn from "./ContextColumn";
+import { RightRail } from "./Hud";
 import AgentGrid from "./AgentGrid";
 import AllSessions from "./AllSessions";
 import Hud from "./Hud";
@@ -350,7 +351,14 @@ export default function Cockpit() {
           <div style={{ display: "grid", gridTemplateColumns: contextCollapsed ? "214px 1fr" : "214px 1fr 314px", flex: 1, minHeight: 0 }}>
             <QueueRail />
             <FocusStage />
-            {!contextCollapsed && <ContextColumn />}
+            {!contextCollapsed && (
+              // Right rail matches HUD mode: Special Agent card + telemetry deck, with
+              // the tasks/plan column beneath so Flow keeps its per-session context.
+              <div className="no-scrollbar" style={{ borderLeft: "1px solid var(--border)", padding: "14px 16px 0", minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: 14 }}>
+                <RightRail />
+                <ContextColumn />
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -44,7 +44,7 @@ export type Appearance = {
   videoMuted: boolean;
 };
 
-export const DEFAULT_APPEARANCE: Appearance = { font: "default", theme: "warm", sfxVolume: 50, ambientVolume: 30, veil: 6, blur: 28, bgAnim: true, dockPos: "bottom", dockScale: 1, hudClear: false, glass: 94, videoMuted: false };
+export const DEFAULT_APPEARANCE: Appearance = { font: "default", theme: "hitech", sfxVolume: 0, ambientVolume: 0, veil: 6, blur: 28, bgAnim: true, dockPos: "bottom", dockScale: 1, hudClear: false, glass: 94, videoMuted: false };
 
 const KEY = "rcw.appearance";
 
@@ -53,7 +53,7 @@ export function loadAppearance(): Appearance {
     const raw = JSON.parse(localStorage.getItem(KEY) || "{}");
     return {
       font: raw.font === "futura" ? "futura" : DEFAULT_APPEARANCE.font,
-      theme: raw.theme === "hitech" ? "hitech" : DEFAULT_APPEARANCE.theme,
+      theme: raw.theme === "warm" ? "warm" : raw.theme === "hitech" ? "hitech" : DEFAULT_APPEARANCE.theme,
       sfxVolume: clampNum(raw.sfxVolume, 0, 100, DEFAULT_APPEARANCE.sfxVolume),
       ambientVolume: clampNum(raw.ambientVolume, 0, 100, DEFAULT_APPEARANCE.ambientVolume),
       veil: clampNum(raw.veil, 0, 40, DEFAULT_APPEARANCE.veil),

@@ -82,6 +82,12 @@ export function setThinking(on: boolean): void {
 const lastAt: Partial<Record<SfxName, number>> = {};
 const MIN_GAP_MS: Record<SfxName, number> = { button: 40, message: 400, loading: 600, pageloaded: 300, keystroke: 20, boot: 4000, output: 180, scan: 500, folder: 80, panels: 120, alarm: 3000 };
 
+// Essential cues that stay audible even when SFX is muted by default: the launch
+// chime (splashscreen/boot), the overdue-question alarm, and the notification
+// (message) cue. They play at a fixed floor so the user never misses them.
+const ESSENTIAL = new Set<SfxName>(["boot", "alarm", "message"]);
+const ESSENTIAL_VOL = 0.7;
+
 function playAt(name: SfxName, vol: number): void {
   if (vol <= 0) return;
   try {
@@ -97,11 +103,14 @@ function playAt(name: SfxName, vol: number): void {
  *  The boot chime plays at full volume (a signature launch sound), not the SFX level —
  *  it's still silenced when SFX is fully muted. */
 export function playSfx(name: SfxName): void {
-  if (volume <= 0) return;
+  const essential = ESSENTIAL.has(name);
+  // Essential cues ignore the mute; everything else is silent when volume is 0.
+  const vol = essential ? Math.max(volume, ESSENTIAL_VOL) : volume;
+  if (vol <= 0) return;
   const now = Date.now();
   if (now - (lastAt[name] ?? 0) < MIN_GAP_MS[name]) return;
   lastAt[name] = now;
-  playAt(name, name === "boot" || name === "alarm" ? 1 : volume);
+  playAt(name, name === "boot" || name === "alarm" ? 1 : vol);
 }
 
 /** Preview a sound at a SPECIFIC volume (the Settings slider), bypassing the rate

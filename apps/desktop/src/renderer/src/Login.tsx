@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import yiaSealUrl from "./assets/yia-seal.png?url";
 import { describeFace, loadFaceModels } from "./faceEngine";
+import { loadAppearance, saveAppearance } from "./appearance";
 
 interface LoginProps {
   onConnected: () => void;
@@ -88,7 +89,8 @@ function Corners() {
 
 export default function Login({ onConnected }: LoginProps) {
   const [serverUrl, setServerUrl] = useState("https://cowork.chatredstone.com");
-  const [enrollFace, setEnrollFace] = useState(false); // opt in to face sign-in on this device
+  const [enrollFace, setEnrollFace] = useState(true); // show the face scan + enroll by default
+  const [soundOn, setSoundOn] = useState(() => { try { return loadAppearance().sfxVolume > 0; } catch { return false; } });
   const [mode, setMode] = useState<Mode>("agency");
   const [redstoneOn, setRedstoneOn] = useState(false);
   const [accountsOn, setAccountsOn] = useState(false);
@@ -227,6 +229,12 @@ export default function Login({ onConnected }: LoginProps) {
       }
       if (descriptor) await window.cowork.faceEnroll(descriptor, { username: account.username, displayName: account.displayName });
     } catch { /* enrollment is best-effort — never blocks sign-in */ }
+  }
+
+  function toggleSound() {
+    const on = !soundOn;
+    setSoundOn(on);
+    try { const a = loadAppearance(); saveAppearance({ ...a, sfxVolume: on ? 50 : 0 }); } catch { /* ignore */ }
   }
 
   async function signInWithJira() {
@@ -411,6 +419,7 @@ export default function Login({ onConnected }: LoginProps) {
           {accountsOn && mode !== "agency" && <button className="yia-alt" onClick={() => { setMode("agency"); setError(""); }}>AGENT LOGIN</button>}
           {redstoneOn && mode !== "redstone" && <button className="yia-alt" onClick={() => { setMode("redstone"); setError(""); }}>REDSTONE SSO</button>}
           {mode !== "token" && <button className="yia-alt" onClick={() => { setMode("token"); setError(""); }}>INSTANCE TOKEN</button>}
+          <button className="yia-alt" onClick={toggleSound}>{soundOn ? "🔊 SOUND ON" : "🔇 SOUND OFF"}</button>
           <button className="yia-alt" onClick={() => setShowServer((s) => !s)}>{showServer ? "HIDE SERVER" : "SERVER"}</button>
         </div>
       </div>
