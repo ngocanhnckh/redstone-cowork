@@ -44,6 +44,50 @@ const CSS = `
 const STEPS: Step[] = ["server", "provision", "session", "folder", "mode", "launch"];
 const shq = (v: string) => `'${v.replace(/'/g, `'\\''`)}'`;
 
+const PARENT = (p: string) => { const t = p.replace(/\/+$/, ""); const i = t.lastIndexOf("/"); return i <= 0 ? "/" : t.slice(0, i); };
+const QUICK = ["/home", "/root", "/opt", "/srv", "/var/www", "/"];
+
+/** Browse directories on the server and pick one — no manual typing required (but the
+ *  current path is still editable for power users). */
+function FolderBrowser({ machine, value, onChange }: { machine: string; value: string; onChange: (p: string) => void }) {
+  const [cur, setCur] = useState(value && value.startsWith("/") ? value : "/");
+  const [dirs, setDirs] = useState<Array<{ name: string; path: string }>>([]);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState("");
+  const load = useCallback((dir: string) => {
+    setLoading(true); setErr("");
+    window.cowork.filesList({ machine, cwd: dir, dir }).then((r) => {
+      if (r.ok) { setDirs(r.entries.filter((e) => e.kind === "dir").map((e) => ({ name: e.name, path: e.path }))); setCur(dir); onChange(dir); }
+      else { setErr(r.error || "can't list this folder"); }
+    }).catch((e) => setErr(e instanceof Error ? e.message : "failed")).finally(() => setLoading(false));
+  }, [machine, onChange]);
+  useEffect(() => { load(cur); }, [machine]); // eslint-disable-line
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+        {QUICK.map((q) => <button key={q} className="rcw-nw-btn ghost" style={{ padding: "4px 9px", fontSize: 10 }} onClick={() => load(q)}>{q}</button>)}
+      </div>
+      <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 8 }}>
+        <button className="rcw-nw-btn ghost" style={{ padding: "6px 10px", fontSize: 12 }} onClick={() => load(PARENT(cur))} title="Up one level">↑</button>
+        <input className="rcw-nw-input" style={{ flex: 1, margin: 0 }} value={cur} spellCheck={false}
+          onChange={(e) => { setCur(e.target.value); onChange(e.target.value); }} onKeyDown={(e) => { if (e.key === "Enter") load(cur); }} />
+        <button className="rcw-nw-btn ghost" style={{ padding: "6px 10px", fontSize: 10 }} onClick={() => load(cur)}>GO</button>
+      </div>
+      {err && <div style={{ color: "#e0736a", fontSize: 11, marginBottom: 6 }}>⚠ {err}</div>}
+      <div className="no-scrollbar" style={{ maxHeight: 220, overflowY: "auto", border: "1px solid var(--border)", borderRadius: 8 }}>
+        {loading && <div className="faint" style={{ fontSize: 11, padding: "10px 12px" }}>listing…</div>}
+        {!loading && dirs.length === 0 && !err && <div className="faint" style={{ fontSize: 11, padding: "10px 12px" }}>no sub-folders here — this folder is selectable</div>}
+        {dirs.map((d) => (
+          <div key={d.path} onClick={() => load(d.path)} className="rcw-nw-opt" style={{ margin: 0, borderRadius: 0, borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ opacity: .7 }}>📁</span> <b style={{ color: "#e6f2f4", fontWeight: 500 }}>{d.name}</b>
+          </div>
+        ))}
+      </div>
+      <div className="faint" style={{ fontSize: 10.5, marginTop: 6 }}>Selected: <b style={{ color: "rgb(var(--primary-soft))" }}>{cur}</b> — click a folder to open it, or press Next.</div>
+    </div>
+  );
+}
+
 function Cmd({ cmd, label }: { cmd: string; label?: string }) {
   const [done, setDone] = useState(false);
   return (
@@ -274,16 +318,16 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
           {step === "session" && (
             <>
               <div className="rcw-nw-label">RESUME OR CREATE</div>
-              <div className={`rcw-nw-opt ${createNew ? "sel" : ""}`} onClick={() => { setCreateNew(true); setResume(null); }}>
-                <b style={{ color: "#e6f2f4" }}>＋ New session</b> <span className="faint">— pick a folder & mode next</span>
+              <div className={`rcw-nw-opt ${createNew ? "sel" : ""}`} onClick={() => { setCreateNew(true); setResume(null); go("folder"); }}>
+                <b style={{ color: "#e6f2f4" }}>＋ New session</b> <span className="faint">— browse to a folder & pick a mode →</span>
               </div>
-              {hostSessions.length > 0 && <div className="rcw-nw-label">DISCOVERED CLAUDE SESSIONS</div>}
-              {hostSessions.slice(0, 30).map((s) => (
-                <div key={s.id} className={`rcw-nw-opt ${resume?.id === s.id ? "sel" : ""}`} onClick={() => { setResume(s); setCreateNew(false); }}>
+              {hostSessions.length > 0 && <div className="rcw-nw-label">RESUME A DISCOVERED SESSION</div>}
+              {hostSessions.slice(0, 40).map((s) => (
+                <div key={s.id} className={`rcw-nw-opt ${resume?.id === s.id ? "sel" : ""}`} onClick={() => { setResume(s); setCreateNew(false); go("folder"); }}>
                   <b style={{ color: "#e6f2f4" }}>{s.folder}</b> <span className="faint">{s.title ?? s.cwd}</span>
                 </div>
               ))}
-              {!hostSessions.length && <div className="faint" style={{ fontSize: 11 }}>No prior Claude sessions discovered on this server yet.</div>}
+              {!hostSessions.length && <div className="faint" style={{ fontSize: 11 }}>No prior Claude sessions found here yet — start a new one above.</div>}
             </>
           )}
 
@@ -293,10 +337,7 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
               {resume ? (
                 <div style={{ fontSize: 12, color: "var(--text-soft)" }}>{resume.cwd}</div>
               ) : (
-                <>
-                  <input className="rcw-nw-input" value={folder} onChange={(e) => setFolder(e.target.value)} placeholder="~/projects/my-app" spellCheck={false} />
-                  <div className="faint" style={{ fontSize: 10.5, marginTop: 6 }}>Absolute path or ~ — the session starts (and redstone hooks) here.</div>
-                </>
+                <FolderBrowser machine={host?.machine ?? server?.host ?? server?.name ?? ""} value={folder} onChange={setFolder} />
               )}
             </>
           )}

@@ -1,6 +1,7 @@
 import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from "@nestjs/common";
 import { loadConfig } from "../../infrastructure/config";
 import { AccessKeysService } from "../../application/access-keys.service";
+import { AccountsService } from "../../application/accounts.service";
 import { DevicesService } from "../../application/devices.service";
 import { RedstoneService } from "../../application/redstone.service";
 import { SettingsService } from "../../application/settings.service";
@@ -24,6 +25,7 @@ export class ExternalApiGuard implements CanActivate {
     private readonly devices: DevicesService,
     private readonly redstone: RedstoneService,
     private readonly settings: SettingsService,
+    private readonly accounts: AccountsService,
   ) {}
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
     const req = ctx.switchToHttp().getRequest<GuardedRequest>();
@@ -35,6 +37,9 @@ export class ExternalApiGuard implements CanActivate {
     if (dev) { req.authKind = "device"; return true; }
     const ak = await this.accessKeys.verify(token);
     if (ak) { req.authKind = "accesskey"; req.accessScope = ak.scope; return true; }
+    // Enterprise agent accounts (rcwa_) — so agents can read inventory / discovered sessions.
+    const account = await this.accounts.verify(token);
+    if (account) { req.authKind = "account"; req.account = account; return true; }
     const user = await verifyRedstoneOwner(this.redstone, this.settings, token);
     if (user) { req.authKind = "redstone"; req.redstoneToken = token; req.redstoneUser = user; return true; }
     throw new UnauthorizedException();

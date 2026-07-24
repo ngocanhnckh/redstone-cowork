@@ -325,6 +325,10 @@ declare global {
         file: string;
         base64: string;
       }): Promise<{ ok: boolean; error?: string }>;
+      filesList(a: { cwd: string; machine: string; dir: string }): Promise<
+        | { ok: true; entries: Array<{ name: string; path: string; kind: "dir" | "file"; size: number }> }
+        | { ok: false; error: string }
+      >;
       deletePath(a: {
         cwd: string;
         machine: string;
