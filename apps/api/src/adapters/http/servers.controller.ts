@@ -33,9 +33,15 @@ export class ServersController {
       ? null
       : new Set((await this.sessions.list(req.account!.id)).map((s) => s.machine.toLowerCase()));
     const now = new Date();
+    const seen = new Set<string>(); // dedup multiple inventory hosts for the same user@host
     const discovered = hosts
       .filter((h) => (myMachines ? myMachines.has(h.machine.toLowerCase()) : true))
-      .filter((h) => !registryKey.has(`${(h.user || "").toLowerCase()}@${(h.address || h.machine).toLowerCase()}`))
+      .filter((h) => {
+        const k = `${(h.user || "").toLowerCase()}@${(h.address || h.machine).toLowerCase()}`;
+        if (registryKey.has(k) || seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      })
       .map((h) => ({
         id: `host:${h.id}`,
         name: h.user ? `${h.user}@${h.machine}` : h.machine,
