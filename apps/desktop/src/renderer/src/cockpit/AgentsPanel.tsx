@@ -235,8 +235,12 @@ export default function AgentsPanel() {
   }
 
   async function recruit() {
-    setBusy(true);
+    // Validate on submit (not via a disabled button) so it's never mysteriously greyed
+    // out — and so OS password-autofill that doesn't fire React onChange is caught here.
     setErr("");
+    if (form.username.trim().length < 2) { setErr("Agent ID (username) must be at least 2 characters."); return; }
+    if (form.password.length < 8) { setErr("Access code (password) must be at least 8 characters. If you used autofill, type it manually."); return; }
+    setBusy(true);
     try {
       const created = await window.cowork.accountCreate({
         username: form.username.trim(), password: form.password,
@@ -513,7 +517,7 @@ export default function AgentsPanel() {
                 {field("PHONE", "phone", "+84 …")}
                 {bioField()}
                 <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
-                  <button className="rcw-ag-btn" disabled={busy || form.username.trim().length < 2 || form.password.length < 8} onClick={recruit}>
+                  <button className="rcw-ag-btn" disabled={busy} onClick={recruit}>
                     {busy ? "…" : "COMMISSION"}
                   </button>
                   <button className="rcw-ag-btn warn" onClick={() => setMode("view")}>CANCEL</button>
