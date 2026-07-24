@@ -552,6 +552,8 @@ ipcMain.handle(IPC.agencyChatPost, (_e, a: { body: string; attachments?: { name:
 ipcMain.handle(IPC.agencyDmThreads, () => api.agencyDmThreads());
 ipcMain.handle(IPC.agencyDmList, (_e, a: { accountId: string; afterId?: string }) => api.agencyDmList(a.accountId, a?.afterId));
 ipcMain.handle(IPC.agencyDmPost, (_e, a: { accountId: string; body: string; attachments?: { name: string; url: string; size: number; mime: string }[] }) => api.agencyDmPost(a.accountId, a.body, a.attachments ?? []));
+ipcMain.handle(IPC.agencyJiraStats, () => api.agencyJiraStats());
+ipcMain.handle(IPC.agencyMissions, () => api.agencyMissions());
 ipcMain.handle(IPC.jiraGetBinding, (_e, a: { sessionId: string }) => api.jiraGetBinding(a.sessionId));
 ipcMain.handle(IPC.jiraSetBinding, (_e, a: { sessionId: string; binding: { profile: string; projectKey: string; boardId?: number | null } }) => api.jiraSetBinding(a.sessionId, a.binding));
 ipcMain.handle(IPC.jiraClearBinding, (_e, a: { sessionId: string }) => api.jiraClearBinding(a.sessionId));

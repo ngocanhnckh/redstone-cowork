@@ -72,6 +72,45 @@ export class JiraClient {
     return { accountId: data.accountId, name: data.name, displayName: data.displayName ?? data.name ?? "" };
   }
 
+  /** Count issues matching a JQL — cheap (maxResults=0 returns only the total). */
+  async countJql(jql: string): Promise<number> {
+    const url = `${this.base}/rest/api/2/search?jql=${encodeURIComponent(jql)}&maxResults=0`;
+    const res = await this.fetchImpl(url, { headers: this.headers() });
+    if (!res.ok) throw new Error(`Jira search responded ${res.status}`);
+    const data = (await res.json()) as { total?: number };
+    return data.total ?? 0;
+  }
+
+  /** Completed / in-progress / to-do counts for issues assigned to a Jira user. */
+  async assigneeStats(jiraUser: string): Promise<{ completed: number; inProgress: number; todo: number; total: number }> {
+    const u = escapeJqlValue(jiraUser);
+    const [completed, inProgress, todo] = await Promise.all([
+      this.countJql(`assignee = "${u}" AND statusCategory = Done`),
+      this.countJql(`assignee = "${u}" AND statusCategory = "In Progress"`),
+      this.countJql(`assignee = "${u}" AND statusCategory = "To Do"`),
+    ]);
+    return { completed, inProgress, todo, total: completed + inProgress + todo };
+  }
+
+  /** Issues assigned to a Jira user, newest first — for the agent's mission list. */
+  async assignedIssues(jiraUser: string, max = 50): Promise<JiraIssue[]> {
+    const u = escapeJqlValue(jiraUser);
+    const jql = `assignee = "${u}" ORDER BY updated DESC`;
+    const url = `${this.base}/rest/api/2/search?jql=${encodeURIComponent(jql)}&fields=${encodeURIComponent("summary,status,project,assignee")}&maxResults=${max}`;
+    const res = await this.fetchImpl(url, { headers: this.headers() });
+    if (!res.ok) throw new Error(`Jira search responded ${res.status}`);
+    const data = (await res.json()) as { issues?: Array<{ key: string; fields?: { summary?: string; status?: { name?: string; statusCategory?: { key?: string } }; project?: { key?: string; name?: string }; assignee?: { displayName?: string } } }> };
+    return (data.issues ?? []).map((it) => ({
+      key: it.key,
+      summary: it.fields?.summary ?? "",
+      status: it.fields?.status?.name ?? "",
+      statusCategory: mapCat(it.fields?.status?.statusCategory?.key),
+      assignee: it.fields?.assignee?.displayName ?? null,
+      url: `${this.base}/browse/${it.key}`,
+      project: it.fields?.project ? { key: it.fields.project.key ?? "", name: it.fields.project.name ?? "" } : undefined,
+    }));
+  }
+
   /** All projects visible to the PAT (key + name) — for binding dropdowns. */
   async listProjects(): Promise<Array<{ key: string; name: string }>> {
     const res = await this.fetchImpl(`${this.base}/rest/api/2/project`, { headers: this.headers() });

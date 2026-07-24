@@ -173,6 +173,8 @@ export class AccountsService implements OnModuleInit {
       jira: input.jira ?? "",
       mattermost: input.mattermost ?? "",
       phone: input.phone ?? "",
+      github: input.github ?? "",
+      bio: input.bio ?? "",
     });
   }
 

@@ -13,6 +13,8 @@ declare global {
     jira: string;
     mattermost: string;
     phone: string;
+    github: string;
+    bio: string;
     createdAt: string;
     disabledAt: string | null;
   }
@@ -57,7 +59,7 @@ declare global {
       accountCreate(input: {
         username: string; password: string; displayName?: string; role?: "admin" | "member";
         photo?: string | null; level?: string; division?: string; email?: string;
-        jira?: string; mattermost?: string; phone?: string;
+        jira?: string; mattermost?: string; phone?: string; github?: string; bio?: string;
       }): Promise<AgentAccount>;
       accountUpdateProfile(id: string, patch: Partial<Omit<AgentAccount, "id" | "username" | "createdAt" | "disabledAt">>): Promise<AgentAccount>;
       accountSetDisabled(id: string, disabled: boolean): Promise<{ ok: boolean }>;
@@ -120,6 +122,8 @@ declare global {
       agencyDmThreads(): Promise<import("../../shared/agency").AgencyThread[]>;
       agencyDmList(accountId: string, afterId?: string): Promise<import("../../shared/agency").AgencyMessage[]>;
       agencyDmPost(accountId: string, body: string, attachments?: import("../../shared/agency").AgencyAttachment[]): Promise<import("../../shared/agency").AgencyMessage>;
+      agencyJiraStats(): Promise<import("../../shared/agency").AgencyJiraStat[]>;
+      agencyMissions(): Promise<import("../../shared/agency").AgencyMission[]>;
       jiraGetBinding(sessionId: string): Promise<{ profile: string; projectKey: string; boardId: number | null } | null>;
       jiraSetBinding(sessionId: string, binding: { profile: string; projectKey: string; boardId?: number | null }): Promise<unknown>;
       jiraClearBinding(sessionId: string): Promise<{ ok: true }>;

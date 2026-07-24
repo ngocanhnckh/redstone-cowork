@@ -8,6 +8,9 @@ import { JiraClient } from "../adapters/jira/jira-client";
 /** Marker for PATs stored in the clear when CRED_ENCRYPTION_KEY is unset (dev). */
 const PLAINTEXT_PREFIX = "plain:";
 
+/** Per-agent Jira workload counts, for the Agency leaderboard. */
+export type AgencyJiraStat = { accountId: string; completed: number; inProgress: number; todo: number; total: number };
+
 /**
  * Per-session Jira integration. Owns named Jira profiles (base URL + PAT encrypted
  * at rest, mirroring ClaudeConfigService), and reads live sprint issues / issue
@@ -84,6 +87,43 @@ export class JiraService {
     const client = await this.clientFor(profileName);
     if (!client) throw new BadRequestException(`Unknown Jira profile: ${profileName}`);
     return client.searchUsers(query);
+  }
+
+  /** The org-wide default Jira profile (first configured), or null. */
+  async defaultProfile(): Promise<string | null> {
+    return (await this.store.list())[0]?.name ?? null;
+  }
+
+  // Roster Jira stats are refreshed at most every few minutes (counts are cheap but we
+  // still don't want to hammer Jira on every 15s leaderboard poll).
+  private rosterStatsCache: { key: string; at: number; data: AgencyJiraStat[] } | null = null;
+
+  /** Completed / in-progress / to-do counts per agent (by their Jira username). */
+  async rosterStats(users: Array<{ accountId: string; jiraUser: string }>): Promise<AgencyJiraStat[]> {
+    const profile = await this.defaultProfile();
+    if (!profile || users.length === 0) return [];
+    const key = profile + "|" + users.map((u) => `${u.accountId}:${u.jiraUser}`).join(",");
+    const now = Date.now();
+    if (this.rosterStatsCache && this.rosterStatsCache.key === key && now - this.rosterStatsCache.at < 180_000) {
+      return this.rosterStatsCache.data;
+    }
+    const client = await this.clientFor(profile);
+    if (!client) return [];
+    const data = await Promise.all(users.map(async (u) => {
+      try { return { accountId: u.accountId, ...(await client.assigneeStats(u.jiraUser)) }; }
+      catch { return { accountId: u.accountId, completed: 0, inProgress: 0, todo: 0, total: 0 }; }
+    }));
+    this.rosterStatsCache = { key, at: now, data };
+    return data;
+  }
+
+  /** An agent's assigned Jira issues (newest first) under the default profile. */
+  async assignedIssues(jiraUser: string): Promise<JiraIssue[]> {
+    const profile = await this.defaultProfile();
+    if (!profile || !jiraUser) return [];
+    const client = await this.clientFor(profile);
+    if (!client) return [];
+    return client.assignedIssues(jiraUser);
   }
 
   /** A client for a stored profile, or null if the profile is unknown. */

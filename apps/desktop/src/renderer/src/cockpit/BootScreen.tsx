@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useStore } from "../store";
 import { playSfx } from "../sfx";
 import yiaSealUrl from "../assets/yia-seal.png?url";
+import { findRank } from "./ranks";
 
 // Play the boot chime once per app launch (BootScreen can remount on reconnects).
 let bootChimePlayed = false;
@@ -103,14 +104,19 @@ const CSS = `
 .rcw-boot-h1 { position:relative; font-family: var(--font-display); font-weight:600; font-size: clamp(26px, 5.2vw, 58px); line-height:1.04; letter-spacing:.08em; text-align:center;
   padding-bottom: 14px; border-bottom: 2px solid rgb(var(--primary) / 0.7); text-shadow: 0 0 34px rgb(var(--primary-soft) / 0.6);
   animation: rcw-boot-titlein .32s linear both; }
-.rcw-boot-seal { width: 108px; height: 108px; object-fit: contain; filter: drop-shadow(0 0 24px rgb(var(--primary-soft) / 0.55));
+.rcw-boot-seal { width: 176px; height: 176px; object-fit: contain; filter: drop-shadow(0 0 34px rgb(var(--primary-soft) / 0.6));
   animation: rcw-boot-titlein .5s ease both; }
-.rcw-boot-access { font-family: var(--font-mono); font-size: 13px; letter-spacing: .5em; font-weight:700; color: rgb(var(--accent));
+.rcw-boot-access { font-family: var(--font-mono); font-size: 14px; letter-spacing: .55em; font-weight:700; color: rgb(var(--accent));
   text-shadow: 0 0 16px rgb(var(--accent) / 0.6); animation: rcw-boot-fadein .4s ease both; }
-.rcw-boot-welcome { display:flex; align-items:center; gap:13px; margin-top:4px; padding:10px 18px 10px 10px; border-radius:14px;
-  border:1px solid rgb(var(--primary) / 0.3); background: rgb(var(--primary) / 0.06); animation: rcw-boot-fadein .5s ease both; }
-.rcw-boot-agent { width:46px; height:46px; border-radius:11px; object-fit:cover; border:1.5px solid rgb(var(--primary) / 0.6); box-shadow:0 0 16px -4px rgb(var(--primary-soft)); background:#05090d; }
-.rcw-boot-agent.ph { display:flex; align-items:center; justify-content:center; font-size:22px; color: rgb(var(--primary-soft) / 0.5); }
+.rcw-boot-welcome { display:flex; align-items:center; gap:20px; margin-top:8px; padding:16px 26px 16px 16px; border-radius:18px;
+  border:1px solid rgb(var(--primary) / 0.32); background: rgb(var(--primary) / 0.07);
+  box-shadow: 0 16px 40px -16px rgb(0 0 0 / 0.6), inset 0 0 40px -28px rgb(var(--primary-soft)); animation: rcw-boot-fadein .5s ease both; }
+.rcw-boot-agent { width:104px; height:104px; border-radius:16px; object-fit:cover; border:2px solid rgb(var(--primary) / 0.65);
+  box-shadow:0 0 26px -6px rgb(var(--primary-soft)); background:#05090d; }
+.rcw-boot-agent.ph { display:flex; align-items:center; justify-content:center; font-size:48px; color: rgb(var(--primary-soft) / 0.5); }
+.rcw-boot-chip { font-family:var(--font-mono); font-size:10px; letter-spacing:.16em; padding:3px 10px; border-radius:999px;
+  border:1px solid rgb(224 162 74 / 0.5); color:#e0a24a; }
+.rcw-boot-chip.alt { border-color: rgb(var(--primary) / 0.5); color: rgb(var(--primary-soft)); }
 .rcw-boot-h1.rcw-glitch { border-color: transparent; color: transparent; }
 .rcw-boot-h1.rcw-glitch::before, .rcw-boot-h1.rcw-glitch::after {
   content: attr(data-text); position:absolute; left:0; right:0; top:0; }
@@ -133,15 +139,18 @@ export default function BootScreen() {
   const [phase, setPhase] = useState<"log" | "title">("log");
   const [glitch, setGlitch] = useState(false);
   const [flash, setFlash] = useState(false);
-  const [agent, setAgent] = useState<{ name: string; photo: string | null } | null>(null);
+  const [agent, setAgent] = useState<{ name: string; username: string; photo: string | null; rank: string; division: string; role: string } | null>(null);
 
   // Who's logging in — for the "ACCESS GRANTED · welcome" splash.
   useEffect(() => {
     let alive = true;
     window.cowork.accountsMe().then((m) => {
       if (alive && m && "username" in m && m.username) {
-        const a = m as { displayName: string; username: string; photo?: string | null };
-        setAgent({ name: a.displayName || a.username, photo: a.photo ?? null });
+        const a = m as { displayName: string; username: string; photo?: string | null; level?: string; division?: string; role: string };
+        setAgent({
+          name: a.displayName || a.username, username: a.username, photo: a.photo ?? null,
+          rank: a.level || (a.role === "admin" ? "General" : "Recruit"), division: a.division ?? "", role: a.role,
+        });
       }
     }).catch(() => {});
     return () => { alive = false; };
@@ -209,15 +218,26 @@ export default function BootScreen() {
           <img src={yiaSealUrl} alt="" className="rcw-boot-seal" />
           <h1 className={`rcw-boot-h1${glitch ? " rcw-glitch" : ""}`} data-text="YITEC INTELLIGENCE AGENCY">YITEC INTELLIGENCE AGENCY</h1>
           <div className="rcw-boot-access">◈ ACCESS GRANTED</div>
-          {agent && (
-            <div className="rcw-boot-welcome">
-              {agent.photo ? <img src={agent.photo} alt="" className="rcw-boot-agent" /> : <div className="rcw-boot-agent ph">◍</div>}
-              <div style={{ textAlign: "left" }}>
-                <div className="mono" style={{ fontSize: 9.5, letterSpacing: "0.3em", color: "rgb(var(--primary-soft))" }}>WELCOME BACK</div>
-                <div style={{ fontSize: 17, fontWeight: 700, letterSpacing: "0.03em", color: "#e6f2f4" }}>{agent.name}</div>
+          {agent && (() => {
+            const rk = findRank(agent.rank);
+            return (
+              <div className="rcw-boot-welcome">
+                {agent.photo ? <img src={agent.photo} alt="" className="rcw-boot-agent" /> : <div className="rcw-boot-agent ph">◍</div>}
+                <div style={{ textAlign: "left", display: "flex", flexDirection: "column", gap: 3 }}>
+                  <div className="mono" style={{ fontSize: 10, letterSpacing: "0.34em", color: "rgb(var(--primary-soft))" }}>
+                    WELCOME {agent.role === "admin" ? "DIRECTOR" : "AGENT"}
+                  </div>
+                  <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: "0.02em", color: "#e6f2f4", lineHeight: 1.05 }}>{agent.name}</div>
+                  <div className="mono" style={{ fontSize: 11, color: "var(--text-faint)", letterSpacing: "0.12em" }}>@{agent.username}</div>
+                  {rk?.insignia && <div style={{ fontSize: 14, letterSpacing: "0.24em", color: "#ffd166", marginTop: 2 }}>{rk.insignia}</div>}
+                  <div style={{ display: "flex", gap: 8, marginTop: 4, flexWrap: "wrap" }}>
+                    <span className="rcw-boot-chip">★ {agent.rank}</span>
+                    {agent.division && <span className="rcw-boot-chip alt">◈ {agent.division}</span>}
+                  </div>
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
         </div>
       ) : (
         <div className="rcw-boot-log">

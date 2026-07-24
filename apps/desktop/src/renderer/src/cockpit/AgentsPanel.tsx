@@ -121,7 +121,7 @@ function fileToDataUrl(file: File): Promise<string> {
   });
 }
 
-const EMPTY = { username: "", password: "", displayName: "", level: "", division: "", email: "", jira: "", mattermost: "", phone: "", photo: null as string | null };
+const EMPTY = { username: "", password: "", displayName: "", level: "", division: "", email: "", jira: "", mattermost: "", phone: "", github: "", bio: "", photo: null as string | null };
 
 type Analytics = { accountId: string; username: string; displayName: string; sessions: number; activeSessions: number; tokensInput: number; tokensOutput: number; estCostUsd: number; lastActiveAt: string | null };
 const fmtK = (n: number) => n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1e3 ? (n / 1e3).toFixed(0) + "k" : String(n);
@@ -243,6 +243,7 @@ export default function AgentsPanel() {
         displayName: form.displayName || form.username, photo: form.photo,
         level: form.level, division: form.division, email: form.email,
         jira: form.jira, mattermost: form.mattermost, phone: form.phone,
+        github: form.github, bio: form.bio,
       });
       await reload();
       setSelId(created.id);
@@ -336,6 +337,14 @@ export default function AgentsPanel() {
         <option value="">— unranked —</option>
         {RANK_NAMES.map((r) => <option key={r} value={r}>{r}</option>)}
       </select>
+    </>
+  );
+
+  const bioField = () => (
+    <>
+      <label className="rcw-ag-label">BIO</label>
+      <textarea className="rcw-ag-input" style={{ minHeight: 58, resize: "vertical", fontFamily: "inherit", lineHeight: 1.5 }}
+        value={form.bio} onChange={(e) => setForm((f) => ({ ...f, bio: e.target.value }))} placeholder="Short bio / specialty…" maxLength={2000} />
     </>
   );
 
@@ -499,8 +508,10 @@ export default function AgentsPanel() {
                 {field("DIVISION", "division", "e.g. Cyber Ops")}
                 {field("EMAIL", "email", "agent@yitec.dev")}
                 {jiraUserField()}
+                {field("GITHUB USERNAME", "github")}
                 {field("MATTERMOST HANDLE", "mattermost")}
                 {field("PHONE", "phone", "+84 …")}
+                {bioField()}
                 <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
                   <button className="rcw-ag-btn" disabled={busy || form.username.trim().length < 2 || form.password.length < 8} onClick={recruit}>
                     {busy ? "…" : "COMMISSION"}
@@ -524,8 +535,10 @@ export default function AgentsPanel() {
                     {field("DIVISION", "division")}
                     {field("EMAIL", "email")}
                     {jiraUserField()}
+                    {field("GITHUB USERNAME", "github")}
                     {field("MATTERMOST HANDLE", "mattermost")}
                     {field("PHONE", "phone")}
+                    {bioField()}
                     {/* Biometric samples — enroll from the profile photo, add extra
                         samples (e.g. with glasses), or reset. Count shown live. */}
                     <label className="rcw-ag-label" style={{ marginTop: 14 }}>

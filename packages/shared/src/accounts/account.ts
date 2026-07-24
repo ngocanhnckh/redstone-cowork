@@ -18,6 +18,10 @@ export const AccountSchema = z.object({
   jira: z.string().default(""),
   mattermost: z.string().default(""),
   phone: z.string().default(""),
+  /** GitHub username (admin-editable) — source for GitHub-derived stats. */
+  github: z.string().default(""),
+  /** Short free-text bio shown on the agent's profile. */
+  bio: z.string().default(""),
   createdAt: z.coerce.date(),
   disabledAt: z.coerce.date().nullable().default(null),
 });
@@ -33,6 +37,8 @@ export const AccountProfilePatchSchema = z.object({
   jira: z.string().max(120).optional(),
   mattermost: z.string().max(120).optional(),
   phone: z.string().max(40).optional(),
+  github: z.string().max(120).optional(),
+  bio: z.string().max(2000).optional(),
   role: AccountRoleSchema.optional(),
 });
 export type AccountProfilePatch = z.infer<typeof AccountProfilePatchSchema>;
@@ -53,6 +59,8 @@ export const NewAccountSchema = z.object({
   jira: z.string().max(120).optional(),
   mattermost: z.string().max(120).optional(),
   phone: z.string().max(40).optional(),
+  github: z.string().max(120).optional(),
+  bio: z.string().max(2000).optional(),
 });
 export type NewAccount = z.infer<typeof NewAccountSchema>;
 

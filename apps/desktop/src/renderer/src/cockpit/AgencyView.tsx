@@ -22,10 +22,10 @@ function rate(x: number, cap: number): number {
   const v = Math.round((99 * Math.log(1 + x)) / Math.log(1 + cap));
   return Math.max(1, Math.min(99, v));
 }
-const CAP = { output: 5_000_000, hours: 400, missions: 150, tempo: 150_000 };
+const CAP = { output: 5_000_000, hours: 400, missions: 150, tempo: 150_000, complete: 120 };
 
-type Stats = { OUT: number; END: number; MSN: number; TMP: number };
-function ratingsFor(a: Analytics): Stats {
+type Stats = { OUT: number; END: number; MSN: number; TMP: number; CMP: number };
+function ratingsFor(a: Analytics, completed: number): Stats {
   const hours = a.timeSpentMs / 3.6e6;
   const tempo = hours > 0.02 ? a.tokensOutput / hours : 0; // tokens/hr
   return {
@@ -33,9 +33,10 @@ function ratingsFor(a: Analytics): Stats {
     END: rate(hours, CAP.hours),
     MSN: rate(a.sessions, CAP.missions),
     TMP: rate(tempo, CAP.tempo),
+    CMP: rate(completed, CAP.complete), // Jira tasks completed
   };
 }
-const ovrOf = (s: Stats): number => Math.round((s.OUT * 0.34 + s.END * 0.22 + s.MSN * 0.20 + s.TMP * 0.24));
+const ovrOf = (s: Stats): number => Math.round(s.OUT * 0.26 + s.END * 0.15 + s.MSN * 0.13 + s.TMP * 0.18 + s.CMP * 0.28);
 
 function fmtK(n: number): string { return n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1e3 ? (n / 1e3).toFixed(1) + "k" : String(Math.round(n)); }
 function fmtDur(ms: number): string {
@@ -121,8 +122,8 @@ function StatRow({ label, val }: { label: string; val: number }) {
   return <div className="agc-stat"><b>{val}</b><span>{label}</span></div>;
 }
 
-function PlayerCard({ a, rank }: { a: Analytics; rank: number }) {
-  const s = ratingsFor(a);
+function PlayerCard({ a, rank, completed }: { a: Analytics; rank: number; completed: number }) {
+  const s = ratingsFor(a, completed);
   const ovr = ovrOf(s);
   const tier = tierOf(ovr);
   const rk = findRank(a.level);
@@ -146,11 +147,12 @@ function PlayerCard({ a, rank }: { a: Analytics; rank: number }) {
           <StatRow label="ENDURANCE" val={s.END} />
           <StatRow label="MISSIONS" val={s.MSN} />
           <StatRow label="TEMPO" val={s.TMP} />
+          <StatRow label="COMPLETE" val={s.CMP} />
         </div>
         <div className="agc-real">
           <span><b>{fmtK(a.tokensInput + a.tokensOutput)}</b> tok</span>
           <span><b>{fmtDur(a.timeSpentMs)}</b> on task</span>
-          <span><b>{a.sessions}</b> msn</span>
+          <span><b>{completed}</b> done</span>
         </div>
       </div>
     </div>
@@ -237,11 +239,23 @@ export default function AgencyView() {
   const [rows, setRows] = useState<Analytics[] | null>(null);
   const [err, setErr] = useState("");
   const [meUsername, setMeUsername] = useState<string | null>(null);
+  const [doneByAccount, setDoneByAccount] = useState<Record<string, number>>({});
 
   useEffect(() => {
     window.cowork.accountsMe().then((m) => {
       setMeUsername(m && "username" in m ? (m.username as string | null) : null);
     }).catch(() => {});
+  }, []);
+
+  // Real Jira workload — completed-task counts per agent (cached server-side, ~3min).
+  useEffect(() => {
+    let alive = true;
+    const load = () => window.cowork.agencyJiraStats()
+      .then((stats) => { if (alive) setDoneByAccount(Object.fromEntries(stats.map((s) => [s.accountId, s.completed]))); })
+      .catch(() => {});
+    load();
+    const t = setInterval(load, 60000);
+    return () => { alive = false; clearInterval(t); };
   }, []);
 
   useEffect(() => {
@@ -255,9 +269,9 @@ export default function AgencyView() {
   }, []);
 
   const ranked = useMemo(() => {
-    const list = (rows ?? []).map((a) => ({ a, ovr: ovrOf(ratingsFor(a)) }));
+    const list = (rows ?? []).map((a) => ({ a, ovr: ovrOf(ratingsFor(a, doneByAccount[a.accountId] ?? 0)) }));
     return list.sort((x, y) => y.ovr - x.ovr).map((x) => x.a);
-  }, [rows]);
+  }, [rows, doneByAccount]);
 
   return (
     <div className="agc-root">
@@ -280,7 +294,7 @@ export default function AgencyView() {
             <div className="soft" style={{ padding: 24, fontSize: 13 }}>No agents on the board yet.</div>
           ) : (
             <div className="agc-grid">
-              {ranked.map((a, i) => <PlayerCard key={a.accountId} a={a} rank={i + 1} />)}
+              {ranked.map((a, i) => <PlayerCard key={a.accountId} a={a} rank={i + 1} completed={doneByAccount[a.accountId] ?? 0} />)}
             </div>
           )}
         </>

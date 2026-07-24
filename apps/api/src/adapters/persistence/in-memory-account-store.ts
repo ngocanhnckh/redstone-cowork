@@ -17,6 +17,8 @@ const toAccount = (r: Row): Account => ({
   jira: r.jira ?? "",
   mattermost: r.mattermost ?? "",
   phone: r.phone ?? "",
+  github: r.github ?? "",
+  bio: r.bio ?? "",
   createdAt: r.createdAt,
   disabledAt: r.disabledAt,
 });

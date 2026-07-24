@@ -49,6 +49,8 @@ export const JiraIssueSchema = z.object({
   statusCategory: JiraStatusCategorySchema,
   assignee: z.string().nullable(),
   url: z.string(),
+  /** Owning project (present on cross-project lists like an agent's missions). */
+  project: z.object({ key: z.string(), name: z.string() }).optional(),
 });
 export type JiraIssue = z.infer<typeof JiraIssueSchema>;
 

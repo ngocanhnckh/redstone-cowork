@@ -14,6 +14,8 @@ export type NewAccountRecord = {
   jira?: string;
   mattermost?: string;
   phone?: string;
+  github?: string;
+  bio?: string;
 };
 
 export type AccountTokenRecord = {

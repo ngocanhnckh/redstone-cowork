@@ -145,6 +145,8 @@ contextBridge.exposeInMainWorld("cowork", {
   agencyDmThreads: (): Promise<AgencyThread[]> => ipcRenderer.invoke(IPC.agencyDmThreads),
   agencyDmList: (accountId: string, afterId?: string): Promise<AgencyMessage[]> => ipcRenderer.invoke(IPC.agencyDmList, { accountId, afterId }),
   agencyDmPost: (accountId: string, body: string, attachments?: AgencyAttachment[]): Promise<AgencyMessage> => ipcRenderer.invoke(IPC.agencyDmPost, { accountId, body, attachments }),
+  agencyJiraStats: (): Promise<import("../shared/agency").AgencyJiraStat[]> => ipcRenderer.invoke(IPC.agencyJiraStats),
+  agencyMissions: (): Promise<import("../shared/agency").AgencyMission[]> => ipcRenderer.invoke(IPC.agencyMissions),
   jiraGetBinding: (sessionId: string): Promise<{ profile: string; projectKey: string; boardId: number | null } | null> => ipcRenderer.invoke(IPC.jiraGetBinding, { sessionId }),
   jiraSetBinding: (sessionId: string, binding: { profile: string; projectKey: string; boardId?: number | null }): Promise<unknown> => ipcRenderer.invoke(IPC.jiraSetBinding, { sessionId, binding }),
   jiraClearBinding: (sessionId: string): Promise<{ ok: true }> => ipcRenderer.invoke(IPC.jiraClearBinding, { sessionId }),

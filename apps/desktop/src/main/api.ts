@@ -527,6 +527,8 @@ export async function agencyDmList(accountId: string, afterId?: string): Promise
 export async function agencyDmPost(accountId: string, body: string, attachments: AgencyAttachment[] = []): Promise<unknown> {
   return (await req(`/agency/dm/${encodeURIComponent(accountId)}`, { method: "POST", body: JSON.stringify({ body, attachments }) })).json();
 }
+export async function agencyJiraStats(): Promise<unknown[]> { return (await req("/agency/jira-stats")).json(); }
+export async function agencyMissions(): Promise<unknown[]> { return (await req("/agency/missions")).json(); }
 export async function jiraGetBinding(sessionId: string): Promise<unknown> {
   const t = await (await req(`/sessions/${sid(sessionId)}/jira`)).text();
   return t && t.trim() ? JSON.parse(t) : null;

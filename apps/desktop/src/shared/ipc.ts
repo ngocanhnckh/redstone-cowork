@@ -75,6 +75,8 @@ export const IPC = {
   agencyDmThreads: "api:agency:dm:threads",
   agencyDmList: "api:agency:dm:list",
   agencyDmPost: "api:agency:dm:post",
+  agencyJiraStats: "api:agency:jira-stats",
+  agencyMissions: "api:agency:missions",
   jiraGetBinding: "api:jira:binding:get",
   jiraSetBinding: "api:jira:binding:set",
   jiraClearBinding: "api:jira:binding:clear",
