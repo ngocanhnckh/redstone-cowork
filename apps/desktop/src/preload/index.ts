@@ -31,6 +31,13 @@ contextBridge.exposeInMainWorld("cowork", {
   serverRevoke: (id: string, accountId: string): Promise<{ ok: boolean }> => ipcRenderer.invoke(IPC.serverRevoke, { id, accountId }),
   serverCoworkKey: (): Promise<{ publicKey: string | null }> => ipcRenderer.invoke(IPC.serverCoworkKey),
   serverProvision: (id: string): Promise<{ serverUrl: string; installCommand: string; installCommandRelay: string }> => ipcRenderer.invoke(IPC.serverProvision, { id }),
+  serverSavedPassword: (host: string, sshUser: string): Promise<{ has: boolean }> => ipcRenderer.invoke(IPC.serverSavedPassword, { host, sshUser }),
+  serverInstall: (a: { host: string; sshUser: string; sshPort: number; command: string; password?: string; savePassword?: boolean }): Promise<{ ok: boolean; authFailed?: boolean; output: string; error?: string }> => ipcRenderer.invoke(IPC.serverInstall, a),
+  onServerInstallData: (cb: (chunk: string) => void): (() => void) => {
+    const h = (_e: unknown, chunk: string) => cb(chunk);
+    ipcRenderer.on(IPC.serverInstallData, h);
+    return () => ipcRenderer.removeListener(IPC.serverInstallData, h);
+  },
   accountsAnalytics: (): Promise<Array<Record<string, unknown>>> => ipcRenderer.invoke(IPC.accountsAnalytics),
   jiraNotifications: (): Promise<Array<{ id: string; issueKey: string; summary: string; event: string; status: string; actor: string; url: string; createdAt: string; seenAt: string | null }>> => ipcRenderer.invoke(IPC.jiraNotifications),
   jiraNotificationsSeen: (): Promise<{ ok: boolean }> => ipcRenderer.invoke(IPC.jiraNotificationsSeen),

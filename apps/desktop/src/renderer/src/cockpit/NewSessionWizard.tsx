@@ -75,6 +75,38 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
   const [mode, setMode] = useState<Mode>("normal");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  // Auto-install-over-SSH state.
+  const [installing, setInstalling] = useState(false);
+  const [installLog, setInstallLog] = useState("");
+  const [installNeedsPw, setInstallNeedsPw] = useState(false);
+  const [sshPw, setSshPw] = useState("");
+  const [savePw, setSavePw] = useState(true);
+  const [installErr, setInstallErr] = useState("");
+  const [showManual, setShowManual] = useState(false);
+
+  async function runInstall(password?: string) {
+    if (!server || !provision) return;
+    setInstalling(true); setInstallErr(""); setInstallLog("");
+    const off = window.cowork.onServerInstallData((c) => setInstallLog((l) => (l + c).slice(-8000)));
+    try {
+      const command = closed ? provision.installCommandRelay : provision.installCommand;
+      const r = await window.cowork.serverInstall({ host: server.host, sshUser: server.sshUser, sshPort: server.sshPort, command, password, savePassword: password ? savePw : false });
+      if (r.ok) {
+        setInstallNeedsPw(false);
+        // The agent installs then reports back — poll the inventory until it appears.
+        for (let i = 0; i < 12; i++) { await new Promise((res) => setTimeout(res, 2500)); refreshInv(); }
+      } else if (r.authFailed) {
+        setInstallNeedsPw(true);
+        setInstallErr(password ? "That password was rejected — try again." : "SSH needs a password for this server.");
+      } else {
+        setInstallErr(r.error || "Install failed — see the log, or use the manual command below.");
+      }
+    } catch (e) {
+      setInstallErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      off(); setInstalling(false);
+    }
+  }
 
   useEffect(() => { window.cowork.serversList().then(setServers).catch(() => {}); }, []);
   const refreshInv = useCallback(() => {
@@ -180,17 +212,45 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
                 <div style={{ color: "#7fd18b", fontSize: 12, padding: "6px 2px" }}>◈ Redstone agent is reporting from this server — ready.</div>
               ) : (
                 <>
-                  <div style={{ fontSize: 12, color: "var(--text-soft)", lineHeight: 1.6, marginBottom: 4 }}>
-                    Not detected yet. Run this on <b>{server.name}</b> to install redstone{closed ? " (reverse-SSH relay — for closed servers)" : ""}. It auto-installs the background agent and reports back here.
+                  <div style={{ fontSize: 12, color: "var(--text-soft)", lineHeight: 1.6, marginBottom: 8 }}>
+                    Not installed yet. I can install redstone over SSH from your machine to <b>{server.sshUser}@{server.host}</b> — it sets up the background agent and reports back.
                   </div>
-                  {provision && <Cmd cmd={closed ? provision.installCommandRelay : provision.installCommand} label={closed ? "RUN ON SERVER (REVERSE RELAY)" : "RUN ON SERVER"} />}
-                  {provision && (
-                    <label style={{ display: "flex", gap: 7, alignItems: "center", marginTop: 10, fontSize: 11, color: "var(--text-soft)", cursor: "pointer" }}>
-                      <input type="checkbox" checked={closed} onChange={(e) => setClosed(e.target.checked)} />
-                      Closed / behind NAT — use the reverse-SSH relay command
-                    </label>
+
+                  {!installNeedsPw ? (
+                    <button className="rcw-nw-btn" disabled={installing || !provision} onClick={() => runInstall()}>
+                      {installing ? "◈ INSTALLING…" : "◈ INSTALL VIA SSH"}
+                    </button>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      <div className="rcw-nw-label">SSH PASSWORD FOR {server.sshUser.toUpperCase()}@{server.host}</div>
+                      <input className="rcw-nw-input" type="password" autoFocus value={sshPw} placeholder="password"
+                        onChange={(e) => setSshPw(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && sshPw) runInstall(sshPw); }} />
+                      <label style={{ display: "flex", gap: 7, alignItems: "center", fontSize: 11, color: "var(--text-soft)", cursor: "pointer" }}>
+                        <input type="checkbox" checked={savePw} onChange={(e) => setSavePw(e.target.checked)} />
+                        Remember this password for {server.host} (encrypted)
+                      </label>
+                      <button className="rcw-nw-btn" disabled={installing || !sshPw} onClick={() => runInstall(sshPw)}>
+                        {installing ? "◈ INSTALLING…" : "◈ INSTALL WITH PASSWORD"}
+                      </button>
+                    </div>
                   )}
-                  <button className="rcw-nw-btn ghost" style={{ marginTop: 10, padding: "6px 12px", fontSize: 10 }} onClick={refreshInv}>↻ CHECK AGAIN</button>
+
+                  {installErr && <div style={{ color: "#e0736a", fontSize: 11.5, marginTop: 8 }}>⚠ {installErr}</div>}
+                  {installLog && (
+                    <pre className="no-scrollbar" style={{ marginTop: 10, maxHeight: 160, overflowY: "auto", fontSize: 10.5, lineHeight: 1.5, color: "var(--text-soft)",
+                      background: "rgb(0 0 0 / .35)", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{installLog}</pre>
+                  )}
+
+                  <label style={{ display: "flex", gap: 7, alignItems: "center", marginTop: 10, fontSize: 11, color: "var(--text-soft)", cursor: "pointer" }}>
+                    <input type="checkbox" checked={closed} onChange={(e) => setClosed(e.target.checked)} />
+                    Closed / behind NAT — use the reverse-SSH relay
+                  </label>
+
+                  <div style={{ display: "flex", gap: 8, marginTop: 10, alignItems: "center" }}>
+                    <button className="rcw-nw-btn ghost" style={{ padding: "6px 12px", fontSize: 10 }} onClick={refreshInv}>↻ CHECK AGAIN</button>
+                    <button className="rcw-nw-btn ghost" style={{ padding: "6px 12px", fontSize: 10 }} onClick={() => setShowManual((v) => !v)}>{showManual ? "HIDE" : "MANUAL COMMAND"}</button>
+                  </div>
+                  {showManual && provision && <div style={{ marginTop: 10 }}><Cmd cmd={closed ? provision.installCommandRelay : provision.installCommand} label={closed ? "RUN ON SERVER (REVERSE RELAY)" : "RUN ON SERVER"} /></div>}
                 </>
               )}
             </>

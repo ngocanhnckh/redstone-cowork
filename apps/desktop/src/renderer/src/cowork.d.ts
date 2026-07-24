@@ -44,6 +44,9 @@ declare global {
       serverRevoke(id: string, accountId: string): Promise<{ ok: boolean }>;
       serverCoworkKey(): Promise<{ publicKey: string | null }>;
       serverProvision(id: string): Promise<{ serverUrl: string; installCommand: string; installCommandRelay: string }>;
+      serverSavedPassword(host: string, sshUser: string): Promise<{ has: boolean }>;
+      serverInstall(a: { host: string; sshUser: string; sshPort: number; command: string; password?: string; savePassword?: boolean }): Promise<{ ok: boolean; authFailed?: boolean; output: string; error?: string }>;
+      onServerInstallData(cb: (chunk: string) => void): () => void;
       accountsAnalytics(): Promise<Array<{ accountId: string; username: string; displayName: string; role: string; photo: string | null; level: string; division: string; sessions: number; activeSessions: number; tokensInput: number; tokensOutput: number; estCostUsd: number; timeSpentMs: number; lastActiveAt: string | null }>>;
       jiraNotifications(): Promise<Array<{ id: string; issueKey: string; summary: string; event: string; status: string; actor: string; url: string; createdAt: string; seenAt: string | null }>>;
       jiraNotificationsSeen(): Promise<{ ok: boolean }>;

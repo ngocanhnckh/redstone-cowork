@@ -34,6 +34,8 @@ import {
   type StartArgs as ForwardStartArgs,
 } from "./forwarding";
 import { sshSetup, type SshSetupArgs } from "./ssh-setup";
+import { sshInstall } from "./ssh-install";
+import { saveSshPassword, getSshPassword } from "./ssh-creds";
 import { listDir, readFileAt, writeFileAt, writeFileBase64, deletePath, makeDir, createFile, uploadLocalFile, searchFiles, searchFilesStream, downloadFileTo } from "./files";
 import { gitInfo } from "./git";
 import { chooseBgImage, getBgImage, clearBgImage, setSimpleFullscreen, isFullscreen, loadFullscreenPref, setVibrancy, chooseBgVideo, getBgVideoUrl, clearBgVideo, currentBgVideoPath } from "./appearance";
@@ -372,6 +374,19 @@ ipcMain.handle(IPC.serverGrant, (_e, a: { id: string; username: string }) => api
 ipcMain.handle(IPC.serverRevoke, (_e, a: { id: string; accountId: string }) => api.serverRevoke(a.id, a.accountId));
 ipcMain.handle(IPC.serverCoworkKey, () => api.serverCoworkKey());
 ipcMain.handle(IPC.serverProvision, (_e, a: { id: string }) => api.serverProvision(a.id));
+ipcMain.handle(IPC.serverSavedPassword, (_e, a: { host: string; sshUser: string }) => ({ has: !!getSshPassword(a.sshUser, a.host) }));
+ipcMain.handle(IPC.serverInstall, async (e, a: { host: string; sshUser: string; sshPort: number; command: string; password?: string; savePassword?: boolean }) => {
+  const send = (chunk: string) => { try { e.sender.send(IPC.serverInstallData, chunk); } catch { /* ignore */ } };
+  // First attempt: exactly what the caller asked (key-only when no password typed).
+  let res = await sshInstall({ host: a.host, sshUser: a.sshUser, sshPort: a.sshPort, command: a.command, password: a.password }, send);
+  // If key auth was refused and we have a remembered password for this user@host, retry with it.
+  if (!res.ok && res.authFailed && !a.password) {
+    const saved = getSshPassword(a.sshUser, a.host);
+    if (saved) { send("\r\n[auth] key not accepted — trying saved password…\r\n"); res = await sshInstall({ host: a.host, sshUser: a.sshUser, sshPort: a.sshPort, command: a.command, password: saved }, send); }
+  }
+  if (res.ok && a.password && a.savePassword) saveSshPassword(a.sshUser, a.host, a.password);
+  return res;
+});
 ipcMain.handle(IPC.accountsAnalytics, () => api.accountsAnalytics());
 ipcMain.handle(IPC.jiraNotifications, () => api.jiraNotifications());
 ipcMain.handle(IPC.jiraNotificationsSeen, () => api.jiraNotificationsSeen());
