@@ -124,6 +124,10 @@ declare global {
       agencyDmPost(accountId: string, body: string, attachments?: import("../../shared/agency").AgencyAttachment[]): Promise<import("../../shared/agency").AgencyMessage>;
       agencyJiraStats(): Promise<import("../../shared/agency").AgencyJiraStat[]>;
       agencyMissions(): Promise<import("../../shared/agency").AgencyMission[]>;
+      agencyMissionDetail(key: string): Promise<import("../../shared/agency").AgencyMissionDetail>;
+      agencyMissionTransitions(key: string): Promise<import("../../shared/agency").AgencyMissionTransition[]>;
+      agencyMissionTransition(key: string, transitionId: string): Promise<{ ok: boolean }>;
+      agencyMissionComment(key: string, body: string): Promise<{ ok: boolean }>;
       jiraGetBinding(sessionId: string): Promise<{ profile: string; projectKey: string; boardId: number | null } | null>;
       jiraSetBinding(sessionId: string, binding: { profile: string; projectKey: string; boardId?: number | null }): Promise<unknown>;
       jiraClearBinding(sessionId: string): Promise<{ ok: true }>;

@@ -554,6 +554,10 @@ ipcMain.handle(IPC.agencyDmList, (_e, a: { accountId: string; afterId?: string }
 ipcMain.handle(IPC.agencyDmPost, (_e, a: { accountId: string; body: string; attachments?: { name: string; url: string; size: number; mime: string }[] }) => api.agencyDmPost(a.accountId, a.body, a.attachments ?? []));
 ipcMain.handle(IPC.agencyJiraStats, () => api.agencyJiraStats());
 ipcMain.handle(IPC.agencyMissions, () => api.agencyMissions());
+ipcMain.handle(IPC.agencyMissionDetail, (_e, a: { key: string }) => api.agencyMissionDetail(a.key));
+ipcMain.handle(IPC.agencyMissionTransitions, (_e, a: { key: string }) => api.agencyMissionTransitions(a.key));
+ipcMain.handle(IPC.agencyMissionTransition, (_e, a: { key: string; transitionId: string }) => api.agencyMissionTransition(a.key, a.transitionId));
+ipcMain.handle(IPC.agencyMissionComment, (_e, a: { key: string; body: string }) => api.agencyMissionComment(a.key, a.body));
 ipcMain.handle(IPC.jiraGetBinding, (_e, a: { sessionId: string }) => api.jiraGetBinding(a.sessionId));
 ipcMain.handle(IPC.jiraSetBinding, (_e, a: { sessionId: string; binding: { profile: string; projectKey: string; boardId?: number | null } }) => api.jiraSetBinding(a.sessionId, a.binding));
 ipcMain.handle(IPC.jiraClearBinding, (_e, a: { sessionId: string }) => api.jiraClearBinding(a.sessionId));

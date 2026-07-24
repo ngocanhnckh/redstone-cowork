@@ -77,4 +77,34 @@ export class AgencyController {
     const agent = this.requireAgent(req);
     return this.jira.assignedIssues(agent.jira ?? "");
   }
+
+  @Get("missions/:key")
+  async missionDetail(@Req() req: GuardedRequest, @Param("key") key: string) {
+    this.requireAgent(req);
+    return this.jira.missionDetail(key);
+  }
+
+  @Get("missions/:key/transitions")
+  async missionTransitions(@Req() req: GuardedRequest, @Param("key") key: string) {
+    this.requireAgent(req);
+    return this.jira.missionTransitions(key);
+  }
+
+  @Post("missions/:key/transitions")
+  @HttpCode(200)
+  async missionTransition(@Req() req: GuardedRequest, @Param("key") key: string, @Body() body: { transitionId?: string }) {
+    this.requireAgent(req);
+    await this.jira.missionTransition(key, String(body?.transitionId ?? ""));
+    return { ok: true };
+  }
+
+  @Post("missions/:key/comment")
+  @HttpCode(200)
+  async missionComment(@Req() req: GuardedRequest, @Param("key") key: string, @Body() body: { body?: string }) {
+    this.requireAgent(req);
+    const text = String(body?.body ?? "").trim();
+    if (!text) throw new ForbiddenException("empty comment");
+    await this.jira.missionComment(key, text);
+    return { ok: true };
+  }
 }

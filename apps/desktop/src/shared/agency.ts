@@ -30,3 +30,11 @@ export type AgencyMission = {
   url: string;
   project?: { key: string; name: string };
 };
+
+export type AgencyMissionComment = { author: string | null; created: string; bodyHtml: string };
+export type AgencyMissionTransition = { id: string; name: string; to: string };
+export type AgencyMissionDetail = {
+  key: string; summary: string; status: string; statusCategory: string; assignee: string | null; url: string;
+  descriptionHtml: string; description: string; issueType: string;
+  comments: AgencyMissionComment[];
+};

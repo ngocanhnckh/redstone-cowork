@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { findRank } from "./ranks";
 import type { AgencyMessage } from "../../../shared/agency";
+import AgencyProfile from "./AgencyProfile";
 
 // ——— AGENCY — organisation-wide arena ———
 // The competitive heart of YITEC: agents ranked on a gamified "player card" (FIFA-style
@@ -8,7 +9,7 @@ import type { AgencyMessage } from "../../../shared/agency";
 // on task), MISSIONS (sessions) and TEMPO (throughput). Org IRC chat + DMs land in later
 // slices; a tab bar is here so those slot in without a re-layout.
 
-type Analytics = {
+export type Analytics = {
   accountId: string; username: string; displayName: string; role: string;
   photo: string | null; level: string; division: string;
   sessions: number; activeSessions: number; tokensInput: number; tokensOutput: number;
@@ -24,8 +25,8 @@ function rate(x: number, cap: number): number {
 }
 const CAP = { output: 5_000_000, hours: 400, missions: 150, tempo: 150_000, complete: 120 };
 
-type Stats = { OUT: number; END: number; MSN: number; TMP: number; CMP: number };
-function ratingsFor(a: Analytics, completed: number): Stats {
+export type Stats = { OUT: number; END: number; MSN: number; TMP: number; CMP: number };
+export function ratingsFor(a: Analytics, completed: number): Stats {
   const hours = a.timeSpentMs / 3.6e6;
   const tempo = hours > 0.02 ? a.tokensOutput / hours : 0; // tokens/hr
   return {
@@ -36,7 +37,7 @@ function ratingsFor(a: Analytics, completed: number): Stats {
     CMP: rate(completed, CAP.complete), // Jira tasks completed
   };
 }
-const ovrOf = (s: Stats): number => Math.round(s.OUT * 0.26 + s.END * 0.15 + s.MSN * 0.13 + s.TMP * 0.18 + s.CMP * 0.28);
+export const ovrOf = (s: Stats): number => Math.round(s.OUT * 0.26 + s.END * 0.15 + s.MSN * 0.13 + s.TMP * 0.18 + s.CMP * 0.28);
 
 function fmtK(n: number): string { return n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1e3 ? (n / 1e3).toFixed(1) + "k" : String(Math.round(n)); }
 function fmtDur(ms: number): string {
@@ -235,7 +236,7 @@ function OrgChat({ meUsername }: { meUsername: string | null }) {
 }
 
 export default function AgencyView() {
-  const [tab, setTab] = useState<"arena" | "chat" | "dms">("arena");
+  const [tab, setTab] = useState<"profile" | "arena" | "chat" | "dms">("profile");
   const [rows, setRows] = useState<Analytics[] | null>(null);
   const [err, setErr] = useState("");
   const [meUsername, setMeUsername] = useState<string | null>(null);
@@ -277,10 +278,12 @@ export default function AgencyView() {
     <div className="agc-root">
       <style>{CSS}</style>
       <div className="agc-tabs">
+        <button className={`agc-tab${tab === "profile" ? " on" : ""}`} onClick={() => setTab("profile")}>◆ DOSSIER</button>
         <button className={`agc-tab${tab === "arena" ? " on" : ""}`} onClick={() => setTab("arena")}>⬡ ARENA</button>
         <button className={`agc-tab${tab === "chat" ? " on" : ""}`} onClick={() => setTab("chat")}>◈ IRC CHAT</button>
         <button className="agc-tab soon" title="Coming soon">✉ DMs</button>
       </div>
+      {tab === "profile" && <AgencyProfile />}
       {tab === "arena" && (
         <>
           <div className="agc-hd">

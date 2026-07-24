@@ -126,6 +126,28 @@ export class JiraService {
     return client.assignedIssues(jiraUser);
   }
 
+  /** A client on the org-wide default profile (for account-scoped mission actions). */
+  private async defaultClient(): Promise<JiraClient> {
+    const profile = await this.defaultProfile();
+    const client = profile ? await this.clientFor(profile) : null;
+    if (!client) throw new BadRequestException("No Jira profile configured");
+    return client;
+  }
+
+  /** Mission (assigned issue) detail under the default profile. */
+  async missionDetail(key: string): Promise<JiraIssueDetail> {
+    return (await this.defaultClient()).issueDetail(key);
+  }
+  async missionTransitions(key: string): Promise<Array<{ id: string; name: string; to: string }>> {
+    return (await this.defaultClient()).transitions(key);
+  }
+  async missionTransition(key: string, transitionId: string): Promise<void> {
+    await (await this.defaultClient()).transition(key, transitionId);
+  }
+  async missionComment(key: string, body: string): Promise<void> {
+    await (await this.defaultClient()).addComment(key, body);
+  }
+
   /** A client for a stored profile, or null if the profile is unknown. */
   private async clientFor(name: string): Promise<JiraClient | null> {
     const rec = await this.store.get(name);
