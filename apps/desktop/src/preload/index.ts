@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 import { IPC } from "../shared/ipc";
 import type { SshSetupResult } from "../main/ssh-setup";
+import type { AgencyMessage, AgencyThread, AgencyAttachment } from "../shared/agency";
 
 // ipcRenderer is a SINGLETON shared by every panel. Several channels are legitimately
 // subscribed once-per-component (browser:find per browser panel, onUpdate per view),
@@ -135,6 +136,11 @@ contextBridge.exposeInMainWorld("cowork", {
   jiraProfileValidate: (name: string): Promise<{ ok: boolean; account?: string; error?: string }> => ipcRenderer.invoke(IPC.jiraProfileValidate, { name }),
   jiraProfileProjects: (name: string): Promise<Array<{ key: string; name: string }>> => ipcRenderer.invoke(IPC.jiraProfileProjects, { name }),
   jiraProfileUsers: (name: string, q: string): Promise<Array<{ name: string; key?: string; displayName: string; email?: string; avatarUrl?: string }>> => ipcRenderer.invoke(IPC.jiraProfileUsers, { name, q }),
+  agencyChatList: (afterId?: string): Promise<AgencyMessage[]> => ipcRenderer.invoke(IPC.agencyChatList, { afterId }),
+  agencyChatPost: (body: string, attachments?: AgencyAttachment[]): Promise<AgencyMessage> => ipcRenderer.invoke(IPC.agencyChatPost, { body, attachments }),
+  agencyDmThreads: (): Promise<AgencyThread[]> => ipcRenderer.invoke(IPC.agencyDmThreads),
+  agencyDmList: (accountId: string, afterId?: string): Promise<AgencyMessage[]> => ipcRenderer.invoke(IPC.agencyDmList, { accountId, afterId }),
+  agencyDmPost: (accountId: string, body: string, attachments?: AgencyAttachment[]): Promise<AgencyMessage> => ipcRenderer.invoke(IPC.agencyDmPost, { accountId, body, attachments }),
   jiraGetBinding: (sessionId: string): Promise<{ profile: string; projectKey: string; boardId: number | null } | null> => ipcRenderer.invoke(IPC.jiraGetBinding, { sessionId }),
   jiraSetBinding: (sessionId: string, binding: { profile: string; projectKey: string; boardId?: number | null }): Promise<unknown> => ipcRenderer.invoke(IPC.jiraSetBinding, { sessionId, binding }),
   jiraClearBinding: (sessionId: string): Promise<{ ok: true }> => ipcRenderer.invoke(IPC.jiraClearBinding, { sessionId }),

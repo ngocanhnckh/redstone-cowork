@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { findRank } from "./ranks";
+import type { AgencyMessage } from "../../../shared/agency";
 
 // ——— AGENCY — organisation-wide arena ———
 // The competitive heart of YITEC: agents ranked on a gamified "player card" (FIFA-style
@@ -95,6 +96,23 @@ const CSS = `
 .agc-rankbadge { position:absolute; top:-9px; left:-9px; z-index:3; width:30px; height:30px; border-radius:50%;
   display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:800; font-family:var(--font-display);
   border:2px solid #06121a; box-shadow:0 4px 14px rgb(0 0 0 / .6); }
+
+/* IRC chat */
+.agx-chat { flex:1; min-height:0; display:flex; flex-direction:column; padding:0 18px 14px; }
+.agx-log { flex:1; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:2px; padding:8px 2px; font-size:13px; }
+.agx-line { display:flex; gap:8px; padding:3px 8px; border-radius:7px; align-items:baseline; }
+.agx-line:hover { background: rgb(var(--primary) / 0.06); }
+.agx-ts { font-size:9.5px; color: var(--text-faint); font-variant-numeric:tabular-nums; flex-shrink:0; width:42px; }
+.agx-who { font-weight:700; color: rgb(var(--primary-soft)); flex-shrink:0; }
+.agx-who.me { color: rgb(var(--accent)); }
+.agx-body { color: var(--text); word-break:break-word; min-width:0; }
+.agx-compose { display:flex; gap:8px; margin-top:8px; }
+.agx-input { flex:1; padding:11px 14px; border-radius:10px; font-size:13px; font-family:inherit;
+  border:1px solid rgb(var(--primary) / 0.3); background: rgb(var(--primary) / 0.05); color: var(--text); outline:none; }
+.agx-input:focus { border-color: rgb(var(--primary) / 0.7); }
+.agx-send { padding:0 18px; border-radius:10px; border:1px solid rgb(var(--primary) / 0.6); cursor:pointer;
+  background: rgb(var(--primary) / 0.2); color:#d9f7ff; font-family:inherit; font-size:12px; font-weight:700; letter-spacing:.18em; }
+.agx-send:disabled { opacity:.4; cursor:not-allowed; }
 `;
 
 const MEDAL = ["linear-gradient(180deg,#ffe08a,#e0a24a)", "linear-gradient(180deg,#e6eef2,#9fb0bc)", "linear-gradient(180deg,#e0a878,#b5794a)"];
@@ -139,10 +157,92 @@ function PlayerCard({ a, rank }: { a: Analytics; rank: number }) {
   );
 }
 
+function hhmm(iso: string): string {
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+/** Organisation-wide IRC channel — every agent shares one town square. Polls for new
+ *  lines every 4s and appends incrementally via the afterId cursor. */
+function OrgChat({ meUsername }: { meUsername: string | null }) {
+  const [msgs, setMsgs] = useState<AgencyMessage[]>([]);
+  const [draft, setDraft] = useState("");
+  const [sending, setSending] = useState(false);
+  const lastId = useRef<string | null>(null);
+  const logRef = useRef<HTMLDivElement>(null);
+  const stick = useRef(true);
+
+  const append = (incoming: AgencyMessage[]) => {
+    if (!incoming.length) return;
+    setMsgs((cur) => {
+      const seen = new Set(cur.map((m) => m.id));
+      const merged = [...cur, ...incoming.filter((m) => !seen.has(m.id))];
+      lastId.current = merged[merged.length - 1]?.id ?? lastId.current;
+      return merged;
+    });
+  };
+
+  useEffect(() => {
+    let alive = true;
+    window.cowork.agencyChatList().then((m) => { if (alive) append(m); }).catch(() => {});
+    const t = setInterval(() => {
+      window.cowork.agencyChatList(lastId.current ?? undefined).then((m) => { if (alive) append(m); }).catch(() => {});
+    }, 4000);
+    return () => { alive = false; clearInterval(t); };
+  }, []);
+
+  useEffect(() => {
+    const el = logRef.current;
+    if (el && stick.current) el.scrollTop = el.scrollHeight;
+  }, [msgs]);
+
+  const onScroll = () => {
+    const el = logRef.current;
+    if (el) stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+  };
+
+  const send = async () => {
+    const body = draft.trim();
+    if (!body || sending) return;
+    setSending(true);
+    try { const m = await window.cowork.agencyChatPost(body); append([m]); setDraft(""); stick.current = true; }
+    catch { /* ignore */ }
+    finally { setSending(false); }
+  };
+
+  return (
+    <div className="agx-chat">
+      <div className="agx-log no-scrollbar" ref={logRef} onScroll={onScroll}>
+        {msgs.length === 0 && <div className="soft" style={{ padding: 12, fontSize: 12.5 }}>No transmissions yet — say hello to the agency.</div>}
+        {msgs.map((m) => (
+          <div key={m.id} className="agx-line">
+            <span className="agx-ts">{hhmm(m.createdAt)}</span>
+            <span className={`agx-who${m.from.username === meUsername ? " me" : ""}`}>{m.from.displayName}</span>
+            <span className="agx-body">{m.body}</span>
+          </div>
+        ))}
+      </div>
+      <div className="agx-compose">
+        <input className="agx-input" value={draft} onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); } }}
+          placeholder="Broadcast to the agency…" maxLength={4000} />
+        <button className="agx-send" onClick={send} disabled={sending || !draft.trim()}>SEND</button>
+      </div>
+    </div>
+  );
+}
+
 export default function AgencyView() {
   const [tab, setTab] = useState<"arena" | "chat" | "dms">("arena");
   const [rows, setRows] = useState<Analytics[] | null>(null);
   const [err, setErr] = useState("");
+  const [meUsername, setMeUsername] = useState<string | null>(null);
+
+  useEffect(() => {
+    window.cowork.accountsMe().then((m) => {
+      setMeUsername(m && "username" in m ? (m.username as string | null) : null);
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -164,22 +264,35 @@ export default function AgencyView() {
       <style>{CSS}</style>
       <div className="agc-tabs">
         <button className={`agc-tab${tab === "arena" ? " on" : ""}`} onClick={() => setTab("arena")}>⬡ ARENA</button>
-        <button className="agc-tab soon" title="Coming soon">◈ IRC CHAT</button>
+        <button className={`agc-tab${tab === "chat" ? " on" : ""}`} onClick={() => setTab("chat")}>◈ IRC CHAT</button>
         <button className="agc-tab soon" title="Coming soon">✉ DMs</button>
       </div>
-      <div className="agc-hd">
-        <h2>Agent Arena</h2>
-        <span className="soft" style={{ fontSize: 11, letterSpacing: ".12em" }}>ranked by overall rating · updates live</span>
-      </div>
-      {err && <div style={{ padding: "0 18px 10px", color: "#ff9d94", fontSize: 12 }}>⚠ {err}</div>}
-      {rows === null ? (
-        <div className="soft" style={{ padding: 24, fontSize: 13 }}>Loading roster…</div>
-      ) : ranked.length === 0 ? (
-        <div className="soft" style={{ padding: 24, fontSize: 13 }}>No agents on the board yet.</div>
-      ) : (
-        <div className="agc-grid">
-          {ranked.map((a, i) => <PlayerCard key={a.accountId} a={a} rank={i + 1} />)}
-        </div>
+      {tab === "arena" && (
+        <>
+          <div className="agc-hd">
+            <h2>Agent Arena</h2>
+            <span className="soft" style={{ fontSize: 11, letterSpacing: ".12em" }}>ranked by overall rating · updates live</span>
+          </div>
+          {err && <div style={{ padding: "0 18px 10px", color: "#ff9d94", fontSize: 12 }}>⚠ {err}</div>}
+          {rows === null ? (
+            <div className="soft" style={{ padding: 24, fontSize: 13 }}>Loading roster…</div>
+          ) : ranked.length === 0 ? (
+            <div className="soft" style={{ padding: 24, fontSize: 13 }}>No agents on the board yet.</div>
+          ) : (
+            <div className="agc-grid">
+              {ranked.map((a, i) => <PlayerCard key={a.accountId} a={a} rank={i + 1} />)}
+            </div>
+          )}
+        </>
+      )}
+      {tab === "chat" && (
+        <>
+          <div className="agc-hd">
+            <h2>Agency IRC</h2>
+            <span className="soft" style={{ fontSize: 11, letterSpacing: ".12em" }}>organisation-wide channel · #org</span>
+          </div>
+          <OrgChat meUsername={meUsername} />
+        </>
       )}
     </div>
   );

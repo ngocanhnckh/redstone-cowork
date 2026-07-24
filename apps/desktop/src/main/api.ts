@@ -498,6 +498,21 @@ export async function jiraProfileProjects(name: string): Promise<unknown> {
 export async function jiraProfileUsers(name: string, q: string): Promise<unknown> {
   return (await req(`/jira/profiles/${sid(name)}/users?q=${encodeURIComponent(q)}`)).json();
 }
+// ---- Agency messaging ----
+type AgencyAttachment = { name: string; url: string; size: number; mime: string };
+export async function agencyChatList(afterId?: string): Promise<unknown[]> {
+  return (await req(`/agency/chat${afterId ? `?afterId=${encodeURIComponent(afterId)}` : ""}`)).json();
+}
+export async function agencyChatPost(body: string, attachments: AgencyAttachment[] = []): Promise<unknown> {
+  return (await req("/agency/chat", { method: "POST", body: JSON.stringify({ body, attachments }) })).json();
+}
+export async function agencyDmThreads(): Promise<unknown[]> { return (await req("/agency/dm")).json(); }
+export async function agencyDmList(accountId: string, afterId?: string): Promise<unknown[]> {
+  return (await req(`/agency/dm/${encodeURIComponent(accountId)}${afterId ? `?afterId=${encodeURIComponent(afterId)}` : ""}`)).json();
+}
+export async function agencyDmPost(accountId: string, body: string, attachments: AgencyAttachment[] = []): Promise<unknown> {
+  return (await req(`/agency/dm/${encodeURIComponent(accountId)}`, { method: "POST", body: JSON.stringify({ body, attachments }) })).json();
+}
 export async function jiraGetBinding(sessionId: string): Promise<unknown> {
   const t = await (await req(`/sessions/${sid(sessionId)}/jira`)).text();
   return t && t.trim() ? JSON.parse(t) : null;

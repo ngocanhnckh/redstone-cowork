@@ -56,6 +56,7 @@ const nextConfig: NextConfig = {
       // (/sessions/:id/jira/*) are already covered by /sessions/:path* above.
       { source: "/jira", destination: `${API_URL}/jira` },
       { source: "/jira/:path*", destination: `${API_URL}/jira/:path*` },
+      { source: "/agency/:path*", destination: `${API_URL}/agency/:path*` },
     ];
   },
 };
