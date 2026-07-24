@@ -1937,6 +1937,11 @@ export default function Hud() {
   const rootRef = useRef<HTMLDivElement>(null);
   const [rightWidth, setRightWidth] = useState(loadRightWidth);
   const [resizing, setResizing] = useState(false);
+  // Either sidebar can be fully hidden to maximise the center console; persisted.
+  const [leftHidden, setLeftHidden] = useState(() => { try { return localStorage.getItem("rcw.hud.leftHidden") === "1"; } catch { return false; } });
+  const [rightHidden, setRightHidden] = useState(() => { try { return localStorage.getItem("rcw.hud.rightHidden") === "1"; } catch { return false; } });
+  const toggleLeft = () => setLeftHidden((v) => { const n = !v; try { localStorage.setItem("rcw.hud.leftHidden", n ? "1" : "0"); } catch { /* ignore */ } return n; });
+  const toggleRight = () => setRightHidden((v) => { const n = !v; try { localStorage.setItem("rcw.hud.rightHidden", n ? "1" : "0"); } catch { /* ignore */ } return n; });
 
   // Persist the chosen width.
   useEffect(() => { try { localStorage.setItem(HUD_RIGHT_KEY, String(Math.round(rightWidth))); } catch { /* ignore */ } }, [rightWidth]);
@@ -1974,7 +1979,7 @@ export default function Hud() {
     handle.addEventListener("pointerup", up);
   };
 
-  const cols = `214px minmax(0,1fr) ${Math.round(rightWidth)}px`;
+  const cols = `${leftHidden ? "0px" : "214px"} minmax(0,1fr) ${rightHidden ? "0px" : Math.round(rightWidth) + "px"}`;
   return (
     <div ref={rootRef} className="hud-root" style={{ flex: 1, minHeight: 0, position: "relative", overflow: "hidden" }}>
       <HudStyles />
@@ -1983,14 +1988,19 @@ export default function Hud() {
       <CompletionNotifier />
       <OverdueAlert />
       <JiraNotifier />
+      {/* Edge toggles to collapse/reveal either sidebar (persisted). */}
+      <button className="hud-edge-toggle" onClick={toggleLeft} title={leftHidden ? "Show left panel" : "Hide left panel"}
+        style={{ left: leftHidden ? 6 : 200 }}>{leftHidden ? "›" : "‹"}</button>
+      <button className="hud-edge-toggle" onClick={toggleRight} title={rightHidden ? "Show right panel" : "Hide right panel"}
+        style={{ right: rightHidden ? 6 : Math.round(rightWidth) - 8 }}>{rightHidden ? "‹" : "›"}</button>
       <div style={{ position: "relative", zIndex: 1, height: "100%", display: "grid", gridTemplateColumns: cols, minHeight: 0 }}>
         {/* Left column: sessions queue (top half) + git history (bottom half) */}
-        <div style={{ display: "flex", flexDirection: "column", minHeight: 0, borderRight: "1px solid var(--border)" }}>
+        <div style={{ display: leftHidden ? "none" : "flex", flexDirection: "column", minHeight: 0, borderRight: "1px solid var(--border)" }}>
           <div style={{ flex: "1 1 50%", minHeight: 0, display: "flex", flexDirection: "column" }}><QueueRail /></div>
           <div className="no-scrollbar" style={{ flex: "1 1 50%", minHeight: 0, overflowY: "auto", padding: "0 10px 10px" }}><GitPane /></div>
         </div>
         <HudConsole />
-        <div style={{ borderLeft: "1px solid var(--border)", padding: "14px 16px", minHeight: 0, display: "flex", flexDirection: "column", position: "relative" }}>
+        <div style={{ borderLeft: "1px solid var(--border)", padding: "14px 16px", minHeight: 0, display: rightHidden ? "none" : "flex", flexDirection: "column", position: "relative" }}>
           {/* Drag handle straddling the left border of the telemetry column. */}
           <div
             className={`hud-resize-handle${resizing ? " dragging" : ""}`}
@@ -2045,6 +2055,12 @@ function HudStyles() {
         transition: background .18s, box-shadow .18s, height .18s; }
       .hud-resize-handle:hover::before, .hud-resize-handle.dragging::before {
         background: rgb(var(--primary-soft) / 0.75); box-shadow: 0 0 10px rgb(var(--primary-soft) / 0.45); height:84px; }
+      .hud-edge-toggle { position:absolute; top:50%; transform:translateY(-50%); z-index:8; width:18px; height:52px;
+        display:flex; align-items:center; justify-content:center; cursor:pointer; font-family:var(--font-mono); font-size:14px; line-height:1;
+        color: rgb(var(--primary-soft) / 0.8); border:1px solid var(--border); border-radius:7px;
+        background: rgb(var(--surface) / 0.7); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+        transition: background .16s, color .16s, box-shadow .16s; }
+      .hud-edge-toggle:hover { color:#fff; background: rgb(var(--primary) / 0.28); box-shadow: 0 0 16px -4px rgb(var(--primary) / 0.6); }
       .hud-rail-row:hover { background: rgb(var(--primary) / 0.09) !important; }
       .hud-term .hud-scanlines { position:absolute; inset:0; pointer-events:none; z-index:0; opacity:0.35;
         background: repeating-linear-gradient(to bottom, transparent 0, transparent 2px, rgb(var(--primary-soft) / 0.03) 3px, transparent 4px);

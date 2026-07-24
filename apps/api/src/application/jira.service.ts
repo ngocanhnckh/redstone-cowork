@@ -72,6 +72,20 @@ export class JiraService {
     }
   }
 
+  /** Projects visible under a stored profile — powers the session's project dropdown. */
+  async listProjects(profileName: string): Promise<Array<{ key: string; name: string }>> {
+    const client = await this.clientFor(profileName);
+    if (!client) throw new BadRequestException(`Unknown Jira profile: ${profileName}`);
+    return client.listProjects();
+  }
+
+  /** Search Jira users under a stored profile — powers the admin agent→Jira picker. */
+  async searchUsers(profileName: string, query: string): Promise<Array<{ name: string; key?: string; displayName: string; email?: string; avatarUrl?: string }>> {
+    const client = await this.clientFor(profileName);
+    if (!client) throw new BadRequestException(`Unknown Jira profile: ${profileName}`);
+    return client.searchUsers(query);
+  }
+
   /** A client for a stored profile, or null if the profile is unknown. */
   private async clientFor(name: string): Promise<JiraClient | null> {
     const rec = await this.store.get(name);

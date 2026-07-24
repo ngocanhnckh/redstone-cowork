@@ -133,6 +133,8 @@ contextBridge.exposeInMainWorld("cowork", {
     ipcRenderer.invoke(IPC.jiraProfilePut, { name, baseUrl, pat }),
   jiraProfileDelete: (name: string): Promise<{ ok: true }> => ipcRenderer.invoke(IPC.jiraProfileDelete, { name }),
   jiraProfileValidate: (name: string): Promise<{ ok: boolean; account?: string; error?: string }> => ipcRenderer.invoke(IPC.jiraProfileValidate, { name }),
+  jiraProfileProjects: (name: string): Promise<Array<{ key: string; name: string }>> => ipcRenderer.invoke(IPC.jiraProfileProjects, { name }),
+  jiraProfileUsers: (name: string, q: string): Promise<Array<{ name: string; key?: string; displayName: string; email?: string; avatarUrl?: string }>> => ipcRenderer.invoke(IPC.jiraProfileUsers, { name, q }),
   jiraGetBinding: (sessionId: string): Promise<{ profile: string; projectKey: string; boardId: number | null } | null> => ipcRenderer.invoke(IPC.jiraGetBinding, { sessionId }),
   jiraSetBinding: (sessionId: string, binding: { profile: string; projectKey: string; boardId?: number | null }): Promise<unknown> => ipcRenderer.invoke(IPC.jiraSetBinding, { sessionId, binding }),
   jiraClearBinding: (sessionId: string): Promise<{ ok: true }> => ipcRenderer.invoke(IPC.jiraClearBinding, { sessionId }),

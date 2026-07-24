@@ -8,6 +8,7 @@ import {
   Param,
   Post,
   Put,
+  Query,
   UseGuards,
 } from "@nestjs/common";
 import { ZodError, z } from "zod";
@@ -85,6 +86,18 @@ export class JiraController {
   @Get("jira/profiles/:name/validate")
   validate(@Param("name") name: string) {
     return this.jira.validate(this.parseName(name));
+  }
+
+  /** Projects under a profile — for the session's project-binding dropdown. */
+  @Get("jira/profiles/:name/projects")
+  listProjects(@Param("name") name: string) {
+    return this.jira.listProjects(this.parseName(name));
+  }
+
+  /** Search Jira users under a profile — for the admin agent→Jira picker. */
+  @Get("jira/profiles/:name/users")
+  searchUsers(@Param("name") name: string, @Query("q") q: string) {
+    return this.jira.searchUsers(this.parseName(name), q ?? "");
   }
 
   @Get("sessions/:id/jira")

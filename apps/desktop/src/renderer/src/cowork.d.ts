@@ -109,6 +109,8 @@ declare global {
       jiraProfilePut(name: string, baseUrl: string, pat: string): Promise<{ name: string; baseUrl: string; account: string | null }>;
       jiraProfileDelete(name: string): Promise<{ ok: true }>;
       jiraProfileValidate(name: string): Promise<{ ok: boolean; account?: string; error?: string }>;
+      jiraProfileProjects(name: string): Promise<Array<{ key: string; name: string }>>;
+      jiraProfileUsers(name: string, q: string): Promise<Array<{ name: string; key?: string; displayName: string; email?: string; avatarUrl?: string }>>;
       jiraGetBinding(sessionId: string): Promise<{ profile: string; projectKey: string; boardId: number | null } | null>;
       jiraSetBinding(sessionId: string, binding: { profile: string; projectKey: string; boardId?: number | null }): Promise<unknown>;
       jiraClearBinding(sessionId: string): Promise<{ ok: true }>;

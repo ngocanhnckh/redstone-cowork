@@ -64,6 +64,8 @@ export const IPC = {
   jiraProfilePut: "api:jira:profiles:put",
   jiraProfileDelete: "api:jira:profiles:delete",
   jiraProfileValidate: "api:jira:profiles:validate",
+  jiraProfileProjects: "api:jira:profiles:projects",
+  jiraProfileUsers: "api:jira:profiles:users",
   jiraGetBinding: "api:jira:binding:get",
   jiraSetBinding: "api:jira:binding:set",
   jiraClearBinding: "api:jira:binding:clear",

@@ -8,6 +8,56 @@ import { describeFaceFromImageUrl } from "../faceEngine";
 // face sign-in (Slice 2) — the admin uploads it here BEFORE the agent enrolls.
 
 type Audit = { id: string; accountId: string | null; username: string; ok: boolean; ip: string; device: string; at: string };
+type JiraUser = { name: string; key?: string; displayName: string; email?: string; avatarUrl?: string };
+
+/** Searchable Jira-user dropdown: type to search the admin's Jira (via a stored
+ *  profile), pick a user to bind the agent to that Jira account. Typing also sets the
+ *  raw username so a manual value still works if the search is empty/unavailable. */
+function JiraUserPicker({ value, profile, onType, onPick }: {
+  value: string; profile: string; onType: (v: string) => void; onPick: (u: JiraUser) => void;
+}) {
+  const [q, setQ] = useState(value);
+  const [open, setOpen] = useState(false);
+  const [results, setResults] = useState<JiraUser[]>([]);
+  const [loading, setLoading] = useState(false);
+  useEffect(() => { setQ(value); }, [value]);
+  useEffect(() => {
+    if (!open || !profile) return;
+    let alive = true;
+    const t = setTimeout(() => {
+      setLoading(true);
+      window.cowork.jiraProfileUsers(profile, q).then((r) => { if (alive) setResults(r); })
+        .catch(() => { if (alive) setResults([]); }).finally(() => { if (alive) setLoading(false); });
+    }, 250);
+    return () => { alive = false; clearTimeout(t); };
+  }, [q, open, profile]);
+  return (
+    <div style={{ position: "relative" }}>
+      <input className="rcw-ag-input" value={q} placeholder="search Jira users…" autoCapitalize="off" autoCorrect="off" spellCheck={false}
+        onChange={(e) => { setQ(e.target.value); onType(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 180)} />
+      {open && (results.length > 0 || loading) && (
+        <div className="no-scrollbar" style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 40, marginTop: 3, maxHeight: 220, overflowY: "auto",
+          border: "1px solid rgb(84 230 255 / .4)", borderRadius: 9, background: "rgb(8 14 20 / .97)", backdropFilter: "blur(10px)", boxShadow: "0 12px 40px -10px rgb(0 0 0 / .7)" }}>
+          {loading && <div className="faint" style={{ padding: "8px 10px", fontSize: 10.5 }}>searching…</div>}
+          {results.map((u) => (
+            <div key={(u.key || u.name) + u.displayName} onMouseDown={(e) => { e.preventDefault(); onPick(u); setQ(u.name); setOpen(false); }}
+              style={{ display: "flex", alignItems: "center", gap: 9, padding: "7px 10px", cursor: "pointer", borderBottom: "1px solid rgb(84 230 255 / .1)" }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "rgb(84 230 255 / .12)")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}>
+              {u.avatarUrl ? <img src={u.avatarUrl} alt="" style={{ width: 24, height: 24, borderRadius: 6, objectFit: "cover" }} />
+                : <div style={{ width: 24, height: 24, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", background: "rgb(84 230 255 / .12)", fontSize: 11 }}>◍</div>}
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div style={{ fontSize: 12, color: "#e6f2f4", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{u.displayName}</div>
+                <div className="faint" style={{ fontSize: 10 }}>@{u.name}{u.email ? ` · ${u.email}` : ""}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 const CSS = `
 @keyframes rcw-ag-in { from { opacity:0; transform: translateY(8px); } to { opacity:1; transform:none; } }
@@ -89,6 +139,7 @@ export default function AgentsPanel() {
   const [analytics, setAnalytics] = useState<Analytics[]>([]);
   const [svServers, setSvServers] = useState<import("../../../shared/servers").ServerView[]>([]);
   const [svGrantFor, setSvGrantFor] = useState<string | null>(null);
+  const [jiraProfile, setJiraProfile] = useState<string>(""); // first Jira profile → user search
   const fileRef = useRef<HTMLInputElement>(null);
 
   const sel = agents.find((a) => a.id === selId) ?? null;
@@ -105,6 +156,8 @@ export default function AgentsPanel() {
   }, []);
 
   useEffect(() => { void reload(); }, [reload]);
+  // Pick a Jira profile to search users against (admin's shared Jira credentials).
+  useEffect(() => { window.cowork.jiraProfilesList().then((ps) => { if (ps[0]) setJiraProfile(ps[0].name); }).catch(() => {}); }, []);
   useEffect(() => {
     if (view === "console" && me?.role === "admin") window.cowork.accountsAnalytics().then((a) => setAnalytics(a as Analytics[])).catch(() => setAnalytics([]));
   }, [view, me]);
@@ -225,6 +278,29 @@ export default function AgentsPanel() {
       <label className="rcw-ag-label">{label}</label>
       <input className="rcw-ag-input" type={type} value={(form[k] as string) ?? ""} onChange={set(k)} placeholder={ph}
         autoCapitalize="off" autoCorrect="off" spellCheck={false} />
+    </>
+  );
+
+  // Jira account binding: a searchable picker when a Jira profile is configured (falls
+  // back to a plain username input otherwise). Selecting a user also fills the agent's
+  // name / email / photo when those are still empty — one click imports from Jira.
+  const jiraUserField = () => (
+    <>
+      <label className="rcw-ag-label">JIRA ACCOUNT</label>
+      {jiraProfile ? (
+        <JiraUserPicker value={form.jira} profile={jiraProfile}
+          onType={(v) => setForm((f) => ({ ...f, jira: v }))}
+          onPick={(u) => setForm((f) => ({
+            ...f,
+            jira: u.name,
+            displayName: f.displayName || u.displayName,
+            email: f.email || u.email || "",
+            photo: f.photo || u.avatarUrl || null,
+          }))} />
+      ) : (
+        <input className="rcw-ag-input" value={form.jira} onChange={set("jira")} placeholder="jira username"
+          autoCapitalize="off" autoCorrect="off" spellCheck={false} />
+      )}
     </>
   );
 
@@ -363,7 +439,7 @@ export default function AgentsPanel() {
                 {field("LEVEL", "level", "e.g. L3")}
                 {field("DIVISION", "division", "e.g. Cyber Ops")}
                 {field("EMAIL", "email", "agent@yitec.dev")}
-                {field("JIRA USERNAME", "jira")}
+                {jiraUserField()}
                 {field("MATTERMOST HANDLE", "mattermost")}
                 {field("PHONE", "phone", "+84 …")}
                 <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
@@ -388,7 +464,7 @@ export default function AgentsPanel() {
                     {field("LEVEL", "level")}
                     {field("DIVISION", "division")}
                     {field("EMAIL", "email")}
-                    {field("JIRA USERNAME", "jira")}
+                    {jiraUserField()}
                     {field("MATTERMOST HANDLE", "mattermost")}
                     {field("PHONE", "phone")}
                     <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>

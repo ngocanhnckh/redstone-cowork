@@ -492,6 +492,12 @@ export async function jiraProfileDelete(name: string): Promise<unknown> {
 export async function jiraProfileValidate(name: string): Promise<unknown> {
   return (await req(`/jira/profiles/${sid(name)}/validate`)).json();
 }
+export async function jiraProfileProjects(name: string): Promise<unknown> {
+  return (await req(`/jira/profiles/${sid(name)}/projects`)).json();
+}
+export async function jiraProfileUsers(name: string, q: string): Promise<unknown> {
+  return (await req(`/jira/profiles/${sid(name)}/users?q=${encodeURIComponent(q)}`)).json();
+}
 export async function jiraGetBinding(sessionId: string): Promise<unknown> {
   const t = await (await req(`/sessions/${sid(sessionId)}/jira`)).text();
   return t && t.trim() ? JSON.parse(t) : null;

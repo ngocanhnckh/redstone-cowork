@@ -72,6 +72,36 @@ export class JiraClient {
     return { accountId: data.accountId, name: data.name, displayName: data.displayName ?? data.name ?? "" };
   }
 
+  /** All projects visible to the PAT (key + name) — for binding dropdowns. */
+  async listProjects(): Promise<Array<{ key: string; name: string }>> {
+    const res = await this.fetchImpl(`${this.base}/rest/api/2/project`, { headers: this.headers() });
+    if (!res.ok) throw new Error(`Jira /project responded ${res.status}`);
+    const arr = (await res.json()) as Array<{ key?: string; name?: string }>;
+    return arr
+      .filter((p) => p.key)
+      .map((p) => ({ key: p.key as string, name: p.name ?? (p.key as string) }))
+      .sort((a, b) => a.key.localeCompare(b.key));
+  }
+
+  /** Search users (Jira DC: /user/search?username=). Returns the writable `name`
+   *  (used for assignee), plus display name / email / avatar for the picker. */
+  async searchUsers(query: string): Promise<Array<{ name: string; key?: string; displayName: string; email?: string; avatarUrl?: string }>> {
+    const q = query.trim() || ".";
+    const res = await this.fetchImpl(
+      `${this.base}/rest/api/2/user/search?username=${encodeURIComponent(q)}&maxResults=20`,
+      { headers: this.headers() },
+    );
+    if (!res.ok) throw new Error(`Jira /user/search responded ${res.status}`);
+    const arr = (await res.json()) as Array<{ name?: string; key?: string; accountId?: string; displayName?: string; emailAddress?: string; avatarUrls?: Record<string, string> }>;
+    return arr.map((u) => ({
+      name: u.name ?? u.accountId ?? "",
+      key: u.key,
+      displayName: u.displayName ?? u.name ?? "",
+      email: u.emailAddress,
+      avatarUrl: u.avatarUrls?.["48x48"] ?? u.avatarUrls?.["32x32"],
+    }));
+  }
+
   /** Create an issue and return its key + browse URL. Throws with Jira's error body on failure. */
   async createIssue(
     projectKey: string,

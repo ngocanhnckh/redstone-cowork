@@ -34,6 +34,9 @@ export default function JiraSettings({ sessionId }: { sessionId: string }) {
   const [selProfile, setSelProfile] = useState("");
   const [projectKey, setProjectKey] = useState("");
   const [boardId, setBoardId] = useState("");
+  // Projects available under the selected profile — drives the project dropdown.
+  const [projects, setProjects] = useState<Array<{ key: string; name: string }>>([]);
+  const [projLoading, setProjLoading] = useState(false);
 
   const loadProfiles = () => window.cowork.jiraProfilesList().then(setProfiles).catch(() => {});
   const loadBinding = () => window.cowork.jiraGetBinding(sessionId).then((b) => {
@@ -42,6 +45,18 @@ export default function JiraSettings({ sessionId }: { sessionId: string }) {
   }).catch(() => {});
   useEffect(() => { loadProfiles(); }, []);
   useEffect(() => { loadBinding(); /* eslint-disable-next-line */ }, [sessionId]);
+  // Fetch the selected profile's projects for the dropdown (falls back to a free-text
+  // key input if the listing fails, e.g. a PAT without browse permission).
+  useEffect(() => {
+    if (!selProfile) { setProjects([]); return; }
+    let alive = true;
+    setProjLoading(true);
+    window.cowork.jiraProfileProjects(selProfile)
+      .then((ps) => { if (alive) setProjects(ps); })
+      .catch(() => { if (alive) setProjects([]); })
+      .finally(() => { if (alive) setProjLoading(false); });
+    return () => { alive = false; };
+  }, [selProfile]);
 
   const saveProfile = async () => {
     const name = pName.trim();
@@ -104,7 +119,14 @@ export default function JiraSettings({ sessionId }: { sessionId: string }) {
               <option value="">profile…</option>
               {profiles.map((p) => <option key={p.name} value={p.name}>{p.name}</option>)}
             </select>
-            <input value={projectKey} onChange={(e) => setProjectKey(e.target.value)} placeholder="PROJECT KEY (e.g. RCW)" style={{ ...input, width: 190 }} />
+            {projects.length > 0 ? (
+              <select value={projectKey} onChange={(e) => setProjectKey(e.target.value)} className="mono" style={{ ...input, cursor: "pointer", width: 230 }}>
+                <option value="">{projLoading ? "loading projects…" : "project…"}</option>
+                {projects.map((p) => <option key={p.key} value={p.key}>{p.key} — {p.name}</option>)}
+              </select>
+            ) : (
+              <input value={projectKey} onChange={(e) => setProjectKey(e.target.value.toUpperCase())} placeholder={projLoading ? "loading projects…" : "PROJECT KEY (e.g. RCW)"} style={{ ...input, width: 190 }} />
+            )}
             <input value={boardId} onChange={(e) => setBoardId(e.target.value.replace(/[^0-9]/g, ""))} placeholder="board# (opt)" style={{ ...input, width: 96 }} />
             <button onClick={connect} disabled={busy || !selProfile || !projectKey.trim()} className="glass-btn--clay" style={{ padding: "7px 14px", borderRadius: 8, fontSize: 12, fontWeight: 600, opacity: selProfile && projectKey.trim() ? 1 : 0.5 }}>Connect</button>
           </div>
