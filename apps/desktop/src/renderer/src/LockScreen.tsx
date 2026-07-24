@@ -84,7 +84,9 @@ export default function LockScreen({ onUnlock, onSignOut }: Props) {
             if (r.account) setAgent((prev) => prev ?? { displayName: r.account!.displayName, username: r.account!.username, photo: null, hasPin: false });
             setPhase("identified"); setMsg("◈ AGENT IDENTIFIED");
             stopCam();
-            setTimeout(() => { if (alive) onUnlock(); }, 1100);
+            // NB: no `alive` guard here — setPhase re-runs this effect and its cleanup
+            // sets alive=false, which would otherwise cancel the unlock. We matched; go.
+            setTimeout(() => onUnlock(), 1100);
             return;
           }
           attempts++;

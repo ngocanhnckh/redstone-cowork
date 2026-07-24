@@ -677,15 +677,29 @@ const appWinId = (appId: string): string => `app:${appId}`;
 // per-session like every other window. A newly-opened app window gets this size.
 const DEFAULT_APP_WIN: WinState = { x: 90, y: 66, w: 940, h: 640, min: false };
 const APPS_KEY = "rcw.customApps";
+// Apps baked in by default for every YITEC agent (themed to the cockpit, own login
+// profile). Seeded ONCE (see rcw.defaultAppsSeeded) so an agent can still remove them.
+const DEFAULT_APPS: CustomApp[] = [
+  { id: "yitec-mattermost", name: "Mattermost", url: "https://mattermost.yitec.group", icon: "💬", theme: "hitech", sessionProfile: true, workspace: null, customCss: null },
+];
 function loadApps(): CustomApp[] {
+  let stored: CustomApp[] = [];
   try {
     const raw = localStorage.getItem(APPS_KEY);
-    if (!raw) return [];
-    const p = JSON.parse(raw);
-    return Array.isArray(p) ? p.filter((a) => a && typeof a.id === "string" && typeof a.url === "string") : [];
-  } catch {
-    return [];
-  }
+    if (raw) {
+      const p = JSON.parse(raw);
+      if (Array.isArray(p)) stored = p.filter((a) => a && typeof a.id === "string" && typeof a.url === "string");
+    }
+  } catch { /* ignore */ }
+  try {
+    if (localStorage.getItem("rcw.defaultAppsSeeded") !== "1") {
+      const have = new Set(stored.map((a) => a.id));
+      stored = [...DEFAULT_APPS.filter((d) => !have.has(d.id)), ...stored];
+      localStorage.setItem("rcw.defaultAppsSeeded", "1");
+      localStorage.setItem(APPS_KEY, JSON.stringify(stored));
+    }
+  } catch { /* ignore */ }
+  return stored;
 }
 
 // ---------------------------------------------------------------------------
