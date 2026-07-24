@@ -51,8 +51,10 @@ export default function AnswerDock({ decision, working, sessionId: sessionIdProp
   const caps = useStore((s) => s.caps);
   const mode = useStore((s) => s.mode);
   const idleSessionId = sessionIdProp ?? focusId;
-  // Slash-command suggestions for the focused session's host.
-  const machine = (sessions.find((s) => s.id === (decision?.sessionId ?? idleSessionId)) ?? queue.find((s) => s.id === (decision?.sessionId ?? idleSessionId)))?.machine;
+  // Slash-command suggestions + attachment target for the focused session's host.
+  const activeSession = sessions.find((s) => s.id === (decision?.sessionId ?? idleSessionId)) ?? queue.find((s) => s.id === (decision?.sessionId ?? idleSessionId));
+  const machine = activeSession?.machine;
+  const cwd = activeSession?.cwd;
   const commands = commandsFor(caps, machine);
 
   // Reset the answering state whenever the shown decision changes, so picks/errors
@@ -150,6 +152,8 @@ export default function AnswerDock({ decision, working, sessionId: sessionIdProp
           <SlashTextarea
             ref={idleInputRef}
             commands={commands}
+            machine={machine}
+            cwd={cwd}
             className="reply-input no-scrollbar"
             placeholder={working ? "Queue a message for Claude…  (/ for commands)" : "Send an instruction…  (/ for commands)"}
             onSubmit={submitIdle}
@@ -355,6 +359,8 @@ export default function AnswerDock({ decision, working, sessionId: sessionIdProp
         <SlashTextarea
           ref={inputRef}
           commands={commands}
+          machine={machine}
+          cwd={cwd}
           className="reply-input no-scrollbar"
           placeholder="Type a custom reply…  (/ for commands)"
           onSubmit={handleSend}

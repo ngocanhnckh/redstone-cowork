@@ -7,6 +7,9 @@ type Props = {
   placeholder?: string;
   style?: React.CSSProperties;
   className?: string;
+  /** Session host + working dir — enables paste/drop/attach file upload into the chat. */
+  machine?: string;
+  cwd?: string;
 };
 
 /**
@@ -15,12 +18,51 @@ type Props = {
  * insert, Esc to dismiss). Enter otherwise submits (Shift+Enter = newline). The
  * underlying <textarea> ref is forwarded so callers read `.value` as before.
  */
-const SlashTextarea = forwardRef<HTMLTextAreaElement, Props>(function SlashTextarea({ commands, onSubmit, placeholder, style, className }, ref) {
+const SlashTextarea = forwardRef<HTMLTextAreaElement, Props>(function SlashTextarea({ commands, onSubmit, placeholder, style, className, machine, cwd }, ref) {
   const localRef = useRef<HTMLTextAreaElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
   useImperativeHandle(ref, () => localRef.current as HTMLTextAreaElement, []);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [index, setIndex] = useState(0);
+  const [uploading, setUploading] = useState(0); // in-flight upload count
+  const [dragOver, setDragOver] = useState(false);
+  const [note, setNote] = useState("");
+  const canAttach = !!machine && !!cwd;
+
+  // Insert text at the cursor of the (uncontrolled) textarea, keeping height in sync.
+  const insertAtCursor = (text: string) => {
+    const el = localRef.current;
+    if (!el) return;
+    const s = el.selectionStart ?? el.value.length, e = el.selectionEnd ?? el.value.length;
+    el.value = el.value.slice(0, s) + text + el.value.slice(e);
+    const pos = s + text.length;
+    el.selectionStart = el.selectionEnd = pos;
+    autoGrow(el);
+    el.focus();
+  };
+
+  // Upload a pasted/dropped/picked file to the session host (<cwd>/.rcw-uploads/…) and
+  // drop the ABSOLUTE path into the message so Claude (running in cwd) can read it.
+  const uploadFile = async (file: File) => {
+    if (!machine || !cwd || file.size > 25 * 1024 * 1024) { if (file.size > 25 * 1024 * 1024) setNote("file too large (>25MB)"); return; }
+    setUploading((n) => n + 1); setNote("");
+    try {
+      const dataUrl: string = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.onerror = () => rej(new Error("read failed")); r.readAsDataURL(file); });
+      const base64 = dataUrl.slice(dataUrl.indexOf(",") + 1);
+      const ext = ((file.name.split(".").pop() || file.type.split("/")[1] || "bin")).replace(/[^\w]/g, "").slice(0, 8) || "bin";
+      const base = (file.name.replace(/\.[^.]+$/, "") || "pasted").replace(/[^\w.-]+/g, "_").slice(0, 40);
+      const rel = `.rcw-uploads/${base}-${Date.now()}.${ext}`;
+      const r = await window.cowork.writeFileBase64({ cwd, machine, file: rel, base64 });
+      if (!r.ok) throw new Error(r.error || "upload failed");
+      insertAtCursor(`${cwd.replace(/\/$/, "")}/${rel} `);
+    } catch (e) {
+      setNote(e instanceof Error ? e.message : "upload failed");
+    } finally {
+      setUploading((n) => Math.max(0, n - 1));
+    }
+  };
+  const uploadFiles = (files: FileList | File[]) => { const arr = Array.from(files); if (arr.length) void Promise.all(arr.map(uploadFile)); };
 
   const filtered = useMemo(() => {
     if (!open) return [];
@@ -78,6 +120,10 @@ const SlashTextarea = forwardRef<HTMLTextAreaElement, Props>(function SlashTexta
         placeholder={placeholder}
         rows={1}
         onInput={(e) => onInput(e.currentTarget)}
+        onPaste={(e) => { if (canAttach && e.clipboardData.files.length) { e.preventDefault(); uploadFiles(e.clipboardData.files); } }}
+        onDragOver={(e) => { if (canAttach && e.dataTransfer.types.includes("Files")) { e.preventDefault(); setDragOver(true); } }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={(e) => { setDragOver(false); if (canAttach && e.dataTransfer.files.length) { e.preventDefault(); uploadFiles(e.dataTransfer.files); } }}
         onKeyDown={(e) => {
           if (open && filtered.length > 0) {
             if (e.key === "ArrowDown") { e.preventDefault(); setIndex((i) => Math.min(filtered.length - 1, i + 1)); return; }
@@ -87,8 +133,27 @@ const SlashTextarea = forwardRef<HTMLTextAreaElement, Props>(function SlashTexta
           }
           if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); onSubmit(); }
         }}
-        style={style}
+        style={{ ...style, ...(dragOver ? { outline: "2px dashed rgb(var(--accent))", outlineOffset: -2 } : null) }}
       />
+      {canAttach && (
+        <>
+          <input ref={fileRef} type="file" multiple style={{ display: "none" }}
+            onChange={(e) => { if (e.target.files) uploadFiles(e.target.files); e.target.value = ""; }} />
+          <button type="button" title="Attach a file — uploads to the session host and inserts its path"
+            onMouseDown={(e) => { e.preventDefault(); fileRef.current?.click(); }}
+            style={{ position: "absolute", right: 8, bottom: 8, width: 26, height: 26, borderRadius: 7, cursor: "pointer",
+              border: "1px solid var(--border)", background: "rgb(var(--primary) / 0.08)", color: "rgb(var(--primary-soft))",
+              display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13 }}>
+            {uploading > 0 ? "…" : "📎"}
+          </button>
+        </>
+      )}
+      {(uploading > 0 || note) && (
+        <div className="mono" style={{ position: "absolute", left: 4, bottom: "calc(100% + 4px)", fontSize: 10, letterSpacing: ".04em",
+          color: note ? "#e0736a" : "rgb(var(--accent))" }}>
+          {uploading > 0 ? `↑ uploading ${uploading} file${uploading > 1 ? "s" : ""}…` : note}
+        </div>
+      )}
     </div>
   );
 });

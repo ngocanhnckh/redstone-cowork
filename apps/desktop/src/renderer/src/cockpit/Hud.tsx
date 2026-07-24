@@ -26,6 +26,7 @@ import AgentIdentityCard from "./AgentIdentityCard";
 import AppsModal, { AppIcon } from "./AppsModal";
 import ContextColumn from "./ContextColumn";
 import AnswerDock from "./AnswerDock";
+import yiaSealUrl from "../assets/yia-seal.png?url";
 import Markdown from "./Markdown";
 import ErrorBoundary from "./ErrorBoundary";
 import ContextGauge from "./ContextGauge";
@@ -1999,6 +2000,8 @@ export default function Hud() {
     <div ref={rootRef} className="hud-root" style={{ flex: 1, minHeight: 0, position: "relative", overflow: "hidden" }}>
       <HudStyles />
       <span className="hud-grid" />
+      {/* Huge faint agency seal watermark behind the whole HUD. */}
+      <img className="hud-seal" src={yiaSealUrl} alt="" aria-hidden="true" />
       {/* Futuristic pop-up alerts when a background session finishes / needs an answer */}
       <CompletionNotifier />
       <OverdueAlert />
@@ -2041,6 +2044,12 @@ function HudStyles() {
           linear-gradient(rgb(var(--primary-soft) / 0.05) 1px, transparent 1px),
           linear-gradient(90deg, rgb(var(--primary-soft) / 0.05) 1px, transparent 1px);
         background-size: 44px 44px; animation: hud-pan 24s linear infinite; }
+      /* Oversized agency seal watermark, centred behind everything. */
+      .hud-seal { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+        width:min(78vh, 62vw); height:auto; z-index:0; pointer-events:none; opacity:0.05;
+        filter: drop-shadow(0 0 60px rgb(var(--primary-soft) / 0.4)); animation: hud-seal-spin 240s linear infinite; }
+      @keyframes hud-seal-spin { from { transform:translate(-50%,-50%) rotate(0deg);} to { transform:translate(-50%,-50%) rotate(360deg);} }
+      body.rcw-hidden .hud-seal { animation: none; }
       @keyframes hud-pan { from { background-position: 0 0, 0 0; } to { background-position: 44px 44px, 44px 44px; } }
       .hud-blink { animation: hud-blink 1.1s steps(1) infinite; }
       @keyframes hud-blink { 50% { opacity: 0; } }
