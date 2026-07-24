@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ratingsFor, ovrOf, STAT_LABELS, type Analytics, type Stats } from "./AgencyView";
+import { ratingsFor, ovrOf, STAT_LABELS, type Analytics, type Stats } from "./agencyStats";
 import { findRank } from "./ranks";
 import type { AgencyMission, AgencyMissionDetail, AgencyMissionTransition, AgencyGithubStat } from "../../../shared/agency";
 import { Tiles, Bars, ActivityChart, GithubHeatmap, fmtK } from "./agencyCharts";
