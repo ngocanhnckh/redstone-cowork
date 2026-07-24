@@ -34,26 +34,36 @@ export default function LockScreen({ onUnlock, onSignOut }: Props) {
   // is enrolled we OPEN in scan mode (identity concealed until recognised).
   useEffect(() => {
     (async () => {
-      try {
-        const me = await window.cowork.accountsMe();
-        let trust = await window.cowork.deviceTrust().catch(() => null);
-        if (me && "username" in me && me.username) {
-          const a = me as { displayName: string; username: string; photo?: string | null; hasPin?: boolean; hasFace?: boolean };
-          const ag: Agent = { displayName: a.displayName || a.username, username: a.username, photo: a.photo ?? null, hasPin: !!a.hasPin };
-          setAgent(ag);
-          // If the account has an enrolled face (e.g. one an admin added from the roster
-          // photo) but this device isn't trusted yet, trust it now — we're already in an
-          // authenticated session — so face unlock becomes available without a re-login.
-          if (!trust && a.hasFace) {
-            const r = await window.cowork.deviceTrustEstablish().catch(() => ({ ok: false }));
-            if (r.ok) trust = await window.cowork.deviceTrust().catch(() => null);
-          }
-          setFaceReady(!!trust);
-          if (trust) { setPhase("scanning"); setMsg("LOOK AT THE CAMERA"); }
-          else if (!ag.hasPin) { setPhase("setpin"); setMsg("SET A 4–8 DIGIT UNLOCK PIN"); }
-          else { setPhase("pin"); setMsg("ENTER YOUR PIN"); }
-        }
-      } catch { /* fall back to sign out */ }
+      // Device trust is LOCAL and works even when the session token has idle-expired —
+      // face sign-in uses the device secret, not the token. So decide face availability
+      // from trust FIRST, and only use accountsMe (which can 401 on an expired token) to
+      // enrich the displayed identity. Never let a failed accountsMe hide face unlock.
+      let trust = await window.cowork.deviceTrust().catch(() => null);
+      const me = await window.cowork.accountsMe().catch(() => null);
+      const acct = me && "username" in me && me.username
+        ? (me as { displayName: string; username: string; photo?: string | null; hasPin?: boolean; hasFace?: boolean })
+        : null;
+
+      // If the account has an enrolled face but this device isn't trusted yet, trust it
+      // now (only possible while the token is still valid).
+      if (!trust && acct?.hasFace) {
+        const r = await window.cowork.deviceTrustEstablish().catch(() => ({ ok: false }));
+        if (r.ok) trust = await window.cowork.deviceTrust().catch(() => null);
+      }
+
+      // Identity for the reveal — from the account if available, else the trust record
+      // (which carries username/displayName/photo), else a neutral placeholder.
+      const ag: Agent = acct
+        ? { displayName: acct.displayName || acct.username, username: acct.username, photo: acct.photo ?? null, hasPin: !!acct.hasPin }
+        : trust
+          ? { displayName: trust.displayName || trust.username, username: trust.username, photo: trust.photo, hasPin: true }
+          : { displayName: "AGENT", username: "", photo: null, hasPin: true };
+      setAgent(ag);
+
+      setFaceReady(!!trust);
+      if (trust) { setPhase("scanning"); setMsg("LOOK AT THE CAMERA"); }
+      else if (acct && !acct.hasPin) { setPhase("setpin"); setMsg("SET A 4–8 DIGIT UNLOCK PIN"); }
+      else { setPhase("pin"); setMsg("ENTER YOUR PIN"); }
     })();
   }, []);
 
