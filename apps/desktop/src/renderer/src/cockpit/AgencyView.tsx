@@ -50,30 +50,40 @@ const CSS = `
   border:1px solid var(--border); background: rgb(var(--primary) / 0.05); color: var(--text); outline:none; }
 .agc-search input:focus { border-color: rgb(var(--primary) / 0.6); box-shadow: 0 0 0 1px rgb(var(--primary) / 0.25); }
 
-/* Vertical leaderboard */
-.agc-list { flex:1; min-height:0; overflow-y:auto; padding:2px 18px 26px; display:flex; flex-direction:column; gap:8px; }
-.agc-row { display:flex; align-items:center; gap:15px; padding:11px 16px; border-radius:13px; cursor:pointer; animation: agc-in .25s ease both;
-  border:1px solid var(--border); background: rgb(var(--primary) / 0.035); transition: border-color .14s, background .14s, transform .1s; }
-.agc-row:hover { border-color: var(--tier-b); background: rgb(var(--primary) / 0.08); }
-.agc-rank { font-family:var(--font-display); font-size:30px; font-weight:700; line-height:1; min-width:52px; text-align:center; flex-shrink:0;
-  display:flex; align-items:baseline; justify-content:center; }
-.agc-rank-hash { font-size:14px; opacity:.6; margin-right:1px; }
-.agc-rowphoto { width:50px; height:50px; border-radius:12px; object-fit:cover; border:1.5px solid var(--tier-b); box-shadow:0 0 16px -6px var(--tier-b); background:#05090d; flex-shrink:0; }
-.agc-rowphoto.ph { display:flex; align-items:center; justify-content:center; font-size:22px; color: rgb(var(--primary-soft) / .5); }
-.agc-rowid { flex:1; min-width:0; }
-.agc-rowname { font-size:15px; font-weight:700; color:#f0f7ff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.agc-rowsub { font-size:10.5px; color: var(--text-faint); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.agc-rowreal { font-size:9.5px; color: rgb(var(--primary-soft)); margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.agc-rowbars { display:flex; gap:11px; flex-shrink:0; }
-.agc-rowbar { display:flex; flex-direction:column; align-items:center; gap:3px; }
-.agc-rowbar > b { font-size:11px; color:#e6f2f4; font-variant-numeric:tabular-nums; line-height:1; }
-.agc-rowbar-track { width:8px; height:36px; border-radius:4px; background: rgb(var(--primary) / 0.1); display:flex; align-items:flex-end; overflow:hidden; }
-.agc-rowbar-fill { width:100%; border-radius:4px; background: linear-gradient(180deg, var(--tier-a), var(--tier-b)); transition: height .5s ease; }
-.agc-rowbar > span { font-size:7.5px; letter-spacing:.04em; color: var(--text-soft); }
-.agc-rowovr { display:flex; flex-direction:column; align-items:center; justify-content:center; width:58px; flex-shrink:0; }
-.agc-rowovr b { font-family:var(--font-display); font-size:30px; line-height:.9; color: var(--tier-a); text-shadow:0 0 13px var(--tier-b); }
-.agc-rowovr span { font-size:7.5px; letter-spacing:.14em; color: var(--text-soft); margin-top:3px; text-align:center; }
-@media (max-width: 720px) { .agc-rowbars { display:none; } }
+/* Vertical stack of horizontal player cards */
+.agc-list { flex:1; min-height:0; overflow-y:auto; padding:4px 18px 26px; display:flex; flex-direction:column; gap:14px; }
+.agc-card { position:relative; border-radius:16px; padding:2px; cursor:pointer; animation: agc-in .28s ease both;
+  background: linear-gradient(120deg, var(--tier-a), var(--tier-b)); box-shadow: 0 14px 36px -18px rgb(0 0 0 / .7); transition: box-shadow .15s; }
+.agc-card:hover { box-shadow: 0 20px 50px -16px var(--tier-b); }
+.agc-inner { position:relative; overflow:hidden; border-radius:14px; padding:15px 18px; display:flex; align-items:center; gap:22px;
+  background: linear-gradient(180deg, rgb(6 12 20 / .94), rgb(8 16 26 / .97)); }
+.agc-inner::before { content:""; position:absolute; inset:0; pointer-events:none; opacity:.5;
+  background: linear-gradient(115deg, transparent 38%, rgb(255 255 255 / .12) 50%, transparent 62%); background-size: 240% 100%; animation: agc-shine 6s ease-in-out infinite; }
+.agc-left { display:flex; align-items:center; gap:16px; flex-shrink:0; }
+.agc-ovr { display:flex; flex-direction:column; align-items:center; justify-content:center; min-width:56px; }
+.agc-ovr b { font-family:var(--font-display); font-size:40px; line-height:.9; color: var(--tier-a); text-shadow: 0 0 16px var(--tier-b); }
+.agc-ovr span { font-size:8px; letter-spacing:.22em; color: var(--text-soft); margin-top:2px; }
+.agc-tier { display:inline-block; margin-top:6px; font-size:8px; font-weight:800; letter-spacing:.16em; padding:2px 7px; border-radius:5px;
+  background: linear-gradient(180deg, var(--tier-a), var(--tier-b)); color: var(--tier-text); }
+.agc-photo { width:76px; height:76px; border-radius:14px; object-fit:cover; border:2px solid var(--tier-b); box-shadow:0 0 20px -6px var(--tier-b); background:#05090d; flex-shrink:0; }
+.agc-photo.ph { display:flex; align-items:center; justify-content:center; font-size:32px; color: rgb(255 255 255 / .35); }
+.agc-idcol { min-width:120px; }
+.agc-name { font-size:16px; font-weight:700; color:#f0f7ff; line-height:1.15; }
+.agc-sub { font-size:10px; letter-spacing:.06em; color: var(--text-faint); margin-top:3px; }
+.agc-insignia { font-size:11px; letter-spacing:.22em; color:#ffd166; margin-top:5px; min-height:12px; }
+.agc-right { flex:1; min-width:0; display:flex; flex-direction:column; gap:9px; }
+.agc-stats { display:grid; grid-template-columns:1fr 1fr; gap:6px 20px; }
+.agc-stat { display:flex; align-items:center; gap:9px; }
+.agc-stat-l { font-size:9px; letter-spacing:.1em; color: var(--text-soft); width:82px; flex-shrink:0; text-align:right; }
+.agc-stat-track { flex:1; height:7px; border-radius:4px; background: rgb(var(--primary) / .1); overflow:hidden; }
+.agc-stat-fill { height:100%; border-radius:4px; background: linear-gradient(90deg, var(--tier-b), var(--tier-a)); transition: width .5s ease; }
+.agc-stat b { font-size:12px; color:#e6f2f4; width:22px; text-align:right; font-variant-numeric:tabular-nums; }
+.agc-real { display:flex; flex-wrap:wrap; gap:6px 16px; padding-top:8px; border-top:1px solid rgb(255 255 255 / .1); font-size:10px; letter-spacing:.04em; color: var(--text-faint); }
+.agc-real b { color: rgb(var(--primary-soft)); font-weight:600; }
+.agc-rankbadge { position:absolute; top:-10px; left:-10px; z-index:3; min-width:32px; height:32px; padding:0 8px; border-radius:16px;
+  display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:800; font-family:var(--font-display);
+  border:2px solid #06121a; box-shadow:0 4px 14px rgb(0 0 0 / .6); }
+@media (max-width: 760px) { .agc-inner { flex-direction:column; align-items:stretch; gap:14px; } .agc-left { justify-content:flex-start; } .agc-stats { grid-template-columns:1fr; } }
 
 /* IRC chat */
 .agx-chat { flex:1; min-height:0; display:flex; flex-direction:column; padding:0 18px 14px; }
@@ -214,34 +224,55 @@ function AgentDossierModal({ a, input, meUsername, onClose }: { a: Analytics; in
 }
 
 const MEDAL_COLOR = ["#ffd166", "#cdd6de", "#e0a878"];
-/** One vertical leaderboard row: prominent rank number, identity, per-stat mini bars, OVR. */
-function LeaderRow({ a, rank, input, onOpen }: { a: Analytics; rank: number; input: StatInput; onOpen: () => void }) {
+function StatRow({ label, val }: { label: string; val: number }) {
+  return (
+    <div className="agc-stat" title={`${label} ${val}`}>
+      <span className="agc-stat-l">{label}</span>
+      <div className="agc-stat-track"><div className="agc-stat-fill" style={{ width: `${val}%` }} /></div>
+      <b>{val}</b>
+    </div>
+  );
+}
+
+/** The football-style player card, laid out HORIZONTALLY for the vertical leaderboard:
+ *  left = rank + OVR + photo + identity + radar; right = per-stat bars + real numbers. */
+function PlayerCard({ a, rank, input, onOpen }: { a: Analytics; rank: number; input: StatInput; onOpen: () => void }) {
   const s = ratingsFor(input);
   const ovr = ovrOf(s);
   const tier = tierOf(ovr);
   const rk = findRank(a.level);
-  const style = { "--tier-a": tier.a, "--tier-b": tier.b } as React.CSSProperties;
+  const style = { "--tier-a": tier.a, "--tier-b": tier.b, "--tier-text": tier.text } as React.CSSProperties;
   return (
-    <div className="agc-row" style={style} onClick={onOpen} role="button" title="View full dossier">
-      <div className="agc-rank" style={{ color: rank <= 3 ? MEDAL_COLOR[rank - 1] : "var(--text-faint)" }}>
-        <span className="agc-rank-hash">#</span>{rank}
-      </div>
-      {a.photo ? <img className="agc-rowphoto" src={a.photo} alt="" /> : <div className="agc-rowphoto ph">◍</div>}
-      <div className="agc-rowid">
-        <div className="agc-rowname">{a.displayName || a.username}</div>
-        <div className="agc-rowsub">@{a.username}{a.division ? ` · ${a.division}` : ""}{rk?.name ? ` · ${rk.name}` : ""}</div>
-        <div className="agc-rowreal">{input.ghContrib.toLocaleString()} contrib · {input.done} done · {input.jiraTotal} assigned</div>
-      </div>
-      <div className="agc-rowbars">
-        {STAT_LABELS.map(({ key, short }) => (
-          <div className="agc-rowbar" key={key} title={`${short} ${s[key]}`}>
-            <b>{s[key]}</b>
-            <div className="agc-rowbar-track"><div className="agc-rowbar-fill" style={{ height: `${s[key]}%` }} /></div>
-            <span>{short}</span>
+    <div className="agc-card" style={style} onClick={onOpen} role="button" title="View full dossier">
+      <div className="agc-rankbadge" style={{ background: rank <= 3 ? MEDAL_COLOR[rank - 1] : "#2a3947", color: rank <= 3 ? "#1a1006" : "#cfe0ec" }}>{rank}</div>
+      <div className="agc-inner">
+        {/* Left: identity + OVR + radar */}
+        <div className="agc-left">
+          <div className="agc-ovr">
+            <b>{ovr}</b><span>OVR</span>
+            <span className="agc-tier">{tier.name}</span>
           </div>
-        ))}
+          {a.photo ? <img className="agc-photo" src={a.photo} alt={a.displayName} /> : <div className="agc-photo ph">◍</div>}
+          <div className="agc-idcol">
+            <div className="agc-name">{a.displayName || a.username}</div>
+            <div className="agc-sub">@{a.username}{a.division ? ` · ${a.division}` : ""}</div>
+            <div className="agc-insignia">{rk?.insignia ? `${rk.insignia}  ${rk.name}` : rk?.name ?? ""}</div>
+          </div>
+          <MiniRadar s={s} />
+        </div>
+        {/* Right: per-stat bars + real numbers */}
+        <div className="agc-right">
+          <div className="agc-stats">
+            {STAT_LABELS.map(({ key, long }) => <StatRow key={key} label={long} val={s[key]} />)}
+          </div>
+          <div className="agc-real">
+            <span><b>{input.ghContrib.toLocaleString()}</b> contrib</span>
+            <span><b>{input.done}</b> / {input.jiraTotal} jira</span>
+            <span><b>{input.ghActiveDays}</b> active days</span>
+            <span><b>{fmtK(a.tokensInput + a.tokensOutput)}</b> tok · {fmtDur(a.timeSpentMs)}</span>
+          </div>
+        </div>
       </div>
-      <div className="agc-rowovr"><b>{ovr}</b><span>{tier.name}</span></div>
     </div>
   );
 }
@@ -409,7 +440,7 @@ export default function AgencyView() {
             if (shown.length === 0) return <div className="soft" style={{ padding: 24, fontSize: 13 }}>No agents match “{search}”.</div>;
             return (
               <div className="agc-list no-scrollbar">
-                {shown.map(({ a, rank }) => <LeaderRow key={a.accountId} a={a} rank={rank} input={inputFor(a)} onOpen={() => setOpenAgent(a)} />)}
+                {shown.map(({ a, rank }) => <PlayerCard key={a.accountId} a={a} rank={rank} input={inputFor(a)} onOpen={() => setOpenAgent(a)} />)}
               </div>
             );
           })()}
