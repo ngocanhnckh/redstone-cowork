@@ -94,6 +94,8 @@ contextBridge.exposeInMainWorld("cowork", {
     ipcRenderer.invoke(IPC.instruct, { sessionId, text }),
   claudeCapturePane: (machine: string, wrapperId: string): Promise<string> =>
     ipcRenderer.invoke(IPC.claudeCapturePane, { machine, wrapperId }),
+  claudeSendKeys: (machine: string, wrapperId: string, opts: { text?: string; enter?: boolean }): Promise<boolean> =>
+    ipcRenderer.invoke(IPC.claudeSendKeys, { machine, wrapperId, ...opts }),
   interrupt: (sessionId: string, text?: string): Promise<unknown> =>
     ipcRenderer.invoke(IPC.interrupt, { sessionId, text }),
   switchMode: (sessionId: string, mode: string): Promise<unknown> =>

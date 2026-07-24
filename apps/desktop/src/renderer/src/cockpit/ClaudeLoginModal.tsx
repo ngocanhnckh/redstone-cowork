@@ -6,8 +6,31 @@ import type { SessionView } from "../types";
 // the OAuth URL out of the pane so they can open it in their real browser with one click,
 // then types the pasted code back — Claude persists the credentials on the host itself.
 
-const URL_RE = /(https?:\/\/[^\s"'`)]*(?:claude\.ai|anthropic\.com)[^\s"'`)]*)/i;
+const DOMAIN_RE = /(?:claude\.(?:ai|com)|anthropic\.com)/i;
 const OK_RE = /login successful|logged in|successfully (?:logged|authenticated)|authentication successful/i;
+
+/** Pull the OAuth URL out of the captured pane. Claude hard-wraps the (long) URL across
+ *  several 80-col lines with real newlines, so we find the line that starts the URL, then
+ *  stitch on the following lines while they're entirely non-whitespace (URL continuation)
+ *  — the next real line ("Paste code here…") is indented, which stops the join. */
+function extractLoginUrl(pane: string): string | null {
+  const lines = pane.split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) {
+    const t = lines[i].trim();
+    if (!/^https?:\/\//i.test(t) || !DOMAIN_RE.test(t)) continue;
+    let url = t;
+    for (let j = i + 1; j < lines.length; j++) {
+      const raw = lines[j];
+      if (raw.length === 0 || /\s/.test(raw)) break; // continuation lines contain no spaces
+      url += raw.trim();
+    }
+    return url;
+  }
+  return null;
+}
+// The "Select login method" menu that `/login` shows first — option 1 is "Claude account
+// with subscription". We press Enter to accept the default once we see it.
+const MENU_RE = /select login method|claude account with subscription|anthropic console account|log in with (?:your )?claude/i;
 
 const CSS = `
 .clg-scrim { position:fixed; inset:0; z-index:200; background:rgb(4 8 12 / .6); backdrop-filter:blur(4px);
@@ -46,6 +69,7 @@ export default function ClaudeLoginModal({ session, onClose }: { session: Sessio
   const [sentCode, setSentCode] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const triesRef = useRef(0);
+  const menuDone = useRef(false); // have we already pressed Enter on the login-method menu?
 
   const stopPoll = useCallback(() => { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; } }, []);
   useEffect(() => stopPoll, [stopPoll]);
@@ -56,19 +80,28 @@ export default function ClaudeLoginModal({ session, onClose }: { session: Sessio
     try {
       const pane = await window.cowork.claudeCapturePane(session.machine, session.wrapperId);
       if (OK_RE.test(pane)) { setPhase("done"); stopPoll(); return; }
-      const m = pane.match(URL_RE);
-      if (m) { setUrl((u) => u || m[1]); setPhase((p) => (p === "waiting" ? "link" : p)); }
+      const found = extractLoginUrl(pane);
+      if (found) { setUrl((u) => u || found); setPhase((p) => (p === "waiting" ? "link" : p)); return; }
+      // No URL yet — if the "Select login method" menu is showing, accept option 1
+      // (Claude account with subscription) by pressing Enter, once.
+      if (!menuDone.current && MENU_RE.test(pane)) {
+        menuDone.current = true;
+        await window.cowork.claudeSendKeys(session.machine, session.wrapperId, { enter: true });
+      }
     } catch { /* ignore — manual fallback stays available */ }
-    if (triesRef.current > 40) stopPoll(); // ~80s
+    if (triesRef.current > 45) stopPoll(); // ~80s
   }, [session.machine, session.wrapperId, stopPoll]);
 
   const start = async () => {
-    setErr(""); setBusy(true); setPhase("waiting"); triesRef.current = 0;
+    if (!session.wrapperId) return;
+    setErr(""); setBusy(true); setPhase("waiting"); triesRef.current = 0; menuDone.current = false;
     try {
-      await window.cowork.instruct(session.id, "/login");
+      // Type `/login` + Enter straight into the Claude TUI. The menu-confirm Enter is
+      // sent by the poller once it sees the "Select login method" screen.
+      await window.cowork.claudeSendKeys(session.machine, session.wrapperId, { text: "/login", enter: true });
       stopPoll();
-      pollRef.current = setInterval(poll, 2000);
-      void poll();
+      pollRef.current = setInterval(poll, 1800);
+      setTimeout(() => void poll(), 900);
     } catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
     finally { setBusy(false); }
   };
@@ -78,14 +111,14 @@ export default function ClaudeLoginModal({ session, onClose }: { session: Sessio
 
   const sendCode = async () => {
     const c = code.trim();
-    if (!c) return;
+    if (!c || !session.wrapperId) return;
     setErr(""); setBusy(true);
     try {
-      await window.cowork.instruct(session.id, c);
+      await window.cowork.claudeSendKeys(session.machine, session.wrapperId, { text: c, enter: true });
       setSentCode(true);
       // Watch for the success line.
       stopPoll(); triesRef.current = 0;
-      pollRef.current = setInterval(poll, 2000);
+      pollRef.current = setInterval(poll, 1800);
     } catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
     finally { setBusy(false); }
   };
