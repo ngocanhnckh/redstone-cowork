@@ -3,23 +3,27 @@ import { describeFace, loadFaceModels } from "./faceEngine";
 
 // Quick-unlock lock screen shown on app launch / after the away-timeout when an
 // agent session is stored. The session token stays put — this just re-verifies the
-// person with FACE (if the device is enrolled) or a PIN. If the agent has no PIN and
-// no enrolled face, they're prompted to set a PIN now (first-time setup).
+// person. When this device is face-enrolled we SCAN FIRST: the agent's identity is
+// hidden until the camera recognises them ("◈ AGENT IDENTIFIED"), then it unlocks —
+// no PIN needed. PIN is the fallback (and first-time setup when there's neither).
 
 interface Props {
   onUnlock: () => void;
   onSignOut: () => void;
 }
 type Agent = { displayName: string; username: string; photo: string | null; hasPin: boolean };
+// scanning → face camera up, identity concealed; identified → recognised, revealing;
+// pin → enter PIN; setpin → first-time PIN setup.
+type Phase = "scanning" | "identified" | "pin" | "setpin";
 
 export default function LockScreen({ onUnlock, onSignOut }: Props) {
   const [agent, setAgent] = useState<Agent | null>(null);
   const [faceReady, setFaceReady] = useState(false);
-  const [mode, setMode] = useState<"pin" | "setpin">("pin");
+  const [phase, setPhase] = useState<Phase>("pin");
   const [pin, setPin] = useState("");
   const [pin2, setPin2] = useState("");
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState("LOOK AT THE CAMERA OR ENTER PIN");
+  const [msg, setMsg] = useState("IDENTIFY YOURSELF");
   const [err, setErr] = useState("");
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -27,27 +31,38 @@ export default function LockScreen({ onUnlock, onSignOut }: Props) {
 
   const stopCam = useCallback(() => { streamRef.current?.getTracks().forEach((t) => t.stop()); streamRef.current = null; }, []);
 
-  // Load identity + whether face unlock is available on this device.
+  // Load identity + whether face unlock is available on this device. When the device
+  // is enrolled we OPEN in scan mode (identity concealed until recognised).
   useEffect(() => {
     (async () => {
       try {
         const me = await window.cowork.accountsMe();
-        const trust = await window.cowork.deviceTrust().catch(() => null);
+        let trust = await window.cowork.deviceTrust().catch(() => null);
         if (me && "username" in me && me.username) {
-          const a = me as { displayName: string; username: string; photo?: string | null; hasPin?: boolean };
+          const a = me as { displayName: string; username: string; photo?: string | null; hasPin?: boolean; hasFace?: boolean };
           const ag: Agent = { displayName: a.displayName || a.username, username: a.username, photo: a.photo ?? null, hasPin: !!a.hasPin };
           setAgent(ag);
+          // If the account has an enrolled face (e.g. one an admin added from the roster
+          // photo) but this device isn't trusted yet, trust it now — we're already in an
+          // authenticated session — so face unlock becomes available without a re-login.
+          if (!trust && a.hasFace) {
+            const r = await window.cowork.deviceTrustEstablish().catch(() => ({ ok: false }));
+            if (r.ok) trust = await window.cowork.deviceTrust().catch(() => null);
+          }
           setFaceReady(!!trust);
-          if (!ag.hasPin && !trust) { setMode("setpin"); setMsg("SET A 4–8 DIGIT UNLOCK PIN"); }
+          if (trust) { setPhase("scanning"); setMsg("LOOK AT THE CAMERA"); }
+          else if (!ag.hasPin) { setPhase("setpin"); setMsg("SET A 4–8 DIGIT UNLOCK PIN"); }
+          else { setPhase("pin"); setMsg("ENTER YOUR PIN"); }
         }
       } catch { /* fall back to sign out */ }
     })();
   }, []);
 
-  // Face unlock loop (only if the device is enrolled).
+  // Face-scan loop — runs whenever we're actively scanning.
   useEffect(() => {
-    if (!faceReady || mode !== "pin") return;
+    if (phase !== "scanning" || !faceReady) return;
     let alive = true;
+    faceTried.current = false;
     (async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 480, height: 480 }, audio: false });
@@ -55,12 +70,11 @@ export default function LockScreen({ onUnlock, onSignOut }: Props) {
         streamRef.current = stream;
         if (videoRef.current) { videoRef.current.srcObject = stream; await videoRef.current.play().catch(() => {}); }
         await loadFaceModels();
-        // Try to match for ~2.5s after the camera warms up.
-        setTimeout(() => void tryFace(), 1800);
-      } catch { setMsg("ENTER PIN"); }
+        setTimeout(() => { if (alive) void tryFace(); }, 1600);
+      } catch { setMsg("CAMERA UNAVAILABLE — USE PIN"); toPin(); }
     })();
     return () => { alive = false; stopCam(); };
-  }, [faceReady, mode]); // eslint-disable-line
+  }, [phase, faceReady]); // eslint-disable-line
 
   async function tryFace() {
     if (faceTried.current || !videoRef.current) return;
@@ -69,18 +83,32 @@ export default function LockScreen({ onUnlock, onSignOut }: Props) {
     try {
       let d: number[] | null = null;
       for (let i = 0; i < 5 && !d; i++) { d = await describeFace(videoRef.current); if (!d) await new Promise((r) => setTimeout(r, 400)); }
-      if (!d) { setMsg("NO FACE — ENTER PIN"); faceTried.current = false; return; }
+      if (!d) { setMsg("NO FACE DETECTED — RETRYING…"); faceTried.current = false; setTimeout(() => void tryFace(), 900); return; }
       const r = await window.cowork.faceLogin(d);
-      if (r.ok) { setMsg("◈ IDENTITY CONFIRMED"); stopCam(); return onUnlock(); }
-      setMsg("FACE NOT RECOGNIZED — ENTER PIN"); faceTried.current = false;
-    } catch { setMsg("ENTER PIN"); faceTried.current = false; }
+      if (r.ok) {
+        // Boom — identified. Reveal the agent, then unlock after a short flourish.
+        if (r.account) setAgent((prev) => prev ?? { displayName: r.account!.displayName, username: r.account!.username, photo: null, hasPin: false });
+        setPhase("identified"); setMsg("◈ AGENT IDENTIFIED");
+        stopCam();
+        setTimeout(() => onUnlock(), 1100);
+        return;
+      }
+      setMsg("NOT RECOGNISED — TRY PIN"); faceTried.current = false;
+    } catch { setMsg("SCAN FAILED — USE PIN"); faceTried.current = false; }
   }
+
+  function toPin() {
+    stopCam();
+    setPhase(agent && !agent.hasPin && !faceReady ? "setpin" : "pin");
+    setMsg(agent && !agent.hasPin ? "SET A 4–8 DIGIT UNLOCK PIN" : "ENTER YOUR PIN");
+  }
+  function toScan() { setErr(""); setPin(""); setPhase("scanning"); setMsg("LOOK AT THE CAMERA"); }
 
   async function submitPin() {
     if (busy) return;
     setBusy(true); setErr("");
     try {
-      if (mode === "setpin") {
+      if (phase === "setpin") {
         if (!/^[0-9]{4,8}$/.test(pin)) { setErr("PIN must be 4–8 digits"); return; }
         if (pin !== pin2) { setErr("PINs don't match"); return; }
         const r = await window.cowork.pinSet(pin);
@@ -88,40 +116,71 @@ export default function LockScreen({ onUnlock, onSignOut }: Props) {
         setErr("Could not set PIN");
       } else {
         const r = await window.cowork.pinVerify(pin);
-        if (r.ok) { stopCam(); return onUnlock(); }
+        if (r.ok) { setPhase("identified"); setMsg("◈ ACCESS GRANTED"); stopCam(); setTimeout(() => onUnlock(), 700); return; }
         setErr("Incorrect PIN"); setPin("");
       }
     } catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
     finally { setBusy(false); }
   }
 
+  const scanning = phase === "scanning";
+  const identified = phase === "identified";
+  const concealed = scanning; // hide identity until recognised
+  const isPin = phase === "pin" || phase === "setpin";
+
   return (
     <div className="lk">
       <style>{CSS}</style>
       <div className="lk-grid" />
       <div className="lk-card">
-        {agent?.photo ? <img className="lk-photo" src={agent.photo} alt="" /> : <div className="lk-photo ph">◍</div>}
-        <div className="lk-kick">{mode === "setpin" ? "SECURE THIS DEVICE" : "IDENTITY LOCK"}</div>
-        <div className="lk-name">{agent?.displayName ?? "AGENT"}</div>
-        {agent && <div className="lk-user">@{agent.username}</div>}
-
-        {faceReady && mode === "pin" && (
-          <div className="lk-cam"><video ref={videoRef} muted playsInline /><span className="lk-sweep" /></div>
+        {/* Identity block — concealed while scanning, revealed on identification. */}
+        {concealed ? (
+          <div className="lk-photo ph unknown">◍</div>
+        ) : agent?.photo ? (
+          <img className={`lk-photo${identified ? " reveal" : ""}`} src={agent.photo} alt="" />
+        ) : (
+          <div className={`lk-photo ph${identified ? " reveal" : ""}`}>◍</div>
         )}
-        <div className="lk-msg">{mode === "setpin" ? "SET A 4–8 DIGIT UNLOCK PIN" : msg}</div>
+        <div className="lk-kick">
+          {phase === "setpin" ? "SECURE THIS DEVICE" : identified ? "IDENTITY CONFIRMED" : scanning ? "◍ UNIDENTIFIED" : "IDENTITY LOCK"}
+        </div>
+        <div className="lk-name">{concealed ? "SCANNING…" : agent?.displayName ?? "AGENT"}</div>
+        {!concealed && agent && <div className="lk-user">@{agent.username}</div>}
 
-        <input className="lk-pin" type="password" inputMode="numeric" value={pin} maxLength={8} autoFocus
-          onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))} onKeyDown={(e) => e.key === "Enter" && submitPin()}
-          placeholder={mode === "setpin" ? "NEW PIN" : "• • • •"} />
-        {mode === "setpin" && (
-          <input className="lk-pin" type="password" inputMode="numeric" value={pin2} maxLength={8}
-            onChange={(e) => setPin2(e.target.value.replace(/\D/g, ""))} onKeyDown={(e) => e.key === "Enter" && submitPin()}
-            placeholder="CONFIRM PIN" />
+        {(scanning || identified) && faceReady && (
+          <div className={`lk-cam${identified ? " ok" : ""}`}>
+            <video ref={videoRef} muted playsInline />
+            {scanning && <span className="lk-sweep" />}
+            {identified && <span className="lk-check">◈</span>}
+          </div>
         )}
-        <button className="lk-btn" onClick={submitPin} disabled={busy || pin.length < 4}>
-          {busy ? "…" : mode === "setpin" ? "SET PIN & ENTER" : "UNLOCK"}
-        </button>
+        <div className="lk-msg">{msg}</div>
+
+        {isPin && (
+          <>
+            <input className="lk-pin" type="password" inputMode="numeric" value={pin} maxLength={8} autoFocus
+              onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))} onKeyDown={(e) => e.key === "Enter" && submitPin()}
+              placeholder={phase === "setpin" ? "NEW PIN" : "• • • •"} />
+            {phase === "setpin" && (
+              <input className="lk-pin" type="password" inputMode="numeric" value={pin2} maxLength={8}
+                onChange={(e) => setPin2(e.target.value.replace(/\D/g, ""))} onKeyDown={(e) => e.key === "Enter" && submitPin()}
+                placeholder="CONFIRM PIN" />
+            )}
+            <button className="lk-btn" onClick={submitPin} disabled={busy || pin.length < 4}>
+              {busy ? "…" : phase === "setpin" ? "SET PIN & ENTER" : "UNLOCK"}
+            </button>
+          </>
+        )}
+
         {err && <div className="lk-err">⚠ {err}</div>}
+
+        {/* Method switch: offer the other route when both are available. */}
+        {scanning && (agent?.hasPin || !faceReady) && (
+          <button className="lk-alt" onClick={toPin}>USE PIN INSTEAD</button>
+        )}
+        {phase === "pin" && faceReady && (
+          <button className="lk-alt" onClick={toScan}>◈ SCAN FACE</button>
+        )}
         <button className="lk-alt" onClick={() => { stopCam(); onSignOut(); }}>SIGN OUT (FULL LOGIN)</button>
       </div>
     </div>
@@ -139,13 +198,19 @@ const CSS = `
   box-shadow: 0 0 60px -18px rgb(84 230 255 / .5); display:flex; flex-direction:column; align-items:center; }
 .lk-photo { width:88px; height:88px; border-radius:14px; object-fit:cover; border:2px solid rgb(84 230 255 / .55); box-shadow:0 0 20px -5px rgb(84 230 255 / .7); background:#05090d; }
 .lk-photo.ph { display:flex; align-items:center; justify-content:center; font-size:40px; color: rgb(84 230 255 / .4); }
+.lk-photo.ph.unknown { color: rgb(84 230 255 / .25); border-color: rgb(84 230 255 / .25); box-shadow:none; animation: lk-pulse 1.6s ease-in-out infinite; }
+.lk-photo.reveal { animation: lk-reveal .5s cubic-bezier(.2,.9,.3,1.2) both; border-color: rgb(120 255 190 / .85); box-shadow:0 0 26px -4px rgb(120 255 190 / .7); }
+@keyframes lk-reveal { 0% { opacity:0; transform: scale(.6) rotate(-6deg); filter:brightness(2); } 100% { opacity:1; transform:none; filter:none; } }
+@keyframes lk-pulse { 0%,100% { opacity:.5; } 50% { opacity:1; } }
 .lk-kick { font-size:9px; letter-spacing:.34em; color: rgb(84 230 255 / .85); margin-top:12px; font-weight:700; }
 .lk-name { font-size:17px; font-weight:700; letter-spacing:.05em; color:#e6f2f4; margin-top:3px; }
 .lk-user { font-size:10px; color: var(--text-faint, #6a7a80); letter-spacing:.14em; }
 .lk-cam { position:relative; width:120px; height:120px; margin:14px 0 4px; border-radius:12px; overflow:hidden; border:1px solid rgb(84 230 255 / .45); background:#03080c; }
+.lk-cam.ok { border-color: rgb(120 255 190 / .8); box-shadow:0 0 22px -4px rgb(120 255 190 / .7); }
 .lk-cam video { width:100%; height:100%; object-fit:cover; transform: scaleX(-1); }
 .lk-sweep { position:absolute; left:6%; right:6%; height:2px; background: linear-gradient(90deg,transparent,rgb(84 230 255 / .95),transparent); box-shadow:0 0 16px 3px rgb(84 230 255 / .5); animation: lk-sweep 1.2s ease-in-out infinite alternate; }
 @keyframes lk-sweep { 0% { top:8%; } 100% { top:88%; } }
+.lk-check { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:44px; color: rgb(120 255 190 / .95); text-shadow:0 0 18px rgb(120 255 190 / .8); animation: lk-reveal .45s ease both; }
 .lk-msg { font-size:9.5px; letter-spacing:.2em; color: rgb(84 230 255 / .8); min-height:14px; margin:12px 0 10px; }
 .lk-pin { width:100%; box-sizing:border-box; margin-bottom:9px; padding:11px 14px; border-radius:9px; text-align:center; letter-spacing:.4em; font-size:18px; font-family:inherit;
   border:1px solid rgb(84 230 255 / .3); background: rgb(84 230 255 / .05); color:#e6f2f4; outline:none; }

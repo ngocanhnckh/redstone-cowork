@@ -231,6 +231,16 @@ export default function Login({ onConnected }: LoginProps) {
     } catch { /* enrollment is best-effort — never blocks sign-in */ }
   }
 
+  // Run after any successful ACCOUNT login: opt-in camera enrollment, then trust this
+  // device so the lock screen can face-match against an existing descriptor (e.g. one
+  // an admin pre-enrolled from the agent's roster photo). Both are best-effort.
+  async function finishAuth(account: { username: string; displayName: string }) {
+    await maybeEnrollFace(account);
+    try { await window.cowork.deviceTrustEstablish(); } catch { /* best-effort */ }
+    stopCam();
+    onConnected();
+  }
+
   function toggleSound() {
     const on = !soundOn;
     setSoundOn(on);
@@ -242,7 +252,7 @@ export default function Login({ onConnected }: LoginProps) {
     setError("");
     try {
       const r = await window.cowork.jiraOAuthLogin(serverUrl.trim());
-      if (r.ok) { await maybeEnrollFace(r.account ?? { username: "agent", displayName: "Agent" }); stopCam(); return onConnected(); }
+      if (r.ok) return finishAuth(r.account ?? { username: "agent", displayName: "Agent" });
       setError(r.error ?? "Jira sign-in failed.");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -259,7 +269,7 @@ export default function Login({ onConnected }: LoginProps) {
     try {
       if (mode === "agency") {
         const r = await window.cowork.accountLogin(serverUrl.trim(), username.trim(), password);
-        if (r.ok) { await maybeEnrollFace(r.account ?? { username: username.trim(), displayName: username.trim() }); stopCam(); return onConnected(); }
+        if (r.ok) return finishAuth(r.account ?? { username: username.trim(), displayName: username.trim() });
         setError(r.error ?? "ACCESS DENIED — credentials rejected.");
       } else if (mode === "redstone") {
         const r = await window.cowork.redstoneLogin(serverUrl.trim(), username.trim(), password);

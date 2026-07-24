@@ -58,6 +58,27 @@ export class FaceService {
     await this.store.addFaceDescriptor(accountId, descriptor);
   }
 
+  /** Does this account have any enrolled face descriptor (self- or admin-enrolled)? */
+  async hasFace(accountId: string): Promise<boolean> {
+    return (await this.store.getFaceDescriptors(accountId)).length > 0;
+  }
+
+  /** Trust THIS device for the already-signed-in account (possession factor), without
+   *  adding a face descriptor — used after a password/OAuth login so face unlock works
+   *  on the lock screen against an EXISTING descriptor (e.g. one an admin added from a
+   *  roster photo). Returns a one-time device secret the client stores. */
+  async trustCurrentDevice(account: Account, deviceLabel: string): Promise<{ deviceSecret: string }> {
+    const deviceSecret = "rcwd_" + randomBytes(24).toString("hex");
+    await this.store.trustDevice({
+      id: randomUUID(),
+      accountId: account.id,
+      secretHash: sha256(deviceSecret),
+      label: deviceLabel.slice(0, 200),
+      createdAt: new Date(),
+    });
+    return { deviceSecret };
+  }
+
   /** Face sign-in: resolve the device→account, match the live descriptor against that
    *  account's enrolled descriptors, and issue a session. Two-factor by construction. */
   async login(deviceSecret: string, descriptor: number[], ctx: LoginContext): Promise<AccountSession> {

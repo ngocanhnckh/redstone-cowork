@@ -25,6 +25,7 @@ export const IPC = {
   accountSessions: "api:accounts:sessions",
   deviceSecretGet: "device:secret:get",
   deviceSecretSet: "device:secret:set",
+  deviceTrustEstablish: "device:trust:establish",
   accountsMe: "api:accounts:me",
   accountsList: "api:accounts:list",
   accountCreate: "api:accounts:create",

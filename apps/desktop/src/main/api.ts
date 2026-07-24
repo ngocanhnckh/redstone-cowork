@@ -123,6 +123,11 @@ export async function pinVerify(pin: string): Promise<{ ok: boolean }> { return 
 export async function faceEnroll(descriptor: number[], deviceLabel: string): Promise<{ deviceSecret: string }> {
   return (await req("/accounts/me/face/enroll", { method: "POST", body: JSON.stringify({ descriptor, deviceLabel }) })).json();
 }
+/** Trust this device for the signed-in agent (no camera) → one-time device secret, so
+ *  the lock screen can face-match against an existing (e.g. admin-added) descriptor. */
+export async function trustDevice(deviceLabel: string): Promise<{ deviceSecret: string }> {
+  return (await req("/accounts/me/device/trust", { method: "POST", body: JSON.stringify({ deviceLabel }) })).json();
+}
 /** Admin: pre-enroll a descriptor computed from an agent's roster photo. */
 export async function faceAdminEnroll(id: string, descriptor: number[]): Promise<{ ok: boolean }> {
   return (await req(`/accounts/${encodeURIComponent(id)}/face`, { method: "POST", body: JSON.stringify({ descriptor }) })).json();

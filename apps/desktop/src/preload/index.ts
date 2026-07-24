@@ -44,6 +44,8 @@ contextBridge.exposeInMainWorld("cowork", {
     ipcRenderer.invoke(IPC.faceLogin, { descriptor }),
   deviceTrust: (): Promise<{ serverUrl: string; username: string; displayName: string; photo: string | null } | null> =>
     ipcRenderer.invoke(IPC.deviceSecretGet),
+  deviceTrustEstablish: (): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke(IPC.deviceTrustEstablish),
   accountsMe: (): Promise<unknown> => ipcRenderer.invoke(IPC.accountsMe),
   accountsList: (): Promise<unknown[]> => ipcRenderer.invoke(IPC.accountsList),
   accountCreate: (input: unknown): Promise<unknown> => ipcRenderer.invoke(IPC.accountCreate, { input }),

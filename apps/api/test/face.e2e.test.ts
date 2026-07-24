@@ -90,6 +90,41 @@ describe("face biometric sign-in", () => {
     expect(forbidden.status).toBe(403);
   });
 
+  it("admin pre-enroll + device trust (no camera) enables face login against the roster descriptor", async () => {
+    const adminTok = await login("anh.nguyen", "admin-pass");
+    const created = await request(app.getHttpServer()).post("/accounts").set("Authorization", `Bearer ${adminTok}`)
+      .send({ username: "agent.trust", password: "password-t1" });
+    const agentTok = await login("agent.trust", "password-t1");
+
+    // No face yet → /me reports hasFace false
+    let me = await request(app.getHttpServer()).get("/accounts/me").set("Authorization", `Bearer ${agentTok}`);
+    expect(me.body.hasFace).toBe(false);
+
+    // Admin pre-enrolls a descriptor from the roster photo
+    await request(app.getHttpServer()).post(`/accounts/${created.body.id}/face`)
+      .set("Authorization", `Bearer ${adminTok}`).send({ descriptor: desc(0.9) });
+
+    // Now /me reports hasFace true
+    me = await request(app.getHttpServer()).get("/accounts/me").set("Authorization", `Bearer ${agentTok}`);
+    expect(me.body.hasFace).toBe(true);
+
+    // Agent trusts THIS device without a camera capture → device secret
+    const trust = await request(app.getHttpServer()).post("/accounts/me/device/trust")
+      .set("Authorization", `Bearer ${agentTok}`).send({ deviceLabel: "Agent Mac" });
+    expect(trust.status).toBe(200);
+    expect(trust.body.deviceSecret).toMatch(/^rcwd_/);
+
+    // Face login against the ADMIN-added descriptor now works from this device
+    const ok = await request(app.getHttpServer()).post("/auth/face/login")
+      .send({ deviceSecret: trust.body.deviceSecret, descriptor: desc(0.9, 0.02) });
+    expect(ok.status).toBe(200);
+    expect(ok.body.account.username).toBe("agent.trust");
+
+    // Device trust requires an authenticated agent
+    const anon = await request(app.getHttpServer()).post("/accounts/me/device/trust").send({ deviceLabel: "x" });
+    expect(anon.status).toBe(401);
+  });
+
   it("rejects malformed descriptors (not 128 floats)", async () => {
     const adminTok = await login("anh.nguyen", "admin-pass");
     await request(app.getHttpServer()).post("/accounts").set("Authorization", `Bearer ${adminTok}`)

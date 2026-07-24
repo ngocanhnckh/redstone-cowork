@@ -30,6 +30,7 @@ declare global {
       pinVerify(pin: string): Promise<{ ok: boolean }>;
       faceLogin(descriptor: number[]): Promise<{ ok: boolean; error?: string; account?: { username: string; displayName: string; role: string } }>;
       deviceTrust(): Promise<{ serverUrl: string; username: string; displayName: string; photo: string | null } | null>;
+      deviceTrustEstablish(): Promise<{ ok: boolean; error?: string }>;
       serversList(): Promise<import("../../shared/servers").ServerView[]>;
       serverCreate(input: { name: string; host: string; sshUser?: string; sshPort?: number; description?: string }): Promise<import("../../shared/servers").ServerView>;
       serverUpdate(id: string, patch: Record<string, unknown>): Promise<import("../../shared/servers").ServerView>;
@@ -48,7 +49,7 @@ declare global {
         username: string,
         password: string,
       ): Promise<{ ok: boolean; error?: string; account?: { username: string; displayName: string; role: string } }>;
-      accountsMe(): Promise<(AgentAccount & { hasPin?: boolean }) | { id: null; role: string; username: null; kind?: string }>;
+      accountsMe(): Promise<(AgentAccount & { hasPin?: boolean; hasFace?: boolean }) | { id: null; role: string; username: null; kind?: string }>;
       accountsList(): Promise<AgentAccount[]>;
       accountCreate(input: {
         username: string; password: string; displayName?: string; role?: "admin" | "member";

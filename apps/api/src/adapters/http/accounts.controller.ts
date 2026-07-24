@@ -15,6 +15,7 @@ import { BadRequestException } from "@nestjs/common";
 import { ZodError } from "zod";
 import { AccountProfilePatchSchema, NewAccountSchema } from "@rcw/shared";
 import { AccountsService } from "../../application/accounts.service";
+import { FaceService } from "../../application/face.service";
 import { InstanceTokenGuard, isAdminScope, type GuardedRequest } from "./instance-token.guard";
 
 /** Admin = the instance token (the installation itself) or an admin-role account.
@@ -26,12 +27,16 @@ function requireAdmin(req: GuardedRequest): void {
 @Controller("accounts")
 @UseGuards(InstanceTokenGuard)
 export class AccountsController {
-  constructor(private readonly accounts: AccountsService) {}
+  constructor(private readonly accounts: AccountsService, private readonly face: FaceService) {}
 
   @Get("me")
   async me(@Req() req: GuardedRequest) {
     if (req.authKind === "account" && req.account) {
-      return { ...req.account, hasPin: await this.accounts.hasPin(req.account.id) };
+      return {
+        ...req.account,
+        hasPin: await this.accounts.hasPin(req.account.id),
+        hasFace: await this.face.hasFace(req.account.id),
+      };
     }
     // Instance-token (or other privileged) callers aren't a person; say so explicitly.
     return { id: null, role: "admin", username: null, kind: req.authKind };

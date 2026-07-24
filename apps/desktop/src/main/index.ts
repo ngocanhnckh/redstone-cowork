@@ -393,6 +393,24 @@ ipcMain.handle(IPC.faceAdminEnroll, async (_e, a: { id: string; descriptor: numb
   try { return await api.faceAdminEnroll(a.id, a.descriptor); }
   catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
 });
+// Trust this device (no camera) so the lock screen can offer face unlock against an
+// existing descriptor. Only meaningful when the account already has a face enrolled.
+ipcMain.handle(IPC.deviceTrustEstablish, async () => {
+  try {
+    const cfg = loadConfig();
+    if (!cfg?.serverUrl) return { ok: false, error: "not signed in" };
+    const me = (await api.accountsMe()) as { username?: string; displayName?: string; photo?: string | null; hasFace?: boolean } | null;
+    if (!me?.username) return { ok: false, error: "no account" };
+    if (!me.hasFace) return { ok: false, error: "no enrolled face" }; // nothing to match against
+    if (loadDeviceTrust()) return { ok: true }; // already trusted on this device
+    const label = `${hostname()} · ${process.platform}`;
+    const { deviceSecret } = await api.trustDevice(label);
+    saveDeviceTrust({ serverUrl: cfg.serverUrl, username: me.username, displayName: me.displayName ?? me.username, photo: me.photo ?? null, deviceSecret });
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+});
 ipcMain.handle(IPC.pinSet, (_e, a: { pin: string }) => api.pinSet(a.pin));
 ipcMain.handle(IPC.pinVerify, (_e, a: { pin: string }) => api.pinVerify(a.pin));
 ipcMain.handle(IPC.faceLogin, async (_e, a: { descriptor: number[] }) => {

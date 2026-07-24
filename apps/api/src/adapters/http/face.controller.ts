@@ -50,6 +50,16 @@ export class FaceEnrollController {
     }
   }
 
+  /** Trust THIS device for the signed-in agent (possession factor) WITHOUT a live camera
+   *  capture, so the lock screen can face-match against an existing descriptor (e.g. one
+   *  an admin pre-enrolled from a roster photo). Returns a one-time device secret. */
+  @Post("me/device/trust")
+  @HttpCode(200)
+  async trustDevice(@Req() req: GuardedRequest, @Body() body: { deviceLabel?: string }) {
+    if (req.authKind !== "account" || !req.account) throw new ForbiddenException("sign in as an agent first");
+    return await this.face.trustCurrentDevice(req.account, String(body?.deviceLabel ?? ""));
+  }
+
   /** Admin pre-enrollment: store a descriptor computed from the agent's roster photo. */
   @Post(":id/face")
   @HttpCode(200)
