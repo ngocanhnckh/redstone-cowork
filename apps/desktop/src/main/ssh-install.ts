@@ -15,6 +15,40 @@ function loadPty(): typeof import("node-pty") {
 export type InstallArgs = { host: string; sshUser: string; sshPort: number; command: string; password?: string };
 export type InstallResult = { ok: boolean; authFailed?: boolean; output: string; error?: string };
 
+const shSingle = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
+
+/** Build the remote command that actually STARTS a redstone-claude session — the same
+ *  background steps `redstone claude` performs (create a detached `rcw-<id>` tmux with
+ *  claude + a hidden poll window that reports to the cockpit), minus the interactive
+ *  attach + kill-session the wrapper does when a human is at the terminal. The folder is
+ *  pre-trusted in ~/.claude.json so claude doesn't block on the first-run trust prompt
+ *  (where the session would be invisible to the cockpit). Base64-wrapped so no quoting of
+ *  the folder path can break the shell. Prints `RCW_STARTED <session>` on success. */
+export function buildLaunchCommand(opts: { folder: string; danger: boolean }): string {
+  const flags = opts.danger ? "--dangerously-skip-permissions" : "";
+  const script = [
+    `set -e`,
+    `FOLDER=${shSingle(opts.folder)}`,
+    `mkdir -p "$FOLDER"`,
+    // Pre-accept the folder-trust prompt (same effect as choosing "Yes, I trust this folder").
+    `python3 -c 'import json,os,sys; p=os.path.expanduser("~/.claude.json"); d=(json.load(open(p)) if os.path.exists(p) else {}); d.setdefault("projects",{}).setdefault(sys.argv[1],{})["hasTrustDialogAccepted"]=True; json.dump(d,open(p,"w"))' "$FOLDER" >/dev/null 2>&1 || true`,
+    `cd "$FOLDER"`,
+    `command -v redstone >/dev/null 2>&1 || { echo "RCW_ERR redstone not installed on this server"; exit 3; }`,
+    `command -v tmux >/dev/null 2>&1 || { echo "RCW_ERR tmux not installed on this server"; exit 3; }`,
+    `redstone hook >/dev/null 2>&1 || true`,
+    `ID=$(od -An -N4 -tx1 /dev/urandom | tr -d ' \\n')`,
+    `S="rcw-$ID"`,
+    `BIN="$HOME/.redstone/redstone.js"`,
+    `CLAUDECMD="RCW_WRAPPER_ID=$ID claude ${flags}; rcw_ec=\\$?; [ \\$rcw_ec -eq 0 ] || { echo; echo 'redstone: claude exited '\\$rcw_ec; echo 'press Enter to close'; read _; }"`,
+    `tmux new-session -d -s "$S" -c "$FOLDER" "$CLAUDECMD"`,
+    `tmux set-option -t "$S" status off`,
+    `tmux new-window -d -t "$S" "node $BIN poll --wrapper $ID --tmux $S:0"`,
+    `echo "RCW_STARTED $S"`,
+  ].join("\n");
+  const b64 = Buffer.from(script, "utf8").toString("base64");
+  return `echo ${b64} | base64 -d | bash -l`;
+}
+
 const baseOpts = (port: number) => ["-o", "StrictHostKeyChecking=accept-new", "-o", "ConnectTimeout=15", "-p", String(port || 22)];
 
 /** Run the install command on `sshUser@host`. Without a password → key-only (fast fail on

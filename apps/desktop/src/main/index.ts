@@ -34,7 +34,7 @@ import {
   type StartArgs as ForwardStartArgs,
 } from "./forwarding";
 import { sshSetup, type SshSetupArgs } from "./ssh-setup";
-import { sshInstall } from "./ssh-install";
+import { sshInstall, buildLaunchCommand } from "./ssh-install";
 import { saveSshPassword, getSshPassword } from "./ssh-creds";
 import { listDir, readFileAt, writeFileAt, writeFileBase64, deletePath, makeDir, createFile, uploadLocalFile, searchFiles, searchFilesStream, downloadFileTo } from "./files";
 import { gitInfo } from "./git";
@@ -386,6 +386,22 @@ ipcMain.handle(IPC.serverInstall, async (e, a: { host: string; sshUser: string; 
   }
   if (res.ok && a.password && a.savePassword) saveSshPassword(a.sshUser, a.host, a.password);
   return res;
+});
+// Actually START a redstone-claude session on the server (no copy-paste). Same key →
+// saved-password → typed-password ladder as install. On success parses the new session
+// name; the cockpit picks it up via the poll window within a poll cycle.
+ipcMain.handle(IPC.sessionLaunch, async (e, a: { host: string; sshUser: string; sshPort: number; folder: string; danger: boolean; password?: string; savePassword?: boolean }) => {
+  const send = (chunk: string) => { try { e.sender.send(IPC.serverInstallData, chunk); } catch { /* ignore */ } };
+  const command = buildLaunchCommand({ folder: a.folder, danger: a.danger });
+  let res = await sshInstall({ host: a.host, sshUser: a.sshUser, sshPort: a.sshPort, command, password: a.password }, send);
+  if (!res.ok && res.authFailed && !a.password) {
+    const saved = getSshPassword(a.sshUser, a.host);
+    if (saved) { send("\r\n[auth] key not accepted — trying saved password…\r\n"); res = await sshInstall({ host: a.host, sshUser: a.sshUser, sshPort: a.sshPort, command, password: saved }, send); }
+  }
+  if (res.ok && a.password && a.savePassword) saveSshPassword(a.sshUser, a.host, a.password);
+  const m = res.output.match(/RCW_STARTED\s+(rcw-[0-9a-f]+)/);
+  const rcwErr = res.output.match(/RCW_ERR\s+(.+)/);
+  return { ok: res.ok && !!m, authFailed: res.authFailed, session: m?.[1] ?? null, output: res.output, error: rcwErr?.[1] ?? res.error };
 });
 ipcMain.handle(IPC.accountsAnalytics, () => api.accountsAnalytics());
 ipcMain.handle(IPC.jiraNotifications, () => api.jiraNotifications());

@@ -127,6 +127,39 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
   const [savePw, setSavePw] = useState(true);
   const [installErr, setInstallErr] = useState("");
   const [showManual, setShowManual] = useState(false);
+  // Launch-over-SSH state (the app starts the session for the user — no copy-paste).
+  const [launching, setLaunching] = useState(false);
+  const [launched, setLaunched] = useState<string | null>(null);
+  const [launchErr, setLaunchErr] = useState("");
+  const [launchLog, setLaunchLog] = useState("");
+  const [launchNeedsPw, setLaunchNeedsPw] = useState(false);
+  const [launchPw, setLaunchPw] = useState("");
+
+  async function runLaunch(password?: string) {
+    if (!server) return;
+    setLaunching(true); setLaunchErr(""); setLaunchLog("");
+    const off = window.cowork.onServerInstallData((c) => setLaunchLog((l) => (l + c).slice(-8000)));
+    try {
+      const r = await window.cowork.sessionLaunch({
+        host: server.host, sshUser: server.sshUser, sshPort: server.sshPort,
+        folder, danger: mode === "danger", password, savePassword: password ? savePw : false,
+      });
+      if (r.ok) {
+        setLaunched(r.session); setLaunchNeedsPw(false);
+        // Nudge the inventory so the freshly-started session appears in the cockpit.
+        for (let i = 0; i < 8; i++) { await new Promise((res) => setTimeout(res, 2500)); refreshInv(); }
+      } else if (r.authFailed) {
+        setLaunchNeedsPw(true);
+        setLaunchErr(password ? "That password was rejected — try again." : "SSH needs a password for this server.");
+      } else {
+        setLaunchErr(r.error || "Couldn't start the session — see the log below.");
+      }
+    } catch (e) {
+      setLaunchErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      off(); setLaunching(false);
+    }
+  }
 
   async function runInstall(password?: string) {
     if (!server || !provision) return;
@@ -211,12 +244,6 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
   }, [step, provision, redstoneInstalled, installing]); // eslint-disable-line
 
   // The command to run on the server to start the session.
-  const launchCmd = useMemo(() => {
-    const flag = mode === "danger" ? " --dangerously-skip-permissions" : "";
-    if (resume) return `redstone --resume ${resume.id}${flag}`;
-    return `cd ${shq(folder)} && redstone hook && redstone claude${flag}`;
-  }, [resume, folder, mode]);
-
   return (
     <div className="rcw-nw-scrim" onClick={onClose}>
       <style>{CSS}</style>
@@ -357,14 +384,51 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
           {step === "launch" && (
             <>
               <div className="rcw-nw-label">LAUNCH</div>
-              <div style={{ fontSize: 12, color: "var(--text-soft)", lineHeight: 1.6, marginBottom: 6 }}>
-                Run this on <b>{server?.name}</b> to {resume ? "resume" : "start"} the session in
-                {" "}<b>{mode === "danger" ? "DANGEROUS" : "normal"}</b> mode. It appears in your cockpit once it connects.
-              </div>
-              <Cmd cmd={launchCmd} label="RUN ON SERVER" />
-              <div className="faint" style={{ fontSize: 10.5, marginTop: 10 }}>
-                Tip: SSH in ({server?.sshUser}@{server?.host}{server?.sshPort !== 22 ? `:${server?.sshPort}` : ""}) and paste — or run it in any terminal on that machine.
-              </div>
+              {resume ? (
+                <>
+                  <div style={{ fontSize: 12, color: "var(--text-soft)", lineHeight: 1.6, marginBottom: 6 }}>
+                    <b>{resume.folder}</b> is already running on <b>{server?.name}</b> — it's in your cockpit. Close this and open it from the grid.
+                  </div>
+                </>
+              ) : launched ? (
+                <div style={{ padding: "10px 2px" }}>
+                  <div style={{ color: "#7fd18b", fontSize: 13, fontWeight: 600 }}>◈ Session started — {launched}</div>
+                  <div className="faint" style={{ fontSize: 11.5, marginTop: 6, lineHeight: 1.6 }}>
+                    Running in <b>{folder}</b> ({mode === "danger" ? "DANGEROUS" : "normal"} mode) on <b>{server?.name}</b>.
+                    It appears in your cockpit within a few seconds — close this and open it.
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div style={{ fontSize: 12, color: "var(--text-soft)", lineHeight: 1.6, marginBottom: 10 }}>
+                    Start the session in <b>{folder}</b> on <b>{server?.name}</b> in{" "}
+                    <b>{mode === "danger" ? "DANGEROUS" : "normal"}</b> mode. The app launches it over SSH — it shows up in your cockpit automatically.
+                  </div>
+                  {!launchNeedsPw ? (
+                    <button className="rcw-nw-btn" disabled={launching} onClick={() => runLaunch()}>
+                      {launching ? "◈ STARTING…" : "▶ START SESSION"}
+                    </button>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      <div className="rcw-nw-label">SSH PASSWORD FOR {server?.sshUser.toUpperCase()}@{server?.host}</div>
+                      <input className="rcw-nw-input" type="password" autoFocus value={launchPw} placeholder="password"
+                        onChange={(e) => setLaunchPw(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && launchPw) runLaunch(launchPw); }} />
+                      <label style={{ display: "flex", gap: 7, alignItems: "center", fontSize: 11, color: "var(--text-soft)", cursor: "pointer" }}>
+                        <input type="checkbox" checked={savePw} onChange={(e) => setSavePw(e.target.checked)} />
+                        Remember this password for {server?.host} (encrypted)
+                      </label>
+                      <button className="rcw-nw-btn" disabled={launching || !launchPw} onClick={() => runLaunch(launchPw)}>
+                        {launching ? "◈ STARTING…" : "▶ START WITH PASSWORD"}
+                      </button>
+                    </div>
+                  )}
+                  {launchErr && <div style={{ color: "#e0736a", fontSize: 11.5, marginTop: 8 }}>⚠ {launchErr}</div>}
+                  {launchLog && (
+                    <pre className="no-scrollbar" style={{ marginTop: 10, maxHeight: 140, overflowY: "auto", fontSize: 10.5, lineHeight: 1.5, color: "var(--text-soft)",
+                      background: "rgb(0 0 0 / .35)", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{launchLog}</pre>
+                  )}
+                </>
+              )}
             </>
           )}
         </div>

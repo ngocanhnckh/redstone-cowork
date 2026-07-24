@@ -25,6 +25,7 @@ export const IPC = {
   serverInstall: "api:servers:install",
   serverInstallData: "api:servers:install:data",
   serverSavedPassword: "api:servers:saved-password",
+  sessionLaunch: "api:session:launch",
   accountsAnalytics: "api:accounts:analytics",
   jiraNotifications: "api:jira:notifications",
   jiraNotificationsSeen: "api:jira:notifications:seen",

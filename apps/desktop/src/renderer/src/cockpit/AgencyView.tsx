@@ -121,8 +121,8 @@ const CSS = `
 .agc-x { position:absolute; top:14px; right:14px; width:30px; height:30px; border:1px solid var(--border); background:none; color:var(--text-soft); border-radius:8px; cursor:pointer; z-index:2; }
 .agc-x:hover { color:#fff; border-color: rgb(var(--primary) / .6); }
 .agc-dhero { display:flex; gap:18px; align-items:flex-start; margin-bottom:12px; padding-right:34px; }
-.agc-dphoto { width:96px; height:96px; border-radius:14px; object-fit:cover; border:2px solid var(--tier-b); box-shadow:0 0 22px -6px var(--tier-b); background:#05090d; flex-shrink:0; }
-.agc-dphoto.ph { display:flex; align-items:center; justify-content:center; font-size:42px; color: rgb(var(--primary-soft) / .5); }
+.agc-dphoto { width:150px; height:150px; border-radius:16px; object-fit:cover; border:2px solid var(--tier-b); box-shadow:0 0 30px -6px var(--tier-b); background:#05090d; flex-shrink:0; }
+.agc-dphoto.ph { display:flex; align-items:center; justify-content:center; font-size:64px; color: rgb(var(--primary-soft) / .5); }
 .agc-dchip { font-size:10px; letter-spacing:.14em; padding:3px 10px; border-radius:999px; border:1px solid rgb(224 162 74 / .5); color:#e0a24a; }
 .agc-dchip.alt { border-color: rgb(var(--primary) / .5); color: rgb(var(--primary-soft)); }
 .agc-dovr { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:6px 14px; border-radius:14px; border:1px solid var(--tier-b); background: rgb(var(--primary) / .06); flex-shrink:0; }
