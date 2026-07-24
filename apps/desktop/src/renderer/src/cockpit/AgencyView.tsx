@@ -3,6 +3,7 @@ import { findRank } from "./ranks";
 import type { AgencyMessage } from "../../../shared/agency";
 import AgencyProfile from "./AgencyProfile";
 import { Tiles, Bars, GithubHeatmap } from "./agencyCharts";
+import { AgentDmPanel } from "./AgencyDm";
 import type { AgencyAgentDossier } from "../../../shared/agency";
 
 // ——— AGENCY — organisation-wide arena ———
@@ -44,39 +45,35 @@ const CSS = `
 .agc-tab.soon { opacity:.5; cursor:default; }
 .agc-hd { display:flex; align-items:baseline; gap:12px; padding:14px 18px 6px; }
 .agc-hd h2 { font-family:var(--font-display); font-size:24px; margin:0; letter-spacing:.02em; color:#e6f2f4; }
-.agc-grid { flex:1; min-height:0; overflow-y:auto; padding:14px 18px 26px;
-  display:grid; grid-template-columns: repeat(auto-fill, minmax(232px, 1fr)); gap:16px; align-content:start; }
+.agc-search { padding: 4px 18px 10px; }
+.agc-search input { width:100%; box-sizing:border-box; padding:10px 14px; border-radius:11px; font-size:13px; font-family:inherit;
+  border:1px solid var(--border); background: rgb(var(--primary) / 0.05); color: var(--text); outline:none; }
+.agc-search input:focus { border-color: rgb(var(--primary) / 0.6); box-shadow: 0 0 0 1px rgb(var(--primary) / 0.25); }
 
-.agc-card { position:relative; border-radius:16px; padding:2px; animation: agc-in .3s ease both; cursor:pointer;
-  background: linear-gradient(160deg, var(--tier-a), var(--tier-b)); box-shadow: 0 16px 40px -16px rgb(0 0 0 / .7); }
-.agc-card:hover { box-shadow: 0 20px 50px -14px var(--tier-b); }
-.agc-inner { position:relative; overflow:hidden; border-radius:14px; padding:14px 14px 15px;
-  background: linear-gradient(180deg, rgb(6 12 20 / .93), rgb(8 16 26 / .97)); }
-.agc-inner::before { content:""; position:absolute; inset:0; pointer-events:none; opacity:.5;
-  background: linear-gradient(115deg, transparent 36%, rgb(255 255 255 / .14) 50%, transparent 64%); background-size: 220% 100%;
-  animation: agc-shine 5s ease-in-out infinite; }
-.agc-top { display:flex; gap:12px; }
-.agc-ovr { display:flex; flex-direction:column; align-items:center; justify-content:center; min-width:52px; }
-.agc-ovr b { font-family:var(--font-display); font-size:34px; line-height:.9; color: var(--tier-a); text-shadow: 0 0 14px var(--tier-b); }
-.agc-ovr span { font-size:8px; letter-spacing:.22em; color: var(--text-soft); margin-top:2px; }
-.agc-tier { display:inline-block; margin-top:6px; font-size:8px; font-weight:800; letter-spacing:.18em; padding:2px 7px; border-radius:5px;
-  background: linear-gradient(180deg, var(--tier-a), var(--tier-b)); color: var(--tier-text); }
-.agc-photo { width:60px; height:60px; border-radius:12px; object-fit:cover; border:1.5px solid var(--tier-b);
-  box-shadow:0 0 18px -5px var(--tier-b); background:#05090d; margin-left:auto; }
-.agc-photo.ph { display:flex; align-items:center; justify-content:center; font-size:26px; color: rgb(255 255 255 / .35); }
-.agc-name { font-size:14px; font-weight:700; letter-spacing:.03em; color:#f0f7ff; margin-top:11px; line-height:1.15; }
-.agc-sub { font-size:9.5px; letter-spacing:.1em; color: var(--text-faint); margin-top:2px; }
-.agc-insignia { font-size:11px; letter-spacing:.24em; color:#ffd166; margin-top:4px; min-height:12px; }
-.agc-statwrap { display:flex; align-items:center; gap:10px; margin-top:12px; padding-top:11px; border-top:1px solid rgb(255 255 255 / .1); }
-.agc-stats { flex:1; min-width:0; display:flex; flex-direction:column; gap:5px; }
-.agc-stat { display:flex; align-items:center; gap:7px; }
-.agc-stat b { font-size:12px; color:#e6f2f4; width:20px; text-align:right; font-variant-numeric:tabular-nums; }
-.agc-stat span { font-size:9px; letter-spacing:.1em; color: var(--text-soft); }
-.agc-real { display:flex; justify-content:space-between; margin-top:11px; font-size:9px; letter-spacing:.06em; color: var(--text-faint); }
-.agc-real b { color: rgb(var(--primary-soft)); font-weight:600; }
-.agc-rankbadge { position:absolute; top:-9px; left:-9px; z-index:3; width:30px; height:30px; border-radius:50%;
-  display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:800; font-family:var(--font-display);
-  border:2px solid #06121a; box-shadow:0 4px 14px rgb(0 0 0 / .6); }
+/* Vertical leaderboard */
+.agc-list { flex:1; min-height:0; overflow-y:auto; padding:2px 18px 26px; display:flex; flex-direction:column; gap:8px; }
+.agc-row { display:flex; align-items:center; gap:15px; padding:11px 16px; border-radius:13px; cursor:pointer; animation: agc-in .25s ease both;
+  border:1px solid var(--border); background: rgb(var(--primary) / 0.035); transition: border-color .14s, background .14s, transform .1s; }
+.agc-row:hover { border-color: var(--tier-b); background: rgb(var(--primary) / 0.08); }
+.agc-rank { font-family:var(--font-display); font-size:30px; font-weight:700; line-height:1; min-width:52px; text-align:center; flex-shrink:0;
+  display:flex; align-items:baseline; justify-content:center; }
+.agc-rank-hash { font-size:14px; opacity:.6; margin-right:1px; }
+.agc-rowphoto { width:50px; height:50px; border-radius:12px; object-fit:cover; border:1.5px solid var(--tier-b); box-shadow:0 0 16px -6px var(--tier-b); background:#05090d; flex-shrink:0; }
+.agc-rowphoto.ph { display:flex; align-items:center; justify-content:center; font-size:22px; color: rgb(var(--primary-soft) / .5); }
+.agc-rowid { flex:1; min-width:0; }
+.agc-rowname { font-size:15px; font-weight:700; color:#f0f7ff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.agc-rowsub { font-size:10.5px; color: var(--text-faint); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.agc-rowreal { font-size:9.5px; color: rgb(var(--primary-soft)); margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.agc-rowbars { display:flex; gap:11px; flex-shrink:0; }
+.agc-rowbar { display:flex; flex-direction:column; align-items:center; gap:3px; }
+.agc-rowbar > b { font-size:11px; color:#e6f2f4; font-variant-numeric:tabular-nums; line-height:1; }
+.agc-rowbar-track { width:8px; height:36px; border-radius:4px; background: rgb(var(--primary) / 0.1); display:flex; align-items:flex-end; overflow:hidden; }
+.agc-rowbar-fill { width:100%; border-radius:4px; background: linear-gradient(180deg, var(--tier-a), var(--tier-b)); transition: height .5s ease; }
+.agc-rowbar > span { font-size:7.5px; letter-spacing:.04em; color: var(--text-soft); }
+.agc-rowovr { display:flex; flex-direction:column; align-items:center; justify-content:center; width:58px; flex-shrink:0; }
+.agc-rowovr b { font-family:var(--font-display); font-size:30px; line-height:.9; color: var(--tier-a); text-shadow:0 0 13px var(--tier-b); }
+.agc-rowovr span { font-size:7.5px; letter-spacing:.14em; color: var(--text-soft); margin-top:3px; text-align:center; }
+@media (max-width: 720px) { .agc-rowbars { display:none; } }
 
 /* IRC chat */
 .agx-chat { flex:1; min-height:0; display:flex; flex-direction:column; padding:0 18px 14px; }
@@ -117,11 +114,6 @@ const CSS = `
 .agc-dradarnums b { color:#e6f2f4; }
 `;
 
-const MEDAL = ["linear-gradient(180deg,#ffe08a,#e0a24a)", "linear-gradient(180deg,#e6eef2,#9fb0bc)", "linear-gradient(180deg,#e0a878,#b5794a)"];
-
-function StatRow({ label, val }: { label: string; val: number }) {
-  return <div className="agc-stat"><b>{val}</b><span>{label}</span></div>;
-}
 
 const RADAR_KEYS: Array<keyof Stats> = ["DEL", "COD", "CON", "WRK", "THR"];
 function polar2(cx: number, cy: number, r: number, i: number, n: number): [number, number] {
@@ -144,7 +136,7 @@ function MiniRadar({ s }: { s: Stats }) {
 }
 
 /** Full-dossier modal for any agent, opened from an Arena card. */
-function AgentDossierModal({ a, input, onClose }: { a: Analytics; input: StatInput; onClose: () => void }) {
+function AgentDossierModal({ a, input, meUsername, onClose }: { a: Analytics; input: StatInput; meUsername: string | null; onClose: () => void }) {
   const [dossier, setDossier] = useState<AgencyAgentDossier | null>(null);
   useEffect(() => { window.cowork.agencyAgent(a.accountId).then(setDossier).catch(() => setDossier(null)); }, [a.accountId]);
   const gh = dossier?.github;
@@ -211,43 +203,45 @@ function AgentDossierModal({ a, input, onClose }: { a: Analytics; input: StatInp
         <div className="agc-dpanel" style={{ marginTop: 12 }}>
           {gh?.found ? <GithubHeatmap days={gh.days} total={gh.contribTotal} /> : <div className="soft" style={{ fontSize: 11.5 }}>{acc?.github ? "No public GitHub activity found." : "No GitHub linked."}</div>}
         </div>
+        {a.username !== meUsername && (
+          <div style={{ marginTop: 12 }}>
+            <AgentDmPanel accountId={a.accountId} name={a.displayName || a.username} meUsername={meUsername} />
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-function PlayerCard({ a, rank, input, onOpen }: { a: Analytics; rank: number; input: StatInput; onOpen: () => void }) {
+const MEDAL_COLOR = ["#ffd166", "#cdd6de", "#e0a878"];
+/** One vertical leaderboard row: prominent rank number, identity, per-stat mini bars, OVR. */
+function LeaderRow({ a, rank, input, onOpen }: { a: Analytics; rank: number; input: StatInput; onOpen: () => void }) {
   const s = ratingsFor(input);
   const ovr = ovrOf(s);
   const tier = tierOf(ovr);
   const rk = findRank(a.level);
-  const style = { "--tier-a": tier.a, "--tier-b": tier.b, "--tier-text": tier.text } as React.CSSProperties;
+  const style = { "--tier-a": tier.a, "--tier-b": tier.b } as React.CSSProperties;
   return (
-    <div className="agc-card" style={style} onClick={onOpen} role="button" title="View full dossier">
-      {rank <= 3 && <div className="agc-rankbadge" style={{ background: MEDAL[rank - 1], color: "#1a1006" }}>{rank}</div>}
-      <div className="agc-inner">
-        <div className="agc-top">
-          <div className="agc-ovr">
-            <b>{ovr}</b><span>OVR</span>
-            <span className="agc-tier">{tier.name}</span>
-          </div>
-          {a.photo ? <img className="agc-photo" src={a.photo} alt={a.displayName} /> : <div className="agc-photo ph">◍</div>}
-        </div>
-        <div className="agc-name">{a.displayName || a.username}</div>
-        <div className="agc-sub">@{a.username}{a.division ? ` · ${a.division}` : ""}</div>
-        <div className="agc-insignia">{rk?.insignia ? `${rk.insignia}  ${rk.name}` : rk?.name ?? ""}</div>
-        <div className="agc-statwrap">
-          <MiniRadar s={s} />
-          <div className="agc-stats">
-            {STAT_LABELS.map(({ key, short }) => <StatRow key={key} label={short} val={s[key]} />)}
-          </div>
-        </div>
-        <div className="agc-real">
-          <span><b>{input.ghContrib.toLocaleString()}</b> contrib</span>
-          <span><b>{input.done}</b> done</span>
-          <span><b>{fmtK(a.tokensInput + a.tokensOutput)}</b> tok</span>
-        </div>
+    <div className="agc-row" style={style} onClick={onOpen} role="button" title="View full dossier">
+      <div className="agc-rank" style={{ color: rank <= 3 ? MEDAL_COLOR[rank - 1] : "var(--text-faint)" }}>
+        <span className="agc-rank-hash">#</span>{rank}
       </div>
+      {a.photo ? <img className="agc-rowphoto" src={a.photo} alt="" /> : <div className="agc-rowphoto ph">◍</div>}
+      <div className="agc-rowid">
+        <div className="agc-rowname">{a.displayName || a.username}</div>
+        <div className="agc-rowsub">@{a.username}{a.division ? ` · ${a.division}` : ""}{rk?.name ? ` · ${rk.name}` : ""}</div>
+        <div className="agc-rowreal">{input.ghContrib.toLocaleString()} contrib · {input.done} done · {input.jiraTotal} assigned</div>
+      </div>
+      <div className="agc-rowbars">
+        {STAT_LABELS.map(({ key, short }) => (
+          <div className="agc-rowbar" key={key} title={`${short} ${s[key]}`}>
+            <b>{s[key]}</b>
+            <div className="agc-rowbar-track"><div className="agc-rowbar-fill" style={{ height: `${s[key]}%` }} /></div>
+            <span>{short}</span>
+          </div>
+        ))}
+      </div>
+      <div className="agc-rowovr"><b>{ovr}</b><span>{tier.name}</span></div>
     </div>
   );
 }
@@ -335,6 +329,7 @@ export default function AgencyView() {
   const [jiraByAccount, setJiraByAccount] = useState<Record<string, { completed: number; total: number }>>({});
   const [ghByAccount, setGhByAccount] = useState<Record<string, { contribTotal: number; activeDays: number }>>({});
   const [openAgent, setOpenAgent] = useState<Analytics | null>(null);
+  const [search, setSearch] = useState("");
 
   const inputFor = (a: Analytics): StatInput => ({
     done: jiraByAccount[a.accountId]?.completed ?? 0,
@@ -398,17 +393,27 @@ export default function AgencyView() {
             <h2>Agent Arena</h2>
             <span className="soft" style={{ fontSize: 11, letterSpacing: ".12em" }}>ranked by overall rating · updates live</span>
           </div>
+          <div className="agc-search">
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="🔍  Search agents by name, @handle or division…" />
+          </div>
           {err && <div style={{ padding: "0 18px 10px", color: "#ff9d94", fontSize: 12 }}>⚠ {err}</div>}
           {rows === null ? (
             <div className="soft" style={{ padding: 24, fontSize: 13 }}>Loading roster…</div>
           ) : ranked.length === 0 ? (
             <div className="soft" style={{ padding: 24, fontSize: 13 }}>No agents on the board yet.</div>
-          ) : (
-            <div className="agc-grid">
-              {ranked.map((a, i) => <PlayerCard key={a.accountId} a={a} rank={i + 1} input={inputFor(a)} onOpen={() => setOpenAgent(a)} />)}
-            </div>
-          )}
-          {openAgent && <AgentDossierModal a={openAgent} input={inputFor(openAgent)} onClose={() => setOpenAgent(null)} />}
+          ) : (() => {
+            const q = search.trim().toLowerCase();
+            // Rank number reflects the FULL leaderboard position, preserved when filtering.
+            const shown = ranked.map((a, i) => ({ a, rank: i + 1 }))
+              .filter(({ a }) => !q || a.displayName.toLowerCase().includes(q) || a.username.toLowerCase().includes(q) || (a.division || "").toLowerCase().includes(q));
+            if (shown.length === 0) return <div className="soft" style={{ padding: 24, fontSize: 13 }}>No agents match “{search}”.</div>;
+            return (
+              <div className="agc-list no-scrollbar">
+                {shown.map(({ a, rank }) => <LeaderRow key={a.accountId} a={a} rank={rank} input={inputFor(a)} onOpen={() => setOpenAgent(a)} />)}
+              </div>
+            );
+          })()}
+          {openAgent && <AgentDossierModal a={openAgent} input={inputFor(openAgent)} meUsername={meUsername} onClose={() => setOpenAgent(null)} />}
         </>
       )}
       {tab === "chat" && (

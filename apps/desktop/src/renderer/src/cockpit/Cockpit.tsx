@@ -11,6 +11,7 @@ import { RightRail } from "./Hud";
 import AgentGrid from "./AgentGrid";
 import AllSessions from "./AllSessions";
 import AgencyView from "./AgencyView";
+import { DmNotifier } from "./AgencyDm";
 import Hud from "./Hud";
 import BootScreen from "./BootScreen";
 import { useKeybindings } from "./useKeybindings";
@@ -379,6 +380,7 @@ export default function Cockpit() {
       <SettingsPanel />
       <CapsModal />
       <SessionSwitcher />
+      <DmNotifier />
     </div>
   );
 }
