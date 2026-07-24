@@ -89,10 +89,11 @@ const CSS = `
 .agc-name { font-size:14px; font-weight:700; letter-spacing:.03em; color:#f0f7ff; margin-top:11px; line-height:1.15; }
 .agc-sub { font-size:9.5px; letter-spacing:.1em; color: var(--text-faint); margin-top:2px; }
 .agc-insignia { font-size:11px; letter-spacing:.24em; color:#ffd166; margin-top:4px; min-height:12px; }
-.agc-stats { display:grid; grid-template-columns:1fr 1fr; gap:6px 12px; margin-top:12px; padding-top:11px; border-top:1px solid rgb(255 255 255 / .1); }
+.agc-statwrap { display:flex; align-items:center; gap:10px; margin-top:12px; padding-top:11px; border-top:1px solid rgb(255 255 255 / .1); }
+.agc-stats { flex:1; min-width:0; display:flex; flex-direction:column; gap:5px; }
 .agc-stat { display:flex; align-items:center; gap:7px; }
-.agc-stat b { font-size:13px; color:#e6f2f4; width:22px; text-align:right; font-variant-numeric:tabular-nums; }
-.agc-stat span { font-size:9px; letter-spacing:.12em; color: var(--text-soft); }
+.agc-stat b { font-size:12px; color:#e6f2f4; width:20px; text-align:right; font-variant-numeric:tabular-nums; }
+.agc-stat span { font-size:9px; letter-spacing:.1em; color: var(--text-soft); }
 .agc-real { display:flex; justify-content:space-between; margin-top:11px; font-size:9px; letter-spacing:.06em; color: var(--text-faint); }
 .agc-real b { color: rgb(var(--primary-soft)); font-weight:600; }
 .agc-rankbadge { position:absolute; top:-9px; left:-9px; z-index:3; width:30px; height:30px; border-radius:50%;
@@ -123,6 +124,26 @@ function StatRow({ label, val }: { label: string; val: number }) {
   return <div className="agc-stat"><b>{val}</b><span>{label}</span></div>;
 }
 
+const RADAR_KEYS: Array<keyof Stats> = ["OUT", "END", "MSN", "TMP", "CMP"];
+function polar2(cx: number, cy: number, r: number, i: number, n: number): [number, number] {
+  const a = -Math.PI / 2 + (i * 2 * Math.PI) / n;
+  return [cx + r * Math.cos(a), cy + r * Math.sin(a)];
+}
+/** Compact per-card radar of the five sub-ratings (inherits the card's tier colours). */
+function MiniRadar({ s }: { s: Stats }) {
+  const S = 108, cx = S / 2, cy = S / 2, R = 42, n = 5;
+  const shape = RADAR_KEYS.map((k, i) => polar2(cx, cy, R * (s[k] / 99), i, n).join(",")).join(" ");
+  return (
+    <svg width={S} height={S} viewBox={`0 0 ${S} ${S}`} style={{ flexShrink: 0 }}>
+      {[0.5, 1].map((rr, ri) => (
+        <polygon key={ri} points={RADAR_KEYS.map((_, i) => polar2(cx, cy, R * rr, i, n).join(",")).join(" ")} fill="none" stroke="rgb(255 255 255 / 0.13)" strokeWidth={1} />
+      ))}
+      {RADAR_KEYS.map((_, i) => { const [x, y] = polar2(cx, cy, R, i, n); return <line key={i} x1={cx} y1={cy} x2={x} y2={y} stroke="rgb(255 255 255 / 0.1)" strokeWidth={1} />; })}
+      <polygon points={shape} fill="var(--tier-b)" fillOpacity={0.4} stroke="var(--tier-a)" strokeWidth={1.5} />
+    </svg>
+  );
+}
+
 function PlayerCard({ a, rank, completed }: { a: Analytics; rank: number; completed: number }) {
   const s = ratingsFor(a, completed);
   const ovr = ovrOf(s);
@@ -143,12 +164,15 @@ function PlayerCard({ a, rank, completed }: { a: Analytics; rank: number; comple
         <div className="agc-name">{a.displayName || a.username}</div>
         <div className="agc-sub">@{a.username}{a.division ? ` · ${a.division}` : ""}</div>
         <div className="agc-insignia">{rk?.insignia ? `${rk.insignia}  ${rk.name}` : rk?.name ?? ""}</div>
-        <div className="agc-stats">
-          <StatRow label="OUTPUT" val={s.OUT} />
-          <StatRow label="ENDURANCE" val={s.END} />
-          <StatRow label="MISSIONS" val={s.MSN} />
-          <StatRow label="TEMPO" val={s.TMP} />
-          <StatRow label="COMPLETE" val={s.CMP} />
+        <div className="agc-statwrap">
+          <MiniRadar s={s} />
+          <div className="agc-stats">
+            <StatRow label="OUT" val={s.OUT} />
+            <StatRow label="END" val={s.END} />
+            <StatRow label="MSN" val={s.MSN} />
+            <StatRow label="TMP" val={s.TMP} />
+            <StatRow label="CMP" val={s.CMP} />
+          </div>
         </div>
         <div className="agc-real">
           <span><b>{fmtK(a.tokensInput + a.tokensOutput)}</b> tok</span>

@@ -85,12 +85,16 @@ export class AgencyService {
         fetch(`https://api.github.com/users/${encodeURIComponent(u)}/events/public?per_page=100`, { headers }),
       ]);
       const prof = uRes.ok ? ((await uRes.json()) as { public_repos?: number; followers?: number }) : {};
-      const events = eRes.ok ? ((await eRes.json()) as Array<{ type?: string; repo?: { name?: string }; payload?: { action?: string; commits?: unknown[]; size?: number } }>) : [];
+      const events = eRes.ok ? ((await eRes.json()) as Array<{ type?: string; repo?: { name?: string }; payload?: { action?: string; commits?: unknown[]; size?: number; distinct_size?: number } }>) : [];
       let commits = 0, prs = 0, issues = 0, reviews = 0;
       const repos = new Set<string>();
       for (const ev of Array.isArray(events) ? events : []) {
         if (ev.repo?.name) repos.add(ev.repo.name);
-        if (ev.type === "PushEvent") commits += ev.payload?.commits?.length ?? ev.payload?.size ?? 0;
+        if (ev.type === "PushEvent") {
+          // GitHub's PUBLIC events feed sometimes omits size/commits — count each push
+          // as at least 1 so real activity isn't reported as zero.
+          commits += ev.payload?.size ?? ev.payload?.distinct_size ?? ev.payload?.commits?.length ?? 1;
+        }
         else if (ev.type === "PullRequestEvent" && ev.payload?.action === "opened") prs++;
         else if (ev.type === "IssuesEvent" && ev.payload?.action === "opened") issues++;
         else if (ev.type === "PullRequestReviewEvent") reviews++;
