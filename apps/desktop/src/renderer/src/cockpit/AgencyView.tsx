@@ -50,40 +50,52 @@ const CSS = `
   border:1px solid var(--border); background: rgb(var(--primary) / 0.05); color: var(--text); outline:none; }
 .agc-search input:focus { border-color: rgb(var(--primary) / 0.6); box-shadow: 0 0 0 1px rgb(var(--primary) / 0.25); }
 
-/* Vertical stack of horizontal player cards */
-.agc-list { flex:1; min-height:0; overflow-y:auto; padding:4px 18px 26px; display:flex; flex-direction:column; gap:14px; }
-.agc-card { position:relative; border-radius:16px; padding:2px; cursor:pointer; animation: agc-in .28s ease both;
-  background: linear-gradient(120deg, var(--tier-a), var(--tier-b)); box-shadow: 0 14px 36px -18px rgb(0 0 0 / .7); transition: box-shadow .15s; }
-.agc-card:hover { box-shadow: 0 20px 50px -16px var(--tier-b); }
-.agc-inner { position:relative; overflow:hidden; border-radius:14px; padding:15px 18px; display:flex; align-items:center; gap:22px;
-  background: linear-gradient(180deg, rgb(6 12 20 / .94), rgb(8 16 26 / .97)); }
+/* Vertical stack: each entry = the compact card (grid size) + an info panel to its right */
+.agc-list { flex:1; min-height:0; overflow-y:auto; padding:6px 18px 26px; display:flex; flex-direction:column; gap:14px; }
+.agc-entry { display:flex; gap:14px; align-items:stretch; cursor:pointer; animation: agc-in .26s ease both; }
+
+/* --- the compact card (identical size to grid mode: ~236px) --- */
+.agc-card { position:relative; width:236px; flex-shrink:0; border-radius:16px; padding:2px;
+  background: linear-gradient(160deg, var(--tier-a), var(--tier-b)); box-shadow: 0 16px 40px -16px rgb(0 0 0 / .7); }
+.agc-entry:hover .agc-card { box-shadow: 0 20px 50px -14px var(--tier-b); }
+.agc-inner { position:relative; overflow:hidden; border-radius:14px; padding:14px 14px 15px;
+  background: linear-gradient(180deg, rgb(6 12 20 / .93), rgb(8 16 26 / .97)); }
 .agc-inner::before { content:""; position:absolute; inset:0; pointer-events:none; opacity:.5;
-  background: linear-gradient(115deg, transparent 38%, rgb(255 255 255 / .12) 50%, transparent 62%); background-size: 240% 100%; animation: agc-shine 6s ease-in-out infinite; }
-.agc-left { display:flex; align-items:center; gap:16px; flex-shrink:0; }
-.agc-ovr { display:flex; flex-direction:column; align-items:center; justify-content:center; min-width:56px; }
-.agc-ovr b { font-family:var(--font-display); font-size:40px; line-height:.9; color: var(--tier-a); text-shadow: 0 0 16px var(--tier-b); }
+  background: linear-gradient(115deg, transparent 36%, rgb(255 255 255 / .14) 50%, transparent 64%); background-size: 220% 100%; animation: agc-shine 5s ease-in-out infinite; }
+.agc-top { display:flex; gap:12px; }
+.agc-ovr { display:flex; flex-direction:column; align-items:center; justify-content:center; min-width:52px; }
+.agc-ovr b { font-family:var(--font-display); font-size:34px; line-height:.9; color: var(--tier-a); text-shadow: 0 0 14px var(--tier-b); }
 .agc-ovr span { font-size:8px; letter-spacing:.22em; color: var(--text-soft); margin-top:2px; }
-.agc-tier { display:inline-block; margin-top:6px; font-size:8px; font-weight:800; letter-spacing:.16em; padding:2px 7px; border-radius:5px;
+.agc-tier { display:inline-block; margin-top:6px; font-size:8px; font-weight:800; letter-spacing:.18em; padding:2px 7px; border-radius:5px;
   background: linear-gradient(180deg, var(--tier-a), var(--tier-b)); color: var(--tier-text); }
-.agc-photo { width:76px; height:76px; border-radius:14px; object-fit:cover; border:2px solid var(--tier-b); box-shadow:0 0 20px -6px var(--tier-b); background:#05090d; flex-shrink:0; }
-.agc-photo.ph { display:flex; align-items:center; justify-content:center; font-size:32px; color: rgb(255 255 255 / .35); }
-.agc-idcol { min-width:120px; }
-.agc-name { font-size:16px; font-weight:700; color:#f0f7ff; line-height:1.15; }
-.agc-sub { font-size:10px; letter-spacing:.06em; color: var(--text-faint); margin-top:3px; }
-.agc-insignia { font-size:11px; letter-spacing:.22em; color:#ffd166; margin-top:5px; min-height:12px; }
-.agc-right { flex:1; min-width:0; display:flex; flex-direction:column; gap:9px; }
-.agc-stats { display:grid; grid-template-columns:1fr 1fr; gap:6px 20px; }
-.agc-stat { display:flex; align-items:center; gap:9px; }
-.agc-stat-l { font-size:9px; letter-spacing:.1em; color: var(--text-soft); width:82px; flex-shrink:0; text-align:right; }
-.agc-stat-track { flex:1; height:7px; border-radius:4px; background: rgb(var(--primary) / .1); overflow:hidden; }
-.agc-stat-fill { height:100%; border-radius:4px; background: linear-gradient(90deg, var(--tier-b), var(--tier-a)); transition: width .5s ease; }
-.agc-stat b { font-size:12px; color:#e6f2f4; width:22px; text-align:right; font-variant-numeric:tabular-nums; }
-.agc-real { display:flex; flex-wrap:wrap; gap:6px 16px; padding-top:8px; border-top:1px solid rgb(255 255 255 / .1); font-size:10px; letter-spacing:.04em; color: var(--text-faint); }
-.agc-real b { color: rgb(var(--primary-soft)); font-weight:600; }
-.agc-rankbadge { position:absolute; top:-10px; left:-10px; z-index:3; min-width:32px; height:32px; padding:0 8px; border-radius:16px;
-  display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:800; font-family:var(--font-display);
+.agc-photo { width:60px; height:60px; border-radius:12px; object-fit:cover; border:1.5px solid var(--tier-b); box-shadow:0 0 18px -5px var(--tier-b); background:#05090d; margin-left:auto; }
+.agc-photo.ph { display:flex; align-items:center; justify-content:center; font-size:26px; color: rgb(255 255 255 / .35); }
+.agc-name { font-size:14px; font-weight:700; letter-spacing:.03em; color:#f0f7ff; margin-top:11px; line-height:1.15; }
+.agc-sub { font-size:9.5px; letter-spacing:.1em; color: var(--text-faint); margin-top:2px; }
+.agc-insignia { font-size:11px; letter-spacing:.24em; color:#ffd166; margin-top:4px; min-height:12px; }
+.agc-statwrap { display:flex; align-items:center; gap:10px; margin-top:12px; padding-top:11px; border-top:1px solid rgb(255 255 255 / .1); }
+.agc-stats { flex:1; min-width:0; display:flex; flex-direction:column; gap:5px; }
+.agc-stat { display:flex; align-items:center; gap:7px; }
+.agc-stat b { font-size:12px; color:#e6f2f4; width:20px; text-align:right; font-variant-numeric:tabular-nums; }
+.agc-stat span { font-size:9px; letter-spacing:.1em; color: var(--text-soft); }
+.agc-rankbadge { position:absolute; top:-9px; left:-9px; z-index:3; width:30px; height:30px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:800; font-family:var(--font-display);
   border:2px solid #06121a; box-shadow:0 4px 14px rgb(0 0 0 / .6); }
-@media (max-width: 760px) { .agc-inner { flex-direction:column; align-items:stretch; gap:14px; } .agc-left { justify-content:flex-start; } .agc-stats { grid-template-columns:1fr; } }
+
+/* --- the info panel to the right --- */
+.agc-side { flex:1; min-width:0; display:flex; flex-direction:column; gap:12px; padding:15px 18px; border-radius:14px;
+  border:1px solid var(--border); background: rgb(var(--primary) / .035); transition: border-color .14s, background .14s; }
+.agc-entry:hover .agc-side { border-color: rgb(var(--primary) / .4); background: rgb(var(--primary) / .06); }
+.agc-side-top { display:flex; align-items:center; gap:14px; }
+.agc-side-rank { font-family:var(--font-display); font-size:38px; font-weight:700; line-height:1; display:flex; align-items:baseline; }
+.agc-side-hash { font-size:17px; opacity:.55; margin-right:1px; }
+.agc-metrics { display:grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap:10px; }
+.agc-metric { border:1px solid var(--border); border-radius:11px; padding:9px 12px; background: rgb(var(--primary) / .04); }
+.agc-metric-v { font-family:var(--font-display); font-size:22px; line-height:1; color:#e6f2f4; }
+.agc-metric-l { font-size:8.5px; letter-spacing:.16em; color: rgb(var(--primary-soft)); margin-top:6px; }
+.agc-metric-h { font-size:9px; color: var(--text-faint); margin-top:2px; }
+.agc-side-foot { margin-top:auto; font-size:10px; letter-spacing:.04em; color: var(--text-faint); }
+@media (max-width: 720px) { .agc-entry { flex-direction:column; } .agc-card { width:100%; } }
 
 /* IRC chat */
 .agx-chat { flex:1; min-height:0; display:flex; flex-direction:column; padding:0 18px 14px; }
@@ -223,54 +235,67 @@ function AgentDossierModal({ a, input, meUsername, onClose }: { a: Analytics; in
   );
 }
 
-const MEDAL_COLOR = ["#ffd166", "#cdd6de", "#e0a878"];
+const MEDAL = ["linear-gradient(180deg,#ffe08a,#e0a24a)", "linear-gradient(180deg,#e6eef2,#9fb0bc)", "linear-gradient(180deg,#e0a878,#b5794a)"];
 function StatRow({ label, val }: { label: string; val: number }) {
-  return (
-    <div className="agc-stat" title={`${label} ${val}`}>
-      <span className="agc-stat-l">{label}</span>
-      <div className="agc-stat-track"><div className="agc-stat-fill" style={{ width: `${val}%` }} /></div>
-      <b>{val}</b>
-    </div>
-  );
+  return <div className="agc-stat"><b>{val}</b><span>{label}</span></div>;
 }
 
-/** The football-style player card, laid out HORIZONTALLY for the vertical leaderboard:
- *  left = rank + OVR + photo + identity + radar; right = per-stat bars + real numbers. */
-function PlayerCard({ a, rank, input, onOpen }: { a: Analytics; rank: number; input: StatInput; onOpen: () => void }) {
+/** The original compact player card (grid-mode size) + an info panel to its right,
+ *  one entry per row (vertical leaderboard). */
+function LeaderEntry({ a, rank, input, onOpen }: { a: Analytics; rank: number; input: StatInput; onOpen: () => void }) {
   const s = ratingsFor(input);
   const ovr = ovrOf(s);
   const tier = tierOf(ovr);
   const rk = findRank(a.level);
   const style = { "--tier-a": tier.a, "--tier-b": tier.b, "--tier-text": tier.text } as React.CSSProperties;
   return (
-    <div className="agc-card" style={style} onClick={onOpen} role="button" title="View full dossier">
-      <div className="agc-rankbadge" style={{ background: rank <= 3 ? MEDAL_COLOR[rank - 1] : "#2a3947", color: rank <= 3 ? "#1a1006" : "#cfe0ec" }}>{rank}</div>
-      <div className="agc-inner">
-        {/* Left: identity + OVR + radar */}
-        <div className="agc-left">
-          <div className="agc-ovr">
-            <b>{ovr}</b><span>OVR</span>
-            <span className="agc-tier">{tier.name}</span>
+    <div className="agc-entry" style={style} onClick={onOpen} role="button" title="View full dossier">
+      {/* the compact card (same size as grid mode) */}
+      <div className="agc-card">
+        {rank <= 3 && <div className="agc-rankbadge" style={{ background: MEDAL[rank - 1], color: "#1a1006" }}>{rank}</div>}
+        <div className="agc-inner">
+          <div className="agc-top">
+            <div className="agc-ovr"><b>{ovr}</b><span>OVR</span><span className="agc-tier">{tier.name}</span></div>
+            {a.photo ? <img className="agc-photo" src={a.photo} alt={a.displayName} /> : <div className="agc-photo ph">◍</div>}
           </div>
-          {a.photo ? <img className="agc-photo" src={a.photo} alt={a.displayName} /> : <div className="agc-photo ph">◍</div>}
-          <div className="agc-idcol">
-            <div className="agc-name">{a.displayName || a.username}</div>
-            <div className="agc-sub">@{a.username}{a.division ? ` · ${a.division}` : ""}</div>
-            <div className="agc-insignia">{rk?.insignia ? `${rk.insignia}  ${rk.name}` : rk?.name ?? ""}</div>
+          <div className="agc-name">{a.displayName || a.username}</div>
+          <div className="agc-sub">@{a.username}{a.division ? ` · ${a.division}` : ""}</div>
+          <div className="agc-insignia">{rk?.insignia ? `${rk.insignia}  ${rk.name}` : rk?.name ?? ""}</div>
+          <div className="agc-statwrap">
+            <MiniRadar s={s} />
+            <div className="agc-stats">{STAT_LABELS.map(({ key, short }) => <StatRow key={key} label={short} val={s[key]} />)}</div>
           </div>
-          <MiniRadar s={s} />
         </div>
-        {/* Right: per-stat bars + real numbers */}
-        <div className="agc-right">
-          <div className="agc-stats">
-            {STAT_LABELS.map(({ key, long }) => <StatRow key={key} label={long} val={s[key]} />)}
+      </div>
+      {/* info panel to the right */}
+      <div className="agc-side">
+        <div className="agc-side-top">
+          <div className="agc-side-rank" style={{ color: rank <= 3 ? ["#ffd166", "#cdd6de", "#e0a878"][rank - 1] : "var(--text-faint)" }}>
+            <span className="agc-side-hash">#</span>{rank}
           </div>
-          <div className="agc-real">
-            <span><b>{input.ghContrib.toLocaleString()}</b> contrib</span>
-            <span><b>{input.done}</b> / {input.jiraTotal} jira</span>
-            <span><b>{input.ghActiveDays}</b> active days</span>
-            <span><b>{fmtK(a.tokensInput + a.tokensOutput)}</b> tok · {fmtDur(a.timeSpentMs)}</span>
+          <div style={{ minWidth: 0 }}>
+            <div className="mono" style={{ fontSize: 9, letterSpacing: ".2em", color: "rgb(var(--primary-soft))" }}>OVERALL RATING</div>
+            <div style={{ fontSize: 13, color: "var(--text-soft)" }}>{tier.name} agent · {rk?.name ?? "—"}</div>
           </div>
+        </div>
+        <div className="agc-metrics">
+          {[
+            { l: "GH CONTRIB", v: input.ghContrib.toLocaleString(), h: "last year" },
+            { l: "ACTIVE DAYS", v: String(input.ghActiveDays) },
+            { l: "JIRA DONE", v: String(input.done), h: `${input.jiraTotal} assigned` },
+            { l: "TOKENS", v: fmtK(a.tokensInput + a.tokensOutput) },
+            { l: "TIME", v: fmtDur(a.timeSpentMs) },
+            { l: "SESSIONS", v: String(a.sessions), h: `${a.activeSessions} active` },
+          ].map((m) => (
+            <div className="agc-metric" key={m.l}>
+              <div className="agc-metric-v">{m.v}</div>
+              <div className="agc-metric-l">{m.l}</div>
+              {m.h && <div className="agc-metric-h">{m.h}</div>}
+            </div>
+          ))}
+        </div>
+        <div className="agc-side-foot">
+          {a.lastActiveAt ? `last active ${new Date(a.lastActiveAt).toLocaleDateString()}` : "no recent activity"} · click for full dossier & DM →
         </div>
       </div>
     </div>
@@ -440,7 +465,7 @@ export default function AgencyView() {
             if (shown.length === 0) return <div className="soft" style={{ padding: 24, fontSize: 13 }}>No agents match “{search}”.</div>;
             return (
               <div className="agc-list no-scrollbar">
-                {shown.map(({ a, rank }) => <PlayerCard key={a.accountId} a={a} rank={rank} input={inputFor(a)} onOpen={() => setOpenAgent(a)} />)}
+                {shown.map(({ a, rank }) => <LeaderEntry key={a.accountId} a={a} rank={rank} input={inputFor(a)} onOpen={() => setOpenAgent(a)} />)}
               </div>
             );
           })()}
