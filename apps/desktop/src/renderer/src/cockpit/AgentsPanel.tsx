@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { describeFaceFromImageUrl } from "../faceEngine";
+import { RANK_NAMES } from "./ranks";
 
 // ——— AGENT ROSTER — YITEC INTELLIGENCE AGENCY personnel dashboard ———
 // Admin-only management of employee accounts: recruit agents, edit profiles
@@ -281,6 +282,18 @@ export default function AgentsPanel() {
     </>
   );
 
+  // Rank/Level as a dropdown of the YITEC military ranks (junior → senior).
+  const rankField = () => (
+    <>
+      <label className="rcw-ag-label">RANK (LEVEL)</label>
+      <select className="rcw-ag-input" style={{ cursor: "pointer" }} value={(form.level as string) ?? ""}
+        onChange={(e) => setForm((f) => ({ ...f, level: e.target.value }))}>
+        <option value="">— unranked —</option>
+        {RANK_NAMES.map((r) => <option key={r} value={r}>{r}</option>)}
+      </select>
+    </>
+  );
+
   // Jira account binding: a searchable picker when a Jira profile is configured (falls
   // back to a plain username input otherwise). Selecting a user also fills the agent's
   // name / email / photo when those are still empty — one click imports from Jira.
@@ -436,7 +449,7 @@ export default function AgentsPanel() {
                 {field("AGENT ID (USERNAME)", "username", "firstname.lastname")}
                 {field("ACCESS CODE (PASSWORD)", "password", "min 8 chars", "password")}
                 {field("AGENT NAME", "displayName", "Full name")}
-                {field("LEVEL", "level", "e.g. L3")}
+                {rankField()}
                 {field("DIVISION", "division", "e.g. Cyber Ops")}
                 {field("EMAIL", "email", "agent@yitec.dev")}
                 {jiraUserField()}
@@ -461,7 +474,7 @@ export default function AgentsPanel() {
                 {isAdmin ? (
                   <>
                     {field("AGENT NAME", "displayName")}
-                    {field("LEVEL", "level")}
+                    {rankField()}
                     {field("DIVISION", "division")}
                     {field("EMAIL", "email")}
                     {jiraUserField()}

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { findRank } from "./ranks";
 
 // Futuristic identity card for the signed-in agent, shown at the top of the right
 // sidebar: "SPECIAL AGENT <name>", rank (profile level), and photo. Pulls from the
@@ -25,9 +26,16 @@ const CSS = `
 .aic-kick { font-size:9px; letter-spacing:.36em; color: rgb(84 230 255 / .85); font-weight:700; margin-top:12px; }
 .aic-name { font-size:16px; font-weight:700; letter-spacing:.05em; color:#e6f2f4; line-height:1.15; margin-top:3px; text-align:center; }
 .aic-user { font-size:10px; letter-spacing:.14em; color: var(--text-faint); margin-top:2px; }
-.aic-badges { display:flex; gap:6px; margin-top:9px; flex-wrap:wrap; justify-content:center; }
-.aic-rank { display:inline-flex; align-items:center; gap:5px; font-size:9px; letter-spacing:.2em;
-  padding:3px 9px; border-radius:999px; border:1px solid rgb(224 162 74 / .5); color:#e0a24a; }
+/* Rank insignia — a glyph strip (stars/bars/chevrons) above the rank name. */
+.aic-insignia { margin-top:10px; font-size:13px; letter-spacing:.28em; line-height:1; color:#e0a24a; text-shadow:0 0 10px rgb(224 162 74 / .55); }
+.aic-insignia.general { color:#ffd166; }
+/* Dossier strip: RANK | DIVISION as label/value columns, split by a hairline. */
+.aic-strip { display:flex; width:100%; margin-top:10px; padding-top:11px; border-top:1px solid rgb(84 230 255 / .18); }
+.aic-cell { flex:1; min-width:0; display:flex; flex-direction:column; align-items:center; gap:3px; padding:0 6px; }
+.aic-cell + .aic-cell { border-left:1px solid rgb(84 230 255 / .18); }
+.aic-clabel { font-size:8px; letter-spacing:.24em; color: rgb(84 230 255 / .6); }
+.aic-cval { font-size:11px; letter-spacing:.04em; color:#e6f2f4; font-weight:600; text-align:center; line-height:1.2;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
 `;
 
 export default function AgentIdentityCard() {
@@ -44,7 +52,7 @@ export default function AgentIdentityCard() {
           setId({
             name: acct.displayName || acct.username,
             username: acct.username,
-            rank: acct.level || (acct.role === "admin" ? "DIRECTOR" : "FIELD AGENT"),
+            rank: acct.level || (acct.role === "admin" ? "General" : "Recruit"),
             division: acct.division ?? "",
             photo: acct.photo ?? null,
           });
@@ -54,7 +62,7 @@ export default function AgentIdentityCard() {
       // Fallback: device-trust identity (paired agent on this machine).
       try {
         const t = await window.cowork.deviceTrust();
-        if (!cancelled && t) setId({ name: t.displayName || t.username, username: t.username, rank: "FIELD AGENT", division: "", photo: t.photo });
+        if (!cancelled && t) setId({ name: t.displayName || t.username, username: t.username, rank: "Recruit", division: "", photo: t.photo });
       } catch { /* ignore */ }
     })();
     return () => { cancelled = true; };
@@ -75,9 +83,19 @@ export default function AgentIdentityCard() {
       <div className="aic-kick">SPECIAL AGENT</div>
       <div className="aic-name">{id.name}</div>
       {id.username && <div className="aic-user">@{id.username}</div>}
-      <div className="aic-badges">
-        <span className="aic-rank">★ {id.rank.toUpperCase()}</span>
-        {id.division && <span className="aic-rank" style={{ borderColor: "rgb(84 230 255 / .5)", color: "rgb(84 230 255 / .95)" }}>◈ {id.division.toUpperCase()}</span>}
+      {(() => {
+        const r = findRank(id.rank);
+        return r?.insignia ? <div className={`aic-insignia${r.tier === "general" ? " general" : ""}`}>{r.insignia}</div> : null;
+      })()}
+      <div className="aic-strip">
+        <div className="aic-cell">
+          <span className="aic-clabel">RANK</span>
+          <span className="aic-cval">{id.rank}</span>
+        </div>
+        <div className="aic-cell">
+          <span className="aic-clabel">DIVISION</span>
+          <span className="aic-cval" style={{ color: id.division ? "#e6f2f4" : "var(--text-faint)" }}>{id.division || "—"}</span>
+        </div>
       </div>
     </div>
   );
