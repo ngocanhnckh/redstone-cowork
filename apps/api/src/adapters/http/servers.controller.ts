@@ -27,6 +27,14 @@ export class ServersController {
     const registryKey = new Set(
       registry.map((s) => `${(s.sshUser || "").toLowerCase()}@${(s.host || "").toLowerCase()}`),
     );
+    // Also index each registry server's BOX (its host string + display name) so a curated
+    // entry like root@csd2 suppresses the auto-discovered anhnguyen@csd2 for the same box —
+    // even though the user differs — instead of showing the machine twice.
+    const registryBoxes = new Set<string>();
+    for (const s of registry) {
+      if (s.host) registryBoxes.add(s.host.toLowerCase());
+      if (s.name) registryBoxes.add(s.name.toLowerCase());
+    }
     const hosts = await this.inventory.listHosts();
     // Which user@host AND which host machine names currently report a redstone agent —
     // the authoritative "redstone is installed here" signal (inventory is ground truth).
@@ -50,7 +58,10 @@ export class ServersController {
       .filter((h) => (myMachines ? myMachines.has(h.machine.toLowerCase()) : true))
       .filter((h) => {
         const k = `${(h.user || "").toLowerCase()}@${(h.address || h.machine).toLowerCase()}`;
+        // Skip if a registry entry already covers this exact user@host, this box (by
+        // machine name or address), or we've already surfaced this user@host.
         if (registryKey.has(k) || seen.has(k)) return false;
+        if (registryBoxes.has((h.machine || "").toLowerCase()) || registryBoxes.has((h.address || "").toLowerCase())) return false;
         seen.add(k);
         return true;
       })

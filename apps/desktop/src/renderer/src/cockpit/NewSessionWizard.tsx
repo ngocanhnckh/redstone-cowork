@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ServerView } from "../../../shared/servers";
 
 // ——— NEW SESSION WIZARD ———
@@ -63,7 +63,7 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
   const [servers, setServers] = useState<ServerView[]>([]);
   const [server, setServer] = useState<ServerView | null>(null);
   const [connecting, setConnecting] = useState(false);
-  const [newSrv, setNewSrv] = useState({ name: "", host: "", sshUser: "root", sshPort: 22 });
+  const [newSrv, setNewSrv] = useState({ name: "", host: "", sshUser: "root", sshPort: 22, password: "" });
   const [closed, setClosed] = useState(false);
 
   const [provision, setProvision] = useState<{ installCommand: string; installCommandRelay: string } | null>(null);
@@ -135,11 +135,16 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
     setServer(s); setResume(null); setCreateNew(false); setProvision(null);
     go("provision");
   }
+  // After adding a fresh server, auto-run the SSH check/install once provision is ready.
+  const autoInstall = useRef(false);
+  const autoInstallPw = useRef<string | undefined>(undefined);
   async function connectNew() {
     setBusy(true); setErr("");
     try {
-      const created = await window.cowork.serverCreate({ ...newSrv, name: newSrv.name.trim(), host: newSrv.host.trim() });
+      const { password, ...srv } = newSrv; // password stays client-side (used for the SSH install)
+      const created = await window.cowork.serverCreate({ ...srv, name: srv.name.trim(), host: srv.host.trim() });
       setServers((prev) => [...prev, created]); setConnecting(false);
+      autoInstall.current = true; autoInstallPw.current = password.trim() || undefined; setSavePw(!!password.trim());
       await chooseServer(created);
     } catch (e) { setErr(`Connect failed (${e instanceof Error ? e.message : e})`); }
     finally { setBusy(false); }
@@ -152,6 +157,14 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
     finally { setBusy(false); }
   }
   useEffect(() => { if (step === "provision" && server && !provision) void loadProvision(); }, [step, server]); // eslint-disable-line
+  // Once we know the install command AND the server isn't already reporting, kick off the
+  // auto-install (key first; the entered password is used if key fails / for sudo).
+  useEffect(() => {
+    if (step === "provision" && provision && autoInstall.current && !redstoneInstalled && !installing) {
+      autoInstall.current = false;
+      void runInstall(autoInstallPw.current);
+    }
+  }, [step, provision, redstoneInstalled, installing]); // eslint-disable-line
 
   // The command to run on the server to start the session.
   const launchCmd = useMemo(() => {
@@ -195,11 +208,13 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
                     <div style={{ flex: 1 }}><div className="rcw-nw-label">SSH USER</div><input className="rcw-nw-input" value={newSrv.sshUser} onChange={(e) => setNewSrv({ ...newSrv, sshUser: e.target.value })} /></div>
                     <div style={{ width: 66 }}><div className="rcw-nw-label">PORT</div><input className="rcw-nw-input" value={newSrv.sshPort} onChange={(e) => setNewSrv({ ...newSrv, sshPort: Number(e.target.value) || 22 })} /></div>
                   </div>
+                  <div className="rcw-nw-label">SSH PASSWORD <span style={{ opacity: .6, letterSpacing: 0 }}>(optional — for password login &amp; sudo install; leave blank to use your SSH key)</span></div>
+                  <input className="rcw-nw-input" type="password" value={newSrv.password} onChange={(e) => setNewSrv({ ...newSrv, password: e.target.value })} placeholder="only if the server needs a password" autoComplete="off" />
                   <label style={{ display: "flex", gap: 7, alignItems: "center", marginTop: 10, fontSize: 11, color: "var(--text-soft)", cursor: "pointer" }}>
                     <input type="checkbox" checked={closed} onChange={(e) => setClosed(e.target.checked)} />
                     Closed / behind NAT (no inbound SSH — use reverse-SSH relay)
                   </label>
-                  <button className="rcw-nw-btn" style={{ marginTop: 12 }} disabled={busy || !newSrv.name.trim() || !newSrv.host.trim()} onClick={connectNew}>{busy ? "…" : "ADD & CONTINUE"}</button>
+                  <button className="rcw-nw-btn" style={{ marginTop: 12 }} disabled={busy || !newSrv.name.trim() || !newSrv.host.trim()} onClick={connectNew}>{busy ? "…" : "ADD → CHECK & INSTALL"}</button>
                 </div>
               )}
             </>
