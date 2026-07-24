@@ -104,16 +104,16 @@ const CSS = `
 .rcw-boot-h1 { position:relative; font-family: var(--font-display); font-weight:600; font-size: clamp(26px, 5.2vw, 58px); line-height:1.04; letter-spacing:.08em; text-align:center;
   padding-bottom: 14px; border-bottom: 2px solid rgb(var(--primary) / 0.7); text-shadow: 0 0 34px rgb(var(--primary-soft) / 0.6);
   animation: rcw-boot-titlein .32s linear both; }
-.rcw-boot-seal { width: 176px; height: 176px; object-fit: contain; filter: drop-shadow(0 0 34px rgb(var(--primary-soft) / 0.6));
+.rcw-boot-seal { width: 248px; height: 248px; object-fit: contain; filter: drop-shadow(0 0 44px rgb(var(--primary-soft) / 0.65));
   animation: rcw-boot-titlein .5s ease both; }
 .rcw-boot-access { font-family: var(--font-mono); font-size: 14px; letter-spacing: .55em; font-weight:700; color: rgb(var(--accent));
   text-shadow: 0 0 16px rgb(var(--accent) / 0.6); animation: rcw-boot-fadein .4s ease both; }
-.rcw-boot-welcome { display:flex; align-items:center; gap:20px; margin-top:8px; padding:16px 26px 16px 16px; border-radius:18px;
-  border:1px solid rgb(var(--primary) / 0.32); background: rgb(var(--primary) / 0.07);
-  box-shadow: 0 16px 40px -16px rgb(0 0 0 / 0.6), inset 0 0 40px -28px rgb(var(--primary-soft)); animation: rcw-boot-fadein .5s ease both; }
-.rcw-boot-agent { width:104px; height:104px; border-radius:16px; object-fit:cover; border:2px solid rgb(var(--primary) / 0.65);
-  box-shadow:0 0 26px -6px rgb(var(--primary-soft)); background:#05090d; }
-.rcw-boot-agent.ph { display:flex; align-items:center; justify-content:center; font-size:48px; color: rgb(var(--primary-soft) / 0.5); }
+.rcw-boot-welcome { display:flex; align-items:center; gap:26px; margin-top:10px; padding:22px 34px 22px 22px; border-radius:22px;
+  border:1px solid rgb(var(--primary) / 0.34); background: rgb(var(--primary) / 0.08);
+  box-shadow: 0 20px 50px -18px rgb(0 0 0 / 0.65), inset 0 0 48px -30px rgb(var(--primary-soft)); animation: rcw-boot-fadein .5s ease both; }
+.rcw-boot-agent { width:150px; height:150px; border-radius:20px; object-fit:cover; border:2px solid rgb(var(--primary) / 0.7);
+  box-shadow:0 0 34px -6px rgb(var(--primary-soft)); background:#05090d; }
+.rcw-boot-agent.ph { display:flex; align-items:center; justify-content:center; font-size:64px; color: rgb(var(--primary-soft) / 0.5); }
 .rcw-boot-chip { font-family:var(--font-mono); font-size:10px; letter-spacing:.16em; padding:3px 10px; border-radius:999px;
   border:1px solid rgb(224 162 74 / 0.5); color:#e0a24a; }
 .rcw-boot-chip.alt { border-color: rgb(var(--primary) / 0.5); color: rgb(var(--primary-soft)); }
@@ -227,7 +227,7 @@ export default function BootScreen() {
                   <div className="mono" style={{ fontSize: 10, letterSpacing: "0.34em", color: "rgb(var(--primary-soft))" }}>
                     WELCOME {agent.role === "admin" ? "DIRECTOR" : "AGENT"}
                   </div>
-                  <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: "0.02em", color: "#e6f2f4", lineHeight: 1.05 }}>{agent.name}</div>
+                  <div style={{ fontSize: 34, fontWeight: 700, letterSpacing: "0.02em", color: "#e6f2f4", lineHeight: 1.05 }}>{agent.name}</div>
                   <div className="mono" style={{ fontSize: 11, color: "var(--text-faint)", letterSpacing: "0.12em" }}>@{agent.username}</div>
                   {rk?.insignia && <div style={{ fontSize: 14, letterSpacing: "0.24em", color: "#ffd166", marginTop: 2 }}>{rk.insignia}</div>}
                   <div style={{ display: "flex", gap: 8, marginTop: 4, flexWrap: "wrap" }}>

@@ -20,6 +20,12 @@ export type AgencyThread = { channel: string; other: AgencyPerson; lastAt: strin
 /** Per-agent Jira workload counts for the Arena leaderboard. */
 export type AgencyJiraStat = { accountId: string; completed: number; inProgress: number; todo: number; total: number };
 
+/** Public GitHub activity for an agent (recent-events window). */
+export type AgencyGithubStat = {
+  username: string; found: boolean; publicRepos: number; followers: number;
+  commits: number; prs: number; issues: number; reviews: number; activeRepos: number;
+};
+
 /** One assigned Jira issue (mission) in an agent's list. */
 export type AgencyMission = {
   key: string;

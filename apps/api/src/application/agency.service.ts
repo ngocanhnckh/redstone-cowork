@@ -6,6 +6,13 @@ import { AGENCY_MESSAGE_STORE, type AgencyAttachment, type AgencyMessageStore } 
 
 const ORG = "org";
 
+/** Public GitHub activity for an agent (unauthenticated API — recent-events window). */
+export type GithubStat = {
+  username: string; found: boolean; publicRepos: number; followers: number;
+  commits: number; prs: number; issues: number; reviews: number; activeRepos: number;
+};
+const emptyGh = (username = ""): GithubStat => ({ username, found: false, publicRepos: 0, followers: 0, commits: 0, prs: 0, issues: 0, reviews: 0, activeRepos: 0 });
+
 /** Enriched message for the client: the raw record + the author's public identity. */
 export type AgencyMessageView = {
   id: string;
@@ -60,6 +67,43 @@ export class AgencyService {
     if (!(await this.accounts.findById(otherId))) throw new NotFoundException("agent not found");
     const channel = this.dmChannel(me.id, otherId);
     return this.enrich(await this.store.list(channel, { afterId }));
+  }
+
+  // GitHub public stats are cached ~10min per username (the events feed is a rolling
+  // ~90-day / 300-event window, so "commits" means recent commits).
+  private ghCache = new Map<string, { at: number; data: GithubStat }>();
+  async githubStats(username: string): Promise<GithubStat> {
+    const u = (username ?? "").trim();
+    if (!u) return emptyGh();
+    const key = u.toLowerCase();
+    const hit = this.ghCache.get(key);
+    if (hit && Date.now() - hit.at < 600_000) return hit.data;
+    try {
+      const headers = { "User-Agent": "yitec-cowork", Accept: "application/vnd.github+json" };
+      const [uRes, eRes] = await Promise.all([
+        fetch(`https://api.github.com/users/${encodeURIComponent(u)}`, { headers }),
+        fetch(`https://api.github.com/users/${encodeURIComponent(u)}/events/public?per_page=100`, { headers }),
+      ]);
+      const prof = uRes.ok ? ((await uRes.json()) as { public_repos?: number; followers?: number }) : {};
+      const events = eRes.ok ? ((await eRes.json()) as Array<{ type?: string; repo?: { name?: string }; payload?: { action?: string; commits?: unknown[]; size?: number } }>) : [];
+      let commits = 0, prs = 0, issues = 0, reviews = 0;
+      const repos = new Set<string>();
+      for (const ev of Array.isArray(events) ? events : []) {
+        if (ev.repo?.name) repos.add(ev.repo.name);
+        if (ev.type === "PushEvent") commits += ev.payload?.commits?.length ?? ev.payload?.size ?? 0;
+        else if (ev.type === "PullRequestEvent" && ev.payload?.action === "opened") prs++;
+        else if (ev.type === "IssuesEvent" && ev.payload?.action === "opened") issues++;
+        else if (ev.type === "PullRequestReviewEvent") reviews++;
+      }
+      const data: GithubStat = {
+        username: u, found: uRes.ok, publicRepos: prof.public_repos ?? 0, followers: prof.followers ?? 0,
+        commits, prs, issues, reviews, activeRepos: repos.size,
+      };
+      this.ghCache.set(key, { at: Date.now(), data });
+      return data;
+    } catch {
+      return emptyGh(u);
+    }
   }
 
   async threads(me: Account): Promise<AgencyThreadView[]> {

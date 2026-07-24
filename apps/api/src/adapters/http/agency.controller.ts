@@ -107,4 +107,20 @@ export class AgencyController {
     await this.jira.missionComment(key, text);
     return { ok: true };
   }
+
+  /** The current agent's public GitHub activity (?username= overrides, e.g. admin). */
+  @Get("github-stats")
+  async githubStats(@Req() req: GuardedRequest, @Query("username") username?: string) {
+    const agent = this.requireAgent(req);
+    return this.agency.githubStats(username || agent.github || "");
+  }
+
+  /** The current agent's own Jira workload breakdown (todo / in-progress / done). */
+  @Get("my-jira")
+  async myJira(@Req() req: GuardedRequest) {
+    const agent = this.requireAgent(req);
+    if (!agent.jira) return { completed: 0, inProgress: 0, todo: 0, total: 0 };
+    const [row] = await this.jira.rosterStats([{ accountId: agent.id, jiraUser: agent.jira }]);
+    return row ? { completed: row.completed, inProgress: row.inProgress, todo: row.todo, total: row.total } : { completed: 0, inProgress: 0, todo: 0, total: 0 };
+  }
 }

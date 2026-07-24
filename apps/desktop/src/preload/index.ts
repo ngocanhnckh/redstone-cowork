@@ -151,6 +151,8 @@ contextBridge.exposeInMainWorld("cowork", {
   agencyMissionTransitions: (key: string): Promise<import("../shared/agency").AgencyMissionTransition[]> => ipcRenderer.invoke(IPC.agencyMissionTransitions, { key }),
   agencyMissionTransition: (key: string, transitionId: string): Promise<{ ok: boolean }> => ipcRenderer.invoke(IPC.agencyMissionTransition, { key, transitionId }),
   agencyMissionComment: (key: string, body: string): Promise<{ ok: boolean }> => ipcRenderer.invoke(IPC.agencyMissionComment, { key, body }),
+  agencyGithubStats: (): Promise<import("../shared/agency").AgencyGithubStat> => ipcRenderer.invoke(IPC.agencyGithubStats),
+  agencyMyJira: (): Promise<{ completed: number; inProgress: number; todo: number; total: number }> => ipcRenderer.invoke(IPC.agencyMyJira),
   jiraGetBinding: (sessionId: string): Promise<{ profile: string; projectKey: string; boardId: number | null } | null> => ipcRenderer.invoke(IPC.jiraGetBinding, { sessionId }),
   jiraSetBinding: (sessionId: string, binding: { profile: string; projectKey: string; boardId?: number | null }): Promise<unknown> => ipcRenderer.invoke(IPC.jiraSetBinding, { sessionId, binding }),
   jiraClearBinding: (sessionId: string): Promise<{ ok: true }> => ipcRenderer.invoke(IPC.jiraClearBinding, { sessionId }),

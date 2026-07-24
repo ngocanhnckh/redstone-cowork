@@ -1,7 +1,42 @@
 import { useEffect, useMemo, useState } from "react";
 import { ratingsFor, ovrOf, type Analytics, type Stats } from "./AgencyView";
 import { findRank } from "./ranks";
-import type { AgencyMission, AgencyMissionDetail, AgencyMissionTransition } from "../../../shared/agency";
+import type { AgencyMission, AgencyMissionDetail, AgencyMissionTransition, AgencyGithubStat } from "../../../shared/agency";
+
+function fmtK(n: number): string { return n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1e3 ? (n / 1e3).toFixed(1) + "k" : String(Math.round(n)); }
+
+/** A grid of labelled stat tiles (real numbers). */
+function Tiles({ items }: { items: Array<{ label: string; value: string; hint?: string }> }) {
+  return (
+    <div className="agp-tiles">
+      {items.map((t) => (
+        <div key={t.label} className="agp-tile">
+          <div className="agp-tile-v">{t.value}</div>
+          <div className="agp-tile-l">{t.label}</div>
+          {t.hint && <div className="agp-tile-h">{t.hint}</div>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Horizontal labelled bar chart (each row scaled to the max). */
+function Bars({ rows }: { rows: Array<{ label: string; value: number; color: string }> }) {
+  const max = Math.max(1, ...rows.map((r) => r.value));
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+      {rows.map((r) => (
+        <div key={r.label} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ width: 78, fontSize: 10, letterSpacing: "0.08em", color: "var(--text-soft)", textAlign: "right", flexShrink: 0 }}>{r.label}</span>
+          <div style={{ flex: 1, height: 12, borderRadius: 6, background: "rgb(var(--primary) / 0.08)", overflow: "hidden" }}>
+            <div style={{ width: `${(r.value / max) * 100}%`, height: "100%", borderRadius: 6, background: r.color, minWidth: r.value > 0 ? 4 : 0, transition: "width .5s ease" }} />
+          </div>
+          <b style={{ width: 32, fontSize: 12, color: "#e6f2f4", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{r.value}</b>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 // ——— AGENCY · agent dossier ———
 // The Agency main screen for the signed-in agent: profile header, a radar of the five
@@ -156,6 +191,9 @@ export default function AgencyProfile() {
   const [missions, setMissions] = useState<AgencyMission[]>([]);
   const [open, setOpen] = useState<AgencyMission | null>(null);
   const [completed, setCompleted] = useState(0);
+  const [gh, setGh] = useState<AgencyGithubStat | null>(null);
+  const [jira, setJira] = useState<{ completed: number; inProgress: number; todo: number; total: number } | null>(null);
+  const [analyticsRow, setAnalyticsRow] = useState<Analytics | null>(null);
 
   const loadMissions = () => window.cowork.agencyMissions().then(setMissions).catch(() => setMissions([]));
 
@@ -181,7 +219,11 @@ export default function AgencyProfile() {
         ?? (analytics as Analytics[]).find((r) => r.username === meObj.username);
       const done = (jstats.find((s) => s.accountId === meObj.accountId)?.completed) ?? 0;
       setCompleted(done);
-      if (mine) { const s = ratingsFor(mine, done); setStats(s); setOvr(ovrOf(s)); }
+      if (mine) { setAnalyticsRow(mine); const s = ratingsFor(mine, done); setStats(s); setOvr(ovrOf(s)); }
+
+      // Real GitHub + Jira-breakdown for the extra charts (best-effort, cached server-side).
+      window.cowork.agencyGithubStats().then((g) => { if (alive) setGh(g); }).catch(() => {});
+      window.cowork.agencyMyJira().then((j) => { if (alive) setJira(j); }).catch(() => {});
 
       // Real cumulative activity: tokens output over time from session history.
       const rows = (sessions as Array<{ lastSeenAt: string; tokensOutput: number }>)
@@ -226,6 +268,18 @@ export default function AgencyProfile() {
         </div>
       </div>
 
+      {/* Stat tiles — real numbers */}
+      <Tiles items={[
+        { label: "TOKENS", value: analyticsRow ? fmtK(analyticsRow.tokensInput + analyticsRow.tokensOutput) : "—", hint: analyticsRow ? `$${analyticsRow.estCostUsd.toFixed(2)} est` : undefined },
+        { label: "TIME ON TASK", value: analyticsRow ? `${(analyticsRow.timeSpentMs / 3.6e6).toFixed(analyticsRow.timeSpentMs >= 3.6e7 ? 0 : 1)}h` : "—" },
+        { label: "SESSIONS", value: analyticsRow ? String(analyticsRow.sessions) : "—", hint: analyticsRow ? `${analyticsRow.activeSessions} active` : undefined },
+        { label: "JIRA DONE", value: jira ? String(jira.completed) : String(completed), hint: jira ? `${jira.total} total` : undefined },
+        { label: "GH COMMITS", value: gh?.found ? String(gh.commits) : (me.github ? "…" : "—"), hint: gh?.found ? "recent" : undefined },
+        { label: "GH PRs", value: gh?.found ? String(gh.prs) : (me.github ? "…" : "—") },
+        { label: "REPOS", value: gh?.found ? String(gh.publicRepos) : (me.github ? "…" : "—"), hint: gh?.found ? `${gh.activeRepos} active` : undefined },
+        { label: "FOLLOWERS", value: gh?.found ? String(gh.followers) : (me.github ? "…" : "—") },
+      ]} />
+
       {/* Charts */}
       <div className="agp-charts">
         <div className="agp-panel" style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
@@ -234,6 +288,27 @@ export default function AgencyProfile() {
         </div>
         <div className="agp-panel">
           <ActivityChart points={series} label="CUMULATIVE OUTPUT · TOKENS OVER TIME" />
+        </div>
+        <div className="agp-panel">
+          <div className="mono" style={{ fontSize: 9, letterSpacing: "0.22em", color: "rgb(var(--primary-soft))", marginBottom: 12 }}>JIRA WORKLOAD</div>
+          {jira && jira.total > 0 ? (
+            <Bars rows={[
+              { label: "TO DO", value: jira.todo, color: "var(--text-faint)" },
+              { label: "IN PROG", value: jira.inProgress, color: "rgb(var(--accent))" },
+              { label: "DONE", value: jira.completed, color: "#5ef2b0" },
+            ]} />
+          ) : <div className="soft" style={{ fontSize: 11.5 }}>{me.jira ? "No Jira issues assigned." : "Link a Jira username to see workload."}</div>}
+        </div>
+        <div className="agp-panel">
+          <div className="mono" style={{ fontSize: 9, letterSpacing: "0.22em", color: "rgb(var(--primary-soft))", marginBottom: 12 }}>GITHUB ACTIVITY · RECENT</div>
+          {gh?.found ? (
+            <Bars rows={[
+              { label: "COMMITS", value: gh.commits, color: "rgb(var(--primary))" },
+              { label: "PRs", value: gh.prs, color: "rgb(var(--primary-soft))" },
+              { label: "ISSUES", value: gh.issues, color: "rgb(var(--accent))" },
+              { label: "REVIEWS", value: gh.reviews, color: "#c792ff" },
+            ]} />
+          ) : <div className="soft" style={{ fontSize: 11.5 }}>{me.github ? "No public GitHub activity found (or rate-limited)." : "Add a GitHub username (ask an admin) to pull activity."}</div>}
         </div>
       </div>
 
@@ -273,9 +348,14 @@ const CSS = `
 .agp-ovr { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:6px 14px; border-radius:14px; border:1px solid rgb(var(--accent) / 0.5); background: rgb(var(--accent) / 0.08); }
 .agp-ovr b { font-family:var(--font-display); font-size:46px; line-height:.9; color: rgb(var(--accent)); text-shadow:0 0 16px rgb(var(--accent) / 0.6); }
 .agp-ovr span { font-size:9px; letter-spacing:.24em; color: var(--text-soft); }
-.agp-charts { display:grid; grid-template-columns: 320px 1fr; gap:14px; margin-top:14px; }
+.agp-tiles { display:grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap:10px; margin-top:14px; }
+.agp-tile { border:1px solid var(--border); border-radius:12px; padding:11px 13px; background: rgb(var(--primary) / 0.04); }
+.agp-tile-v { font-family:var(--font-display); font-size:24px; line-height:1; color:#e6f2f4; }
+.agp-tile-l { font-size:8.5px; letter-spacing:.18em; color: rgb(var(--primary-soft)); margin-top:6px; }
+.agp-tile-h { font-size:9px; color: var(--text-faint); margin-top:2px; }
+.agp-charts { display:grid; grid-template-columns: 1fr 1fr; gap:14px; margin-top:14px; }
 .agp-panel { border:1px solid var(--border); border-radius:14px; padding:14px 16px; background: rgb(var(--primary) / 0.03); min-width:0; }
-@media (max-width: 820px) { .agp-charts { grid-template-columns: 1fr; } }
+@media (max-width: 900px) { .agp-charts { grid-template-columns: 1fr; } }
 .agp-missions-hd { display:flex; align-items:baseline; justify-content:space-between; margin:20px 2px 8px; }
 .agp-missions { display:flex; flex-direction:column; gap:6px; }
 .agp-mission { display:flex; align-items:center; gap:11px; padding:10px 13px; border-radius:11px; cursor:pointer; width:100%;

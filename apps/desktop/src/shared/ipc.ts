@@ -81,6 +81,8 @@ export const IPC = {
   agencyMissionTransitions: "api:agency:mission:transitions",
   agencyMissionTransition: "api:agency:mission:transition",
   agencyMissionComment: "api:agency:mission:comment",
+  agencyGithubStats: "api:agency:github-stats",
+  agencyMyJira: "api:agency:my-jira",
   jiraGetBinding: "api:jira:binding:get",
   jiraSetBinding: "api:jira:binding:set",
   jiraClearBinding: "api:jira:binding:clear",

@@ -128,6 +128,8 @@ declare global {
       agencyMissionTransitions(key: string): Promise<import("../../shared/agency").AgencyMissionTransition[]>;
       agencyMissionTransition(key: string, transitionId: string): Promise<{ ok: boolean }>;
       agencyMissionComment(key: string, body: string): Promise<{ ok: boolean }>;
+      agencyGithubStats(): Promise<import("../../shared/agency").AgencyGithubStat>;
+      agencyMyJira(): Promise<{ completed: number; inProgress: number; todo: number; total: number }>;
       jiraGetBinding(sessionId: string): Promise<{ profile: string; projectKey: string; boardId: number | null } | null>;
       jiraSetBinding(sessionId: string, binding: { profile: string; projectKey: string; boardId?: number | null }): Promise<unknown>;
       jiraClearBinding(sessionId: string): Promise<{ ok: true }>;
