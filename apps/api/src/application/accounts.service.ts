@@ -241,6 +241,22 @@ export class AccountsService implements OnModuleInit {
     return [...byId.values()].sort((a, b) => b.estCostUsd - a.estCostUsd);
   }
 
+  /** Tokens (input+output) burned per account within [start, end), attributing a
+   *  session's tokens when it was last active in the window. A rough weekly proxy —
+   *  sessions carry running totals, not per-day breakdowns — but good enough to rank
+   *  effort for the Agent-of-the-Week board. */
+  async tokensSince(start: Date, end: Date): Promise<Map<string, number>> {
+    const sessions = await this.sessions.listAllIncludingClosed();
+    const m = new Map<string, number>();
+    for (const s of sessions) {
+      if (!s.accountId) continue;
+      const seen = s.lastSeenAt?.getTime() ?? 0;
+      if (seen < start.getTime() || seen >= end.getTime()) continue;
+      m.set(s.accountId, (m.get(s.accountId) ?? 0) + (s.tokensInput ?? 0) + (s.tokensOutput ?? 0));
+    }
+    return m;
+  }
+
   /** One agent's session history (id, folder, machine, tokens, cost, timestamps). */
   async sessionHistory(accountId: string): Promise<AccountSessionRow[]> {
     const sessions = await this.sessions.listAllIncludingClosed();

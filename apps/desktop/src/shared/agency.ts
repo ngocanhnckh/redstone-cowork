@@ -53,3 +53,18 @@ export type AgencyMissionDetail = {
   descriptionHtml: string; description: string; issueType: string;
   comments: AgencyMissionComment[];
 };
+
+/** Agent-of-the-Week competition config + weighted weekly leaderboard. */
+export type WeekConfig = { prize: string; startsAt: string | null; endsAt: string | null };
+export type WeekEntry = {
+  accountId: string; displayName: string; username: string; photo: string | null;
+  division: string; level: string; github: string; jira: string;
+  commits: number; jiraDone: number; tokens: number;
+  nCommits: number; nJira: number; nTokens: number; score: number; rank: number;
+};
+export type AgentOfWeek = {
+  config: WeekConfig;
+  window: { start: string; end: string };
+  weights: { jira: number; commits: number; tokens: number };
+  entries: WeekEntry[];
+};

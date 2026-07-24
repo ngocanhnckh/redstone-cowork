@@ -163,6 +163,8 @@ contextBridge.exposeInMainWorld("cowork", {
   agencyMyJira: (): Promise<{ completed: number; inProgress: number; todo: number; total: number }> => ipcRenderer.invoke(IPC.agencyMyJira),
   agencyAgent: (id: string): Promise<import("../shared/agency").AgencyAgentDossier> => ipcRenderer.invoke(IPC.agencyAgent, { id }),
   agencyGithubRoster: (): Promise<Array<{ accountId: string; found: boolean; contribTotal: number; activeDays: number; commits: number }>> => ipcRenderer.invoke(IPC.agencyGithubRoster),
+  agencyWeek: (): Promise<import("../shared/agency").AgentOfWeek> => ipcRenderer.invoke(IPC.agencyWeek),
+  agencyWeekConfig: (cfg: import("../shared/agency").WeekConfig): Promise<import("../shared/agency").WeekConfig> => ipcRenderer.invoke(IPC.agencyWeekConfig, cfg),
   jiraGetBinding: (sessionId: string): Promise<{ profile: string; projectKey: string; boardId: number | null } | null> => ipcRenderer.invoke(IPC.jiraGetBinding, { sessionId }),
   jiraSetBinding: (sessionId: string, binding: { profile: string; projectKey: string; boardId?: number | null }): Promise<unknown> => ipcRenderer.invoke(IPC.jiraSetBinding, { sessionId, binding }),
   jiraClearBinding: (sessionId: string): Promise<{ ok: true }> => ipcRenderer.invoke(IPC.jiraClearBinding, { sessionId }),

@@ -89,6 +89,8 @@ export const IPC = {
   agencyMyJira: "api:agency:my-jira",
   agencyAgent: "api:agency:agent",
   agencyGithubRoster: "api:agency:github-roster",
+  agencyWeek: "api:agency:week",
+  agencyWeekConfig: "api:agency:week:config",
   jiraGetBinding: "api:jira:binding:get",
   jiraSetBinding: "api:jira:binding:set",
   jiraClearBinding: "api:jira:binding:clear",

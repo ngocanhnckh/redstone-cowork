@@ -126,6 +126,23 @@ export class AgencyController {
     }));
   }
 
+  // ---- Agent of the Week -----------------------------------------------
+  /** Weighted weekly competition board (commits + Jira resolved + tokens). */
+  @Get("week")
+  async week(@Req() req: GuardedRequest) {
+    this.requireAgent(req);
+    return this.agency.agentOfWeek();
+  }
+
+  /** Admin sets the prize (text) and the competition window (start/end ISO, or null = current week). */
+  @Post("week/config")
+  @HttpCode(200)
+  async setWeek(@Req() req: GuardedRequest, @Body() body: { prize?: string; startsAt?: string | null; endsAt?: string | null }) {
+    const agent = this.requireAgent(req);
+    if (agent.role !== "admin") throw new ForbiddenException("admin only");
+    return this.agency.setWeekConfig({ prize: String(body?.prize ?? ""), startsAt: body?.startsAt ?? null, endsAt: body?.endsAt ?? null });
+  }
+
   /** The current agent's own Jira workload breakdown (todo / in-progress / done). */
   @Get("my-jira")
   async myJira(@Req() req: GuardedRequest) {

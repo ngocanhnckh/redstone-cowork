@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { findRank } from "./ranks";
 import type { AgencyMessage } from "../../../shared/agency";
 import AgencyProfile from "./AgencyProfile";
+import AgentWeek from "./AgentWeek";
 import { Tiles, Bars, GithubHeatmap } from "./agencyCharts";
 import { AgentDmPanel } from "./AgencyDm";
 import type { AgencyAgentDossier } from "../../../shared/agency";
@@ -378,7 +379,8 @@ function OrgChat({ meUsername }: { meUsername: string | null }) {
 }
 
 export default function AgencyView() {
-  const [tab, setTab] = useState<"profile" | "arena" | "chat" | "dms">("profile");
+  const [tab, setTab] = useState<"profile" | "arena" | "week" | "chat" | "dms">("profile");
+  const [meRole, setMeRole] = useState<string | null>(null);
   const [rows, setRows] = useState<Analytics[] | null>(null);
   const [err, setErr] = useState("");
   const [meUsername, setMeUsername] = useState<string | null>(null);
@@ -398,6 +400,7 @@ export default function AgencyView() {
   useEffect(() => {
     window.cowork.accountsMe().then((m) => {
       setMeUsername(m && "username" in m ? (m.username as string | null) : null);
+      setMeRole(m && "role" in m ? (m.role as string | null) : null);
     }).catch(() => {});
   }, []);
 
@@ -439,6 +442,7 @@ export default function AgencyView() {
       <div className="agc-tabs">
         <button className={`agc-tab${tab === "profile" ? " on" : ""}`} onClick={() => setTab("profile")}>◆ DOSSIER</button>
         <button className={`agc-tab${tab === "arena" ? " on" : ""}`} onClick={() => setTab("arena")}>⬡ ARENA</button>
+        <button className={`agc-tab${tab === "week" ? " on" : ""}`} onClick={() => setTab("week")}>🏆 AGENT OF THE WEEK</button>
         <button className={`agc-tab${tab === "chat" ? " on" : ""}`} onClick={() => setTab("chat")}>◈ IRC CHAT</button>
         <button className="agc-tab soon" title="Coming soon">✉ DMs</button>
       </div>
@@ -472,6 +476,7 @@ export default function AgencyView() {
           {openAgent && <AgentDossierModal a={openAgent} input={inputFor(openAgent)} meUsername={meUsername} onClose={() => setOpenAgent(null)} />}
         </>
       )}
+      {tab === "week" && <AgentWeek isAdmin={meRole === "admin"} />}
       {tab === "chat" && (
         <>
           <div className="agc-hd">

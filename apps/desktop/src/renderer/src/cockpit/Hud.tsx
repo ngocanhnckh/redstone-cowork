@@ -313,7 +313,6 @@ function HostCard({ t }: { t: HostTelemetryView }) {
           </div>
           <Sparkline data={t.netRxHistory} color="rgb(var(--accent))" height={28} />
         </div>
-        <div style={{ gridColumn: "1 / -1", marginTop: 4 }}><ResponsiveGlobe geo={t.latest.geo} /></div>
       </div>
     </div>
   );
@@ -455,7 +454,6 @@ function TelemetryColumn({ tele }: { tele: HostTelemetryView[] }) {
     <motion.div className="no-scrollbar" style={{ flex: 1, minWidth: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: 14, minHeight: 0 }}
       variants={STAGGER} initial="hidden" animate="show">
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 14 }}>
-        <motion.div variants={RISE}><Clock /></motion.div>
         <motion.div variants={RISE} className="hud-card" style={{ ...card, minWidth: 0 }}>
           <span className="hud-corner" />
           {kicker("Transmission")}
@@ -510,12 +508,85 @@ function TelemetryDeck() {
   return <TelemetryColumn tele={tele} />;
 }
 
-/** The shared right-hand rail — Special Agent identity card + telemetry deck.
- *  Used by both HUD mode and (via Cockpit) Flow mode so the widgets match. */
+const kfmt = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : String(n));
+
+/** "This week" scoreboard for the signed-in agent — commits, Jira resolved and tokens
+ *  burned inside the current competition window, plus their rank. Sits under the agent
+ *  card so an agent always sees where they stand for Agent of the Week. */
+function WeekWidget() {
+  const [mine, setMine] = useState<{ commits: number; jiraDone: number; tokens: number; rank: number; score: number } | null>(null);
+  useEffect(() => {
+    let alive = true;
+    const load = async () => {
+      try {
+        const [me, wk] = await Promise.all([window.cowork.accountsMe(), window.cowork.agencyWeek()]);
+        const uname = me && "username" in me ? (me.username as string | null) : null;
+        const e = wk.entries.find((x) => x.username === uname) ?? null;
+        if (alive) setMine(e ? { commits: e.commits, jiraDone: e.jiraDone, tokens: e.tokens, rank: e.rank, score: e.score } : { commits: 0, jiraDone: 0, tokens: 0, rank: 0, score: 0 });
+      } catch { /* ignore */ }
+    };
+    load();
+    const t = setInterval(load, 60000);
+    return () => { alive = false; clearInterval(t); };
+  }, []);
+  const tile = (n: string, k: string) => (
+    <div style={{ minWidth: 0 }}>
+      <div className="display" style={{ fontSize: 22, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{n}</div>
+      <div className="mono faint" style={{ fontSize: 9, letterSpacing: "0.12em", textTransform: "uppercase", marginTop: 3 }}>{k}</div>
+    </div>
+  );
+  return (
+    <div className="hud-card" style={card}>
+      <span className="hud-corner" />
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        {kicker("This Week")}
+        <span style={{ flex: 1 }} />
+        {mine && mine.rank > 0 && <span className="mono" style={{ fontSize: 11, color: "#ffd166" }}>🏆 #{mine.rank}</span>}
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginTop: 8 }}>
+        {tile(String(mine?.commits ?? "—"), "Commits")}
+        {tile(String(mine?.jiraDone ?? "—"), "Jira done")}
+        {tile(mine ? kfmt(mine.tokens) : "—", "Tokens")}
+      </div>
+    </div>
+  );
+}
+
+/** Standalone rotating globe for the rail — locks onto the first reporting host's geo. */
+function GlobeWidget() {
+  const [geo, setGeo] = useState<HostTelemetryView["latest"]["geo"]>(null);
+  useEffect(() => {
+    let alive = true;
+    const load = () => {
+      if (!alive || document.hidden) return;
+      window.cowork.getTelemetry().then((t) => {
+        if (!alive) return;
+        const g = t.map((h) => h.latest?.geo).find((x) => !!x) ?? null;
+        if (g) setGeo(g);
+      }).catch(() => {});
+    };
+    load();
+    const timer = setInterval(load, 5000);
+    return () => { alive = false; clearInterval(timer); };
+  }, []);
+  return (
+    <div className="hud-card" style={{ ...card, containerType: "inline-size" }}>
+      <span className="hud-corner" />
+      {kicker("Global Position")}
+      <div style={{ marginTop: 6 }}><ResponsiveGlobe geo={geo} /></div>
+    </div>
+  );
+}
+
+/** The shared right-hand rail — mission clock, agent identity, this-week scoreboard,
+ *  globe, then live host telemetry. Used by both HUD mode and (via Cockpit) Flow mode. */
 export function RightRail() {
   return (
     <>
+      <Clock />
       <AgentIdentityCard />
+      <WeekWidget />
+      <GlobeWidget />
       <TelemetryDeck />
     </>
   );

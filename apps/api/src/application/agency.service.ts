@@ -3,8 +3,41 @@ import { BadRequestException, Inject, Injectable, NotFoundException } from "@nes
 import type { Account } from "@rcw/shared";
 import { ACCOUNT_STORE, type AccountStore } from "../domain/accounts/account-store.port";
 import { AGENCY_MESSAGE_STORE, type AgencyAttachment, type AgencyMessageStore } from "../domain/agency/agency-message.port";
+import { JiraService } from "./jira.service";
+import { AccountsService } from "./accounts.service";
+import { SettingsService } from "./settings.service";
 
 const ORG = "org";
+const WEEK_KEY = "agency:week:config";
+
+/** Admin-set competition parameters for Agent of the Week. Empty window = "the current
+ *  ISO week"; a set window pins a fixed contest (e.g. a launch sprint). */
+export type WeekConfig = { prize: string; startsAt: string | null; endsAt: string | null };
+export type WeekEntry = {
+  accountId: string; displayName: string; username: string; photo: string | null;
+  division: string; level: string; github: string; jira: string;
+  commits: number; jiraDone: number; tokens: number;
+  nCommits: number; nJira: number; nTokens: number; score: number; rank: number;
+};
+export type AgentOfWeek = {
+  config: WeekConfig;
+  window: { start: string; end: string };
+  weights: { jira: number; commits: number; tokens: number };
+  entries: WeekEntry[];
+};
+// Weighting: delivered Jira outcomes count most, then commits (activity), then tokens
+// (effort — easily inflated, so it's the lightest touch). Each metric is scored relative
+// to the roster's best performer, so the numbers are a fair like-for-like comparison.
+const WEEK_WEIGHTS = { jira: 0.45, commits: 0.35, tokens: 0.2 };
+const pad2 = (n: number) => String(n).padStart(2, "0");
+const jqlDate = (d: Date) => `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())} ${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`;
+const isoDay = (d: Date) => `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`;
+/** Monday 00:00 UTC of the week containing `now`, and the following Monday. */
+function currentWeek(now: Date): { start: Date; end: Date } {
+  const day = (now.getUTCDay() + 6) % 7; // 0 = Monday
+  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - day, 0, 0, 0));
+  return { start, end: new Date(start.getTime() + 7 * 864e5) };
+}
 
 /** Public GitHub activity for an agent. `days` is the real contribution calendar (the
  *  green-squares graph, one entry per day for ~the last year); `contribTotal` is its sum. */
@@ -69,7 +102,71 @@ export class AgencyService {
   constructor(
     @Inject(AGENCY_MESSAGE_STORE) private readonly store: AgencyMessageStore,
     @Inject(ACCOUNT_STORE) private readonly accounts: AccountStore,
+    private readonly jira: JiraService,
+    private readonly accountsSvc: AccountsService,
+    private readonly settings: SettingsService,
   ) {}
+
+  // ---- Agent of the Week -------------------------------------------------
+  async getWeekConfig(): Promise<WeekConfig> {
+    const raw = await this.settings.get(WEEK_KEY);
+    if (!raw) return { prize: "", startsAt: null, endsAt: null };
+    try {
+      const c = JSON.parse(raw) as Partial<WeekConfig>;
+      return { prize: String(c.prize ?? ""), startsAt: c.startsAt ?? null, endsAt: c.endsAt ?? null };
+    } catch { return { prize: "", startsAt: null, endsAt: null }; }
+  }
+
+  async setWeekConfig(cfg: WeekConfig): Promise<WeekConfig> {
+    const clean: WeekConfig = { prize: String(cfg.prize ?? "").slice(0, 400), startsAt: cfg.startsAt || null, endsAt: cfg.endsAt || null };
+    await this.settings.set(WEEK_KEY, JSON.stringify(clean));
+    return clean;
+  }
+
+  /** The weighted weekly leaderboard: per agent, commits + Jira tickets resolved + tokens
+   *  burned inside the contest window, each scored against the roster's best and combined. */
+  async agentOfWeek(now = new Date()): Promise<AgentOfWeek> {
+    const config = await this.getWeekConfig();
+    const win = config.startsAt && config.endsAt
+      ? { start: new Date(config.startsAt), end: new Date(config.endsAt) }
+      : currentWeek(now);
+    const roster = (await this.accounts.list()).filter((a) => !a.disabledAt);
+
+    const [tokenMap, jiraDone] = await Promise.all([
+      this.accountsSvc.tokensSince(win.start, win.end),
+      this.jira.resolvedInWindow(roster.filter((a) => a.jira).map((a) => ({ accountId: a.id, jiraUser: a.jira })), jqlDate(win.start), jqlDate(win.end)),
+    ]);
+    const jiraMap = new Map(jiraDone.map((r) => [r.accountId, r.done]));
+
+    const startStr = isoDay(win.start), endStr = isoDay(win.end);
+    const rows = await Promise.all(roster.map(async (a) => {
+      let commits = 0;
+      if (a.github) {
+        try {
+          const g = await this.githubStats(a.github);
+          commits = g.days.filter((d) => d.date >= startStr && d.date < endStr).reduce((s, d) => s + d.count, 0);
+        } catch { /* rate-limited → 0 */ }
+      }
+      return {
+        accountId: a.id, displayName: a.displayName, username: a.username, photo: a.photo,
+        division: a.division ?? "", level: a.level ?? "", github: a.github ?? "", jira: a.jira ?? "",
+        commits, jiraDone: jiraMap.get(a.id) ?? 0, tokens: tokenMap.get(a.id) ?? 0,
+      };
+    }));
+
+    const maxC = Math.max(1, ...rows.map((r) => r.commits));
+    const maxJ = Math.max(1, ...rows.map((r) => r.jiraDone));
+    const maxT = Math.max(1, ...rows.map((r) => r.tokens));
+    const entries: WeekEntry[] = rows.map((r) => {
+      const nCommits = r.commits / maxC, nJira = r.jiraDone / maxJ, nTokens = r.tokens / maxT;
+      const score = 100 * (WEEK_WEIGHTS.jira * nJira + WEEK_WEIGHTS.commits * nCommits + WEEK_WEIGHTS.tokens * nTokens);
+      return { ...r, nCommits, nJira, nTokens, score: Math.round(score * 10) / 10, rank: 0 };
+    })
+      .sort((a, b) => b.score - a.score || b.jiraDone - a.jiraDone || b.commits - a.commits)
+      .map((e, i) => ({ ...e, rank: i + 1 }));
+
+    return { config, window: { start: win.start.toISOString(), end: win.end.toISOString() }, weights: WEEK_WEIGHTS, entries };
+  }
 
   /** Stable DM channel id for a pair of accounts (order-independent). */
   dmChannel(a: string, b: string): string {

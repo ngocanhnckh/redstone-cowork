@@ -117,6 +117,22 @@ export class JiraService {
     return data;
   }
 
+  /** Count issues each agent RESOLVED within [start, end] (Jira `resolved` timestamps),
+   *  for the Agent-of-the-Week board. `start`/`end` are JQL date-time strings. */
+  async resolvedInWindow(users: Array<{ accountId: string; jiraUser: string }>, start: string, end: string): Promise<Array<{ accountId: string; done: number }>> {
+    const profile = await this.defaultProfile();
+    if (!profile || users.length === 0) return users.map((u) => ({ accountId: u.accountId, done: 0 }));
+    const client = await this.clientFor(profile);
+    if (!client) return users.map((u) => ({ accountId: u.accountId, done: 0 }));
+    return Promise.all(users.map(async (u) => {
+      try {
+        const who = u.jiraUser.replace(/"/g, "");
+        const jql = `assignee = "${who}" AND resolved >= "${start}" AND resolved <= "${end}"`;
+        return { accountId: u.accountId, done: await client.countJql(jql) };
+      } catch { return { accountId: u.accountId, done: 0 }; }
+    }));
+  }
+
   /** An agent's assigned Jira issues (newest first) under the default profile. */
   async assignedIssues(jiraUser: string): Promise<JiraIssue[]> {
     const profile = await this.defaultProfile();

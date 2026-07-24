@@ -136,6 +136,8 @@ declare global {
       agencyMyJira(): Promise<{ completed: number; inProgress: number; todo: number; total: number }>;
       agencyAgent(id: string): Promise<import("../../shared/agency").AgencyAgentDossier>;
       agencyGithubRoster(): Promise<Array<{ accountId: string; found: boolean; contribTotal: number; activeDays: number; commits: number }>>;
+      agencyWeek(): Promise<import("../../shared/agency").AgentOfWeek>;
+      agencyWeekConfig(cfg: import("../../shared/agency").WeekConfig): Promise<import("../../shared/agency").WeekConfig>;
       jiraGetBinding(sessionId: string): Promise<{ profile: string; projectKey: string; boardId: number | null } | null>;
       jiraSetBinding(sessionId: string, binding: { profile: string; projectKey: string; boardId?: number | null }): Promise<unknown>;
       jiraClearBinding(sessionId: string): Promise<{ ok: true }>;
