@@ -186,7 +186,7 @@ type State = {
   queue: SessionView[];
   decisions: Decision[];
   focusId: string | null;
-  mode: "flow" | "grid" | "history" | "hud";
+  mode: "flow" | "grid" | "history" | "hud" | "agency";
   detailId: string | null; // session shown in the grid's drill-in detail
   hosts: Host[]; // machines reporting via the redstone agent
   inventory: DiscoveredSession[]; // all discovered Claude Code sessions
@@ -245,7 +245,7 @@ type State = {
   moveSwitcher: (dir: 1 | -1) => void;
   commitSwitcher: () => void;
   cancelSwitcher: () => void;
-  setMode: (mode: "flow" | "grid" | "history" | "hud") => void;
+  setMode: (mode: "flow" | "grid" | "history" | "hud" | "agency") => void;
   /** User-customizable keyboard shortcuts (action id → accelerator). */
   keybindings: Record<string, string>;
   setKeybinding: (id: string, accel: string) => void;
@@ -282,8 +282,8 @@ export const useStore = create<State>((set, get) => ({
   focusId: null,
   // Restore the last-used cockpit mode (HUD/Flow/Grid) across launches; a last-viewed
   // "history" reopens to Flow (it's a transient browse view, not a home).
-  mode: ((): "flow" | "grid" | "history" | "hud" => {
-    try { const m = localStorage.getItem("rcw.mode"); if (m === "hud" || m === "grid" || m === "flow") return m; } catch { /* ignore */ }
+  mode: ((): "flow" | "grid" | "history" | "hud" | "agency" => {
+    try { const m = localStorage.getItem("rcw.mode"); if (m === "hud" || m === "grid" || m === "flow" || m === "agency") return m; } catch { /* ignore */ }
     return "flow";
   })(),
   detailId: null,
@@ -464,7 +464,7 @@ export const useStore = create<State>((set, get) => ({
     set({ keybindings: { ...DEFAULT_BINDINGS } });
   },
 
-  setMode: (mode: "flow" | "grid" | "history" | "hud") => {
+  setMode: (mode: "flow" | "grid" | "history" | "hud" | "agency") => {
     set({ mode, detailId: null });
     try { localStorage.setItem("rcw.mode", mode); } catch { /* ignore */ }
     if (mode === "history") get().fetchInventory();

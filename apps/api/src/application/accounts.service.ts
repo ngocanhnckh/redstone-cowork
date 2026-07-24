@@ -211,7 +211,7 @@ export class AccountsService implements OnModuleInit {
         accountId: a.id, username: a.username, displayName: a.displayName, role: a.role,
         photo: a.photo, level: a.level, division: a.division,
         sessions: 0, activeSessions: 0, tokensInput: 0, tokensOutput: 0, estCostUsd: 0,
-        lastActiveAt: null,
+        timeSpentMs: 0, lastActiveAt: null,
       });
     }
     for (const s of sessions) {
@@ -222,6 +222,9 @@ export class AccountsService implements OnModuleInit {
       row.tokensInput += s.tokensInput ?? 0;
       row.tokensOutput += s.tokensOutput ?? 0;
       row.estCostUsd += estCost(s.model, s.tokensInput ?? 0, s.tokensOutput ?? 0);
+      // Time on task: attach → last-seen span per session, summed (clamped ≥ 0).
+      const span = (s.lastSeenAt?.getTime() ?? 0) - (s.attachedAt?.getTime() ?? 0);
+      if (span > 0) row.timeSpentMs += span;
       const seen = s.lastSeenAt?.getTime() ?? 0;
       if (!row.lastActiveAt || seen > row.lastActiveAt.getTime()) row.lastActiveAt = s.lastSeenAt ?? row.lastActiveAt;
     }
@@ -247,7 +250,7 @@ export type AccountAnalytics = {
   accountId: string; username: string; displayName: string; role: string;
   photo: string | null; level: string; division: string;
   sessions: number; activeSessions: number; tokensInput: number; tokensOutput: number;
-  estCostUsd: number; lastActiveAt: Date | null;
+  estCostUsd: number; timeSpentMs: number; lastActiveAt: Date | null;
 };
 export type AccountSessionRow = {
   id: string; machine: string; cwd: string; model: string | null;

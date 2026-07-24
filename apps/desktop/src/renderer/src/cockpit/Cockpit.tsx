@@ -10,6 +10,7 @@ import ContextColumn from "./ContextColumn";
 import { RightRail } from "./Hud";
 import AgentGrid from "./AgentGrid";
 import AllSessions from "./AllSessions";
+import AgencyView from "./AgencyView";
 import Hud from "./Hud";
 import BootScreen from "./BootScreen";
 import { useKeybindings } from "./useKeybindings";
@@ -113,7 +114,7 @@ export default function Cockpit() {
   // handled by the customizable keybindings dispatcher — rebindable in Settings.
   useKeybindings();
 
-  const seg = (m: "flow" | "grid" | "history" | "hud", label: string) => (
+  const seg = (m: "flow" | "grid" | "history" | "hud" | "agency", label: string) => (
     <button
       onClick={() => setMode(m)}
       style={{
@@ -288,6 +289,7 @@ export default function Cockpit() {
             {seg("grid", `Grid${sessions.length ? ` · ${sessions.length}` : ""}`)}
             {seg("history", "All Sessions")}
             {seg("hud", "HUD")}
+            {seg("agency", "Agency")}
           </div>
         </div>
 
@@ -297,6 +299,8 @@ export default function Cockpit() {
           <BootScreen />
         ) : mode === "hud" ? (
           <Hud />
+        ) : mode === "agency" ? (
+          <AgencyView />
         ) : mode === "history" ? (
           <AllSessions />
         ) : mode === "grid" ? (
