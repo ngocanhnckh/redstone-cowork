@@ -4,28 +4,45 @@ import { NewServerSchema } from "@rcw/shared";
 import { ServersService } from "../../application/servers.service";
 import { AccountsService } from "../../application/accounts.service";
 import { SessionsService } from "../../application/sessions.service";
+import { InventoryService } from "../../application/inventory.service";
 import { InstanceTokenGuard, isAdminScope, type GuardedRequest } from "./instance-token.guard";
 
 @Controller("servers")
 @UseGuards(InstanceTokenGuard)
 export class ServersController {
-  constructor(private readonly servers: ServersService, private readonly accounts: AccountsService, private readonly sessions: SessionsService) {}
+  constructor(
+    private readonly servers: ServersService,
+    private readonly accounts: AccountsService,
+    private readonly sessions: SessionsService,
+    private readonly inventory: InventoryService,
+  ) {}
 
   /** Admin sees all servers (with ACL); an agent sees the servers assigned to them + their own. */
   @Get()
   async list(@Req() req: GuardedRequest) {
     const registry = isAdminScope(req) ? await this.servers.listAllWithAccess() : await this.servers.listForAccount(req.account!.id);
-    // Also surface hosts where sessions already run (redstone agent reporting) that
-    // aren't in the curated registry yet — so connected servers aren't invisible.
-    const known = new Set(registry.map((s) => (s.host || "").toLowerCase()).concat(registry.map((s) => s.name.toLowerCase())));
-    const sessions = isAdminScope(req) ? await this.sessions.list() : await this.sessions.list(req.account!.id);
-    const machines = new Map<string, string>();
-    for (const s of sessions) if (s.machine && !machines.has(s.machine.toLowerCase())) machines.set(s.machine.toLowerCase(), s.machine);
+    // Also surface reporting redstone agents not yet curated. A redstone install lives
+    // in the USER's home (~/.redstone/host-id), so each USER@HOST is its own inventory
+    // host — discovery is keyed per (user, host), not per machine.
+    const registryKey = new Set(
+      registry.map((s) => `${(s.sshUser || "").toLowerCase()}@${(s.host || "").toLowerCase()}`),
+    );
+    const hosts = await this.inventory.listHosts();
+    // Members only see hosts they have sessions on (by machine).
+    const myMachines = isAdminScope(req)
+      ? null
+      : new Set((await this.sessions.list(req.account!.id)).map((s) => s.machine.toLowerCase()));
     const now = new Date();
-    const discovered = [...machines.values()]
-      .filter((m) => !known.has(m.toLowerCase()))
-      .map((m) => ({
-        id: `host:${m}`, name: m, host: m, sshUser: "", sshPort: 22, description: "reporting a redstone agent",
+    const discovered = hosts
+      .filter((h) => (myMachines ? myMachines.has(h.machine.toLowerCase()) : true))
+      .filter((h) => !registryKey.has(`${(h.user || "").toLowerCase()}@${(h.address || h.machine).toLowerCase()}`))
+      .map((h) => ({
+        id: `host:${h.id}`,
+        name: h.user ? `${h.user}@${h.machine}` : h.machine,
+        host: h.address || h.machine,
+        sshUser: h.user || "",
+        sshPort: h.sshPort ?? 22,
+        description: "reporting a redstone agent",
         ownerAccountId: null, keyInstalled: true, createdBy: null, createdAt: now, discovered: true,
       }));
     return [...registry, ...discovered];
@@ -67,22 +84,45 @@ export class ServersController {
     };
   }
 
-  /** Admin registers a shared company server; an agent self-adds their own VPS. */
+  /** Admin registers a shared company server; an agent self-adds their own VPS. If the
+   *  same user@host is ALREADY known to cowork (a curated server or a reporting agent),
+   *  we don't duplicate it — we grant the caller access to the existing one. */
   @Post()
   @HttpCode(201)
   async create(@Req() req: GuardedRequest, @Body() body: unknown) {
     try {
       const input = NewServerSchema.parse(body);
+      // Already known (same user@host)? Reuse it and, for a member, grant access.
+      const known = await this.findKnown(input.sshUser, input.host, req);
+      if (known) {
+        if (req.account && req.account.role !== "admin") await this.servers.grant(known, req.account.id);
+        return await this.servers.get(known);
+      }
       if (isAdminScope(req) && req.authKind !== "account") {
         return await this.servers.createCompany(input, "");
       }
       if (req.account?.role === "admin") return await this.servers.createCompany(input, req.account.id);
-      // members self-add owned VPS
+      // members self-add owned VPS (genuinely new)
       return await this.servers.createOwned(input, req.account!.id);
     } catch (e) {
       if (e instanceof ZodError) throw new BadRequestException(e.issues);
       throw e;
     }
+  }
+
+  /** Find an existing registry server for user@host, or adopt a matching reporting host.
+   *  Returns the registry server id, or null when cowork has never seen this user@host. */
+  private async findKnown(sshUser: string, host: string, req: GuardedRequest): Promise<string | null> {
+    const u = (sshUser || "").toLowerCase(), h = (host || "").toLowerCase();
+    const registry = (await this.servers.listAllWithAccess()).find(
+      (s) => s.sshUser.toLowerCase() === u && s.host.toLowerCase() === h,
+    );
+    if (registry) return registry.id;
+    const invHost = (await this.inventory.listHosts()).find(
+      (x) => (x.user || "").toLowerCase() === u && (x.address || x.machine).toLowerCase() === h,
+    );
+    if (invHost) return this.adoptIfDiscovered(`host:${invHost.id}`, req);
+    return null;
   }
 
   @Post(":id")
@@ -122,17 +162,26 @@ export class ServersController {
   }
 
   /** Turn a discovered host into a real registry server so it can be assigned/managed.
-   *  No-op for real ids. Returns the registry server id to operate on. */
+   *  Resolves the inventory host (which carries the Unix user + address + port), so the
+   *  adopted server captures the correct user@host. No-op for real ids. */
   private async adoptIfDiscovered(id: string, req: GuardedRequest): Promise<string> {
     if (!id.startsWith("host:")) return id;
-    const machine = id.slice("host:".length);
-    // Already adopted under a real id? Match by host/name.
+    const hostId = id.slice("host:".length);
+    const host = (await this.inventory.listHosts()).find((h) => h.id === hostId);
+    const machine = host?.machine ?? hostId;
+    const user = host?.user || "root";
+    const addr = host?.address || machine;
+    // Already adopted? Match by (user, host).
     const existing = (await this.servers.listAllWithAccess()).find(
-      (s) => s.host.toLowerCase() === machine.toLowerCase() || s.name.toLowerCase() === machine.toLowerCase(),
+      (s) => s.sshUser.toLowerCase() === user.toLowerCase() && s.host.toLowerCase() === addr.toLowerCase(),
     );
     if (existing) return existing.id;
     const created = await this.servers.createCompany(
-      { name: machine, host: machine, sshUser: "root", sshPort: 22, description: "adopted from a reporting redstone agent" },
+      {
+        name: host?.user ? `${host.user}@${machine}` : machine,
+        host: addr, sshUser: user, sshPort: host?.sshPort ?? 22,
+        description: "adopted from a reporting redstone agent",
+      },
       req.account?.id ?? "",
     );
     return created.id;

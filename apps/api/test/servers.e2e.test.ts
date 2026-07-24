@@ -80,6 +80,34 @@ describe("server registry & ACL", () => {
     expect(del.status).toBe(200);
   });
 
+  it("self-adding a user@host cowork already has grants access instead of duplicating", async () => {
+    const adminTok = await login("anh.nguyen", "admin-pass");
+    await mkAgent(adminTok, "agent.k");
+    const kTok = await login("agent.k", "agent.k-pw1");
+
+    // admin curates a company server ubuntu@10.5.5.5
+    const company = await request(app.getHttpServer()).post("/servers").set("Authorization", `Bearer ${adminTok}`)
+      .send({ name: "Shared Box", host: "10.5.5.5", sshUser: "ubuntu", sshPort: 22 });
+    expect(company.status).toBe(201);
+
+    // member self-adds the SAME user@host → should be granted access to the existing one
+    const selfAdd = await request(app.getHttpServer()).post("/servers").set("Authorization", `Bearer ${kTok}`)
+      .send({ name: "My name for it", host: "10.5.5.5", sshUser: "ubuntu" });
+    expect(selfAdd.status).toBe(201);
+    expect(selfAdd.body.id).toBe(company.body.id); // reused, not duplicated
+    expect(selfAdd.body.ownerAccountId).toBeNull(); // it's the company server, not owned
+
+    // the member can now see it
+    const seen = await request(app.getHttpServer()).get("/servers").set("Authorization", `Bearer ${kTok}`);
+    expect(seen.body.some((s: { id: string }) => s.id === company.body.id)).toBe(true);
+
+    // a DIFFERENT user on the same IP is NOT the same server → member adds their own
+    const diffUser = await request(app.getHttpServer()).post("/servers").set("Authorization", `Bearer ${kTok}`)
+      .send({ name: "root box", host: "10.5.5.5", sshUser: "root" });
+    expect(diffUser.body.id).not.toBe(company.body.id);
+    expect(diffUser.body.ownerAccountId).toBeTruthy(); // genuinely new → owned
+  });
+
   it("member cannot grant access; only admin can", async () => {
     const adminTok = await login("anh.nguyen", "admin-pass");
     await mkAgent(adminTok, "agent.m");
