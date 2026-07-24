@@ -635,7 +635,7 @@ const FIXED: { key: FixedKey; title: string; icon: string }[] = [
   { key: "devtools", title: "Inspector", icon: "◫" },
   { key: "activity", title: "Activity", icon: "⚡" },
   { key: "explorer", title: "Explorer", icon: "◲" },
-  { key: "agents", title: "Agents", icon: "⛨" },
+  { key: "agents", title: "Admin", icon: "⛨" },
   { key: "servers", title: "Servers", icon: "⬡" },
 ];
 const GRID_PANELS: GridKey[] = ["chat", "term", "files", "browser"];

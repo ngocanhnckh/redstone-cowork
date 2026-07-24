@@ -32,14 +32,12 @@ const EMPTY = { name: "", host: "", sshUser: "root", sshPort: 22, description: "
 export default function ServersPanel() {
   const [me, setMe] = useState<{ role: string } | null>(null);
   const [servers, setServers] = useState<ServerView[]>([]);
-  const [agents, setAgents] = useState<AgentAccount[]>([]);
   const [coworkKey, setCoworkKey] = useState<string | null>(null);
   const [form, setForm] = useState<typeof EMPTY>(EMPTY);
   const [adding, setAdding] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
-  const [grantFor, setGrantFor] = useState<string | null>(null);
 
   const isAdmin = me?.role === "admin";
 
@@ -53,7 +51,6 @@ export default function ServersPanel() {
       setMe(meR as { role: string });
       setServers(list);
       setCoworkKey(key.publicKey);
-      if ((meR as { role: string }).role === "admin") setAgents(await window.cowork.accountsList().catch(() => []));
       setErr("");
     } catch (e) {
       setErr(`Registry unavailable (${e instanceof Error ? e.message : e})`);
@@ -70,7 +67,7 @@ export default function ServersPanel() {
     try {
       await window.cowork.serverCreate({ ...form, name: form.name.trim(), host: form.host.trim() });
       setForm(EMPTY); setAdding(false); await reload();
-      flash(isAdmin ? "COMPANY SERVER REGISTERED" : "VPS ADDED");
+      flash("SERVER ADDED");
     } catch (e) { setErr(`Add failed (${e instanceof Error ? e.message : e})`); }
     finally { setBusy(false); }
   }
@@ -79,29 +76,16 @@ export default function ServersPanel() {
     try { await window.cowork.serverDelete(id); await reload(); flash("SERVER REMOVED"); }
     finally { setBusy(false); }
   }
-  async function grant(id: string, username: string) {
-    setBusy(true);
-    try { await window.cowork.serverGrant(id, username); setGrantFor(null); await reload(); flash("ACCESS GRANTED"); }
-    catch (e) { setErr(`Grant failed (${e instanceof Error ? e.message : e})`); }
-    finally { setBusy(false); }
-  }
-  async function revokeByUsername(id: string, username: string) {
-    const acct = agents.find((a) => a.username === username);
-    if (!acct) return;
-    setBusy(true);
-    try { await window.cowork.serverRevoke(id, acct.id); await reload(); flash("ACCESS REVOKED"); }
-    finally { setBusy(false); }
-  }
 
   return (
     <div className="rcw-sv">
       <style>{CSS}</style>
       <div className="rcw-sv-head">
         <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".3em", color: "rgb(84 230 255 / .9)" }}>SERVER REGISTRY</span>
-        <span className="faint" style={{ fontSize: 9.5, letterSpacing: ".2em" }}>{isAdmin ? "COMPANY INFRASTRUCTURE" : "YOUR ASSIGNED MACHINES"}</span>
+        <span className="faint" style={{ fontSize: 9.5, letterSpacing: ".2em" }}>YOUR CONNECTED MACHINES</span>
         <span style={{ flex: 1 }} />
         {msg && <span style={{ fontSize: 10, color: "#7fd18b", letterSpacing: ".14em" }}>{msg}</span>}
-        <button className="rcw-sv-btn" onClick={() => setAdding((a) => !a)}>{adding ? "CANCEL" : isAdmin ? "＋ REGISTER SERVER" : "＋ ADD MY VPS"}</button>
+        <button className="rcw-sv-btn" onClick={() => setAdding((a) => !a)}>{adding ? "CANCEL" : "＋ ADD SERVER"}</button>
       </div>
 
       {err && <div style={{ padding: "10px 14px", color: "#ff7d72", fontSize: 11.5 }}>⚠ {err}</div>}
@@ -118,7 +102,7 @@ export default function ServersPanel() {
             </div>
             <label className="rcw-sv-label">DESCRIPTION</label>
             <input className="rcw-sv-input" value={form.description} onChange={set("description")} placeholder="optional" />
-            {!isAdmin && coworkKey && (
+            {coworkKey && (
               <div style={{ marginTop: 10, padding: 9, borderRadius: 7, background: "rgb(84 230 255 / .06)", border: "1px solid rgb(84 230 255 / .2)" }}>
                 <div style={{ fontSize: 9.5, letterSpacing: ".14em", color: "rgb(84 230 255 / .8)", marginBottom: 4 }}>INSTALL THIS KEY ON THE VPS (authorized_keys):</div>
                 <code style={{ fontSize: 9.5, wordBreak: "break-all", color: "var(--text-soft)" }}>{coworkKey}</code>
@@ -143,28 +127,6 @@ export default function ServersPanel() {
                 {s.keyInstalled ? <span className="rcw-sv-badge green">KEY OK</span> : <span className="rcw-sv-badge warn">KEY?</span>}
               </div>
 
-              {isAdmin && !owned && (
-                <div style={{ marginTop: 8 }}>
-                  <label className="rcw-sv-label">ASSIGNED AGENTS</label>
-                  <div>
-                    {(s.access ?? []).map((u) => (
-                      <span key={u} className="rcw-sv-chip">{u}
-                        <span style={{ cursor: "pointer", color: "#ff9d94" }} onClick={() => revokeByUsername(s.id, u)}> ✕</span>
-                      </span>
-                    ))}
-                    {!(s.access ?? []).length && <span className="faint" style={{ fontSize: 10 }}>none</span>}
-                  </div>
-                  {grantFor === s.id ? (
-                    <select className="rcw-sv-input" style={{ marginTop: 6 }} autoFocus onChange={(e) => e.target.value && grant(s.id, e.target.value)} defaultValue="">
-                      <option value="" disabled>select agent…</option>
-                      {agents.filter((a) => !(s.access ?? []).includes(a.username)).map((a) => <option key={a.id} value={a.username}>{a.displayName} (@{a.username})</option>)}
-                    </select>
-                  ) : (
-                    <button className="rcw-sv-btn" style={{ marginTop: 6 }} onClick={() => setGrantFor(s.id)}>＋ ASSIGN AGENT</button>
-                  )}
-                </div>
-              )}
-
               {(isAdmin || owned) && (
                 <div style={{ marginTop: 8 }}>
                   <button className="rcw-sv-btn warn" disabled={busy} onClick={() => remove(s.id)}>REMOVE</button>
@@ -173,7 +135,7 @@ export default function ServersPanel() {
             </div>
           );
         })}
-        {!servers.length && !adding && !err && <span className="faint" style={{ fontSize: 11.5 }}>{isAdmin ? "No servers registered yet." : "No servers assigned. Add your own VPS to get started."}</span>}
+        {!servers.length && !adding && !err && <span className="faint" style={{ fontSize: 11.5 }}>No servers yet. Add one, or open a session to auto-discover your connected hosts.</span>}
       </div>
     </div>
   );

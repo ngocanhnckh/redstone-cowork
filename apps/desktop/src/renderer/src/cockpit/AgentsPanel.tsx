@@ -85,8 +85,10 @@ export default function AgentsPanel() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
-  const [view, setView] = useState<"roster" | "console">("roster");
+  const [view, setView] = useState<"roster" | "console" | "servers">("roster");
   const [analytics, setAnalytics] = useState<Analytics[]>([]);
+  const [svServers, setSvServers] = useState<import("../../../shared/servers").ServerView[]>([]);
+  const [svGrantFor, setSvGrantFor] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const sel = agents.find((a) => a.id === selId) ?? null;
@@ -106,6 +108,24 @@ export default function AgentsPanel() {
   useEffect(() => {
     if (view === "console" && me?.role === "admin") window.cowork.accountsAnalytics().then((a) => setAnalytics(a as Analytics[])).catch(() => setAnalytics([]));
   }, [view, me]);
+  const loadServers = useCallback(() => {
+    window.cowork.serversList().then(setSvServers).catch(() => setSvServers([]));
+  }, []);
+  useEffect(() => { if (view === "servers" && me?.role === "admin") loadServers(); }, [view, me, loadServers]);
+
+  async function svGrant(serverId: string, username: string) {
+    setBusy(true);
+    try { await window.cowork.serverGrant(serverId, username); setSvGrantFor(null); loadServers(); flash("ACCESS GRANTED"); }
+    catch (e) { setErr(`Grant failed (${e instanceof Error ? e.message : e})`); }
+    finally { setBusy(false); }
+  }
+  async function svRevoke(serverId: string, username: string) {
+    const acct = agents.find((a) => a.username === username);
+    if (!acct) return;
+    setBusy(true);
+    try { await window.cowork.serverRevoke(serverId, acct.id); loadServers(); flash("ACCESS REVOKED"); }
+    finally { setBusy(false); }
+  }
   useEffect(() => {
     window.cowork.accountsAudit(selId ?? undefined, 40).then(setAudit).catch(() => setAudit([]));
   }, [selId, agents]);
@@ -214,14 +234,17 @@ export default function AgentsPanel() {
       <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={onFile} />
 
       <div className="rcw-ag-head">
-        <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".3em", color: "rgb(84 230 255 / .9)" }}>AGENT ROSTER</span>
+        <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".3em", color: "rgb(84 230 255 / .9)" }}>ADMIN CONSOLE</span>
         <span className="faint" style={{ fontSize: 9.5, letterSpacing: ".2em" }}>YITEC INTELLIGENCE AGENCY</span>
         <span style={{ flex: 1 }} />
         {msg && <span style={{ fontSize: 10, color: "#7fd18b", letterSpacing: ".14em" }}>{msg}</span>}
         {isAdmin && (
-          <button className="rcw-ag-btn" onClick={() => setView((v) => v === "roster" ? "console" : "roster")}>
-            {view === "roster" ? "📊 CONSOLE" : "◄ ROSTER"}
-          </button>
+          <div style={{ display: "flex", gap: 4 }}>
+            {(["roster", "console", "servers"] as const).map((v) => (
+              <button key={v} className="rcw-ag-btn" style={{ opacity: view === v ? 1 : 0.55, background: view === v ? "rgb(84 230 255 / .24)" : undefined }}
+                onClick={() => setView(v)}>{v === "roster" ? "ROSTER" : v === "console" ? "📊 CONSOLE" : "⬡ ACCESS"}</button>
+            ))}
+          </div>
         )}
         {isAdmin && view === "roster" && (
           <button className="rcw-ag-btn" onClick={() => { setMode("recruit"); setSelId(null); setForm(EMPTY); }}>
@@ -258,6 +281,48 @@ export default function AgentsPanel() {
               Total est. spend: <b style={{ color: "#e0a24a" }}>${analytics.reduce((s, r) => s + r.estCostUsd, 0).toFixed(2)}</b> across {analytics.reduce((s, r) => s + r.sessions, 0)} sessions
             </div>
           )}
+        </div>
+      ) : view === "servers" && isAdmin ? (
+        <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: 14 }}>
+          <div style={{ fontSize: 11, letterSpacing: ".2em", color: "rgb(84 230 255 / .8)", marginBottom: 4 }}>SERVER ACCESS · ASSIGN AGENTS TO MACHINES</div>
+          <div className="faint" style={{ fontSize: 10, marginBottom: 12 }}>Each user@host is a distinct machine (redstone installs per user). Grant an agent access so it appears in their Servers app.</div>
+          {svServers.map((s) => {
+            const disc = (s as { discovered?: boolean }).discovered;
+            return (
+              <div key={s.id} style={{ border: "1px solid var(--border)", borderRadius: 10, padding: "10px 12px", marginBottom: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <b style={{ color: "#e6f2f4", fontSize: 12.5 }}>{s.name}</b>
+                  <span className="faint" style={{ fontSize: 10.5 }}>{s.sshUser ? `${s.sshUser}@` : ""}{s.host}{s.sshPort !== 22 ? `:${s.sshPort}` : ""}</span>
+                  {s.ownerAccountId ? <span className="rcw-ag-badge dim">PRIVATE</span> : disc ? <span className="rcw-ag-badge">DISCOVERED</span> : <span className="rcw-ag-badge">COMPANY</span>}
+                </div>
+                {!s.ownerAccountId && (
+                  <div style={{ marginTop: 8 }}>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 5, alignItems: "center" }}>
+                      {(s.access ?? []).map((u) => (
+                        <span key={u} className="rcw-ag-badge" style={{ borderColor: "rgb(127 209 139 / .5)", color: "#7fd18b" }}>{u}
+                          <span style={{ cursor: "pointer", color: "#ff9d94", marginLeft: 4 }} onClick={() => svRevoke(s.id, u)}>✕</span>
+                        </span>
+                      ))}
+                      {!(s.access ?? []).length && !disc && <span className="faint" style={{ fontSize: 10 }}>no agents assigned</span>}
+                      {disc && <span className="faint" style={{ fontSize: 10 }}>assign an agent to adopt this host into the registry</span>}
+                    </div>
+                    {svGrantFor === s.id ? (
+                      <select className="rcw-ag-input" style={{ marginTop: 7, maxWidth: 260 }} autoFocus defaultValue=""
+                        onChange={(e) => e.target.value && svGrant(s.id, e.target.value)}>
+                        <option value="" disabled>select agent…</option>
+                        {agents.filter((a) => !(s.access ?? []).includes(a.username)).map((a) => (
+                          <option key={a.id} value={a.username}>{a.displayName} (@{a.username})</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <button className="rcw-ag-btn" style={{ marginTop: 7, padding: "5px 11px", fontSize: 10 }} disabled={busy} onClick={() => setSvGrantFor(s.id)}>＋ ASSIGN AGENT</button>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          {!svServers.length && <span className="faint" style={{ fontSize: 11.5 }}>No servers yet. Agents' connected hosts appear here once they open sessions.</span>}
         </div>
       ) : (
       <div style={{ flex: 1, minHeight: 0, display: "flex" }}>
