@@ -1925,7 +1925,8 @@ function dockBtnStyle(open: boolean, front: boolean): React.CSSProperties {
 const HUD_RIGHT_KEY = "rcw.hud.rightWidth";
 const RIGHT_MIN = 240;
 const RIGHT_MAX_ABS = 560;
-const RIGHT_DEFAULT = 420;
+// Start narrow (at the minimum) by default; the agent widens it if they want more.
+const RIGHT_DEFAULT = RIGHT_MIN;
 const loadRightWidth = (): number => {
   try {
     const v = Number(localStorage.getItem(HUD_RIGHT_KEY));
