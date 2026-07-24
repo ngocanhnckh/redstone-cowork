@@ -88,6 +88,7 @@ declare global {
       pin(id: string, pinned: boolean): Promise<void>;
       dismissSession(id: string): Promise<void>;
       instruct(sessionId: string, text: string): Promise<unknown>;
+      claudeCapturePane(machine: string, wrapperId: string): Promise<string>;
       interrupt(sessionId: string, text?: string): Promise<unknown>;
       switchMode(sessionId: string, mode: string): Promise<unknown>;
       addUserTodo(sessionId: string, text: string): Promise<unknown>;

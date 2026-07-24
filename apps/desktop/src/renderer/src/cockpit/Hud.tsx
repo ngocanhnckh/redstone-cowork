@@ -4,6 +4,7 @@ import { useStore } from "../store";
 import { HostTelemetryView } from "../types";
 import QueueRail from "./QueueRail";
 import TerminalStack from "./TerminalStack";
+import ClaudeLoginModal from "./ClaudeLoginModal";
 import MultiTerminal from "./MultiTerminal";
 import ActionFeed from "./ActionFeed";
 import FileBrowserEdex from "./FileBrowserEdex";
@@ -587,6 +588,7 @@ function ChatPane({ sessionId }: { sessionId?: string } = {}) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
   const [compacted, setCompacted] = useState(false);
+  const [loginOpen, setLoginOpen] = useState(false);
   // Collapsible "you last said" reminder bubble state (persisted, shared).
   const [ctxOpen, setCtxOpen] = useState(() => {
     try { return localStorage.getItem("rcw.chat.ctxBubble") !== "0"; } catch { return true; }
@@ -649,8 +651,20 @@ function ChatPane({ sessionId }: { sessionId?: string } = {}) {
           >
             <span style={{ fontSize: 11, lineHeight: 1 }}>⇥⇤</span>{compacted ? "sent" : "compact"}
           </button>
+          <button
+            onClick={() => setLoginOpen(true)}
+            title="Re-login Claude on this session — opens the login link in your browser and pastes the code back"
+            style={{
+              border: "1px solid var(--border)", background: "transparent", color: "var(--text-soft)",
+              borderRadius: 8, padding: "3px 9px", fontSize: 10.5, fontFamily: "var(--font-mono)", cursor: "pointer",
+              flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 5, whiteSpace: "nowrap",
+            }}
+          >
+            <span style={{ fontSize: 11, lineHeight: 1 }}>🔐</span>login
+          </button>
         </div>
       )}
+      {loginOpen && session && <ClaudeLoginModal session={session} onClose={() => setLoginOpen(false)} />}
       {/* Pinned reminder of the last message you sent to this session. */}
       {session && lastSent && (
         <div style={{ flexShrink: 0, margin: "10px 14px 0", borderRadius: 12, border: "1px solid rgb(var(--accent) / 0.3)", background: "rgb(var(--accent) / 0.06)", overflow: "hidden" }}>

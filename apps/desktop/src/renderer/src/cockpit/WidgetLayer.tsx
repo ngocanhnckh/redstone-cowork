@@ -236,8 +236,12 @@ function modelRate(model: string | null): { in: number; out: number } {
 // recent window → live tok/min & $/hr + per-minute sparklines, plus lifetime totals.
 // Reads BOTH `sessions` and `queue` (the fleet spans both) and dedupes by id — a
 // session living only in `queue` was previously missed, so throughput read 0.
-const WINDOW_MIN = 10;
-function useFleetSamples(): { totalTok: number; totalCost: number; tokPerMin: number; costPerHr: number; tokSpark: number[]; costSpark: number[] } {
+// Live throughput reads a tight 10-min window; the burn RATE reads a wider 60-min window
+// so bursty, real-world usage (token spend is reported per-turn, minutes apart) still
+// registers instead of collapsing to $0.00/hr the moment a session pauses.
+const TOK_WINDOW_MIN = 10;
+const COST_WINDOW_MIN = 60;
+function useFleetSamples(): { totalTok: number; totalCost: number; tokPerMin: number; costPerHr: number; lastBurnMin: number | null; tokSpark: number[]; costSpark: number[] } {
   const sessions = useStore((s) => s.sessions);
   const queue = useStore((s) => s.queue);
   const now = useNow(5000); // re-derive every 5s so the window slides
@@ -248,7 +252,8 @@ function useFleetSamples(): { totalTok: number; totalCost: number; tokPerMin: nu
     const all = [...byId.values()];
 
     let totalTok = 0, totalCost = 0;
-    const cutoff = now - WINDOW_MIN * 60_000;
+    let lastBurnAt = 0; // newest timestamp at which ANY session's tokens grew
+    const cutoff = now - COST_WINDOW_MIN * 60_000; // widest lookback
     // Per-minute buckets of tokens & $ spent, for the sparklines + headline rate.
     const tokByMin = new Map<number, number>();
     const costByMin = new Map<number, number>();
@@ -259,29 +264,40 @@ function useFleetSamples(): { totalTok: number; totalCost: number; tokPerMin: nu
       const series = s.tokenSeries ?? [];
       for (let i = 1; i < series.length; i++) {
         const t = new Date(series[i].t).getTime();
-        if (!Number.isFinite(t) || t < cutoff) continue;
+        if (!Number.isFinite(t)) continue;
         const dIn = Math.max(0, (series[i].input ?? 0) - (series[i - 1].input ?? 0));
         const dOut = Math.max(0, (series[i].output ?? 0) - (series[i - 1].output ?? 0));
+        if ((dIn > 0 || dOut > 0) && t > lastBurnAt) lastBurnAt = t;
+        if (t < cutoff) continue;
         const min = Math.floor(t / 60_000);
         tokByMin.set(min, (tokByMin.get(min) ?? 0) + dIn + dOut);
         costByMin.set(min, (costByMin.get(min) ?? 0) + dIn / 1e6 * r.in + dOut / 1e6 * r.out);
       }
     }
 
-    // Fill a contiguous per-minute series for the last WINDOW_MIN minutes (oldest→newest).
     const nowMin = Math.floor(now / 60_000);
-    const tokSpark: number[] = [], costSpark: number[] = [];
-    let windowTok = 0, windowCost = 0;
-    for (let m = nowMin - WINDOW_MIN + 1; m <= nowMin; m++) {
-      const tk = tokByMin.get(m) ?? 0, ct = costByMin.get(m) ?? 0;
-      tokSpark.push(tk);            // tokens that minute = tok/min
-      costSpark.push(ct * 60);      // $/hr for that minute
-      windowTok += tk; windowCost += ct;
+    // Cost sparkline + $/hr over the last COST_WINDOW_MIN minutes. Because the window is
+    // exactly one hour, the summed cost over it IS the $/hr burn rate.
+    const costSpark: number[] = [];
+    let costWindow = 0;
+    for (let m = nowMin - COST_WINDOW_MIN + 1; m <= nowMin; m++) {
+      const ct = costByMin.get(m) ?? 0;
+      costSpark.push(ct * 60); // $/hr contribution of that minute
+      costWindow += ct;
+    }
+    // Live token throughput over the last TOK_WINDOW_MIN minutes.
+    const tokSpark: number[] = [];
+    let tokWindow = 0;
+    for (let m = nowMin - TOK_WINDOW_MIN + 1; m <= nowMin; m++) {
+      const tk = tokByMin.get(m) ?? 0;
+      tokSpark.push(tk);
+      tokWindow += tk;
     }
     return {
       totalTok, totalCost,
-      tokPerMin: windowTok / WINDOW_MIN,
-      costPerHr: windowCost / WINDOW_MIN * 60,
+      tokPerMin: tokWindow / TOK_WINDOW_MIN,
+      costPerHr: costWindow, // 60-min window → sum is already $/hr
+      lastBurnMin: lastBurnAt ? Math.max(0, Math.round((now - lastBurnAt) / 60_000)) : null,
       tokSpark, costSpark,
     };
   }, [sessions, queue, now]);
@@ -347,7 +363,11 @@ function AttentionRadar() {
 
 // ── Widget: Fleet Burn ($) ────────────────────────────────────────────────────
 function FleetBurn() {
-  const { totalCost, costPerHr, costSpark } = useFleetSamples();
+  const { totalCost, costPerHr, lastBurnMin, costSpark } = useFleetSamples();
+  const active = costPerHr > 0.005;
+  const idleLabel = lastBurnMin == null ? "no recent burn"
+    : lastBurnMin < 60 ? `idle · last burn ${lastBurnMin}m ago`
+    : `idle · last burn ${Math.round(lastBurnMin / 60)}h ago`;
   return (
     <div style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
       {kicker("Fleet burn")}
@@ -355,7 +375,9 @@ function FleetBurn() {
         <span style={{ fontSize: 24, fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>${totalCost.toFixed(2)}</span>
         <span className="mono faint" style={{ fontSize: 10 }}>total</span>
       </div>
-      <div className="mono" style={{ fontSize: 11.5, color: "rgb(var(--accent))", marginTop: 2, marginBottom: 6 }}>${costPerHr.toFixed(2)} <span className="faint">/hr</span></div>
+      <div className="mono" style={{ fontSize: 11.5, color: active ? "rgb(var(--accent))" : "var(--text-faint)", marginTop: 2, marginBottom: 6 }}>
+        {active ? <>${costPerHr.toFixed(2)} <span className="faint">/hr · last 60m</span></> : idleLabel}
+      </div>
       <div style={{ marginTop: "auto" }}><Spark data={costSpark} color="rgb(var(--accent))" height={26} /></div>
     </div>
   );

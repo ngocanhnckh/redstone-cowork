@@ -35,6 +35,7 @@ import {
 } from "./forwarding";
 import { sshSetup, type SshSetupArgs } from "./ssh-setup";
 import { sshInstall, buildLaunchCommand } from "./ssh-install";
+import { captureClaudePane } from "./claude-login";
 import { saveSshPassword, getSshPassword } from "./ssh-creds";
 import { listDir, readFileAt, writeFileAt, writeFileBase64, deletePath, makeDir, createFile, uploadLocalFile, searchFiles, searchFilesStream, downloadFileTo } from "./files";
 import { gitInfo } from "./git";
@@ -531,6 +532,9 @@ ipcMain.handle(IPC.pin, (_e, a: { id: string; pinned: boolean }) =>
 );
 ipcMain.handle(IPC.dismiss, (_e, a: { id: string }) =>
   api.dismissSession(a.id)
+);
+ipcMain.handle(IPC.claudeCapturePane, (_e, a: { machine: string; wrapperId: string }) =>
+  captureClaudePane(a.machine, a.wrapperId),
 );
 ipcMain.handle(IPC.instruct, (_e, a: { sessionId: string; text: string }) =>
   api.instruct(a.sessionId, a.text)

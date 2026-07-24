@@ -49,6 +49,7 @@ export const IPC = {
   dismiss: "api:session:dismiss",
   streamEvent: "stream:event",
   instruct: "api:instruct",
+  claudeCapturePane: "api:claude:capture-pane",
   interrupt: "api:interrupt",
   mode: "api:mode",
   userTodoAdd: "api:usertodo:add",
