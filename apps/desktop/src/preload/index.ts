@@ -37,8 +37,11 @@ contextBridge.exposeInMainWorld("cowork", {
   accountSessions: (id: string): Promise<Array<Record<string, unknown>>> => ipcRenderer.invoke(IPC.accountSessions, { id }),
   faceEnroll: (descriptor: number[], account: { username: string; displayName: string; photo?: string | null }): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke(IPC.faceEnroll, { descriptor, account }),
-  faceAdminEnroll: (id: string, descriptor: number[]): Promise<{ ok: boolean; error?: string }> =>
+  faceAdminEnroll: (id: string, descriptor: number[]): Promise<{ ok: boolean; count?: number; error?: string }> =>
     ipcRenderer.invoke(IPC.faceAdminEnroll, { id, descriptor }),
+  faceAdminCount: (id: string): Promise<{ count: number }> => ipcRenderer.invoke(IPC.faceAdminCount, { id }),
+  faceAdminClear: (id: string): Promise<{ ok: boolean }> => ipcRenderer.invoke(IPC.faceAdminClear, { id }),
+  faceClearOwn: (): Promise<{ ok: boolean }> => ipcRenderer.invoke(IPC.faceClearOwn),
   pinSet: (pin: string): Promise<{ ok: boolean }> => ipcRenderer.invoke(IPC.pinSet, { pin }),
   pinVerify: (pin: string): Promise<{ ok: boolean }> => ipcRenderer.invoke(IPC.pinVerify, { pin }),
   faceLogin: (descriptor: number[]): Promise<{ ok: boolean; error?: string; account?: { username: string; displayName: string; role: string } }> =>
@@ -52,6 +55,7 @@ contextBridge.exposeInMainWorld("cowork", {
   accountCreate: (input: unknown): Promise<unknown> => ipcRenderer.invoke(IPC.accountCreate, { input }),
   accountUpdateProfile: (id: string, patch: unknown): Promise<unknown> => ipcRenderer.invoke(IPC.accountUpdateProfile, { id, patch }),
   accountSetDisabled: (id: string, disabled: boolean): Promise<unknown> => ipcRenderer.invoke(IPC.accountSetDisabled, { id, disabled }),
+  accountDelete: (id: string): Promise<{ ok: boolean }> => ipcRenderer.invoke(IPC.accountDelete, { id }),
   accountsAudit: (accountId?: string, limit?: number): Promise<unknown[]> => ipcRenderer.invoke(IPC.accountsAudit, { accountId, limit }),
   accountLogin: (
     serverUrl: string,

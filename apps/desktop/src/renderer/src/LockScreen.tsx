@@ -27,7 +27,6 @@ export default function LockScreen({ onUnlock, onSignOut }: Props) {
   const [err, setErr] = useState("");
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const faceTried = useRef(false);
 
   const stopCam = useCallback(() => { streamRef.current?.getTracks().forEach((t) => t.stop()); streamRef.current = null; }, []);
 
@@ -58,11 +57,12 @@ export default function LockScreen({ onUnlock, onSignOut }: Props) {
     })();
   }, []);
 
-  // Face-scan loop — runs whenever we're actively scanning.
+  // Face-scan loop — runs continuously while scanning, re-attempting until it matches
+  // (or the agent switches to PIN). A single failed frame never gives up.
   useEffect(() => {
     if (phase !== "scanning" || !faceReady) return;
     let alive = true;
-    faceTried.current = false;
+    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
     (async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 480, height: 480 }, audio: false });
@@ -70,32 +70,31 @@ export default function LockScreen({ onUnlock, onSignOut }: Props) {
         streamRef.current = stream;
         if (videoRef.current) { videoRef.current.srcObject = stream; await videoRef.current.play().catch(() => {}); }
         await loadFaceModels();
-        setTimeout(() => { if (alive) void tryFace(); }, 1600);
-      } catch { setMsg("CAMERA UNAVAILABLE — USE PIN"); toPin(); }
+        await sleep(1200); // let the camera warm up / autoexpose
+        let attempts = 0;
+        while (alive) {
+          const d = videoRef.current ? await describeFace(videoRef.current) : null;
+          if (!alive) break;
+          if (!d) { setMsg("NO FACE DETECTED — HOLD STILL…"); await sleep(650); continue; }
+          setMsg("MATCHING BIOMETRIC SIGNATURE…");
+          const r = await window.cowork.faceLogin(d);
+          if (!alive) break;
+          if (r.ok) {
+            // Boom — identified. Reveal the agent, then unlock after a short flourish.
+            if (r.account) setAgent((prev) => prev ?? { displayName: r.account!.displayName, username: r.account!.username, photo: null, hasPin: false });
+            setPhase("identified"); setMsg("◈ AGENT IDENTIFIED");
+            stopCam();
+            setTimeout(() => { if (alive) onUnlock(); }, 1100);
+            return;
+          }
+          attempts++;
+          setMsg(attempts >= 4 ? "STILL SCANNING… OR USE PIN" : "REALIGNING — LOOK STRAIGHT AT THE CAMERA…");
+          await sleep(900);
+        }
+      } catch { if (alive) { setMsg("CAMERA UNAVAILABLE — USE PIN"); toPin(); } }
     })();
     return () => { alive = false; stopCam(); };
   }, [phase, faceReady]); // eslint-disable-line
-
-  async function tryFace() {
-    if (faceTried.current || !videoRef.current) return;
-    faceTried.current = true;
-    setMsg("MATCHING BIOMETRIC SIGNATURE…");
-    try {
-      let d: number[] | null = null;
-      for (let i = 0; i < 5 && !d; i++) { d = await describeFace(videoRef.current); if (!d) await new Promise((r) => setTimeout(r, 400)); }
-      if (!d) { setMsg("NO FACE DETECTED — RETRYING…"); faceTried.current = false; setTimeout(() => void tryFace(), 900); return; }
-      const r = await window.cowork.faceLogin(d);
-      if (r.ok) {
-        // Boom — identified. Reveal the agent, then unlock after a short flourish.
-        if (r.account) setAgent((prev) => prev ?? { displayName: r.account!.displayName, username: r.account!.username, photo: null, hasPin: false });
-        setPhase("identified"); setMsg("◈ AGENT IDENTIFIED");
-        stopCam();
-        setTimeout(() => onUnlock(), 1100);
-        return;
-      }
-      setMsg("NOT RECOGNISED — TRY PIN"); faceTried.current = false;
-    } catch { setMsg("SCAN FAILED — USE PIN"); faceTried.current = false; }
-  }
 
   function toPin() {
     stopCam();

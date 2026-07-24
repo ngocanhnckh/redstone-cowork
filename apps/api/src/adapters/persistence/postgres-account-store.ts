@@ -84,6 +84,9 @@ export class PostgresAccountStore implements AccountStore {
     const { rows } = await this.pool.query(`SELECT face_descriptors AS d FROM accounts WHERE id=$1`, [accountId]);
     return (rows[0]?.d as number[][]) ?? [];
   }
+  async clearFaceDescriptors(accountId: string): Promise<void> {
+    await this.pool.query(`UPDATE accounts SET face_descriptors = '[]'::jsonb WHERE id=$1`, [accountId]);
+  }
   async trustDevice(rec: { id: string; accountId: string; secretHash: string; label: string; createdAt: Date }): Promise<void> {
     await this.pool.query(
       `INSERT INTO device_trust (id, account_id, secret_hash, label, created_at) VALUES ($1,$2,$3,$4,$5)
@@ -117,6 +120,24 @@ export class PostgresAccountStore implements AccountStore {
   async setDisabled(id: string, at: Date | null): Promise<boolean> {
     const r = await this.pool.query(`UPDATE accounts SET disabled_at=$2 WHERE id=$1`, [id, at]);
     return (r.rowCount ?? 0) > 0;
+  }
+
+  async remove(id: string): Promise<boolean> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      // Orphan the agent's sessions (history is kept, just unowned — sessions.account_id
+      // has no cascade), then delete; tokens/devices/servers/messages cascade.
+      await client.query(`UPDATE sessions SET account_id=NULL WHERE account_id=$1`, [id]);
+      const r = await client.query(`DELETE FROM accounts WHERE id=$1`, [id]);
+      await client.query("COMMIT");
+      return (r.rowCount ?? 0) > 0;
+    } catch (e) {
+      await client.query("ROLLBACK");
+      throw e;
+    } finally {
+      client.release();
+    }
   }
 
   async setPassword(id: string, passwordHash: string): Promise<boolean> {

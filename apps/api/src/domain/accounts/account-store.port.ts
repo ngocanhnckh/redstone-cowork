@@ -38,12 +38,17 @@ export interface AccountStore {
   // ——— Face biometrics + device trust ———
   addFaceDescriptor(accountId: string, descriptor: number[]): Promise<void>;
   getFaceDescriptors(accountId: string): Promise<number[][]>;
+  /** Remove all enrolled face descriptors for an account (reset before re-enrolling). */
+  clearFaceDescriptors(accountId: string): Promise<void>;
   trustDevice(rec: { id: string; accountId: string; secretHash: string; label: string; createdAt: Date }): Promise<void>;
   /** Resolve a device secret hash → its account (enabled + not revoked); touches last_used. */
   findDeviceAccount(secretHash: string, now: Date): Promise<Account | null>;
   list(): Promise<Account[]>;
   count(): Promise<number>;
   setDisabled(id: string, at: Date | null): Promise<boolean>;
+  /** Hard-delete an account (orphaning its sessions back to unowned). Returns false if
+   *  no such account existed. */
+  remove(id: string): Promise<boolean>;
   setPassword(id: string, passwordHash: string): Promise<boolean>;
   setPin(id: string, pinHash: string): Promise<boolean>;
   getPinHash(id: string): Promise<string | null>;

@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   ForbiddenException,
   Get,
   HttpCode,
@@ -36,6 +37,7 @@ export class AccountsController {
         ...req.account,
         hasPin: await this.accounts.hasPin(req.account.id),
         hasFace: await this.face.hasFace(req.account.id),
+        faceCount: await this.face.faceCount(req.account.id),
       };
     }
     // Instance-token (or other privileged) callers aren't a person; say so explicitly.
@@ -110,6 +112,20 @@ export class AccountsController {
   async enable(@Req() req: GuardedRequest, @Param("id") id: string) {
     requireAdmin(req);
     if (!(await this.accounts.setDisabled(id, false))) throw new NotFoundException();
+    return { ok: true };
+  }
+
+  /** Hard-delete an agent. Guarded: can't delete yourself or another admin (the
+   *  env-provisioned admin must survive). Sessions are orphaned, not deleted. */
+  @Delete(":id")
+  @HttpCode(200)
+  async remove(@Req() req: GuardedRequest, @Param("id") id: string) {
+    requireAdmin(req);
+    if (req.account?.id === id) throw new BadRequestException("cannot delete your own account");
+    const target = (await this.accounts.list()).find((a) => a.id === id);
+    if (!target) throw new NotFoundException();
+    if (target.role === "admin") throw new ForbiddenException("cannot delete an admin account");
+    if (!(await this.accounts.remove(id))) throw new NotFoundException();
     return { ok: true };
   }
 

@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, ForbiddenException, HttpCode, NotFoundException, Param, Post, Req, UnauthorizedException, UseGuards } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Delete, ForbiddenException, Get, HttpCode, NotFoundException, Param, Post, Req, UnauthorizedException, UseGuards } from "@nestjs/common";
 import { ZodError } from "zod";
 import { FaceDescriptorSchema, FaceEnrollSchema, FaceLoginSchema } from "@rcw/shared";
 import { FaceError, FaceService } from "../../application/face.service";
@@ -60,7 +60,18 @@ export class FaceEnrollController {
     return await this.face.trustCurrentDevice(req.account, String(body?.deviceLabel ?? ""));
   }
 
-  /** Admin pre-enrollment: store a descriptor computed from the agent's roster photo. */
+  /** Remove all of the CURRENT agent's face samples (reset to re-enroll). */
+  @Delete("me/face")
+  @HttpCode(200)
+  async clearOwnFaces(@Req() req: GuardedRequest) {
+    if (req.authKind !== "account" || !req.account) throw new ForbiddenException("sign in as an agent first");
+    await this.face.clearFaces(req.account.id);
+    return { ok: true };
+  }
+
+  /** Admin pre-enrollment: APPEND a descriptor computed from a photo. Called repeatedly
+   *  to add multiple samples per agent (e.g. with & without glasses) — the match loops
+   *  over every enrolled descriptor. */
   @Post(":id/face")
   @HttpCode(200)
   async adminEnroll(@Req() req: GuardedRequest, @Param("id") id: string, @Body() body: unknown) {
@@ -69,10 +80,26 @@ export class FaceEnrollController {
       const descriptor = FaceDescriptorSchema.parse((body as { descriptor?: unknown })?.descriptor);
       if (!(await this.accounts.list()).some((a) => a.id === id)) throw new NotFoundException();
       await this.face.enrollDescriptor(id, descriptor);
-      return { ok: true };
+      return { ok: true, count: await this.face.faceCount(id) };
     } catch (e) {
       if (e instanceof ZodError) throw new BadRequestException(e.issues);
       throw e;
     }
+  }
+
+  /** Admin: how many face samples an agent has enrolled. */
+  @Get(":id/face/count")
+  async adminFaceCount(@Req() req: GuardedRequest, @Param("id") id: string) {
+    if (!isAdminScope(req)) throw new ForbiddenException("admin only");
+    return { count: await this.face.faceCount(id) };
+  }
+
+  /** Admin: remove all of an agent's face samples. */
+  @Delete(":id/face")
+  @HttpCode(200)
+  async adminClearFaces(@Req() req: GuardedRequest, @Param("id") id: string) {
+    if (!isAdminScope(req)) throw new ForbiddenException("admin only");
+    await this.face.clearFaces(id);
+    return { ok: true };
   }
 }

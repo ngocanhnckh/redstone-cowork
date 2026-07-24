@@ -25,7 +25,10 @@ declare global {
       authConfig(serverUrl: string): Promise<{ redstone: boolean; issuer: string | null; accounts?: boolean; jira?: boolean; orgName?: string | null }>;
       jiraOAuthLogin(serverUrl: string): Promise<{ ok: boolean; error?: string; account?: { username: string; displayName: string; role: string } }>;
       faceEnroll(descriptor: number[], account: { username: string; displayName: string; photo?: string | null }): Promise<{ ok: boolean; error?: string }>;
-      faceAdminEnroll(id: string, descriptor: number[]): Promise<{ ok: boolean; error?: string }>;
+      faceAdminEnroll(id: string, descriptor: number[]): Promise<{ ok: boolean; count?: number; error?: string }>;
+      faceAdminCount(id: string): Promise<{ count: number }>;
+      faceAdminClear(id: string): Promise<{ ok: boolean }>;
+      faceClearOwn(): Promise<{ ok: boolean }>;
       pinSet(pin: string): Promise<{ ok: boolean }>;
       pinVerify(pin: string): Promise<{ ok: boolean }>;
       faceLogin(descriptor: number[]): Promise<{ ok: boolean; error?: string; account?: { username: string; displayName: string; role: string } }>;
@@ -49,7 +52,7 @@ declare global {
         username: string,
         password: string,
       ): Promise<{ ok: boolean; error?: string; account?: { username: string; displayName: string; role: string } }>;
-      accountsMe(): Promise<(AgentAccount & { hasPin?: boolean; hasFace?: boolean }) | { id: null; role: string; username: null; kind?: string }>;
+      accountsMe(): Promise<(AgentAccount & { hasPin?: boolean; hasFace?: boolean; faceCount?: number }) | { id: null; role: string; username: null; kind?: string }>;
       accountsList(): Promise<AgentAccount[]>;
       accountCreate(input: {
         username: string; password: string; displayName?: string; role?: "admin" | "member";
@@ -58,6 +61,7 @@ declare global {
       }): Promise<AgentAccount>;
       accountUpdateProfile(id: string, patch: Partial<Omit<AgentAccount, "id" | "username" | "createdAt" | "disabledAt">>): Promise<AgentAccount>;
       accountSetDisabled(id: string, disabled: boolean): Promise<{ ok: boolean }>;
+      accountDelete(id: string): Promise<{ ok: boolean }>;
       accountsAudit(accountId?: string, limit?: number): Promise<Array<{
         id: string; accountId: string | null; username: string; ok: boolean; ip: string; device: string; at: string;
       }>>;

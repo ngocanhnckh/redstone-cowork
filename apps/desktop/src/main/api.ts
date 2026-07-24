@@ -128,9 +128,18 @@ export async function faceEnroll(descriptor: number[], deviceLabel: string): Pro
 export async function trustDevice(deviceLabel: string): Promise<{ deviceSecret: string }> {
   return (await req("/accounts/me/device/trust", { method: "POST", body: JSON.stringify({ deviceLabel }) })).json();
 }
-/** Admin: pre-enroll a descriptor computed from an agent's roster photo. */
-export async function faceAdminEnroll(id: string, descriptor: number[]): Promise<{ ok: boolean }> {
+/** Admin: APPEND a descriptor (called repeatedly to add multiple samples per agent). */
+export async function faceAdminEnroll(id: string, descriptor: number[]): Promise<{ ok: boolean; count?: number }> {
   return (await req(`/accounts/${encodeURIComponent(id)}/face`, { method: "POST", body: JSON.stringify({ descriptor }) })).json();
+}
+export async function faceAdminCount(id: string): Promise<{ count: number }> {
+  return (await req(`/accounts/${encodeURIComponent(id)}/face/count`)).json();
+}
+export async function faceAdminClear(id: string): Promise<{ ok: boolean }> {
+  return (await req(`/accounts/${encodeURIComponent(id)}/face`, { method: "DELETE" })).json();
+}
+export async function faceClearOwn(): Promise<{ ok: boolean }> {
+  return (await req("/accounts/me/face", { method: "DELETE" })).json();
 }
 /** Face sign-in: device secret + live descriptor → session (public endpoint). */
 export async function faceLogin(serverUrl: string, deviceSecret: string, descriptor: number[]): Promise<{ ok: boolean; token?: string; account?: { username: string; displayName: string; role: string }; error?: string }> {
@@ -291,6 +300,11 @@ export async function accountUpdateProfile(id: string, patch: unknown): Promise<
 }
 export async function accountSetDisabled(id: string, disabled: boolean): Promise<unknown> {
   return (await req(`/accounts/${encodeURIComponent(id)}/${disabled ? "disable" : "enable"}`, { method: "POST" })).json();
+}
+export async function accountDelete(id: string): Promise<{ ok: boolean }> {
+  const r = await req(`/accounts/${encodeURIComponent(id)}`, { method: "DELETE" });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
 }
 export async function accountsAudit(accountId?: string, limit = 100): Promise<unknown[]> {
   const q = new URLSearchParams();

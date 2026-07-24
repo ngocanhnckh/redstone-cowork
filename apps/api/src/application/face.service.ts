@@ -63,6 +63,16 @@ export class FaceService {
     return (await this.store.getFaceDescriptors(accountId)).length > 0;
   }
 
+  /** How many face samples are enrolled (e.g. glasses / no-glasses variants). */
+  async faceCount(accountId: string): Promise<number> {
+    return (await this.store.getFaceDescriptors(accountId)).length;
+  }
+
+  /** Remove every enrolled face sample (reset before re-enrolling). */
+  async clearFaces(accountId: string): Promise<void> {
+    await this.store.clearFaceDescriptors(accountId);
+  }
+
   /** Trust THIS device for the already-signed-in account (possession factor), without
    *  adding a face descriptor — used after a password/OAuth login so face unlock works
    *  on the lock screen against an EXISTING descriptor (e.g. one an admin added from a

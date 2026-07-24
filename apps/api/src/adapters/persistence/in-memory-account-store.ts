@@ -67,6 +67,10 @@ export class InMemoryAccountStore implements AccountStore {
   async getFaceDescriptors(accountId: string): Promise<number[][]> {
     return this.rows.get(accountId)?.faceDescriptors ?? [];
   }
+  async clearFaceDescriptors(accountId: string): Promise<void> {
+    const row = this.rows.get(accountId);
+    if (row) row.faceDescriptors = [];
+  }
   async trustDevice(rec: { id: string; accountId: string; secretHash: string; label: string; createdAt: Date }): Promise<void> {
     this.devices.set(rec.secretHash, { ...rec, lastUsedAt: null, revokedAt: null });
   }
@@ -92,6 +96,10 @@ export class InMemoryAccountStore implements AccountStore {
     if (!row) return false;
     row.disabledAt = at;
     return true;
+  }
+
+  async remove(id: string): Promise<boolean> {
+    return this.rows.delete(id);
   }
 
   async setPassword(id: string, passwordHash: string): Promise<boolean> {

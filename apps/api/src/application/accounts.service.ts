@@ -190,6 +190,11 @@ export class AccountsService implements OnModuleInit {
     return okay;
   }
 
+  /** Hard-delete an agent (sessions are orphaned, not deleted). */
+  async remove(id: string): Promise<boolean> {
+    return this.store.remove(id);
+  }
+
   async jiraNotifications(accountId: string, opts?: { unseenOnly?: boolean; limit?: number }) {
     return this.store.listJiraNotifications(accountId, opts);
   }

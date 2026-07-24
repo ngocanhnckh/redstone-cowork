@@ -141,7 +141,10 @@ export default function AgentsPanel() {
   const [svServers, setSvServers] = useState<import("../../../shared/servers").ServerView[]>([]);
   const [svGrantFor, setSvGrantFor] = useState<string | null>(null);
   const [jiraProfile, setJiraProfile] = useState<string>(""); // first Jira profile → user search
+  const [faceCount, setFaceCount] = useState(0);
+  const [confirmDel, setConfirmDel] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const sampleRef = useRef<HTMLInputElement>(null);
 
   const sel = agents.find((a) => a.id === selId) ?? null;
 
@@ -187,6 +190,9 @@ export default function AgentsPanel() {
   // Load the selected agent into the editor form.
   useEffect(() => {
     if (sel) setForm({ ...EMPTY, ...sel, password: "" });
+    setConfirmDel(false);
+    if (sel) window.cowork.faceAdminCount(sel.id).then((r) => setFaceCount(r.count)).catch(() => setFaceCount(0));
+    else setFaceCount(0);
   }, [selId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const set = (k: keyof typeof EMPTY) => (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -256,9 +262,48 @@ export default function AgentsPanel() {
       const descriptor = await describeFaceFromImageUrl(sel.photo);
       if (!descriptor) { setErr("No face found in the photo — upload a clear frontal portrait."); return; }
       const r = await window.cowork.faceAdminEnroll(sel.id, descriptor);
-      flash(r.ok ? "FACE ENROLLED — agent can face-unlock once device-paired" : "Enroll failed");
+      if (typeof r.count === "number") setFaceCount(r.count);
+      flash(r.ok ? `FACE ENROLLED (${r.count ?? faceCount + 1} sample${(r.count ?? 1) === 1 ? "" : "s"})` : "Enroll failed");
     } catch (e) {
       setErr(`Face enroll failed (${e instanceof Error ? e.message : e})`);
+    } finally { setBusy(false); }
+  }
+
+  // Add an EXTRA face sample from a separate photo (e.g. with glasses) — appended, not
+  // replacing the profile photo. The match loops over every enrolled sample.
+  async function addFaceSample(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0]; e.target.value = "";
+    if (!f || !sel) return;
+    setBusy(true); setErr("");
+    try {
+      flash("COMPUTING FACE SIGNATURE…");
+      const descriptor = await describeFaceFromImageUrl(await fileToDataUrl(f));
+      if (!descriptor) { setErr("No face found — use a clear frontal photo."); return; }
+      const r = await window.cowork.faceAdminEnroll(sel.id, descriptor);
+      if (typeof r.count === "number") setFaceCount(r.count);
+      flash(`FACE SAMPLE ADDED (${r.count ?? faceCount + 1} total)`);
+    } catch (e) {
+      setErr(`Add sample failed (${e instanceof Error ? e.message : e})`);
+    } finally { setBusy(false); }
+  }
+
+  async function resetFaces() {
+    if (!sel) return;
+    setBusy(true); setErr("");
+    try { await window.cowork.faceAdminClear(sel.id); setFaceCount(0); flash("FACE SAMPLES CLEARED"); }
+    catch (e) { setErr(`Reset failed (${e instanceof Error ? e.message : e})`); }
+    finally { setBusy(false); }
+  }
+
+  async function deleteAgent() {
+    if (!sel) return;
+    if (!confirmDel) { setConfirmDel(true); setTimeout(() => setConfirmDel(false), 4000); return; }
+    setBusy(true); setErr(""); setConfirmDel(false);
+    try {
+      await window.cowork.accountDelete(sel.id);
+      setSelId(null); setMode("view"); await reload(); flash("AGENT DELETED");
+    } catch (e) {
+      setErr(/403/.test(String(e)) ? "Can't delete an admin (or yourself)." : `Delete failed (${e instanceof Error ? e.message : e})`);
     } finally { setBusy(false); }
   }
 
@@ -321,6 +366,7 @@ export default function AgentsPanel() {
     <div className="rcw-ag">
       <style>{CSS}</style>
       <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={onFile} />
+      <input ref={sampleRef} type="file" accept="image/*" style={{ display: "none" }} onChange={addFaceSample} />
 
       <div className="rcw-ag-head">
         <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".3em", color: "rgb(84 230 255 / .9)" }}>ADMIN CONSOLE</span>
@@ -480,11 +526,23 @@ export default function AgentsPanel() {
                     {jiraUserField()}
                     {field("MATTERMOST HANDLE", "mattermost")}
                     {field("PHONE", "phone")}
+                    {/* Biometric samples — enroll from the profile photo, add extra
+                        samples (e.g. with glasses), or reset. Count shown live. */}
+                    <label className="rcw-ag-label" style={{ marginTop: 14 }}>
+                      BIOMETRICS · {faceCount} SAMPLE{faceCount === 1 ? "" : "S"} ENROLLED
+                    </label>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <button className="rcw-ag-btn" disabled={busy || !sel.photo} onClick={enrollFaceFromPhoto} title="Compute a face signature from the profile photo">◈ ENROLL FROM PHOTO</button>
+                      <button className="rcw-ag-btn" disabled={busy} onClick={() => sampleRef.current?.click()} title="Add another face sample from a different photo (glasses, angle, lighting)">＋ ADD SAMPLE</button>
+                      {faceCount > 0 && <button className="rcw-ag-btn warn" disabled={busy} onClick={resetFaces}>RESET FACES</button>}
+                    </div>
                     <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
                       <button className="rcw-ag-btn" disabled={busy} onClick={saveProfile}>{busy ? "…" : "SAVE DOSSIER"}</button>
-                      <button className="rcw-ag-btn" disabled={busy || !sel.photo} onClick={enrollFaceFromPhoto} title="Compute a face signature from the photo so this agent can face-unlock">◈ ENROLL FACE</button>
                       <button className="rcw-ag-btn warn" disabled={busy} onClick={toggleDisabled}>
                         {sel.disabledAt ? "REACTIVATE" : "SUSPEND"}
+                      </button>
+                      <button className="rcw-ag-btn warn" disabled={busy} onClick={deleteAgent} title="Permanently delete this agent (sessions are kept, unassigned)">
+                        {confirmDel ? "⚠ CONFIRM DELETE" : "🗑 DELETE"}
                       </button>
                     </div>
                   </>

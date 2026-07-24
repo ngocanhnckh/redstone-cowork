@@ -393,6 +393,15 @@ ipcMain.handle(IPC.faceAdminEnroll, async (_e, a: { id: string; descriptor: numb
   try { return await api.faceAdminEnroll(a.id, a.descriptor); }
   catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
 });
+ipcMain.handle(IPC.faceAdminCount, async (_e, a: { id: string }) => {
+  try { return await api.faceAdminCount(a.id); } catch { return { count: 0 }; }
+});
+ipcMain.handle(IPC.faceAdminClear, async (_e, a: { id: string }) => {
+  try { return await api.faceAdminClear(a.id); } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
+});
+ipcMain.handle(IPC.faceClearOwn, async () => {
+  try { return await api.faceClearOwn(); } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
+});
 // Trust this device (no camera) so the lock screen can offer face unlock against an
 // existing descriptor. Only meaningful when the account already has a face enrolled.
 ipcMain.handle(IPC.deviceTrustEstablish, async () => {
@@ -460,6 +469,7 @@ ipcMain.handle(IPC.accountsList, () => api.accountsList());
 ipcMain.handle(IPC.accountCreate, (_e, a: { input: unknown }) => api.accountCreate(a.input));
 ipcMain.handle(IPC.accountUpdateProfile, (_e, a: { id: string; patch: unknown }) => api.accountUpdateProfile(a.id, a.patch));
 ipcMain.handle(IPC.accountSetDisabled, (_e, a: { id: string; disabled: boolean }) => api.accountSetDisabled(a.id, a.disabled));
+ipcMain.handle(IPC.accountDelete, (_e, a: { id: string }) => api.accountDelete(a.id));
 ipcMain.handle(IPC.accountsAudit, (_e, a: { accountId?: string; limit?: number }) => api.accountsAudit(a.accountId, a.limit));
 ipcMain.handle(IPC.accountLogin, async (_e, a: { serverUrl: string; username: string; password: string }) => {
   try {
