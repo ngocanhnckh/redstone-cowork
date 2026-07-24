@@ -97,21 +97,28 @@ export class AgencyService {
     return this.enrich(await this.store.list(channel, { afterId }));
   }
 
-  // GitHub public stats are cached ~10min per username (the events feed is a rolling
-  // ~90-day / 300-event window, so "commits" means recent commits).
+  // GitHub public stats are cached ~1h per username (keeps us well under GitHub's
+  // unauthenticated 60 req/hr/IP limit — a roster refresh costs one fetch-set per agent
+  // per hour). On error we fall back to the last good value rather than blanking.
   private ghCache = new Map<string, { at: number; data: GithubStat }>();
+  private static readonly GH_TTL_MS = 60 * 60_000;
   async githubStats(username: string): Promise<GithubStat> {
     const u = (username ?? "").trim();
     if (!u) return emptyGh();
     const key = u.toLowerCase();
     const hit = this.ghCache.get(key);
-    if (hit && Date.now() - hit.at < 600_000) return hit.data;
+    if (hit && Date.now() - hit.at < AgencyService.GH_TTL_MS) return hit.data;
     try {
-      const headers = { "User-Agent": "yitec-cowork", Accept: "application/vnd.github+json" };
+      // A GITHUB_TOKEN (classic PAT, read-only is fine) lifts the API from 60→5000 req/hr,
+      // avoiding the shared-IP rate limit that otherwise 403s the /users + /events calls.
+      const token = process.env.GITHUB_TOKEN;
+      const headers: Record<string, string> = { "User-Agent": "yitec-cowork", Accept: "application/vnd.github+json" };
+      if (token) headers.Authorization = `Bearer ${token}`;
       const [uRes, eRes, cRes] = await Promise.all([
         fetch(`https://api.github.com/users/${encodeURIComponent(u)}`, { headers }),
         fetch(`https://api.github.com/users/${encodeURIComponent(u)}/events/public?per_page=100`, { headers }),
-        // The real contribution calendar (green squares) — an unauthenticated HTML fragment.
+        // The real contribution calendar (green squares) — an unauthenticated HTML fragment
+        // with a SEPARATE, far higher rate limit than the JSON API.
         fetch(`https://github.com/users/${encodeURIComponent(u)}/contributions`, { headers: { "User-Agent": "yitec-cowork", "X-Requested-With": "XMLHttpRequest" } }),
       ]);
       const prof = uRes.ok ? ((await uRes.json()) as { public_repos?: number; followers?: number }) : {};
@@ -131,15 +138,19 @@ export class AgencyService {
         else if (ev.type === "IssuesEvent" && ev.payload?.action === "opened") issues++;
         else if (ev.type === "PullRequestReviewEvent") reviews++;
       }
+      // "found" if EITHER the API succeeded OR we parsed a real contribution calendar —
+      // so a rate-limited /users call (403) no longer hides the heatmap.
       const data: GithubStat = {
-        username: u, found: uRes.ok, publicRepos: prof.public_repos ?? 0, followers: prof.followers ?? 0,
+        username: u, found: uRes.ok || days.length > 0, publicRepos: prof.public_repos ?? 0, followers: prof.followers ?? 0,
         commits, prs, issues, reviews, activeRepos: repos.size,
         contribTotal, days,
       };
-      this.ghCache.set(key, { at: Date.now(), data });
-      return data;
+      // Only cache a genuinely useful result; if this fetch found nothing but we have a
+      // prior good value (e.g. transient rate-limit), keep serving the old one.
+      if (data.found || !hit) this.ghCache.set(key, { at: Date.now(), data });
+      return data.found ? data : (hit?.data ?? data);
     } catch {
-      return emptyGh(u);
+      return hit?.data ?? emptyGh(u);
     }
   }
 
