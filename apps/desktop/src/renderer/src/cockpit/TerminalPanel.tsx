@@ -44,6 +44,17 @@ const TERM_CSS = `
   -webkit-mask-image: radial-gradient(120% 100% at 50% 0%, #000 55%, transparent 100%); }
 .rcw-term-wrap .xterm { position:relative; z-index:2; }
 .rcw-term-wrap .xterm .xterm-rows { text-shadow: 0 0 3px rgb(var(--primary-soft) / 0.28); }
+/* Force a CLASSIC (space-reserving) scrollbar on the xterm viewport. On macOS the
+   default overlay scrollbar has zero layout width, so xterm fits text to the full
+   width and the scrollbar then draws ON TOP of the last column. Styling the webkit
+   scrollbar with an explicit width makes Chromium reserve the gutter, so FitAddon
+   leaves room and text never slides under the bar. */
+.rcw-term-wrap .xterm-viewport { scrollbar-width: thin; scrollbar-color: rgb(var(--primary-soft) / 0.4) transparent; }
+.rcw-term-wrap .xterm-viewport::-webkit-scrollbar { width: 11px; }
+.rcw-term-wrap .xterm-viewport::-webkit-scrollbar-track { background: transparent; }
+.rcw-term-wrap .xterm-viewport::-webkit-scrollbar-thumb {
+  background: rgb(var(--primary-soft) / 0.4); border-radius: 6px; border: 3px solid transparent; background-clip: padding-box; }
+.rcw-term-wrap .xterm-viewport::-webkit-scrollbar-thumb:hover { background: rgb(var(--primary-soft) / 0.6); background-clip: padding-box; }
 .rcw-term-cnr { position:absolute; width:13px; height:13px; z-index:4; pointer-events:none; }
 .rcw-term-cnr.tl { top:6px; left:8px; border-top:1.5px solid rgb(var(--primary-soft) / 0.55); border-left:1.5px solid rgb(var(--primary-soft) / 0.55); }
 .rcw-term-cnr.tr { top:6px; right:8px; border-top:1.5px solid rgb(var(--primary-soft) / 0.55); border-right:1.5px solid rgb(var(--primary-soft) / 0.55); }

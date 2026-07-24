@@ -11,6 +11,10 @@ import {
   applyBgImage,
   DOCK_POSITIONS,
   DOCK_LABEL,
+  THEME_PALETTE,
+  EMPTY_PALETTE,
+  normalizeHex,
+  type Palette,
 } from "../appearance";
 import { previewSfx, setThinking } from "../sfx";
 import {
@@ -260,6 +264,50 @@ export default function SettingsPanel() {
             </button>
           ))}
         </div>
+
+        {/* ---- Custom palette (overrides the theme's accent tokens live) ---- */}
+        {(() => {
+          const themeDefaults = THEME_PALETTE[appr.theme];
+          const swatches: Array<{ key: keyof Palette; label: string }> = [
+            { key: "primary", label: "Primary" },
+            { key: "primarySoft", label: "Highlight" },
+            { key: "accent", label: "Accent" },
+          ];
+          const custom = appr.palette.primary || appr.palette.primarySoft || appr.palette.accent;
+          const setColor = (k: keyof Palette, hex: string) =>
+            patchAppr({ palette: { ...appr.palette, [k]: normalizeHex(hex) } });
+          return (
+            <>
+              <label className="soft" style={{ ...labelStyle, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span>Palette colours</span>
+                {custom && (
+                  <button onClick={() => patchAppr({ palette: { ...EMPTY_PALETTE } })}
+                    style={{ background: "none", border: "none", cursor: "pointer", color: "rgb(var(--accent))", fontSize: 10.5, fontFamily: "var(--font-mono)", letterSpacing: "0.1em" }}>
+                    RESET
+                  </button>
+                )}
+              </label>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6, marginBottom: 18 }}>
+                {swatches.map((s) => {
+                  const value = appr.palette[s.key] ?? themeDefaults[s.key] ?? "#54e6ff";
+                  return (
+                    <label key={s.key} style={{ display: "flex", flexDirection: "column", gap: 5, alignItems: "center", cursor: "pointer",
+                      border: "1px solid var(--border)", borderRadius: 9, padding: "9px 6px" }}>
+                      <span style={{ position: "relative", width: 34, height: 34, borderRadius: 8, overflow: "hidden", border: "1px solid var(--border-strong)", boxShadow: `0 0 14px -3px ${value}` }}>
+                        <input type="color" value={value} onChange={(e) => setColor(s.key, e.target.value)}
+                          style={{ position: "absolute", inset: -4, width: "calc(100% + 8px)", height: "calc(100% + 8px)", border: "none", padding: 0, background: "transparent", cursor: "pointer" }} />
+                      </span>
+                      <span className="soft" style={{ fontSize: 10.5 }}>{s.label}</span>
+                      <span className="mono" style={{ fontSize: 8.5, opacity: appr.palette[s.key] ? 0.9 : 0.4, letterSpacing: "0.04em" }}>
+                        {(appr.palette[s.key] ?? themeDefaults[s.key] ?? "").toUpperCase()}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </>
+          );
+        })()}
 
         <label className="soft" style={labelStyle}>Font</label>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 18 }}>

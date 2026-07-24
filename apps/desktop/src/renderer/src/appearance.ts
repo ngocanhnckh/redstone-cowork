@@ -12,6 +12,23 @@ export type DockPos = "top" | "bottom" | "bottom-left" | "bottom-right" | "left"
 export type Theme = "warm" | "hitech";
 export type FontChoice = "default" | "futura";
 
+/** User palette overrides for the three accent tokens that drive nearly every surface
+ *  (borders, glows, buttons, gauges…). Each is a "#rrggbb" hex, or null = use the
+ *  active theme's default. Applied as inline CSS vars on :root, which beat the theme. */
+export type Palette = {
+  primary: string | null;
+  primarySoft: string | null;
+  accent: string | null;
+};
+export const EMPTY_PALETTE: Palette = { primary: null, primarySoft: null, accent: null };
+
+/** Each theme's built-in accent colours (as hex), shown as the picker's value when the
+ *  user hasn't overridden that token. Mirror globals.css [data-theme] token blocks. */
+export const THEME_PALETTE: Record<Theme, Palette> = {
+  warm: { primary: "#e54d2e", primarySoft: "#f06e50", accent: "#e2a95b" },
+  hitech: { primary: "#22d3ee", primarySoft: "#7dd3fc", accent: "#fbbf24" },
+};
+
 export type Appearance = {
   /** Display/body font. "default" = Instrument Serif + Space Grotesk; "futura" = the
    *  bundled SFU Futura family. Applied as a `data-font` attribute on the root. */
@@ -42,9 +59,11 @@ export type Appearance = {
   glass: number;
   /** Mute the looping background video (if one is set). */
   videoMuted: boolean;
+  /** Custom accent-colour overrides (null entries fall back to the theme). */
+  palette: Palette;
 };
 
-export const DEFAULT_APPEARANCE: Appearance = { font: "default", theme: "hitech", sfxVolume: 0, ambientVolume: 0, veil: 6, blur: 28, bgAnim: true, dockPos: "bottom", dockScale: 1, hudClear: false, glass: 94, videoMuted: false };
+export const DEFAULT_APPEARANCE: Appearance = { font: "default", theme: "hitech", sfxVolume: 0, ambientVolume: 0, veil: 6, blur: 28, bgAnim: true, dockPos: "bottom", dockScale: 1, hudClear: false, glass: 94, videoMuted: false, palette: { ...EMPTY_PALETTE } };
 
 const KEY = "rcw.appearance";
 
@@ -64,6 +83,7 @@ export function loadAppearance(): Appearance {
       hudClear: typeof raw.hudClear === "boolean" ? raw.hudClear : DEFAULT_APPEARANCE.hudClear,
       glass: clampNum(raw.glass, 40, 100, DEFAULT_APPEARANCE.glass),
       videoMuted: typeof raw.videoMuted === "boolean" ? raw.videoMuted : DEFAULT_APPEARANCE.videoMuted,
+      palette: parsePalette(raw.palette),
     };
   } catch {
     return { ...DEFAULT_APPEARANCE };
@@ -84,6 +104,10 @@ export function applyAppearance(a: Appearance): void {
   r.setAttribute("data-dock", a.dockPos);
   // The theme swaps the whole CSS-token set (see globals.css [data-theme="hitech"]).
   r.setAttribute("data-theme", a.theme);
+  // Palette overrides: inline vars beat the theme's tokens; null → clear (use theme).
+  applyPaletteVar(r, "--primary", a.palette.primary);
+  applyPaletteVar(r, "--primary-soft", a.palette.primarySoft);
+  applyPaletteVar(r, "--accent", a.palette.accent);
   // The font choice swaps --font-display/--font-body (see globals.css [data-font]).
   r.setAttribute("data-font", a.font);
   // Let live consumers (e.g. the HUD dock, sfx.ts volume) react without prop-threading.
@@ -131,4 +155,31 @@ function clampNum(v: unknown, lo: number, hi: number, fallback: number): number 
   const n = typeof v === "number" ? v : Number(v);
   if (!Number.isFinite(n)) return fallback;
   return Math.max(lo, Math.min(hi, n));
+}
+
+/** "#rrggbb" (any case, with/without #) → normalised "#rrggbb", or null if invalid. */
+export function normalizeHex(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const m = /^#?([0-9a-fA-F]{6})$/.exec(v.trim());
+  return m ? `#${m[1].toLowerCase()}` : null;
+}
+
+/** "#rrggbb" → "r g b" (the space-separated triplet the CSS tokens expect). */
+export function hexToRgbTriplet(hex: string): string {
+  const n = parseInt(hex.slice(1), 16);
+  return `${(n >> 16) & 255} ${(n >> 8) & 255} ${n & 255}`;
+}
+
+function parsePalette(raw: unknown): Palette {
+  const p = (raw ?? {}) as Record<string, unknown>;
+  return {
+    primary: normalizeHex(p.primary),
+    primarySoft: normalizeHex(p.primarySoft),
+    accent: normalizeHex(p.accent),
+  };
+}
+
+function applyPaletteVar(r: HTMLElement, name: string, hex: string | null): void {
+  if (hex) r.style.setProperty(name, hexToRgbTriplet(hex));
+  else r.style.removeProperty(name);
 }
