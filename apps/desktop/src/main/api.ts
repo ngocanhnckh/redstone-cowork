@@ -65,9 +65,19 @@ async function req(path: string, init?: RequestInit): Promise<Response> {
     const fresh = await sharedRefresh(serverUrl);
     if (fresh) res = await call(fresh);
   }
+  // Still unauthorized and nothing left to try (account sessions have no refresh
+  // token): the session expired server-side. Signal the UI to re-authenticate with
+  // face/PIN instead of silently failing every write. Device-secret face login mints
+  // a fresh token without needing the dead one.
+  if (res.status === 401) authExpired?.();
   if (!res.ok) throw new Error(String(res.status));
   return res;
 }
+
+// Set by the main process: called when a request is 401 and can't be recovered, so the
+// renderer can pop the lock screen for a fresh face/PIN sign-in.
+let authExpired: (() => void) | null = null;
+export function onAuthExpired(cb: () => void): void { authExpired = cb; }
 
 /** Public discovery so the login screen can decide which sign-in options to offer. */
 export async function authConfig(

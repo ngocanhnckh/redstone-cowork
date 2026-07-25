@@ -39,6 +39,11 @@ contextBridge.exposeInMainWorld("cowork", {
     ipcRenderer.on(IPC.serverInstallData, h);
     return () => ipcRenderer.removeListener(IPC.serverInstallData, h);
   },
+  onSessionExpired: (cb: () => void): (() => void) => {
+    const h = () => cb();
+    ipcRenderer.on(IPC.sessionExpired, h);
+    return () => ipcRenderer.removeListener(IPC.sessionExpired, h);
+  },
   accountsAnalytics: (): Promise<Array<Record<string, unknown>>> => ipcRenderer.invoke(IPC.accountsAnalytics),
   jiraNotifications: (): Promise<Array<{ id: string; issueKey: string; summary: string; event: string; status: string; actor: string; url: string; createdAt: string; seenAt: string | null }>> => ipcRenderer.invoke(IPC.jiraNotifications),
   jiraNotificationsSeen: (): Promise<{ ok: boolean }> => ipcRenderer.invoke(IPC.jiraNotificationsSeen),

@@ -48,6 +48,7 @@ declare global {
       serverInstall(a: { host: string; sshUser: string; sshPort: number; command: string; password?: string; savePassword?: boolean }): Promise<{ ok: boolean; authFailed?: boolean; output: string; error?: string }>;
       sessionLaunch(a: { host: string; sshUser: string; sshPort: number; folder: string; danger: boolean; password?: string; savePassword?: boolean }): Promise<{ ok: boolean; authFailed?: boolean; session: string | null; output: string; error?: string }>;
       onServerInstallData(cb: (chunk: string) => void): () => void;
+      onSessionExpired(cb: () => void): () => void;
       accountsAnalytics(): Promise<Array<{ accountId: string; username: string; displayName: string; role: string; photo: string | null; level: string; division: string; sessions: number; activeSessions: number; tokensInput: number; tokensOutput: number; estCostUsd: number; timeSpentMs: number; lastActiveAt: string | null }>>;
       jiraNotifications(): Promise<Array<{ id: string; issueKey: string; summary: string; event: string; status: string; actor: string; url: string; createdAt: string; seenAt: string | null }>>;
       jiraNotificationsSeen(): Promise<{ ok: boolean }>;

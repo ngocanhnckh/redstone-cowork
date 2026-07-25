@@ -51,6 +51,7 @@ export const IPC = {
   instruct: "api:instruct",
   claudeCapturePane: "api:claude:capture-pane",
   claudeSendKeys: "api:claude:send-keys",
+  sessionExpired: "auth:session-expired",
   interrupt: "api:interrupt",
   mode: "api:mode",
   userTodoAdd: "api:usertodo:add",

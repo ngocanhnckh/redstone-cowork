@@ -26,6 +26,14 @@ export default function App() {
     recheck();
   }, [recheck]);
 
+  // Session expired server-side (a write 401'd and couldn't be refreshed) → pop the
+  // lock screen so the user re-authenticates with face/PIN instead of writes silently
+  // failing. Face login re-mints a token from the device secret (no dead token needed).
+  useEffect(() => {
+    const off = window.cowork.onSessionExpired?.(() => { setLocked(true); void recheck(); });
+    return off;
+  }, [recheck]);
+
   const isAccount = configState !== "loading" && !!configState?.isAccount && !!configState?.hasToken;
   // Away-lock: enterprise account sessions LOCK (require face/PIN) after 30 min unfocused.
   useEffect(() => {

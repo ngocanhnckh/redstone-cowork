@@ -539,6 +539,14 @@ ipcMain.handle(IPC.claudeCapturePane, (_e, a: { machine: string; wrapperId: stri
 ipcMain.handle(IPC.claudeSendKeys, (_e, a: { machine: string; wrapperId: string; text?: string; enter?: boolean }) =>
   sendClaudeKeys(a.machine, a.wrapperId, { text: a.text, enter: a.enter }),
 );
+// When any API request 401s and can't be recovered (account sessions have no refresh
+// token), the session expired server-side — pop the lock screen so the user re-auths
+// with face/PIN instead of every write silently failing.
+api.onAuthExpired(() => {
+  for (const w of BrowserWindow.getAllWindows()) {
+    try { w.webContents.send(IPC.sessionExpired); } catch { /* window gone */ }
+  }
+});
 ipcMain.handle(IPC.instruct, (_e, a: { sessionId: string; text: string }) =>
   api.instruct(a.sessionId, a.text)
 );
