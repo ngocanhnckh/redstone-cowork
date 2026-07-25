@@ -674,7 +674,7 @@ export default function FilesPanel({ sessionId, cwd, machine }: Props) {
                           borderRadius: 999,
                           border: 0,
                           cursor: "pointer",
-                          background: mdMode === m ? "rgb(var(--primary) / 0.32)" : "transparent",
+                          background: mdMode === m ? "rgba(232,230,225,0.32)" : "transparent",
                           color: mdMode === m ? "#fff" : "var(--text-soft)",
                         }}
                       >
@@ -739,7 +739,7 @@ export default function FilesPanel({ sessionId, cwd, machine }: Props) {
                     title="Save (⌘S)"
                     style={{
                       border: "1px solid var(--border)",
-                      background: dirty ? "rgb(var(--primary) / 0.22)" : "transparent",
+                      background: dirty ? "rgba(232,230,225,0.22)" : "transparent",
                       color: dirty ? "#fff" : "var(--text-soft)",
                       borderRadius: 8,
                       padding: "4px 13px",
@@ -1157,7 +1157,7 @@ function Row({
         borderRadius: 7,
         cursor: onClick ? "pointer" : "default",
         color: active ? "var(--text)" : muted ? "var(--text-soft)" : "var(--text-soft)",
-        background: active ? "rgb(var(--primary) / 0.18)" : "transparent",
+        background: active ? "rgba(232,230,225,0.18)" : "transparent",
         whiteSpace: "nowrap",
         overflow: "hidden",
       }}

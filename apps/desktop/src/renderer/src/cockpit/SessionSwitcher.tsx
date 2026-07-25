@@ -59,7 +59,7 @@ export default function SessionSwitcher() {
                 style={{
                   flex: "0 0 auto", width: 150, padding: "12px 12px", borderRadius: 12, cursor: "default",
                   border: `1px solid ${on ? "rgb(var(--primary-soft))" : "var(--border)"}`,
-                  background: on ? "rgb(var(--primary) / 0.2)" : "rgba(255,255,255,0.03)",
+                  background: on ? "rgba(232,230,225,0.2)" : "rgba(255,255,255,0.03)",
                   boxShadow: on ? "0 0 0 1px rgb(var(--primary-soft) / 0.5)" : "none",
                   transition: "background .12s, border-color .12s",
                 }}

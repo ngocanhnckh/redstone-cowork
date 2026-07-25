@@ -76,7 +76,7 @@ const DT_CSS = `
 @keyframes dt-fade { from { opacity:0; } to { opacity:1; } }
 .dt-crow { position:relative; transition: background .15s; }
 .dt-crow:hover { filter: brightness(1.18); }
-.dt-nrow:hover td { background: rgb(var(--primary) / 0.08); }
+.dt-nrow:hover td { background: rgba(232,230,225,0.08); }
 .dt-badge { font-size:8.5px; font-weight:700; letter-spacing:.1em; padding:1px 5px; border-radius:5px;
   border:1px solid currentColor; line-height:1.3; box-shadow: 0 0 8px -3px currentColor; }
 .dt-chip { font-size:9px; font-weight:600; letter-spacing:.04em; padding:1px 6px; border-radius:5px;
@@ -85,7 +85,7 @@ const DT_CSS = `
   border:1px solid currentColor; box-shadow: inset 0 0 10px -6px currentColor, 0 0 8px -4px currentColor; }
 .dt-tab { position:relative; border:1px solid var(--border); border-radius:8px; padding:4px 12px; font-size:11.5px;
   cursor:pointer; font-family:var(--font-mono); text-transform:uppercase; letter-spacing:.06em; transition: color .15s, background .15s; }
-.dt-tab-on { color:#fff; background:rgb(var(--primary) / 0.26); border-color:rgb(var(--primary-soft) / 0.5);
+.dt-tab-on { color:#fff; background:rgba(232,230,225,0.26); border-color:rgb(var(--primary-soft) / 0.5);
   box-shadow: 0 0 14px -6px rgb(var(--primary-soft) / 0.9), inset 0 0 12px -8px rgb(var(--accent)); }
 .dt-tab-off { color:var(--text-soft); background:transparent; }
 .dt-count { margin-left:7px; font-size:9px; opacity:.7; padding:0 5px; border-radius:999px; background:rgb(255 255 255 / 0.06); }
@@ -95,7 +95,7 @@ const DT_CSS = `
   box-shadow: 0 0 9px -2px currentColor; opacity:.9;
   background-image: linear-gradient(90deg, rgb(255 255 255 / 0.28), transparent 55%); }
 .dt-wf-live { opacity:.85; }
-.dt-nrow.dt-sel td { background: rgb(var(--primary) / 0.14) !important; }
+.dt-nrow.dt-sel td { background: rgba(232,230,225,0.14) !important; }
 .dt-modal { position:absolute; inset:0; z-index:20; display:flex; flex-direction:column;
   background: color-mix(in srgb, var(--app-panel) 80%, transparent); backdrop-filter: blur(16px) saturate(1.35);
   animation: dt-modal-in .16s cubic-bezier(.2,.8,.2,1) both; }
@@ -225,7 +225,7 @@ export default function DevToolsPanel({ sessionId, active }: { sessionId?: strin
     <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, minWidth: 0, position: "relative" }}>
       <style>{DT_CSS}</style>
       {/* Toolbar */}
-      <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "7px 12px", borderBottom: "1px solid var(--border)", flexShrink: 0, background: "linear-gradient(180deg, rgb(var(--primary) / 0.05), transparent)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "7px 12px", borderBottom: "1px solid var(--border)", flexShrink: 0, background: "linear-gradient(180deg, rgba(232,230,225,0.05), transparent)" }}>
         {(["console", "network"] as const).map((t) => (
           <button key={t} onClick={() => setTab(t)} className={`dt-tab ${tab === t ? "dt-tab-on" : "dt-tab-off"}`}>
             {t}
@@ -254,7 +254,7 @@ export default function DevToolsPanel({ sessionId, active }: { sessionId?: strin
       </div>
 
       {/* Body */}
-      <div ref={bodyRef} onScroll={onBodyScroll} className="no-scrollbar dt-body" style={{ flex: 1, minHeight: 0, overflow: "auto", background: "radial-gradient(120% 100% at 0% 0%, rgb(var(--primary) / 0.05), rgba(0,0,0,0.28) 70%)" }}>
+      <div ref={bodyRef} onScroll={onBodyScroll} className="no-scrollbar dt-body" style={{ flex: 1, minHeight: 0, overflow: "auto", background: "radial-gradient(120% 100% at 0% 0%, rgba(232,230,225,0.05), rgba(0,0,0,0.28) 70%)" }}>
         <div className="dt-scan" />
         {!browserOpen ? (
           <div className="mono faint" style={{ padding: 16, fontSize: 12, lineHeight: 1.6, position: "relative", zIndex: 1 }}>
@@ -454,7 +454,7 @@ function NetDetail({ row, sessionId, onClose }: { row: NetRow; sessionId?: strin
   return (
     <div className="dt-modal">
       {/* header */}
-      <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "9px 12px", borderBottom: "1px solid var(--border)", flexShrink: 0, background: "linear-gradient(180deg, rgb(var(--primary) / 0.08), transparent)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "9px 12px", borderBottom: "1px solid var(--border)", flexShrink: 0, background: "linear-gradient(180deg, rgba(232,230,225,0.08), transparent)" }}>
         <span className="dt-chip" style={{ flexShrink: 0 }}>{row.method}</span>
         <span className="dt-pill mono" style={{ color: sc, flexShrink: 0 }}>{row.failed ? (row.canceled ? "CANC" : "FAIL") : row.status || "···"}</span>
         <span className="mono" style={{ flex: 1, minWidth: 0, fontSize: 11, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={row.url}>{basename(row.url)}</span>

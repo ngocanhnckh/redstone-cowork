@@ -142,7 +142,7 @@ export default function JiraSettings({ sessionId }: { sessionId: string }) {
             <div key={p.name} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
               <span className="mono" style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: "0 0 auto", color: "var(--text)" }}>{p.name}</span>
               <span className="faint" style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 10.5 }}>{p.baseUrl}</span>
-              {p.account && <span className="mono" style={{ fontSize: 9.5, padding: "1px 6px", borderRadius: 999, background: "rgb(var(--primary) / 0.16)", color: "var(--text-soft)" }}>{p.account}</span>}
+              {p.account && <span className="mono" style={{ fontSize: 9.5, padding: "1px 6px", borderRadius: 999, background: "rgba(232,230,225,0.16)", color: "var(--text-soft)" }}>{p.account}</span>}
               <button onClick={() => deleteProfile(p.name)} style={{ border: 0, background: "transparent", color: "#e63b2e", cursor: "pointer", fontSize: 11 }}>delete</button>
             </div>
           ))}

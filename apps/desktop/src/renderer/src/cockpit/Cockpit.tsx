@@ -189,6 +189,35 @@ export default function Cockpit() {
             redstone cowork
           </span>
           <div style={{ flex: 1 }} />
+          {/* The one red object in the chrome: sessions awaiting a decision. */}
+          {(() => {
+            const waiting = [...sessions, ...queue].filter((x) => (x.pendingDecisions ?? 0) > 0);
+            if (waiting.length === 0) return null;
+            return (
+              <button
+                onClick={() => useStore.getState().setFocus(waiting[0].id)}
+                title="Sessions awaiting your decision — click to jump to the first"
+                style={{
+                  ...noDrag,
+                  border: 0,
+                  background: "rgb(var(--primary))",
+                  color: "#0a0a0a",
+                  padding: "5px 14px",
+                  fontSize: 10.5,
+                  fontWeight: 700,
+                  fontFamily: "var(--font-display)",
+                  letterSpacing: "0.2em",
+                  textTransform: "uppercase",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                }}
+              >
+                <span style={{ fontSize: 13 }}>{waiting.length}</span> awaiting command
+              </button>
+            );
+          })()}
           {/* Connection settings */}
           <button
             onClick={toggleSettings}
@@ -253,7 +282,7 @@ export default function Cockpit() {
             style={{
               ...noDrag,
               border: "1px solid var(--border)",
-              background: contextCollapsed ? "transparent" : "rgb(var(--primary) / 0.18)",
+              background: contextCollapsed ? "transparent" : "rgba(232,230,225,0.18)",
               color: "var(--text-soft)",
               borderRadius: 8,
               padding: "4px 10px",
@@ -271,7 +300,7 @@ export default function Cockpit() {
             style={{
               ...noDrag,
               border: "1px solid var(--border)",
-              background: fullscreen ? "rgb(var(--primary) / 0.18)" : "transparent",
+              background: fullscreen ? "rgba(232,230,225,0.18)" : "transparent",
               color: "var(--text-soft)",
               borderRadius: 8,
               padding: "4px 10px",

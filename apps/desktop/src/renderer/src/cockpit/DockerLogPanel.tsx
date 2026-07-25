@@ -400,12 +400,12 @@ export default function DockerLogPanel({ streamId, active }: { streamId: string;
           <span className="mono faint" style={{ fontSize: 9, letterSpacing: "0.1em", flexShrink: 0 }} title="Next transmission replay">◈ {relay.secs}s</span>
         )}
         <button onClick={() => setFindOpen((v) => !v)} title="Find in log"
-          style={{ ...findBtn, flexShrink: 0, background: findOpen ? "rgb(var(--primary) / 0.22)" : "transparent", color: findOpen ? "var(--text)" : "var(--text-soft)" }}>⌕</button>
+          style={{ ...findBtn, flexShrink: 0, background: findOpen ? "rgba(232,230,225,0.22)" : "transparent", color: findOpen ? "var(--text)" : "var(--text-soft)" }}>⌕</button>
       </div>
 
       {/* find bar */}
       {findOpen && (
-        <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 10px", borderBottom: "1px solid var(--border)", background: "rgb(var(--primary) / 0.04)", flexShrink: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 10px", borderBottom: "1px solid var(--border)", background: "rgba(232,230,225,0.04)", flexShrink: 0 }}>
           <input
             autoFocus
             value={find}
@@ -429,7 +429,7 @@ export default function DockerLogPanel({ streamId, active }: { streamId: string;
 
       {/* futuristic status graph for the selected container */}
       {sel && (
-        <div style={{ display: "flex", gap: 12, padding: "9px 12px", borderBottom: "1px solid var(--border)", background: "rgb(var(--primary) / 0.03)", flexShrink: 0, position: "relative" }}>
+        <div style={{ display: "flex", gap: 12, padding: "9px 12px", borderBottom: "1px solid var(--border)", background: "rgba(232,230,225,0.03)", flexShrink: 0, position: "relative" }}>
           <span className="hud-corner" />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
@@ -497,7 +497,7 @@ function ContainerPicker({ containers, value, onChange }: { containers: DockerCo
       <button
         onClick={() => { setOpen((o) => !o); setQ(""); }}
         className="mono"
-        style={{ width: "100%", display: "flex", alignItems: "center", gap: 6, background: "rgb(var(--primary) / 0.06)", color: "var(--text)", border: "1px solid var(--border)", borderRadius: 8, padding: "4px 8px", fontSize: 11.5, outline: "none", cursor: "pointer" }}
+        style={{ width: "100%", display: "flex", alignItems: "center", gap: 6, background: "rgba(232,230,225,0.06)", color: "var(--text)", border: "1px solid var(--border)", borderRadius: 8, padding: "4px 8px", fontSize: 11.5, outline: "none", cursor: "pointer" }}
       >
         <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textAlign: "left" }}>
           {cur ? `${shortName(cur.name)} · ${cur.state}` : value || "select container"}
@@ -527,7 +527,7 @@ function ContainerPicker({ containers, value, onChange }: { containers: DockerCo
               const run = c.state === "running";
               return (
                 <div key={c.id || c.name} onClick={() => { onChange(name); setOpen(false); }} className="hud-rail-row"
-                  style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 8px", borderRadius: 7, cursor: "pointer", background: on ? "rgb(var(--primary) / 0.18)" : "transparent" }}>
+                  style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 8px", borderRadius: 7, cursor: "pointer", background: on ? "rgba(232,230,225,0.18)" : "transparent" }}>
                   <span style={{ width: 6, height: 6, borderRadius: 999, background: run ? "rgb(var(--accent))" : "var(--border-strong)", flexShrink: 0 }} />
                   <span className="mono" style={{ flex: 1, minWidth: 0, fontSize: 11.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
                   <span className="mono faint" style={{ fontSize: 9, flexShrink: 0 }}>{c.state}</span>

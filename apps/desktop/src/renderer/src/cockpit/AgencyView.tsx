@@ -43,23 +43,26 @@ const CSS = `
 .agc-tabs { display:flex; gap:6px; padding:12px 16px 0; flex-shrink:0; }
 .agc-tab { padding:7px 15px; border-radius:9px 9px 0 0; font-size:11px; font-weight:700; letter-spacing:.2em; cursor:pointer;
   border:1px solid var(--border); border-bottom:none; background:transparent; color:var(--text-soft); }
-.agc-tab.on { background: rgb(var(--primary) / 0.2); color:#fff; border-color: rgb(var(--primary) / 0.5); }
+.agc-tab.on { background: rgba(232,230,225,0.2); color:#fff; border-color: rgba(232,230,225,0.5); }
 .agc-tab.soon { opacity:.5; cursor:default; }
 .agc-hd { display:flex; align-items:baseline; gap:12px; padding:14px 18px 6px; }
 .agc-hd h2 { font-family:var(--font-display); font-size:24px; margin:0; letter-spacing:.02em; color:var(--text); }
 .agc-search { padding: 4px 18px 10px; }
 .agc-search input { width:100%; box-sizing:border-box; padding:10px 14px; border-radius:11px; font-size:13px; font-family:inherit;
-  border:1px solid var(--border); background: rgb(var(--primary) / 0.05); color: var(--text); outline:none; }
-.agc-search input:focus { border-color: rgb(var(--primary) / 0.6); box-shadow: 0 0 0 1px rgb(var(--primary) / 0.25); }
+  border:1px solid var(--border); background: rgba(232,230,225,0.05); color: var(--text); outline:none; }
+.agc-search input:focus { border-color: rgba(232,230,225,0.6); box-shadow: 0 0 0 1px rgba(232,230,225,0.25); }
 
 /* Vertical stack: each entry = the compact card (grid size) + an info panel to its right */
 .agc-list { flex:1; min-height:0; overflow-y:auto; padding:6px 18px 26px; display:flex; flex-direction:column; gap:14px; }
-.agc-entry { display:flex; gap:14px; align-items:stretch; cursor:pointer; animation: agc-in .26s ease both; }
+.agc-entry { display:flex; gap:14px; align-items:stretch; cursor:pointer; animation: agc-in .26s ease both;
+  background: color-mix(in srgb, var(--app-panel) 55%, transparent);
+  -webkit-backdrop-filter: blur(var(--app-blur, 6px)); backdrop-filter: blur(var(--app-blur, 6px));
+  border: 1px solid var(--border); padding: 4px; }
 
 /* --- the compact card (identical size to grid mode: ~236px) --- */
 .agc-card { position:relative; width:236px; flex-shrink:0; border-radius:16px; padding:2px;
   background: linear-gradient(160deg, var(--tier-a), var(--tier-b)); box-shadow: 0 16px 40px -16px rgb(0 0 0 / .7); }
-.agc-entry:hover .agc-card { box-shadow: 0 20px 50px -14px var(--tier-b); }
+.agc-entry:hover { border-color: var(--border-strong); }
 .agc-inner { position:relative; overflow:hidden; border-radius:14px; padding:14px 14px 15px;
   background: linear-gradient(180deg, rgb(6 12 20 / .93), rgb(8 16 26 / .97)); }
 .agc-inner::before { content:""; position:absolute; inset:0; pointer-events:none; opacity:.5;
@@ -103,17 +106,17 @@ const CSS = `
 .agx-chat { flex:1; min-height:0; display:flex; flex-direction:column; padding:0 18px 14px; }
 .agx-log { flex:1; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:2px; padding:8px 2px; font-size:13px; }
 .agx-line { display:flex; gap:8px; padding:3px 8px; border-radius:7px; align-items:baseline; }
-.agx-line:hover { background: rgb(var(--primary) / 0.06); }
+.agx-line:hover { background: rgba(232,230,225,0.06); }
 .agx-ts { font-size:9.5px; color: var(--text-faint); font-variant-numeric:tabular-nums; flex-shrink:0; width:42px; }
 .agx-who { font-weight:700; color: rgb(var(--primary-soft)); flex-shrink:0; }
 .agx-who.me { color: rgb(var(--accent)); }
 .agx-body { color: var(--text); word-break:break-word; min-width:0; }
 .agx-compose { display:flex; gap:8px; margin-top:8px; }
 .agx-input { flex:1; padding:11px 14px; border-radius:10px; font-size:13px; font-family:inherit;
-  border:1px solid rgb(var(--primary) / 0.3); background: rgb(var(--primary) / 0.05); color: var(--text); outline:none; }
-.agx-input:focus { border-color: rgb(var(--primary) / 0.7); }
-.agx-send { padding:0 18px; border-radius:10px; border:1px solid rgb(var(--primary) / 0.6); cursor:pointer;
-  background: rgb(var(--primary) / 0.2); color:var(--text); font-family:inherit; font-size:12px; font-weight:700; letter-spacing:.18em; }
+  border:1px solid rgba(232,230,225,0.3); background: rgba(232,230,225,0.05); color: var(--text); outline:none; }
+.agx-input:focus { border-color: rgba(232,230,225,0.7); }
+.agx-send { padding:0 18px; border-radius:10px; border:1px solid rgba(232,230,225,0.6); cursor:pointer;
+  background: rgba(232,230,225,0.2); color:var(--text); font-family:inherit; font-size:12px; font-weight:700; letter-spacing:.18em; }
 .agx-send:disabled { opacity:.4; cursor:not-allowed; }
 
 /* Agent dossier modal (Arena card click) */

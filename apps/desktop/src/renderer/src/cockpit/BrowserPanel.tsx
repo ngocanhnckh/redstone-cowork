@@ -747,7 +747,7 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, isAct
                   onMouseEnter={() => setSugIndex(i)}
                   style={{
                     display: "flex", flexDirection: "column", gap: 1, padding: "6px 11px", cursor: "pointer",
-                    background: i === sugIndex ? "rgb(var(--primary) / 0.22)" : "transparent",
+                    background: i === sugIndex ? "rgba(232,230,225,0.22)" : "transparent",
                   }}
                 >
                   {s.title && <span style={{ fontSize: 12, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.title}</span>}
@@ -904,7 +904,7 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, isAct
                       >
                         <span style={{
                           width: 34, height: 34, borderRadius: 9, display: "flex", alignItems: "center", justifyContent: "center",
-                          background: "rgb(var(--primary) / 0.25)", color: "var(--text)", fontSize: 15, fontWeight: 700, textTransform: "uppercase",
+                          background: "rgba(232,230,225,0.25)", color: "var(--text)", fontSize: 15, fontWeight: 700, textTransform: "uppercase",
                         }}>{host.charAt(0) || "?"}</span>
                         <span style={{ fontSize: 11, color: "var(--text-soft)", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{host}</span>
                       </button>
@@ -938,7 +938,7 @@ const LOADER_CSS = `
 @keyframes rcwl-in { from { opacity:0; } to { opacity:1; } }
 .rcwl { position:absolute; inset:0; z-index:6; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:22px;
   overflow:hidden; animation: rcwl-in .18s ease both;
-  background: radial-gradient(120% 90% at 50% 42%, rgb(var(--primary) / 0.10), rgba(0,0,0,0.55) 72%), #0b0a09; }
+  background: radial-gradient(120% 90% at 50% 42%, rgba(232,230,225,0.10), rgba(0,0,0,0.55) 72%), #0b0a09; }
 .rcwl-grid { position:absolute; inset:0; opacity:.5; pointer-events:none;
   background-image:
     linear-gradient(rgb(var(--primary-soft) / 0.09) 1px, transparent 1px),

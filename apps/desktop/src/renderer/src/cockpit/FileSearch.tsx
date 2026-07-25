@@ -15,7 +15,7 @@ const field: React.CSSProperties = {
 };
 const iconBtn = (on: boolean): React.CSSProperties => ({
   border: on ? "1px solid rgb(var(--primary-soft) / 0.6)" : "1px solid var(--border)",
-  background: on ? "rgb(var(--primary) / 0.22)" : "transparent",
+  background: on ? "rgba(232,230,225,0.22)" : "transparent",
   color: on ? "var(--text)" : "var(--text-soft)", borderRadius: 6, padding: "2px 7px",
   fontSize: 11, fontFamily: "var(--font-mono)", cursor: "pointer",
 });
@@ -187,7 +187,7 @@ export default function FileSearch({
           return (
             <div key={path} style={{ marginBottom: 4 }}>
               <div onClick={() => toggleGroup(path)}
-                style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 6px", borderRadius: 6, cursor: "pointer", background: "rgb(var(--primary) / 0.05)" }}>
+                style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 6px", borderRadius: 6, cursor: "pointer", background: "rgba(232,230,225,0.05)" }}>
                 <span className="mono faint" style={{ fontSize: 10 }}>{open ? "▾" : "▸"}</span>
                 <span className="mono" style={{ fontSize: 11, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", direction: "rtl", textAlign: "left" }} title={rel(path)}>
                   {rel(path)}

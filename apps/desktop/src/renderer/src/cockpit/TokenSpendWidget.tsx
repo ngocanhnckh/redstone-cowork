@@ -43,7 +43,7 @@ const metric = (label: string, value: string, color?: string) => (
   <div><div className="mono faint" style={{ fontSize: 9.5, letterSpacing: "0.1em", textTransform: "uppercase" }}>{label}</div><div style={{ fontSize: 15, fontFamily: "var(--font-mono)", color }}>{value}</div></div>
 );
 
-const card: React.CSSProperties = { border: "1px solid var(--border)", borderRadius: 14, padding: "14px 16px", background: "rgb(var(--primary) / 0.03)", position: "relative", overflow: "hidden" };
+const card: React.CSSProperties = { border: "1px solid var(--border)", borderRadius: 14, padding: "14px 16px", background: "rgba(232,230,225,0.03)", position: "relative", overflow: "hidden" };
 
 /** Token spend for the focused session: totals + a per-turn chart over time. */
 export default function TokenSpendWidget() {

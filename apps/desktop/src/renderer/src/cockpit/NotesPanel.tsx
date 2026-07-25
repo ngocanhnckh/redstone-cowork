@@ -129,7 +129,7 @@ export default function NotesPanel({ active }: { active: boolean }) {
                 onClick={() => setActivePath(n.path)}
                 style={{
                   display: "flex", alignItems: "center", gap: 6, padding: "6px 8px", borderRadius: 7, cursor: "pointer",
-                  background: on ? "rgb(var(--primary) / 0.20)" : "transparent",
+                  background: on ? "rgba(232,230,225,0.20)" : "transparent",
                   border: on ? "1px solid rgb(var(--primary-soft) / 0.4)" : "1px solid transparent",
                 }}>
                 <span style={{ fontSize: 11 }}>▢</span>

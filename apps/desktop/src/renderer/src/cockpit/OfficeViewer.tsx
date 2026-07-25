@@ -135,7 +135,7 @@ function ExcelGrid({ cwd, machine, path, base64, name }: Props) {
           {sheetNames.map((n, i) => (
             <button key={n} onClick={() => setActive(i)} className={i === active ? undefined : "glass-inset-hover"}
               style={{ border: "1px solid var(--border)", borderRadius: 6, padding: "2px 9px", fontSize: 11, cursor: "pointer",
-                background: i === active ? "rgb(var(--primary) / 0.22)" : "transparent", color: i === active ? "var(--text)" : "var(--text-soft)" }}>
+                background: i === active ? "rgba(232,230,225,0.22)" : "transparent", color: i === active ? "var(--text)" : "var(--text-soft)" }}>
               {n}
             </button>
           ))}

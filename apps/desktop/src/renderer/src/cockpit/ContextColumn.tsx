@@ -251,7 +251,7 @@ export default function ContextColumn({ sessionId, hideSummary }: { sessionId?: 
               title="Summarize this session with the LLM"
               style={{
                 border: "1px solid var(--border)",
-                background: summarizing ? "rgb(var(--primary) / 0.2)" : "transparent",
+                background: summarizing ? "rgba(232,230,225,0.2)" : "transparent",
                 color: "var(--text-soft)",
                 borderRadius: 7,
                 padding: "3px 9px",
@@ -307,7 +307,7 @@ export default function ContextColumn({ sessionId, hideSummary }: { sessionId?: 
                 display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 11px", borderRadius: 999,
                 fontFamily: "var(--font-mono)", fontSize: 11, cursor: "pointer",
                 border: `1px solid ${on ? "rgb(var(--primary-soft) / 0.5)" : "var(--border)"}`,
-                background: on ? "rgb(var(--primary) / 0.22)" : "transparent",
+                background: on ? "rgba(232,230,225,0.22)" : "transparent",
                 color: on ? "var(--text)" : "var(--text-soft)",
               }}
             >
@@ -420,7 +420,7 @@ export default function ContextColumn({ sessionId, hideSummary }: { sessionId?: 
           title="Add to your checklist"
           style={{
             border: "1px solid var(--border)",
-            background: draft.trim() ? "rgb(var(--primary) / 0.28)" : "transparent",
+            background: draft.trim() ? "rgba(232,230,225,0.28)" : "transparent",
             color: draft.trim() ? "#fff" : "var(--text-soft)",
             borderRadius: 8,
             padding: "6px 12px",

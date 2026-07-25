@@ -65,13 +65,22 @@ export type Appearance = {
   palette: Palette;
 };
 
-export const DEFAULT_APPEARANCE: Appearance = { font: "futura", theme: "hitech", sfxVolume: 0, ambientVolume: 0, veil: 6, blur: 14, bgAnim: true, dockPos: "bottom", dockScale: 1, hudClear: false, glass: 94, videoMuted: false, palette: { ...EMPTY_PALETTE } };
+export const DEFAULT_APPEARANCE: Appearance = { font: "futura", theme: "hitech", sfxVolume: 0, ambientVolume: 0, veil: 4, blur: 6, bgAnim: true, dockPos: "bottom", dockScale: 1, hudClear: false, glass: 94, videoMuted: false, palette: { ...EMPTY_PALETTE } };
 
 const KEY = "rcw.appearance";
+
+const MIGRATION_KEY = "rcw.appearance.signalroom";
 
 export function loadAppearance(): Appearance {
   try {
     const raw = JSON.parse(localStorage.getItem(KEY) || "{}");
+    // One-time Signal Room migration: stored glass sliders from the old theme
+    // (blur 28 / veil 6+) fight the redesign — reset them to the approved values.
+    if (localStorage.getItem(MIGRATION_KEY) !== "1") {
+      raw.blur = 6; raw.veil = 4; raw.theme = "hitech"; raw.font = "futura";
+      raw.palette = null;
+      try { localStorage.setItem(MIGRATION_KEY, "1"); localStorage.setItem(KEY, JSON.stringify({ ...raw })); } catch { /* ignore */ }
+    }
     return {
       font: raw.font === "futura" ? "futura" : DEFAULT_APPEARANCE.font,
       theme: raw.theme === "warm" ? "warm" : raw.theme === "hitech" ? "hitech" : DEFAULT_APPEARANCE.theme,

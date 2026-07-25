@@ -4,7 +4,7 @@ import { CapItem } from "../types";
 
 function Row({ c, prefix }: { c: CapItem; prefix?: string }) {
   return (
-    <div style={{ padding: "9px 11px", borderRadius: 9, background: "rgb(var(--primary) / 0.04)", border: "1px solid var(--border)" }}>
+    <div style={{ padding: "9px 11px", borderRadius: 9, background: "rgba(232,230,225,0.04)", border: "1px solid var(--border)" }}>
       <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
         <span className="mono" style={{ fontSize: 12.5, color: "rgb(var(--accent))" }}>{prefix}{c.name}</span>
         <span style={{ flex: 1 }} />
@@ -48,7 +48,7 @@ export default function CapsModal() {
   const tabBtn = (t: "commands" | "skills", label: string, n: number) => (
     <button onClick={() => setTab(t)} style={{
       padding: "6px 13px", borderRadius: 8, fontFamily: "var(--font-mono)", fontSize: 12, cursor: "pointer", border: 0,
-      background: tab === t ? "rgb(var(--primary) / 0.28)" : "transparent", color: tab === t ? "#fff" : "var(--text-soft)",
+      background: tab === t ? "rgba(232,230,225,0.28)" : "transparent", color: tab === t ? "#fff" : "var(--text-soft)",
     }}>{label} <span className="faint">· {n}</span></button>
   );
 

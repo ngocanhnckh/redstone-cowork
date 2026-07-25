@@ -21,7 +21,7 @@ function ContainerRow({ c }: { c: DockerContainer }) {
   const running = c.state === "running";
   const short = c.name.replace(/^\//, "");
   return (
-    <div style={{ padding: "7px 9px", borderRadius: 8, background: "rgb(var(--primary) / 0.04)", border: "1px solid var(--border)" }}>
+    <div style={{ padding: "7px 9px", borderRadius: 8, background: "rgba(232,230,225,0.04)", border: "1px solid var(--border)" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
         <span style={{ width: 6, height: 6, borderRadius: 999, flexShrink: 0, background: stateColor(c.state), boxShadow: running ? "0 0 0 3px rgb(var(--accent) / 0.14)" : "none" }} className={running ? "hud-pulse" : undefined} />
         <span style={{ fontSize: 11.5, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, flex: 1 }} title={short}>{short}</span>

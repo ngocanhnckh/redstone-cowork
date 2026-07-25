@@ -74,7 +74,7 @@ export default function Weather() {
         <span style={{ flex: 1 }} />
         <div style={{ display: "inline-flex", border: "1px solid var(--border)", borderRadius: 7, overflow: "hidden" }}>
           {(["c", "f"] as const).map((u) => (
-            <button key={u} onClick={() => setUnit(u)} style={{ border: "none", cursor: "pointer", padding: "1px 6px", fontSize: 9, fontFamily: "var(--font-mono)", background: unit === u ? "rgb(var(--primary) / 0.26)" : "transparent", color: unit === u ? "var(--text)" : "var(--text-soft)" }}>°{u.toUpperCase()}</button>
+            <button key={u} onClick={() => setUnit(u)} style={{ border: "none", cursor: "pointer", padding: "1px 6px", fontSize: 9, fontFamily: "var(--font-mono)", background: unit === u ? "rgba(232,230,225,0.26)" : "transparent", color: unit === u ? "var(--text)" : "var(--text-soft)" }}>°{u.toUpperCase()}</button>
           ))}
         </div>
       </div>

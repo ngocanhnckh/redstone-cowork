@@ -104,7 +104,7 @@ const SlashTextarea = forwardRef<HTMLTextAreaElement, Props>(function SlashTexta
         }}>
           {filtered.map((c, i) => (
             <div key={c.source + c.name} onMouseEnter={() => setIndex(i)} onMouseDown={(e) => { e.preventDefault(); complete(c); }}
-              style={{ padding: "7px 10px", borderRadius: 8, cursor: "pointer", background: i === index ? "rgb(var(--primary) / 0.22)" : "transparent" }}>
+              style={{ padding: "7px 10px", borderRadius: 8, cursor: "pointer", background: i === index ? "rgba(232,230,225,0.22)" : "transparent" }}>
               <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
                 <span className="mono" style={{ fontSize: 12.5, color: "rgb(var(--accent))" }}>/{c.name}</span>
                 <span style={{ flex: 1 }} />
@@ -143,7 +143,7 @@ const SlashTextarea = forwardRef<HTMLTextAreaElement, Props>(function SlashTexta
           <button type="button" title="Attach a file — uploads to the session host and inserts its path"
             onMouseDown={(e) => { e.preventDefault(); fileRef.current?.click(); }}
             style={{ position: "absolute", right: 8, bottom: 8, width: 26, height: 26, borderRadius: 7, cursor: "pointer",
-              border: "1px solid var(--border)", background: "rgb(var(--primary) / 0.08)", color: "rgb(var(--primary-soft))",
+              border: "1px solid var(--border)", background: "rgba(232,230,225,0.08)", color: "rgb(var(--primary-soft))",
               display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13 }}>
             {uploading > 0 ? "…" : <IconPaperclip size={13} />}
           </button>

@@ -66,13 +66,13 @@ const CSS = `
 .rcw-fb-scan { position:absolute; left:0; right:0; height:2px; z-index:2; pointer-events:none; opacity:.6;
   background: linear-gradient(90deg, transparent, rgb(var(--primary-soft) / 0.6), transparent); box-shadow:0 0 14px 2px rgb(var(--primary-soft)/0.35); animation: rcw-fb-scan .7s linear; }
 .rcw-fb-tile { position:relative; display:flex; flex-direction:column; align-items:center; gap:7px; padding:14px 8px 11px; border-radius:11px; cursor:pointer;
-  border:1px solid var(--border); background: rgb(var(--primary) / 0.04); transition: transform .12s, border-color .12s, box-shadow .12s; animation: rcw-fb-in .2s both; }
+  border:1px solid var(--border); background: rgba(232,230,225,0.04); transition: transform .12s, border-color .12s, box-shadow .12s; animation: rcw-fb-in .2s both; }
 .rcw-fb-dl { position:absolute; top:5px; right:5px; width:22px; height:22px; padding:0; display:grid; place-items:center; opacity:0;
   border-radius:6px; border:1px solid var(--border); background: color-mix(in srgb, var(--app-panel) 82%, transparent); color: rgb(var(--primary-soft));
   font-family:var(--font-mono); font-size:12px; line-height:1; cursor:pointer; transition: opacity .12s, background .12s, transform .12s; }
 .rcw-fb-tile:hover .rcw-fb-dl { opacity:.85; }
-.rcw-fb-dl:hover { opacity:1; background: rgb(var(--primary) / 0.28); transform: translateY(-1px); }
-.rcw-fb-tile:hover { transform: translateY(-2px); border-color: rgb(var(--primary) / 0.5); box-shadow: 0 0 22px -8px rgb(var(--primary) / 0.7); }
+.rcw-fb-dl:hover { opacity:1; background: rgba(232,230,225,0.28); transform: translateY(-1px); }
+.rcw-fb-tile:hover { transform: translateY(-2px); border-color: rgba(232,230,225,0.5); box-shadow: 0 0 22px -8px rgba(232,230,225,0.7); }
 .rcw-fb-tile.dir { border-color: rgb(var(--accent) / 0.28); }
 .rcw-fb-tile.dir:hover { border-color: rgb(var(--accent) / 0.6); box-shadow: 0 0 22px -8px rgb(var(--accent) / 0.7); }
 .rcw-fb-ico { font-family:var(--font-mono); font-size:24px; line-height:1; text-shadow:0 0 14px currentColor; }
@@ -87,7 +87,7 @@ const CSS = `
   -webkit-backdrop-filter: blur(22px) saturate(1.3); backdrop-filter: blur(22px) saturate(1.3);
   box-shadow: 0 10px 34px -10px rgb(0 0 0 / 0.7); font-family:var(--font-mono); font-size:11.5px; animation: rcw-fb-in .12s ease both; }
 .rcw-fb-mi { display:flex; align-items:center; gap:9px; padding:7px 10px; border-radius:7px; cursor:pointer; color:var(--text-soft); white-space:nowrap; }
-.rcw-fb-mi:hover { background: rgb(var(--primary) / 0.16); color: rgb(var(--primary-soft)); }
+.rcw-fb-mi:hover { background: rgba(232,230,225,0.16); color: rgb(var(--primary-soft)); }
 .rcw-fb-mi.danger:hover { background: rgb(230 59 46 / 0.18); color:#e63b2e; }
 .rcw-fb-mi .k { width:15px; text-align:center; opacity:.85; }
 .rcw-fb-sep { height:1px; margin:4px 6px; background:var(--border); }

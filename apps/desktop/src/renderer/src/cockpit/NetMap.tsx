@@ -15,21 +15,34 @@ const W = 360, H = 180;
 const projX = (lon: number) => lon + 180;
 const projY = (lat: number) => 90 - lat;
 
-// Build one SVG path covering all land polygons (static — computed once).
-const LAND_PATH = (() => {
+// Dot-matrix land (the Signal Room look): sample the land polygons on a grid and
+// emit ONE path of tiny squares — computed once at module load from real geography.
+const DOT_PATH = (() => {
   const fc = land as unknown as { features: { geometry: { type: string; coordinates: unknown } }[] };
-  const parts: string[] = [];
-  const ring = (r: number[][]) => {
-    let d = "";
-    r.forEach(([lon, lat], i) => { d += `${i ? "L" : "M"}${projX(lon).toFixed(1)},${projY(lat).toFixed(1)}`; });
-    return d + "Z";
-  };
+  // collect each feature's rings (outer + holes), projected
+  const feats: number[][][][] = [];
   for (const f of fc.features) {
     const g = f.geometry;
-    if (g.type === "Polygon") (g.coordinates as number[][][]).forEach((r) => (parts.push(ring(r))));
-    else if (g.type === "MultiPolygon") (g.coordinates as number[][][][]).forEach((poly) => poly.forEach((r) => parts.push(ring(r))));
+    const polys: number[][][][] = g.type === "Polygon" ? [g.coordinates as number[][][]] :
+      g.type === "MultiPolygon" ? (g.coordinates as number[][][][]) : [];
+    for (const poly of polys) feats.push(poly.map((r) => r.map(([lon, lat]) => [projX(lon), projY(lat)])));
   }
-  return parts.join("");
+  const inRing = (x: number, y: number, ring: number[][]) => {
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const [xi, yi] = ring[i], [xj, yj] = ring[j];
+      if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+    }
+    return inside;
+  };
+  const isLand = (x: number, y: number) =>
+    feats.some((rings) => rings.reduce((acc, r) => (inRing(x, y, r) ? !acc : acc), false));
+  const STEP = 3.2, DOT = 1.1;
+  let d = "";
+  for (let y = 2; y < H; y += STEP)
+    for (let x = 2; x < W; x += STEP)
+      if (isLand(x, y)) d += `M${(x - DOT / 2).toFixed(1)} ${(y - DOT / 2).toFixed(1)}h${DOT}v${DOT}h-${DOT}Z`;
+  return d;
 })();
 
 // One muted, warm-leaning "instrument" family so the map sits inside the clay/amber HUD
@@ -85,29 +98,24 @@ export default function NetMap() {
       </div>
 
       {/* World map */}
-      <div style={{ position: "relative", width: "100%", aspectRatio: "2 / 1", flexShrink: 0, borderRadius: 8, overflow: "hidden", border: "1px solid var(--border)", background: "radial-gradient(120% 100% at 50% 30%, rgb(var(--primary) / 0.10), rgba(4,8,12,0.9))" }}>
+      <div style={{ position: "relative", width: "100%", aspectRatio: "2 / 1", flexShrink: 0, overflow: "hidden", border: "1px solid var(--border)", background: "rgba(6,6,6,0.55)" }}>
         <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}>
           {/* graticule */}
           <g stroke="rgb(var(--primary-soft) / 0.10)" strokeWidth={0.3}>
             {[30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330].map((x) => <line key={x} x1={x} y1={0} x2={x} y2={H} />)}
             {[30, 60, 90, 120, 150].map((y) => <line key={y} x1={0} y1={y} x2={W} y2={y} />)}
           </g>
-          <path d={LAND_PATH} fill="rgb(var(--primary-soft) / 0.12)" stroke="rgb(var(--primary-soft) / 0.35)" strokeWidth={0.25} />
+          <path d={DOT_PATH} fill="rgba(232,230,225,0.26)" />
 
           {/* arcs + travelling packets */}
           {hostPt && mapped.map(({ p, x, y }) => {
             const cx = (hostPt.x + x) / 2, cy = (hostPt.y + y) / 2 - Math.hypot(x - hostPt.x, y - hostPt.y) * 0.28;
             const d = `M${hostPt.x.toFixed(1)},${hostPt.y.toFixed(1)} Q${cx.toFixed(1)},${cy.toFixed(1)} ${x.toFixed(1)},${y.toFixed(1)}`;
             const on = p.ip === selIp;
-            const col = serviceColor(p.service);
-            const dur = 2 + (p.ip.charCodeAt(p.ip.length - 1) % 5) * 0.4;
             return (
-              <g key={p.ip}>
-                <path d={d} fill="none" stroke={col} strokeWidth={on ? 0.7 : 0.35} opacity={on ? 0.9 : 0.4} />
-                <circle r={on ? 1.7 : 1.2} fill={col} style={{ filter: `drop-shadow(0 0 2px ${col})` }}>
-                  <animateMotion path={d} dur={`${dur}s`} repeatCount="indefinite" calcMode="linear" />
-                </circle>
-              </g>
+              <path key={p.ip} d={d} fill="none" className="rcw-net-arc"
+                stroke="#e63b2e" strokeWidth={on ? 0.8 : 0.45} opacity={on ? 0.95 : 0.55}
+                strokeDasharray="1.6 2.6" />
             );
           })}
 
@@ -115,19 +123,20 @@ export default function NetMap() {
           {mapped.map(({ p, x, y }) => {
             const on = p.ip === selIp; const col = serviceColor(p.service);
             return (
-              <circle key={p.ip} cx={x} cy={y} r={on ? 2.6 : 1.7} fill={col} stroke="#04080c" strokeWidth={0.3}
-                style={{ cursor: "pointer", filter: `drop-shadow(0 0 ${on ? 4 : 2}px ${col})` }}
+              <rect key={p.ip} x={x - (on ? 2.2 : 1.5)} y={y - (on ? 2.2 : 1.5)}
+                width={on ? 4.4 : 3} height={on ? 4.4 : 3} fill={on ? "#e8e6e1" : col}
+                style={{ cursor: "pointer" }}
                 onClick={() => setSelIp((s) => (s === p.ip ? null : p.ip))}>
                 <title>{peerLabel(p)} · {locLabel(p)}</title>
-              </circle>
+              </rect>
             );
           })}
 
           {/* host origin */}
           {hostPt && (
             <g>
-              <circle cx={hostPt.x} cy={hostPt.y} r={2.4} fill="#fff" style={{ filter: "drop-shadow(0 0 4px rgb(var(--accent)))" }} />
-              <circle cx={hostPt.x} cy={hostPt.y} r={2.4} fill="none" stroke="rgb(var(--accent))" strokeWidth={0.5} className="rcw-net-ping" />
+              <rect x={hostPt.x - 2} y={hostPt.y - 2} width={4} height={4} fill="#e63b2e" />
+              <circle cx={hostPt.x} cy={hostPt.y} r={2.4} fill="none" stroke="#e63b2e" strokeWidth={0.5} className="rcw-net-ping" />
             </g>
           )}
         </svg>
@@ -146,8 +155,8 @@ export default function NetMap() {
           const on = p.ip === selIp; const col = serviceColor(p.service);
           return (
             <div key={p.ip} onClick={() => setSelIp((s) => (s === p.ip ? null : p.ip))}
-              style={{ display: "flex", alignItems: "center", gap: 7, padding: "2px 5px", borderRadius: 5, cursor: "pointer", background: on ? "rgb(var(--primary) / 0.16)" : "transparent" }}>
-              <span style={{ width: 6, height: 6, borderRadius: "50%", flexShrink: 0, background: col, boxShadow: `0 0 6px ${col}` }} />
+              style={{ display: "flex", alignItems: "center", gap: 7, padding: "2px 5px", borderRadius: 5, cursor: "pointer", background: on ? "rgba(232,230,225,0.16)" : "transparent" }}>
+              <span style={{ width: 6, height: 6, borderRadius: "50%", flexShrink: 0, background: col }} />
               <span className="mono" style={{ fontSize: 10.5, minWidth: 0, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{peerLabel(p)}</span>
               {p.proc && <span className="mono faint" style={{ fontSize: 8.5, flexShrink: 0 }}>{p.proc}</span>}
               <span className="mono" style={{ fontSize: 8.5, flexShrink: 0, color: col }}>{p.service || (p.port != null ? `:${p.port}` : "")}</span>
@@ -161,7 +170,7 @@ export default function NetMap() {
         <div className="rcw-net-detail" onClick={() => setSelIp(null)}>
           <div className="rcw-net-detail-card" onClick={(e) => e.stopPropagation()}>
             <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 7 }}>
-              <span style={{ width: 8, height: 8, borderRadius: "50%", background: serviceColor(sel.service), boxShadow: `0 0 8px ${serviceColor(sel.service)}` }} />
+              <span style={{ width: 8, height: 8, borderRadius: "50%", background: serviceColor(sel.service) }} />
               <span className="mono" style={{ fontSize: 12, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{peerLabel(sel)}</span>
               <span style={{ flex: 1 }} />
               <button onClick={() => setSelIp(null)} style={{ border: "1px solid var(--border)", background: "transparent", color: "var(--text-soft)", borderRadius: 6, padding: "1px 7px", cursor: "pointer", fontSize: 11 }}>✕</button>
@@ -192,6 +201,9 @@ function NetStyles() {
   return (
     <style>{`
       @keyframes rcw-net-ping { 0% { r:2.4; opacity:.9; } 100% { r:9; opacity:0; } }
+      @keyframes rcw-net-dash { to { stroke-dashoffset: -42; } }
+      .rcw-net-arc { animation: rcw-net-dash 2.6s linear infinite; }
+      body.rcw-hidden .rcw-net-arc { animation-play-state: paused !important; }
       @keyframes rcw-net-fade { from { opacity:0; } to { opacity:1; } }
       .rcw-net-ping { animation: rcw-net-ping 2.2s ease-out infinite; transform-box: fill-box; }
       body.rcw-hidden .rcw-net-ping { animation-play-state: paused !important; }

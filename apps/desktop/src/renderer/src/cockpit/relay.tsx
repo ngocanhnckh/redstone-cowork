@@ -62,7 +62,7 @@ export function DecodeLine({ text }: { text: string }) {
  * in-progress replay immediately.
  */
 export function useRelay(items: RelayItem[], active: boolean, suppressed: boolean, opts?: { loop?: boolean }) {
-  void items; void active; void opts; // auto-replay disabled; kept for API compatibility
+  void active; void opts; // auto-replay disabled; kept for API compatibility
   const [queue, setQueue] = useState<RelayItem[]>([]);
   const [idx, setIdx] = useState(0);
   const [secs] = useState(RELAY_MS / 1000);
@@ -85,7 +85,15 @@ export function useRelay(items: RelayItem[], active: boolean, suppressed: boolea
     return () => clearTimeout(t);
   }, [queue, idx]);
 
-  return { queue, idx, secs, playing: queue.length > 0 && !!queue[idx], dismiss: () => setQueue([]) };
+  // Manual trigger — the ACTIVITY panel's REPLAY button re-runs the last events
+  // through the teletype overlay (idle auto-replay stays off).
+  const replay = () => {
+    const last = items.slice(-RELAY_COUNT);
+    if (!last.length) return;
+    setIdx(0);
+    setQueue(last);
+  };
+  return { queue, idx, secs, playing: queue.length > 0 && !!queue[idx], dismiss: () => setQueue([]), replay };
 }
 
 /** The full-window overlay shown while a replay plays. Click / scroll anywhere on it

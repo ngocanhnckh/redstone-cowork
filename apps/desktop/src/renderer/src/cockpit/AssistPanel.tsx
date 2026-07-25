@@ -267,7 +267,7 @@ export default function AssistPanel() {
           <button onClick={() => run("summarize")} disabled={busy || !sessionId} style={chip}>✦ Summarize</button>
           <button
             onClick={() => setMode((m) => (m === "optimize" ? "chat" : "optimize"))}
-            style={{ ...chip, background: mode === "optimize" ? "rgb(var(--primary) / 0.28)" : chip.background, color: mode === "optimize" ? "#fff" : chip.color }}
+            style={{ ...chip, background: mode === "optimize" ? "rgba(232,230,225,0.28)" : chip.background, color: mode === "optimize" ? "#fff" : chip.color }}
           >
             ✎ Optimize prompt
           </button>
@@ -311,7 +311,7 @@ export default function AssistPanel() {
                 <Markdown>{m.text}</Markdown>
               </div>
             ) : (
-              <div key={i} style={{ alignSelf: "flex-end", maxWidth: "88%", padding: "9px 13px", borderRadius: 12, background: "rgb(var(--primary) / 0.18)", color: "var(--text)", fontSize: 13, whiteSpace: "pre-wrap" }}>
+              <div key={i} style={{ alignSelf: "flex-end", maxWidth: "88%", padding: "9px 13px", borderRadius: 12, background: "rgba(232,230,225,0.18)", color: "var(--text)", fontSize: 13, whiteSpace: "pre-wrap" }}>
                 {m.text}
               </div>
             )

@@ -66,7 +66,7 @@ const CSS = `
 .rcw-af-body { flex:1; min-height:0; overflow-y:auto; padding: 8px 12px; display:flex; flex-direction:column; gap:6px; }
 .rcw-af-row { display:flex; gap:9px; align-items:flex-start; animation: rcw-af-in .16s ease both; }
 .rcw-af-badge { flex-shrink:0; font-family:var(--font-mono); font-size:8.5px; letter-spacing:.12em; padding:2px 6px; border-radius:5px;
-  border:1px solid var(--border); background: rgb(var(--primary) / 0.06); text-transform:uppercase; margin-top:1px; }
+  border:1px solid var(--border); background: rgba(232,230,225,0.06); text-transform:uppercase; margin-top:1px; }
 .rcw-af-detail { font-size:12px; line-height:1.5; color:var(--text); min-width:0; overflow-wrap:anywhere; white-space:pre-wrap; }
 .rcw-af-detail.mono { font-family:var(--font-mono); font-size:11px; color:var(--text-soft); }
 `;
@@ -118,6 +118,12 @@ export default function ActionFeed({ active = true }: { sessionId?: string; acti
         </span>
         <span style={{ flex: 1 }} />
         {working && <SciFiSpinner size={16} />}
+        <button onClick={relay.replay} disabled={!relayItems.length}
+          title="Replay the recent transmission (teletype)"
+          className="mono"
+          style={{ border: "1px solid var(--border)", background: "transparent", color: relayItems.length ? "var(--text-soft)" : "var(--text-faint)", padding: "1px 8px", fontSize: 9, letterSpacing: "0.14em", textTransform: "uppercase", cursor: relayItems.length ? "pointer" : "default" }}>
+          replay
+        </button>
         <span className="mono faint" style={{ fontSize: 9.5 }}>{acts.length} events</span>
       </div>
       <div className="rcw-af-body no-scrollbar" ref={bodyRef} onScroll={onScroll}>

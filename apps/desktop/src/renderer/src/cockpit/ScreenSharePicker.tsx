@@ -41,7 +41,7 @@ export default function ScreenSharePicker() {
 
   const chip = (on: boolean): React.CSSProperties => ({
     border: "1px solid var(--border)", borderRadius: 8, padding: "5px 12px", fontSize: 12, cursor: "pointer",
-    background: on ? "rgb(var(--primary) / 0.22)" : "transparent", color: on ? "var(--text)" : "var(--text-soft)",
+    background: on ? "rgba(232,230,225,0.22)" : "transparent", color: on ? "var(--text)" : "var(--text-soft)",
   });
 
   return (

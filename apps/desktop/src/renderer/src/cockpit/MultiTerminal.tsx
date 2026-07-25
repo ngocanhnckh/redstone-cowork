@@ -51,7 +51,7 @@ export default function MultiTerminal({ sessionId, cwd, machine, idPrefix }: { s
           const on = n === active;
           return (
             <span key={n} onClick={() => setActive(n)}
-              style={{ ...tabBtn, background: on ? "rgb(var(--primary) / 0.22)" : "transparent", color: on ? "var(--text)" : "var(--text-soft)", borderColor: on ? "rgb(var(--primary-soft) / 0.4)" : "transparent" }}>
+              style={{ ...tabBtn, background: on ? "rgba(232,230,225,0.22)" : "transparent", color: on ? "var(--text)" : "var(--text-soft)", borderColor: on ? "rgb(var(--primary-soft) / 0.4)" : "transparent" }}>
               <span style={{ width: 5, height: 5, borderRadius: 999, background: on ? "rgb(var(--accent))" : "var(--border-strong)" }} />
               term {i + 1}
               {tabs.length > 1 && (

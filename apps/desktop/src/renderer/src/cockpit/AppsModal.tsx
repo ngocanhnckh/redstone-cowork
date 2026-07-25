@@ -22,7 +22,7 @@ function ThemePicker({ value, onChange }: { value: AppTheme; onChange: (t: AppTh
             style={{
               border: "none", cursor: "pointer", padding: "3px 9px", fontSize: 11,
               fontFamily: "var(--font-mono)", letterSpacing: "0.02em",
-              background: on ? "rgb(var(--primary) / 0.28)" : "transparent",
+              background: on ? "rgba(232,230,225,0.28)" : "transparent",
               color: on ? "var(--text)" : "var(--text-soft)",
             }}
           >
@@ -135,7 +135,7 @@ export default function AppsModal({
                     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                       <span style={{ fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.name}</span>
                       {a.workspace && (
-                        <span className="mono" title={`Only in workspace: ${a.workspace}`} style={{ flexShrink: 0, fontSize: 8.5, letterSpacing: "0.06em", textTransform: "uppercase", padding: "1px 6px", borderRadius: 999, background: "rgb(var(--primary) / 0.18)", color: "var(--text-soft)" }}>
+                        <span className="mono" title={`Only in workspace: ${a.workspace}`} style={{ flexShrink: 0, fontSize: 8.5, letterSpacing: "0.06em", textTransform: "uppercase", padding: "1px 6px", borderRadius: 999, background: "rgba(232,230,225,0.18)", color: "var(--text-soft)" }}>
                           workspace
                         </span>
                       )}
@@ -156,7 +156,7 @@ export default function AppsModal({
                   <button
                     onClick={() => setCssOpen(open ? null : a.id)}
                     title="Per-app custom CSS"
-                    style={{ border: "1px solid var(--border)", background: open ? "rgb(var(--primary) / 0.18)" : "transparent", color: "var(--text-soft)", borderRadius: 8, padding: "3px 9px", cursor: "pointer", fontSize: 11, fontFamily: "var(--font-mono)" }}
+                    style={{ border: "1px solid var(--border)", background: open ? "rgba(232,230,225,0.18)" : "transparent", color: "var(--text-soft)", borderRadius: 8, padding: "3px 9px", cursor: "pointer", fontSize: 11, fontFamily: "var(--font-mono)" }}
                   >
                     {"</>"} CSS{a.customCss ? " ✦" : ""}
                   </button>

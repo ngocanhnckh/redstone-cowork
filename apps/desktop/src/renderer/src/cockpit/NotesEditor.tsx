@@ -95,7 +95,7 @@ function MermaidBlockView({ block, editor }: { block: { props: { code: string } 
   };
 
   return (
-    <div contentEditable={false} style={{ border: "1px solid var(--border)", borderRadius: 10, padding: 10, background: "rgb(var(--primary) / 0.04)", margin: "4px 0" }}>
+    <div contentEditable={false} style={{ border: "1px solid var(--border)", borderRadius: 10, padding: 10, background: "rgba(232,230,225,0.04)", margin: "4px 0" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
         <span className="mono" style={{ fontSize: 9.5, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--text-soft)" }}>◈ mermaid</span>
         <span style={{ flex: 1 }} />

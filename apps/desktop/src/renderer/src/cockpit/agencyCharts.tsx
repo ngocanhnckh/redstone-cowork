@@ -29,7 +29,7 @@ export function Bars({ rows }: { rows: Array<{ label: string; value: number; col
       {rows.map((r) => (
         <div key={r.label} style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ width: 78, fontSize: 10, letterSpacing: "0.08em", color: "var(--text-soft)", textAlign: "right", flexShrink: 0 }}>{r.label}</span>
-          <div style={{ flex: 1, height: 12, borderRadius: 6, background: "rgb(var(--primary) / 0.08)", overflow: "hidden" }}>
+          <div style={{ flex: 1, height: 12, borderRadius: 6, background: "rgba(232,230,225,0.08)", overflow: "hidden" }}>
             <div style={{ width: `${(r.value / max) * 100}%`, height: "100%", borderRadius: 6, background: r.color, minWidth: r.value > 0 ? 4 : 0, transition: "width .5s ease" }} />
           </div>
           <b style={{ width: 32, fontSize: 12, color: "var(--text)", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{r.value}</b>
@@ -66,8 +66,8 @@ export function ActivityChart({ points, label, unit }: { points: Array<{ t: numb
       <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: "block" }}>
         <defs>
           <linearGradient id="agp-fill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="rgb(var(--primary) / 0.45)" />
-            <stop offset="100%" stopColor="rgb(var(--primary) / 0.02)" />
+            <stop offset="0%" stopColor="rgba(232,230,225,0.45)" />
+            <stop offset="100%" stopColor="rgba(232,230,225,0.02)" />
           </linearGradient>
         </defs>
         {/* axes */}
@@ -88,7 +88,7 @@ export function ActivityChart({ points, label, unit }: { points: Array<{ t: numb
   );
 }
 
-const GH_LEVELS = ["rgb(var(--primary) / 0.08)", "rgb(var(--primary) / 0.3)", "rgb(var(--primary) / 0.5)", "rgb(var(--primary) / 0.72)", "rgb(var(--primary) / 0.95)"];
+const GH_LEVELS = ["rgba(232,230,225,0.08)", "rgba(232,230,225,0.3)", "rgba(232,230,225,0.5)", "rgba(232,230,225,0.72)", "rgba(232,230,225,0.95)"];
 function ghLevel(count: number, max: number): number {
   if (count <= 0) return 0;
   const q = count / Math.max(1, max);

@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useStore } from "../store";
 
 const card: React.CSSProperties = {
   border: "1px solid var(--border)", borderRadius: 14, padding: "14px 16px",
-  background: "rgb(var(--primary) / 0.03)", position: "relative", overflow: "hidden",
+  background: "rgba(232,230,225,0.03)", position: "relative", overflow: "hidden",
 };
 
 const TIME_KEY = "rcw.sessionTime"; // { [sessionId]: secondsSpent }
@@ -51,7 +51,7 @@ const IpRow = ({ label, value }: { label: string; value: string | null | undefin
  * Session-scoped uplink widget: the remote host's local + public IPv4, live time
  * spent on the focused session (foreground only), and this session's prompt count.
  */
-export default function SessionInfoWidget() {
+export default function SessionInfoWidget({ globe }: { globe?: ReactNode } = {}) {
   const focusId = useStore((s) => s.focusId);
   const sessions = useStore((s) => s.sessions);
   const queue = useStore((s) => s.queue);
@@ -90,6 +90,7 @@ export default function SessionInfoWidget() {
           {loading ? "…" : "↻"}
         </button>
       </div>
+      {globe && <div style={{ margin: "2px 0 8px" }}>{globe}</div>}
 
       {!session ? (
         <span className="mono faint" style={{ fontSize: 11 }}>no session selected</span>

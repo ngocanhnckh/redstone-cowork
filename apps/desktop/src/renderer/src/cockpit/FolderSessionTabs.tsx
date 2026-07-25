@@ -49,7 +49,7 @@ export default function FolderSessionTabs({ sessionId }: { sessionId?: string | 
               display: "inline-flex", alignItems: "center", gap: 6, flexShrink: 0, cursor: "pointer",
               padding: "3px 8px", borderRadius: 999, fontFamily: "var(--font-mono)", fontSize: 10.5,
               border: `1px solid ${on ? "rgb(var(--primary-soft) / 0.5)" : "var(--border)"}`,
-              background: on ? "rgb(var(--primary) / 0.2)" : "transparent",
+              background: on ? "rgba(232,230,225,0.2)" : "transparent",
               color: on ? "var(--text)" : "var(--text-soft)",
             }}
           >

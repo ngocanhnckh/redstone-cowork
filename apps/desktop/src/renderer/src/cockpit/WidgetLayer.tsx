@@ -111,7 +111,7 @@ export default function WidgetLayer() {
               <div className="mono faint" style={{ fontSize: 9, letterSpacing: "0.12em", textTransform: "uppercase", padding: "4px 8px 6px" }}>Add widget</div>
               {ORDER.map((k) => (
                 <button key={k} onClick={() => add(k)} style={{ display: "flex", alignItems: "center", gap: 9, width: "100%", border: "none", background: "transparent", color: "var(--text)", cursor: "pointer", padding: "7px 8px", borderRadius: 8, fontSize: 12.5, textAlign: "left" }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = "rgb(var(--primary) / 0.16)")}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(232,230,225,0.16)")}
                   onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}>
                   <span style={{ width: 18, textAlign: "center", color: "rgb(var(--primary-soft))" }}>{CATALOG[k].icon}</span>
                   {CATALOG[k].label}
@@ -555,7 +555,7 @@ function ReconRadar() {
           {/* sweep */}
           <span className="rcw-radar-sweep" />
           {/* center */}
-          <span style={{ position: "absolute", left: "calc(50% - 3px)", top: "calc(50% - 3px)", width: 6, height: 6, borderRadius: "50%", background: "var(--text)" }} />
+          <span className="rcw-round" style={{ position: "absolute", left: "calc(50% - 3px)", top: "calc(50% - 3px)", width: 6, height: 6, background: "var(--text)" }} />
           {/* blips */}
           {blips.map((b) => (
             <span key={b.p.ip}
@@ -605,7 +605,7 @@ function Reactor() {
   const tabBtn = (k: "cpu" | "mem") => ({
     border: "none", cursor: "pointer", padding: "1px 7px", fontSize: 9.5, borderRadius: 6,
     fontFamily: "var(--font-mono)", letterSpacing: "0.06em", textTransform: "uppercase" as const,
-    background: by === k ? "rgb(var(--primary) / 0.26)" : "transparent", color: by === k ? "var(--text)" : "var(--text-soft)",
+    background: by === k ? "rgba(232,230,225,0.26)" : "transparent", color: by === k ? "var(--text)" : "var(--text-soft)",
   });
 
   return (
@@ -621,23 +621,97 @@ function Reactor() {
       {rows.length === 0 ? (
         <div className="mono faint" style={{ fontSize: 11, margin: "auto" }}>{machine ? "reading…" : "focus a session"}</div>
       ) : (
-        <div className="no-scrollbar" style={{ display: "flex", flexDirection: "column", gap: 4, overflowY: "auto", minHeight: 0 }}>
-          {rows.map((p, i) => {
-            const v = by === "cpu" ? p.cpu : p.mem;
-            const c = loadColor(v);
-            const hot = i === 0 && v >= 300;
-            return (
-              <div key={p.pid} title={`pid ${p.pid} · ${p.name} · cpu ${p.cpu}% · mem ${p.mem}%`} style={{ position: "relative", display: "flex", alignItems: "center", gap: 8, height: 17 }}>
-                {/* load bar behind the label */}
-                <span style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${Math.min(100, v)}%`, background: `color-mix(in srgb, ${c} ${hot ? 22 : 14}%, transparent)`, borderLeft: `2px solid ${c}`, borderRadius: 3, transition: "width .6s ease" }} />
-                <span style={{ position: "relative", fontSize: 11.5, minWidth: 0, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", paddingLeft: 6 }}>{p.name}</span>
-                <span className="mono faint" style={{ position: "relative", fontSize: 8.5 }}>{p.pid}</span>
-                <span className="mono" style={{ position: "relative", fontSize: 11, color: c, fontVariantNumeric: "tabular-nums", minWidth: 38, textAlign: "right" }}>{v.toFixed(1)}%</span>
-              </div>
-            );
-          })}
-        </div>
+        <ReactorDonut rows={rows.slice(0, 5)} metric={by} />
       )}
+    </div>
+  );
+}
+
+
+/** Segmented donut of the top 5 processes (the approved Signal Room reactor):
+ *  arcs morph and values count smoothly, leader-line callouts on both sides,
+ *  a slowly rotating dotted inner ring + crosshair. Red only when pegged. */
+function ReactorDonut({ rows, metric }: { rows: Proc[]; metric: "cpu" | "mem" }) {
+  const wrap = useRef<HTMLDivElement>(null);
+  const cv = useRef<HTMLCanvasElement>(null);
+  const state = useRef<{ items: { name: string; v: number; s: number }[]; rot: number }>({ items: [], rot: 0 });
+  const data = useRef(rows);
+  const met = useRef(metric);
+  data.current = rows; met.current = metric;
+  useEffect(() => {
+    const el = cv.current!;
+    let raf = 0, last = 0;
+    const RAMP = ["#e8e6e1", "#b5b2ab", "#98958f", "#6e6b66", "#4a4844"];
+    const draw = (t: number) => {
+      raf = requestAnimationFrame(draw);
+      if (t - last < 33 || document.hidden) return;
+      last = t;
+      const box = wrap.current!;
+      const w = box.clientWidth * 2, h = box.clientHeight * 2;
+      if (el.width !== w || el.height !== h) { el.width = w; el.height = h; }
+      const g = el.getContext("2d")!;
+      const st = state.current;
+      const live = data.current.map((p) => ({ name: p.name, v: met.current === "cpu" ? p.cpu : p.mem }));
+      // reconcile animated items with live rows
+      st.items = live.map((lv) => {
+        const prev = st.items.find((i) => i.name === lv.name);
+        return prev ? { name: lv.name, v: prev.v + (lv.v - prev.v) * 0.08, s: prev.s } : { name: lv.name, v: lv.v, s: 0 };
+      });
+      const total = Math.max(1, st.items.reduce((a, i) => a + i.v, 0));
+      const GAP = 0.07;
+      st.items.forEach((i) => {
+        const target = (i.v / total) * (Math.PI * 2 - GAP * st.items.length);
+        i.s += (target - i.s) * 0.08;
+      });
+      st.rot += 0.0015;
+      const cx = w / 2, cy = h / 2 + 4, R = Math.min(h * 0.34, w * 0.2);
+      g.clearRect(0, 0, w, h);
+      g.fillStyle = "rgba(232,230,225,.3)";
+      for (let d = 0; d < 60; d++) {
+        const da = (d / 60) * Math.PI * 2 + st.rot;
+        g.fillRect(cx + Math.cos(da) * R * 0.72 - 1, cy + Math.sin(da) * R * 0.72 - 1, 2, 2);
+      }
+      g.strokeStyle = "rgba(232,230,225,.18)"; g.lineWidth = 1;
+      g.beginPath(); g.moveTo(cx - 12, cy); g.lineTo(cx + 12, cy); g.stroke();
+      g.beginPath(); g.moveTo(cx, cy - 12); g.lineTo(cx, cy + 12); g.stroke();
+      let a = -Math.PI / 2;
+      const sides: { l: { i: number; mid: number }[]; r: { i: number; mid: number }[] } = { l: [], r: [] };
+      st.items.forEach((item, i) => {
+        const pegged = i === 0 && item.v >= 300;
+        g.strokeStyle = pegged ? "#e63b2e" : RAMP[i] ?? "#4a4844";
+        g.lineWidth = 6; g.lineCap = "butt";
+        g.beginPath(); g.arc(cx, cy, R, a, a + item.s); g.stroke();
+        const mid = a + item.s / 2;
+        sides[Math.cos(mid) >= 0 ? "r" : "l"].push({ i, mid });
+        a += item.s + GAP;
+      });
+      (["l", "r"] as const).forEach((sd) => {
+        const arr = sides[sd].sort((x, y) => Math.sin(x.mid) - Math.sin(y.mid));
+        arr.forEach((e, k) => {
+          const dir = sd === "r" ? 1 : -1;
+          const item = st.items[e.i];
+          const pegged = e.i === 0 && item.v >= 300;
+          const px = cx + Math.cos(e.mid) * (R + 5), py = cy + Math.sin(e.mid) * (R + 5);
+          const ly = cy + (k - (arr.length - 1) / 2) * 44;
+          const lx = cx + dir * (R + 34);
+          g.strokeStyle = "rgba(232,230,225,.25)"; g.lineWidth = 1;
+          g.beginPath(); g.moveTo(px, py); g.lineTo(lx - dir * 12, ly); g.lineTo(lx, ly); g.stroke();
+          g.textAlign = dir > 0 ? "left" : "right";
+          g.fillStyle = "#98958f";
+          g.font = '12px "IBM Plex Mono", monospace';
+          g.fillText(item.name.slice(0, 12), lx + dir * 5, ly - 3);
+          g.fillStyle = pegged ? "#e63b2e" : (RAMP[e.i] ?? "#4a4844");
+          g.font = '700 15px "SFU Futura", "IBM Plex Mono", monospace';
+          g.fillText(String(Math.round(item.v)), lx + dir * 5, ly + 13);
+        });
+      });
+    };
+    raf = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  return (
+    <div ref={wrap} style={{ flex: 1, minHeight: 0, position: "relative" }}>
+      <canvas ref={cv} style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }} />
     </div>
   );
 }
@@ -751,7 +825,7 @@ function WidgetStyles() {
       @keyframes rcw-radar-spin { to { transform: rotate(360deg); } }
       .rcw-radar-sweep { position: absolute; inset: 0; clip-path: circle(50%); animation: rcw-radar-spin 4.2s linear infinite;
         background: conic-gradient(from 0deg, rgba(230,59,46,0.28), rgba(230,59,46,0.04) 52deg, transparent 60deg); }
-      .rcw-blip { border-radius: 50%; background: rgb(var(--primary-soft)); transform: translate(-50%, -50%);
+      .rcw-blip { border-radius: 50% !important; background: rgb(var(--primary-soft)); transform: translate(-50%, -50%);
         cursor: pointer; }
       .rcw-blip:hover { background: var(--text); }
       body.rcw-hidden .rcw-radar-sweep, body.rcw-hidden .rcw-w-pulse { animation-play-state: paused !important; }

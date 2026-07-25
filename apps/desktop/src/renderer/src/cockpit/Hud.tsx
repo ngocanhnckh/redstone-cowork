@@ -28,7 +28,6 @@ import AppsModal, { AppIcon } from "./AppsModal";
 import { IconKey } from "./Icons";
 import ContextColumn from "./ContextColumn";
 import AnswerDock from "./AnswerDock";
-import yiaSealUrl from "../assets/yia-seal.png?url";
 import Markdown from "./Markdown";
 import ErrorBoundary from "./ErrorBoundary";
 import ContextGauge from "./ContextGauge";
@@ -265,24 +264,30 @@ function RotatingGlobe({ geo, size = 150 }: { geo: { lat: number; long: number; 
           <rect x={cx} y={cy - R} width={R + 1} height={R * 2} fill="#000" opacity={0.16} />
         </g>
 
-        {/* location ping — the only accent, so it's the clear focal point */}
-        <g opacity={near ? 1 : 0.2} style={{ transition: "opacity .4s" }}>
-          {near && <line x1={mx} y1={my} x2={mx} y2={my - 11} stroke={A} strokeOpacity={0.6} strokeWidth={0.8} />}
-          <circle cx={mx} cy={my} r={7} fill="none" stroke={A} strokeWidth={0.9}>
-            <animate attributeName="r" values="2.5;9;2.5" dur="2.6s" repeatCount="indefinite" />
-            <animate attributeName="opacity" values="0.9;0;0.9" dur="2.6s" repeatCount="indefinite" />
-          </circle>
-          <circle cx={mx} cy={my} r={2.6} fill={A} />
-          <circle cx={mx} cy={my} r={2.6} fill="none" stroke={A} strokeOpacity={0.4} strokeWidth={3} />
+        {/* location marker + leader-line callout (the approved Signal Room look) */}
+        <g opacity={near ? 1 : 0.35} style={{ transition: "opacity .4s" }}>
+          <rect x={mx - 2.4} y={my - 2.4} width={4.8} height={4.8} fill={A} />
+          {(() => {
+            const dir = mx >= cx ? -1 : 1;
+            const ex = mx + dir * 16, ey = my - 15, tx = ex + dir * 9;
+            return (
+              <g>
+                <polyline points={`${mx},${my} ${ex},${ey} ${tx},${ey}`} fill="none" stroke={A} strokeOpacity={0.65} strokeWidth={0.8} />
+                <text x={tx + dir * 3} y={ey - 2} textAnchor={dir > 0 ? "start" : "end"}
+                  style={{ fontFamily: "var(--font-mono)", fontSize: 7.5, letterSpacing: "0.14em", fill: "var(--text)", textTransform: "uppercase" }}>
+                  {(geo?.city ?? "ACQUIRING…").toUpperCase()}
+                </text>
+                {geo && (
+                  <text x={tx + dir * 3} y={ey + 7} textAnchor={dir > 0 ? "start" : "end"}
+                    style={{ fontFamily: "var(--font-mono)", fontSize: 6, letterSpacing: "0.08em", fill: "var(--text-soft)" }}>
+                    {geo.lat.toFixed(2)} / {geo.long.toFixed(2)}
+                  </text>
+                )}
+              </g>
+            );
+          })()}
         </g>
       </svg>
-      <div style={{ marginTop: 7, textAlign: "center", lineHeight: 1.35 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
-          <span style={{ width: 5, height: 5, borderRadius: "50%", background: A, boxShadow: `0 0 6px 1px ${A}` }} />
-          <span style={{ fontSize: 11.5, color: "var(--text-soft)", letterSpacing: "0.02em" }}>{geo ? (geo.city ?? "Unknown location") : "Acquiring…"}</span>
-        </div>
-        {geo && <div className="mono" style={{ fontSize: 9.5, color: "var(--text-faint)", letterSpacing: "0.06em", marginTop: 2 }}>{geo.lat.toFixed(2)}°, {geo.long.toFixed(2)}°</div>}
-      </div>
     </div>
   );
 }
@@ -310,7 +315,7 @@ function ResponsiveGlobe({ geo }: { geo: { lat: number; long: number; city: stri
   );
 }
 
-const card: React.CSSProperties = { border: "1px solid var(--border)", borderRadius: 14, padding: "14px 16px", background: "rgb(var(--primary) / 0.03)", position: "relative", overflow: "hidden" };
+const card: React.CSSProperties = { border: "1px solid var(--border)", borderRadius: 14, padding: "14px 16px", background: "rgba(232,230,225,0.03)", position: "relative", overflow: "hidden" };
 const kicker = (t: string) => <div style={{ marginBottom: 10 }}><Decode text={t} className="mono" style={{ fontSize: 10, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--text-soft)" }} /></div>;
 const metric = (label: string, value: string) => (
   <div><div className="mono faint" style={{ fontSize: 9.5, letterSpacing: "0.1em", textTransform: "uppercase" }}>{label}</div><div style={{ fontSize: 15, fontFamily: "var(--font-mono)" }}>{value}</div></div>
@@ -366,7 +371,51 @@ function HostCard({ t }: { t: HostTelemetryView }) {
           </div>
           <Sparkline data={t.netRxHistory} color="rgb(var(--accent))" height={28} />
         </div>
-        <div style={{ gridColumn: "1 / -1", marginTop: 4 }}><ResponsiveGlobe geo={t.latest.geo} /></div>
+        <div style={{ gridColumn: "1 / -1", marginTop: 4 }}><HostHistory t={t} /></div>
+      </div>
+    </div>
+  );
+}
+
+/** CPU + RAM history as a proper axis chart: y gridlines/labels, cpu in signal
+ *  red with a faint area fill, ram in chalk. RAM history accumulates client-side. */
+function HostHistory({ t }: { t: HostTelemetryView }) {
+  const ramHist = useRef<number[]>([]);
+  const ramPct = t.latest.ramTotal > 0 ? (t.latest.ramUsed / t.latest.ramTotal) * 100 : 0;
+  useEffect(() => {
+    ramHist.current = [...ramHist.current, ramPct].slice(-44);
+  }, [t.latest]);
+  const cpu = t.cpuHistory.slice(-44);
+  const ram = ramHist.current;
+  const W2 = 220, H2 = 62, PL = 22, PB = 12, PT = 3, PW = W2 - PL - 3, PH = H2 - PT - PB;
+  const pts = (arr: number[]) => arr.map((v, i) =>
+    `${(PL + (i / Math.max(1, arr.length - 1)) * PW).toFixed(1)},${(PT + (1 - Math.min(v, 100) / 100) * PH).toFixed(1)}`).join(" ");
+  return (
+    <div>
+      <svg viewBox={`0 0 ${W2} ${H2}`} style={{ width: "100%", height: 62, display: "block" }} preserveAspectRatio="none">
+        {[0, 50, 100].map((v) => {
+          const y = PT + (1 - v / 100) * PH;
+          return (
+            <g key={v}>
+              <line x1={PL} y1={y} x2={W2 - 3} y2={y} stroke="rgba(232,230,225,0.09)" strokeWidth={0.5} />
+              <text x={PL - 4} y={y + 2.5} textAnchor="end" style={{ fontFamily: "var(--font-mono)", fontSize: 6, fill: "var(--text-faint)" }}>{v}</text>
+            </g>
+          );
+        })}
+        {[0.25, 0.5, 0.75].map((f) => (
+          <line key={f} x1={PL + f * PW} y1={PT} x2={PL + f * PW} y2={PT + PH} stroke="rgba(232,230,225,0.06)" strokeWidth={0.5} />
+        ))}
+        {ram.length > 1 && <polyline points={pts(ram)} fill="none" stroke="#e8e6e1" strokeWidth={1} strokeOpacity={0.75} />}
+        {cpu.length > 1 && (
+          <>
+            <polygon points={`${PL},${PT + PH} ${pts(cpu)} ${PL + PW},${PT + PH}`} fill="rgba(230,59,46,0.1)" />
+            <polyline points={pts(cpu)} fill="none" stroke="#e63b2e" strokeWidth={1.1} />
+          </>
+        )}
+      </svg>
+      <div style={{ display: "flex", gap: 14, marginTop: 3 }}>
+        <span className="mono faint" style={{ fontSize: 8, letterSpacing: "0.14em", display: "flex", alignItems: "center", gap: 5 }}><i style={{ width: 8, height: 2, background: "#e63b2e", display: "inline-block" }} />CPU</span>
+        <span className="mono faint" style={{ fontSize: 8, letterSpacing: "0.14em", display: "flex", alignItems: "center", gap: 5 }}><i style={{ width: 8, height: 2, background: "#e8e6e1", display: "inline-block" }} />RAM</span>
       </div>
     </div>
   );
@@ -521,8 +570,8 @@ function TelemetryColumn({ tele }: { tele: HostTelemetryView[] }) {
         </AnimatePresence>
       </motion.div>
 
-      {/* Session-scoped uplink: host IPs + time-on-session + prompt count */}
-      <motion.div variants={RISE}><SessionInfoWidget /></motion.div>
+      {/* Session-scoped uplink: globe + host IPs + time-on-session + prompt count */}
+      <motion.div variants={RISE}><SessionInfoWidget globe={hostTele ? <ResponsiveGlobe geo={hostTele.latest.geo} /> : undefined} /></motion.div>
 
       {/* Operator dossier — sits under the uplink per the Signal Room layout */}
       <motion.div variants={RISE}><AgentIdentityCard /></motion.div>
@@ -537,7 +586,7 @@ function TelemetryColumn({ tele }: { tele: HostTelemetryView[] }) {
             {metric("Sessions", String(fleet.total))}
             {metric("Uptime", fmtDur(fleet.spent))}
           </div>
-          <WaveLine height={30} color="rgb(var(--accent))" />
+          <WaveLine height={30} color="var(--text-soft)" />
         </motion.div>
       </div>
 
@@ -589,8 +638,8 @@ function WeekWidget() {
   }, []);
   const tile = (n: string, k: string) => (
     <div style={{ minWidth: 0 }}>
-      <div className="display" style={{ fontSize: 22, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{n}</div>
-      <div className="mono faint" style={{ fontSize: 9, letterSpacing: "0.12em", textTransform: "uppercase", marginTop: 3 }}>{k}</div>
+      <div className="display" style={{ fontSize: 14, lineHeight: 1, letterSpacing: "0.01em", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{n}</div>
+      <div className="mono faint" style={{ fontSize: 8, letterSpacing: "0.1em", textTransform: "uppercase", marginTop: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{k}</div>
     </div>
   );
   return (
@@ -1775,7 +1824,7 @@ function HudConsole() {
             {VIEW_ORDER.map((v) => (
               <button key={v} onClick={() => setView(v)} style={{
                 padding: "5px 11px", borderRadius: 8, fontFamily: "var(--font-mono)", fontSize: 10.5, cursor: "pointer", border: 0, whiteSpace: "nowrap",
-                background: view === v ? "rgb(var(--primary) / 0.28)" : "transparent", color: view === v ? "#fff" : "var(--text-soft)",
+                background: view === v ? "rgba(232,230,225,0.28)" : "transparent", color: view === v ? "#fff" : "var(--text-soft)",
               }}>{VIEWS[v].label}</button>
             ))}
           </div>
@@ -1786,7 +1835,7 @@ function HudConsole() {
           {(["grid", "windows"] as HudLayout[]).map((l) => (
             <button key={l} onClick={() => setLayout(l)} title={l === "grid" ? "Tiled grid" : "Free-floating windows"} style={{
               padding: "5px 11px", borderRadius: 8, fontFamily: "var(--font-mono)", fontSize: 10.5, cursor: "pointer", border: 0, whiteSpace: "nowrap",
-              background: layout === l ? "rgb(var(--primary) / 0.28)" : "transparent", color: layout === l ? "#fff" : "var(--text-soft)",
+              background: layout === l ? "rgba(232,230,225,0.28)" : "transparent", color: layout === l ? "#fff" : "var(--text-soft)",
             }}>{l === "grid" ? "Grid" : "Windows"}</button>
           ))}
         </div>
@@ -1797,7 +1846,7 @@ function HudConsole() {
             className="hud-chrome"
             style={{
               padding: "5px 11px", borderRadius: 999, fontFamily: "var(--font-mono)", fontSize: 10.5, cursor: "pointer", whiteSpace: "nowrap",
-              border: "1px solid var(--border)", background: tplMenu ? "rgb(var(--primary) / 0.22)" : "transparent", color: "var(--text-soft)",
+              border: "1px solid var(--border)", background: tplMenu ? "rgba(232,230,225,0.22)" : "transparent", color: "var(--text-soft)",
             }}>▤ Layouts</button>
           {tplMenu && (
             <>
@@ -2041,7 +2090,7 @@ function dockBtnStyle(open: boolean, front: boolean): React.CSSProperties {
     display: "flex", flexDirection: "column", alignItems: "center", gap: 4, width: 46, padding: "6px 0 3px",
     borderRadius: 12, cursor: "pointer", fontFamily: "var(--font-mono)",
     border: front ? "1px solid rgb(var(--accent) / 0.55)" : "1px solid transparent",
-    background: front ? "rgb(var(--primary) / 0.22)" : open ? "rgb(var(--primary) / 0.10)" : "transparent",
+    background: front ? "rgba(232,230,225,0.22)" : open ? "rgba(232,230,225,0.10)" : "transparent",
     color: open ? "var(--text)" : "var(--text-soft)", opacity: open ? 1 : 0.6,
     transition: "background .18s, opacity .18s, border-color .18s",
   };
@@ -2129,9 +2178,6 @@ export default function Hud() {
   return (
     <div ref={rootRef} className="hud-root" style={{ flex: 1, minHeight: 0, position: "relative", overflow: "hidden" }}>
       <HudStyles />
-      <span className="hud-grid" />
-      {/* Huge faint agency seal watermark behind the whole HUD. */}
-      <img className="hud-seal" src={yiaSealUrl} alt="" aria-hidden="true" />
       {/* Futuristic pop-up alerts when a background session finishes / needs an answer */}
       <CompletionNotifier />
       <OverdueAlert />
@@ -2170,14 +2216,6 @@ function HudStyles() {
   return (
     <style>{`
       /* Static faint grid — no panning; liveness comes from real data movement. */
-      .hud-grid { position:absolute; inset:0; pointer-events:none; opacity:0.5;
-        background-image:
-          linear-gradient(rgb(var(--primary-soft) / 0.05) 1px, transparent 1px),
-          linear-gradient(90deg, rgb(var(--primary-soft) / 0.05) 1px, transparent 1px);
-        background-size: 44px 44px; }
-      /* Oversized agency seal watermark, centred behind everything — static. */
-      .hud-seal { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
-        width:min(78vh, 62vw); height:auto; z-index:0; pointer-events:none; opacity:0.05; }
       .hud-blink { animation: hud-blink 1.1s steps(1) infinite; }
       @keyframes hud-blink { 50% { opacity: 0; } }
       .hud-pulse { animation: hud-pulse 1.4s ease-in-out infinite; }
@@ -2190,7 +2228,6 @@ function HudStyles() {
       /* Park every infinite decorative animation while the window is hidden or
          minimized — otherwise the full-viewport .hud-grid pan alone keeps the
          compositor repainting tiles forever. Toggled from Hud's visibilitychange. */
-      body.rcw-hidden .hud-grid,
       body.rcw-hidden .hud-scan,
       body.rcw-hidden .hud-float,
       body.rcw-hidden .hud-panel-shimmer,
@@ -2211,8 +2248,8 @@ function HudStyles() {
         color: rgb(var(--primary-soft) / 0.8); border:1px solid var(--border); border-radius:7px;
         background: rgb(var(--surface) / 0.7); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
         transition: background .16s, color .16s, box-shadow .16s; }
-      .hud-edge-toggle:hover { color:#fff; background: rgb(var(--primary) / 0.28); box-shadow: 0 0 16px -4px rgb(var(--primary) / 0.6); }
-      .hud-rail-row:hover { background: rgb(var(--primary) / 0.09) !important; }
+      .hud-edge-toggle:hover { color:#fff; background: rgba(232,230,225,0.28); box-shadow: 0 0 16px -4px rgba(232,230,225,0.6); }
+      .hud-rail-row:hover { background: rgba(232,230,225,0.09) !important; }
       .hud-term .hud-scanlines { position:absolute; inset:0; pointer-events:none; z-index:0; opacity:0.35;
         background: repeating-linear-gradient(to bottom, transparent 0, transparent 2px, rgb(var(--primary-soft) / 0.03) 3px, transparent 4px);
         animation: hud-scan 6s linear infinite; }

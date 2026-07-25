@@ -184,7 +184,7 @@ export default function SettingsPanel() {
                 style={{
                   flex: 1, padding: "7px 0", fontSize: 12.5, fontWeight: 600, textAlign: "center", cursor: "pointer",
                   borderRadius: 8, border: 0,
-                  background: mode === m ? "rgb(var(--primary) / 0.28)" : "transparent",
+                  background: mode === m ? "rgba(232,230,225,0.28)" : "transparent",
                   color: mode === m ? "#fff" : "var(--text-soft)",
                 }}
               >
@@ -255,7 +255,7 @@ export default function SettingsPanel() {
                 padding: "10px 8px", fontSize: 12.5, fontWeight: 600, cursor: "pointer", borderRadius: 9,
                 display: "flex", flexDirection: "column", gap: 2, alignItems: "center",
                 border: appr.theme === t.id ? "1px solid rgb(var(--accent) / 0.6)" : "1px solid var(--border)",
-                background: appr.theme === t.id ? "rgb(var(--primary) / 0.28)" : "transparent",
+                background: appr.theme === t.id ? "rgba(232,230,225,0.28)" : "transparent",
                 color: appr.theme === t.id ? "#fff" : "var(--text-soft)",
               }}
             >
@@ -322,7 +322,7 @@ export default function SettingsPanel() {
                 padding: "10px 8px", fontSize: 12.5, fontWeight: 600, cursor: "pointer", borderRadius: 9,
                 display: "flex", flexDirection: "column", gap: 2, alignItems: "center",
                 border: appr.font === f.id ? "1px solid rgb(var(--accent) / 0.6)" : "1px solid var(--border)",
-                background: appr.font === f.id ? "rgb(var(--primary) / 0.28)" : "transparent",
+                background: appr.font === f.id ? "rgba(232,230,225,0.28)" : "transparent",
                 color: appr.font === f.id ? "#fff" : "var(--text-soft)",
               }}
             >
@@ -378,7 +378,7 @@ export default function SettingsPanel() {
               style={{
                 padding: "8px 4px", fontSize: 11, fontWeight: 600, cursor: "pointer", borderRadius: 9,
                 border: appr.dockPos === pos ? "1px solid rgb(var(--accent) / 0.6)" : "1px solid var(--border)",
-                background: appr.dockPos === pos ? "rgb(var(--primary) / 0.28)" : "transparent",
+                background: appr.dockPos === pos ? "rgba(232,230,225,0.28)" : "transparent",
                 color: appr.dockPos === pos ? "#fff" : "var(--text-soft)",
               }}
             >
@@ -602,7 +602,7 @@ function KeyboardShortcuts() {
                   style={{
                     minWidth: 96, textAlign: "center", padding: "5px 12px", fontSize: 12, cursor: "pointer",
                     borderRadius: 8, border: `1px solid ${rec ? "rgb(var(--primary-soft))" : "var(--border-strong)"}`,
-                    background: rec ? "rgb(var(--primary) / 0.22)" : "rgba(255,255,255,0.03)",
+                    background: rec ? "rgba(232,230,225,0.22)" : "rgba(255,255,255,0.03)",
                     color: rec ? "var(--text)" : "var(--text-soft)",
                   }}
                 >
@@ -631,7 +631,7 @@ function SwitchRow({ label, hint, on, onToggle }: { label: string; hint?: string
         aria-checked={on}
         style={{
           flexShrink: 0, width: 42, height: 24, borderRadius: 999, border: "1px solid var(--border-strong)",
-          background: on ? "rgb(var(--primary) / 0.55)" : "rgba(255,255,255,0.05)", cursor: "pointer",
+          background: on ? "rgba(232,230,225,0.55)" : "rgba(255,255,255,0.05)", cursor: "pointer",
           position: "relative", transition: "background .18s", marginTop: 1,
         }}
       >

@@ -220,7 +220,7 @@ export default function MultiBrowser({ sessionId, cwd, machine, visible }: { ses
           return (
             <span key={tab.id} onClick={() => setActive(tab.id)} title={tip}
               style={{ ...tabBtn, maxWidth: 180,
-                background: on ? (tab.temp ? "rgb(168 130 255 / 0.20)" : "rgb(var(--primary) / 0.22)") : "transparent",
+                background: on ? (tab.temp ? "rgb(168 130 255 / 0.20)" : "rgba(232,230,225,0.22)") : "transparent",
                 color: on ? "var(--text)" : "var(--text-soft)",
                 borderColor: on ? (tab.temp ? "rgb(168 130 255 / 0.5)" : "rgb(var(--primary-soft) / 0.4)") : "transparent" }}>
               {tab.temp
@@ -259,7 +259,7 @@ export default function MultiBrowser({ sessionId, cwd, machine, visible }: { ses
           <IconCrop size={15} />
         </button>
         <button onClick={() => setMenuOpen((v) => !v)} title="Browser tools" aria-expanded={menuOpen}
-          style={{ ...ctrlBtn, flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 7px", background: menuOpen ? "rgb(var(--primary) / 0.18)" : "transparent", color: menuOpen ? "var(--text)" : "var(--text-soft)" }}>
+          style={{ ...ctrlBtn, flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 7px", background: menuOpen ? "rgba(232,230,225,0.18)" : "transparent", color: menuOpen ? "var(--text)" : "var(--text-soft)" }}>
           <IconMenu size={15} />
         </button>
       </div>

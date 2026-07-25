@@ -38,8 +38,6 @@ const THEME = {
 const TERM_CSS = `
 .rcw-term-wrap { position:relative; }
 .rcw-term-grid { position:absolute; inset:0; z-index:1; pointer-events:none; opacity:.5;
-  background-image: linear-gradient(rgb(var(--primary-soft) / 0.05) 1px, transparent 1px), linear-gradient(90deg, rgb(var(--primary-soft) / 0.05) 1px, transparent 1px);
-  background-size: 32px 32px;
   mask-image: radial-gradient(120% 100% at 50% 0%, #000 55%, transparent 100%);
   -webkit-mask-image: radial-gradient(120% 100% at 50% 0%, #000 55%, transparent 100%); }
 .rcw-term-wrap .xterm { position:relative; z-index:2; }
@@ -347,7 +345,7 @@ export default function TerminalPanel({
             padding: "10px 16px 12px",
             // Glass instead of a flat black box; the transparent xterm bg lets a faint
             // cyan wash + the frame layers show through.
-            background: "rgb(var(--primary) / 0.05)",
+            background: "rgba(232,230,225,0.05)",
             overflow: "hidden",
           }}
         />

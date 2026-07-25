@@ -208,7 +208,7 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
                       borderRadius: 999,
                       border: 0,
                       cursor: "pointer",
-                      background: m === current ? "rgb(var(--primary) / 0.32)" : "transparent",
+                      background: m === current ? "rgba(232,230,225,0.32)" : "transparent",
                       color: m === current ? "#fff" : "var(--text-soft)",
                       transition: "background 0.15s, color 0.15s",
                     }}
