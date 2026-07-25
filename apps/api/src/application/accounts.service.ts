@@ -118,12 +118,15 @@ export class AccountsService implements OnModuleInit {
     return { token, account };
   }
 
-  /** Idle window: a token with no request for this long expires (default 30 min).
-   *  While the app is open and focused it polls constantly, so an active session
-   *  never idles out — only time genuinely away from the app counts. */
+  /** Idle window: a token with no request for this long expires. Default 7 days —
+   *  a desktop cockpit sleeps overnight / over lunch and its Mac suspends the poll
+   *  loop, so a 30-min window logged people out constantly and (account mode has no
+   *  refresh token) wedged all writes until a manual re-unlock. The window slides on
+   *  every request, so an actively-used session effectively never expires. Override
+   *  with ACCOUNT_IDLE_MINUTES for stricter shared-machine deployments. */
   static idleMs(): number {
     const min = Number(process.env.ACCOUNT_IDLE_MINUTES);
-    return (Number.isFinite(min) && min > 0 ? min : 30) * 60_000;
+    return (Number.isFinite(min) && min > 0 ? min : 7 * 24 * 60) * 60_000;
   }
 
   /** Resolve a bearer to its account (null = unknown / revoked / disabled / idled out).
