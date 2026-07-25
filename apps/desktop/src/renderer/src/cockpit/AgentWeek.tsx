@@ -162,7 +162,7 @@ export default function AgentWeek({ isAdmin }: { isAdmin: boolean }) {
       )}
 
       <div className="aow-weights">
-        Fair-weighted score — <b>Jira {Math.round((data?.weights.jira ?? .45) * 100)}%</b> · <b>Commits {Math.round((data?.weights.commits ?? .35) * 100)}%</b> · <b>Tokens {Math.round((data?.weights.tokens ?? .2) * 100)}%</b>, each scored against the roster's best.
+        Fair-weighted score — <b>Jira {Math.round((data?.weights.jira ?? .6) * 100)}%</b> · <b>Commits {Math.round((data?.weights.commits ?? .25) * 100)}%</b> · <b>Tokens {Math.round((data?.weights.tokens ?? .15) * 100)}%</b>, each scored against the roster's best.
       </div>
 
       {err && <div style={{ color: "#ff9d94", fontSize: 12, marginBottom: 10 }}>⚠ {err}</div>}

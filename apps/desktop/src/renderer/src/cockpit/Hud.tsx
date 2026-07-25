@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence, type Variants } from "motion/react";
 import { useStore } from "../store";
 import { HostTelemetryView } from "../types";
@@ -173,63 +173,88 @@ function Decode({ text, className, style }: { text: string; className?: string; 
   return <span className={className} style={style}>{out}</span>;
 }
 
-/** Equirectangular mini-map with a pulsing dot at the host's location. */
 /**
- * A wireframe globe that actually rotates: meridian ellipses whose horizontal
- * radius cycles each frame (classic spinning-wireframe look), latitude rings, and
- * a location marker that orbits with the globe — brightening on the near face and
- * dimming as it swings around the back.
+ * A lit, atmosphere-wrapped holo-globe that rotates. One hue only — the theme's primary
+ * builds the sphere (radial shading for real depth), a dotted graticule (dashed meridians
+ * + latitude rings, front bright / back dim) gives the "digital globe" texture, and a soft
+ * outer halo grounds it in the glass HUD. The single spot of `--accent` is the location
+ * ping, so the eye goes straight to it. No busy orbit/satellite competing for attention.
  */
 function RotatingGlobe({ geo, size = 150 }: { geo: { lat: number; long: number; city: string | null } | null; size?: number }) {
-  const t = useAnimationTick(0.012);
-  const R = size / 2 - 4, cx = size / 2, cy = size / 2;
-  const MERIDIANS = 6;
-  // Marker: its longitude sweeps with rotation; sin(lon-t) < 0 ⇒ on the far side.
+  const t = useAnimationTick(0.01);
+  const R = size / 2 - 7, cx = size / 2, cy = size / 2;
+  const MERIDIANS = 7;
+  const uid = useId();
+  // Marker: its longitude sweeps with rotation; cos(lon-t) < 0 ⇒ on the far (back) side.
   const latRad = geo ? (geo.lat * Math.PI) / 180 : 0.4;
   const lonRad = geo ? (geo.long * Math.PI) / 180 : 0;
   const mLon = lonRad - t;
   const near = Math.cos(mLon) > 0;
   const mx = cx + R * Math.cos(latRad) * Math.sin(mLon);
   const my = cy - R * Math.sin(latRad);
+  const P = "rgb(var(--primary))", PS = "rgb(var(--primary-soft))", A = "rgb(var(--accent))";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-      <svg viewBox={`0 0 ${size} ${size}`} style={{ width: size, height: size, display: "block", filter: "drop-shadow(0 0 12px rgb(var(--primary-soft) / 0.15))" }}>
+      <svg viewBox={`0 0 ${size} ${size}`} style={{ width: size, height: size, display: "block", overflow: "visible" }}>
         <defs>
-          <radialGradient id="globeglow" cx="42%" cy="38%" r="70%">
-            <stop offset="0%" stopColor="rgb(var(--primary-soft) / 0.18)" />
+          {/* lit sphere: highlight up-left, deep limb bottom-right → reads as a 3D ball */}
+          <radialGradient id={`sph-${uid}`} cx="36%" cy="30%" r="78%">
+            <stop offset="0%" stopColor={PS} stopOpacity={0.28} />
+            <stop offset="46%" stopColor={P} stopOpacity={0.08} />
+            <stop offset="100%" stopColor="#000" stopOpacity={0.42} />
+          </radialGradient>
+          {/* thin atmosphere just outside the limb */}
+          <radialGradient id={`atmo-${uid}`} cx="50%" cy="50%" r="50%">
+            <stop offset="72%" stopColor="transparent" />
+            <stop offset="90%" stopColor={PS} stopOpacity={0.22} />
             <stop offset="100%" stopColor="transparent" />
           </radialGradient>
+          {/* soft clip so the day/night wash stays on the sphere */}
+          <clipPath id={`clip-${uid}`}><circle cx={cx} cy={cy} r={R} /></clipPath>
         </defs>
-        <circle cx={cx} cy={cy} r={R} fill="url(#globeglow)" stroke="rgb(var(--primary-soft) / 0.55)" strokeWidth={1} />
-        {/* latitude rings (static) */}
-        {[-0.6, -0.3, 0, 0.3, 0.6].map((f, i) => {
-          const ry = R * Math.cos((f * Math.PI) / 2) * 0.001 + R * 0.16 * (2 - Math.abs(f) * 2);
-          const yy = cy - R * f;
-          const rx = R * Math.sqrt(Math.max(0, 1 - f * f));
-          return <ellipse key={`lat${i}`} cx={cx} cy={yy} rx={rx} ry={Math.max(2, ry)} fill="none" stroke="rgb(var(--primary-soft) / 0.28)" strokeWidth={0.6} />;
-        })}
-        {/* meridians (rotating) */}
-        {Array.from({ length: MERIDIANS }, (_, i) => {
-          const phase = t + (i * Math.PI) / MERIDIANS;
-          const rx = Math.abs(R * Math.cos(phase));
-          const front = Math.sin(phase) > 0;
-          return <ellipse key={`mer${i}`} cx={cx} cy={cy} rx={Math.max(0.5, rx)} ry={R} fill="none" stroke="rgb(var(--primary-soft))" strokeWidth={0.7} opacity={front ? 0.5 : 0.18} />;
-        })}
-        {/* orbit ring + moving satellite tick */}
-        <ellipse cx={cx} cy={cy} rx={R + 6} ry={(R + 6) * 0.34} fill="none" stroke="rgb(var(--accent) / 0.35)" strokeWidth={0.7} strokeDasharray="2 3" transform={`rotate(-18 ${cx} ${cy})`} />
-        {(() => { const a = t * 1.6; const ox = cx + (R + 6) * Math.cos(a); const oy = cy + (R + 6) * 0.34 * Math.sin(a); return <circle cx={ox} cy={oy} r={1.8} fill="rgb(var(--accent))" transform={`rotate(-18 ${cx} ${cy})`} />; })()}
-        {/* location marker */}
-        <g opacity={near ? 1 : 0.25}>
-          <circle cx={mx} cy={my} r={7} fill="none" stroke="rgb(var(--accent))" strokeWidth={0.8}>
-            <animate attributeName="r" values="3;9;3" dur="2.4s" repeatCount="indefinite" />
-            <animate attributeName="opacity" values="0.8;0;0.8" dur="2.4s" repeatCount="indefinite" />
+
+        {/* atmosphere halo */}
+        <circle cx={cx} cy={cy} r={R + 5} fill={`url(#atmo-${uid})`} />
+        {/* sphere body */}
+        <circle cx={cx} cy={cy} r={R} fill={`url(#sph-${uid})`} stroke={P} strokeOpacity={0.4} strokeWidth={1} />
+
+        <g clipPath={`url(#clip-${uid})`}>
+          {/* latitude rings — dotted, subtle */}
+          {[-0.66, -0.34, 0, 0.34, 0.66].map((f, i) => {
+            const yy = cy - R * f;
+            const rx = R * Math.sqrt(Math.max(0, 1 - f * f));
+            const ry = Math.max(1.5, rx * 0.17);
+            return <ellipse key={`lat${i}`} cx={cx} cy={yy} rx={rx} ry={ry} fill="none" stroke={PS} strokeOpacity={0.26} strokeWidth={0.75} strokeDasharray="0.5 3.2" strokeLinecap="round" />;
+          })}
+          {/* meridians — dotted, rotating, front brighter than back */}
+          {Array.from({ length: MERIDIANS }, (_, i) => {
+            const phase = t + (i * Math.PI) / MERIDIANS;
+            const rx = Math.abs(R * Math.cos(phase));
+            const front = Math.sin(phase) > 0;
+            return <ellipse key={`mer${i}`} cx={cx} cy={cy} rx={Math.max(0.5, rx)} ry={R} fill="none" stroke={PS} strokeWidth={0.75} strokeDasharray="0.5 3.2" strokeLinecap="round" opacity={front ? 0.5 : 0.16} />;
+          })}
+          {/* day/night: a soft dark wash creeping in from the shaded limb */}
+          <rect x={cx} y={cy - R} width={R + 1} height={R * 2} fill="#000" opacity={0.16} />
+        </g>
+
+        {/* location ping — the only accent, so it's the clear focal point */}
+        <g opacity={near ? 1 : 0.2} style={{ transition: "opacity .4s" }}>
+          {near && <line x1={mx} y1={my} x2={mx} y2={my - 11} stroke={A} strokeOpacity={0.6} strokeWidth={0.8} />}
+          <circle cx={mx} cy={my} r={7} fill="none" stroke={A} strokeWidth={0.9}>
+            <animate attributeName="r" values="2.5;9;2.5" dur="2.6s" repeatCount="indefinite" />
+            <animate attributeName="opacity" values="0.9;0;0.9" dur="2.6s" repeatCount="indefinite" />
           </circle>
-          <circle cx={mx} cy={my} r={2.6} fill="rgb(var(--accent))" />
+          <circle cx={mx} cy={my} r={2.6} fill={A} />
+          <circle cx={mx} cy={my} r={2.6} fill="none" stroke={A} strokeOpacity={0.4} strokeWidth={3} />
         </g>
       </svg>
-      <div className="mono faint" style={{ fontSize: 10, marginTop: 4, textAlign: "center" }}>
-        {geo ? <>{geo.city ?? "unknown"}<br />{geo.lat.toFixed(2)}°, {geo.long.toFixed(2)}°</> : "location: acquiring…"}
+      <div style={{ marginTop: 7, textAlign: "center", lineHeight: 1.35 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
+          <span style={{ width: 5, height: 5, borderRadius: "50%", background: A, boxShadow: `0 0 6px 1px ${A}` }} />
+          <span style={{ fontSize: 11.5, color: "var(--text-soft)", letterSpacing: "0.02em" }}>{geo ? (geo.city ?? "Unknown location") : "Acquiring…"}</span>
+        </div>
+        {geo && <div className="mono" style={{ fontSize: 9.5, color: "var(--text-faint)", letterSpacing: "0.06em", marginTop: 2 }}>{geo.lat.toFixed(2)}°, {geo.long.toFixed(2)}°</div>}
       </div>
     </div>
   );

@@ -25,10 +25,10 @@ export type AgentOfWeek = {
   weights: { jira: number; commits: number; tokens: number };
   entries: WeekEntry[];
 };
-// Weighting: delivered Jira outcomes count most, then commits (activity), then tokens
+// Weighting: delivered Jira outcomes dominate, then commits (activity), then tokens
 // (effort — easily inflated, so it's the lightest touch). Each metric is scored relative
 // to the roster's best performer, so the numbers are a fair like-for-like comparison.
-const WEEK_WEIGHTS = { jira: 0.45, commits: 0.35, tokens: 0.2 };
+const WEEK_WEIGHTS = { jira: 0.6, commits: 0.25, tokens: 0.15 };
 const pad2 = (n: number) => String(n).padStart(2, "0");
 const jqlDate = (d: Date) => `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())} ${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`;
 const isoDay = (d: Date) => `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`;
