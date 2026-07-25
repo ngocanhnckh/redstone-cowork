@@ -134,6 +134,11 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
   const [folderSess, setFolderSess] = useState<FolderSess[]>([]);
   const [loadingSess, setLoadingSess] = useState(false);
   const [resumeId, setResumeId] = useState<string | null>(null);
+  // Host-wide recent conversations (across all folders) shown on the RESUME step.
+  type HostConvo = { id: string; cwd: string; mtime: number; title: string };
+  const [convos, setConvos] = useState<HostConvo[]>([]);
+  const [loadingConvos, setLoadingConvos] = useState(false);
+  const [convoQuery, setConvoQuery] = useState("");
 
   const [provision, setProvision] = useState<{ installCommand: string; installCommandRelay: string } | null>(null);
   const [inv, setInv] = useState<{ hosts: HostRow[]; sessions: Discovered[] }>({ hosts: [], sessions: [] });
@@ -242,8 +247,23 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
   // Authoritative install signal comes from the API (`reporting`); fall back to a local match.
   const redstoneInstalled = !!server?.reporting || !!host;
 
-  // On the folder step, look up resumable past conversations in the chosen folder.
+  // On the RESUME step, list ALL recent resumable conversations on the host.
   const folderMachine = host?.machine ?? server?.host ?? server?.name ?? "";
+  useEffect(() => {
+    if (step !== "session" || !folderMachine) return;
+    let alive = true; setLoadingConvos(true);
+    window.cowork.hostConversations({ machine: folderMachine })
+      .then((r) => { if (alive) setConvos(r); })
+      .catch(() => { if (alive) setConvos([]); })
+      .finally(() => { if (alive) setLoadingConvos(false); });
+    return () => { alive = false; };
+  }, [step, folderMachine]);
+  // Pick a past conversation → resume it in its own folder (skip the folder browser).
+  const pickConversation = (c: HostConvo) => {
+    setResume(null); setCreateNew(true); setFolder(c.cwd); setResumeId(c.id);
+    log(`Resuming “${c.title || c.id.slice(0, 8)}” in ${c.cwd}`);
+    go("mode");
+  };
   useEffect(() => {
     if (step !== "folder" || resume || !folder || !folder.startsWith("/") || !folderMachine) { setFolderSess([]); return; }
     let alive = true; setLoadingSess(true); setResumeId(null);
@@ -412,13 +432,29 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
               <div className={`rcw-nw-opt ${createNew ? "sel" : ""}`} onClick={() => { setCreateNew(true); setResume(null); go("folder"); }}>
                 <b style={{ color: "#e6f2f4" }}>＋ New session</b> <span className="faint">— browse to a folder & pick a mode →</span>
               </div>
-              {hostSessions.length > 0 && <div className="rcw-nw-label">RESUME A RUNNING SESSION <span style={{ opacity: .6, letterSpacing: 0 }}>— click to open it in your cockpit</span></div>}
+              {hostSessions.length > 0 && <div className="rcw-nw-label">RUNNING NOW <span style={{ opacity: .6, letterSpacing: 0 }}>— click to open it in your cockpit</span></div>}
               {hostSessions.slice(0, 40).map((s) => (
                 <div key={s.id} className="rcw-nw-opt" onClick={() => resumeInCockpit(s)}>
-                  <b style={{ color: "#e6f2f4" }}>{s.folder}</b> <span className="faint">{s.title ?? s.cwd}</span>
+                  <b style={{ color: "#7fd18b" }}>● {s.folder}</b> <span className="faint">{s.title ?? s.cwd}</span>
                 </div>
               ))}
-              {!hostSessions.length && <div className="faint" style={{ fontSize: 11 }}>No prior Claude sessions found here yet — start a new one above.</div>}
+
+              <div className="rcw-nw-label">RESUME A PAST CONVERSATION {loadingConvos && <span style={{ opacity: .6, letterSpacing: 0 }}>· loading…</span>}</div>
+              {convos.length > 8 && (
+                <input className="rcw-nw-input" value={convoQuery} onChange={(e) => setConvoQuery(e.target.value)} placeholder="🔍 filter by folder or title…" style={{ marginBottom: 8 }} spellCheck={false} />
+              )}
+              {!loadingConvos && convos.length === 0 && <div className="faint" style={{ fontSize: 11 }}>No past Claude conversations found on this host.</div>}
+              <div className="no-scrollbar" style={{ maxHeight: 260, overflowY: "auto" }}>
+                {convos
+                  .filter((c) => { const q = convoQuery.trim().toLowerCase(); return !q || c.cwd.toLowerCase().includes(q) || (c.title || "").toLowerCase().includes(q); })
+                  .slice(0, 60)
+                  .map((c) => (
+                    <div key={c.id} className="rcw-nw-opt" onClick={() => pickConversation(c)} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                      <span><b style={{ color: "#e6f2f4", fontWeight: 500 }}>↻ {c.title || "(untitled conversation)"}</b></span>
+                      <span className="faint" style={{ fontSize: 10.5 }}>{c.cwd} · {new Date(c.mtime * 1000).toLocaleString()}</span>
+                    </div>
+                  ))}
+              </div>
             </>
           )}
 

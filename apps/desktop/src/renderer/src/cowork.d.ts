@@ -48,6 +48,7 @@ declare global {
       serverInstall(a: { host: string; sshUser: string; sshPort: number; command: string; password?: string; savePassword?: boolean }): Promise<{ ok: boolean; authFailed?: boolean; output: string; error?: string }>;
       sessionLaunch(a: { host: string; sshUser: string; sshPort: number; folder: string; danger: boolean; resumeId?: string; password?: string; savePassword?: boolean }): Promise<{ ok: boolean; authFailed?: boolean; session: string | null; output: string; error?: string }>;
       folderSessions(a: { machine: string; folder: string }): Promise<Array<{ id: string; mtime: number; title: string; messages: number }>>;
+      hostConversations(a: { machine: string }): Promise<Array<{ id: string; cwd: string; mtime: number; title: string }>>;
       serverInstallCommand(): Promise<{ serverUrl: string; command: string; commandRelay: string }>;
       sshSetCustom(a: { address: string; host: string; opts: string[] }): Promise<{ ok: boolean }>;
       onServerInstallData(cb: (chunk: string) => void): () => void;

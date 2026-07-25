@@ -35,6 +35,7 @@ contextBridge.exposeInMainWorld("cowork", {
   serverInstall: (a: { host: string; sshUser: string; sshPort: number; command: string; password?: string; savePassword?: boolean }): Promise<{ ok: boolean; authFailed?: boolean; output: string; error?: string }> => ipcRenderer.invoke(IPC.serverInstall, a),
   sessionLaunch: (a: { host: string; sshUser: string; sshPort: number; folder: string; danger: boolean; resumeId?: string; password?: string; savePassword?: boolean }): Promise<{ ok: boolean; authFailed?: boolean; session: string | null; output: string; error?: string }> => ipcRenderer.invoke(IPC.sessionLaunch, a),
   folderSessions: (a: { machine: string; folder: string }): Promise<Array<{ id: string; mtime: number; title: string; messages: number }>> => ipcRenderer.invoke(IPC.folderSessions, a),
+  hostConversations: (a: { machine: string }): Promise<Array<{ id: string; cwd: string; mtime: number; title: string }>> => ipcRenderer.invoke(IPC.hostConversations, a),
   serverInstallCommand: (): Promise<{ serverUrl: string; command: string; commandRelay: string }> => ipcRenderer.invoke(IPC.serverInstallCommand),
   sshSetCustom: (a: { address: string; host: string; opts: string[] }): Promise<{ ok: boolean }> => ipcRenderer.invoke(IPC.sshSetCustom, a),
   onServerInstallData: (cb: (chunk: string) => void): (() => void) => {
