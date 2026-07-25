@@ -1,6 +1,6 @@
 {
   "name": "@rcw/desktop",
-  "version": "0.5.34",
+  "version": "0.5.35",
   "private": true,
   "type": "module",
   "main": "./out/main/index.js",
