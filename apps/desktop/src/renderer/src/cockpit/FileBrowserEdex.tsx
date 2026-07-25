@@ -66,8 +66,13 @@ const CSS = `
 .rcw-fb-grid { flex:1; min-height:0; overflow-y:auto; padding:12px; display:grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap:10px; align-content:start; position:relative; }
 .rcw-fb-scan { position:absolute; left:0; right:0; height:2px; z-index:2; pointer-events:none; opacity:.6;
   background: linear-gradient(90deg, transparent, rgb(var(--primary-soft) / 0.6), transparent); box-shadow:0 0 14px 2px rgb(var(--primary-soft)/0.35); animation: rcw-fb-scan .7s linear; }
-.rcw-fb-tile { display:flex; flex-direction:column; align-items:center; gap:7px; padding:14px 8px 11px; border-radius:11px; cursor:pointer;
+.rcw-fb-tile { position:relative; display:flex; flex-direction:column; align-items:center; gap:7px; padding:14px 8px 11px; border-radius:11px; cursor:pointer;
   border:1px solid var(--border); background: rgb(var(--primary) / 0.04); transition: transform .12s, border-color .12s, box-shadow .12s; animation: rcw-fb-in .2s both; }
+.rcw-fb-dl { position:absolute; top:5px; right:5px; width:22px; height:22px; padding:0; display:grid; place-items:center; opacity:0;
+  border-radius:6px; border:1px solid var(--border); background: color-mix(in srgb, var(--app-panel) 82%, transparent); color: rgb(var(--primary-soft));
+  font-family:var(--font-mono); font-size:12px; line-height:1; cursor:pointer; transition: opacity .12s, background .12s, transform .12s; }
+.rcw-fb-tile:hover .rcw-fb-dl { opacity:.85; }
+.rcw-fb-dl:hover { opacity:1; background: rgb(var(--primary) / 0.28); transform: translateY(-1px); }
 .rcw-fb-tile:hover { transform: translateY(-2px); border-color: rgb(var(--primary) / 0.5); box-shadow: 0 0 22px -8px rgb(var(--primary) / 0.7); }
 .rcw-fb-tile.dir { border-color: rgb(var(--accent) / 0.28); }
 .rcw-fb-tile.dir:hover { border-color: rgb(var(--accent) / 0.6); box-shadow: 0 0 22px -8px rgb(var(--accent) / 0.7); }
@@ -201,10 +206,11 @@ export default function FileBrowserEdex({ cwd, machine, active = true }: { sessi
     }
   }
 
-  async function doDownload(entry: DirEntry) {
+  async function doDownload(path: string, name: string) {
+    setMenu(null);
     try {
-      const res = await window.cowork.downloadFile({ cwd, machine, file: entry.path });
-      if (res.ok) setToast(`Downloaded ${entry.name}`);
+      const res = await window.cowork.downloadFile({ cwd, machine, file: path });
+      if (res.ok) setToast(`Downloaded ${name}`);
       else if (!res.canceled) setToast(res.error ?? "Download failed");
     } catch (e) {
       setToast(e instanceof Error ? e.message : String(e));
@@ -319,6 +325,9 @@ export default function FileBrowserEdex({ cwd, machine, active = true }: { sessi
                 <span className="rcw-fb-ico" style={{ color: ico.c }}>{ico.ch}</span>
               )}
               <span className="rcw-fb-name">{e.name}</span>
+              {e.kind === "file" && (
+                <button className="rcw-fb-dl" title={`Download ${e.name}`} onClick={(ev) => { ev.stopPropagation(); doDownload(e.path, e.name); }}>⤓</button>
+              )}
             </div>
           );
         })}
@@ -333,6 +342,9 @@ export default function FileBrowserEdex({ cwd, machine, active = true }: { sessi
             <button onClick={() => setOpenFile(null)} title="Back to files" style={{ padding: "3px 10px", borderRadius: 7, cursor: "pointer", border: "1px solid var(--border)", background: "transparent", color: "inherit", fontFamily: "var(--font-mono)", fontSize: 11 }}>← files</button>
             <span className="mono" style={{ fontSize: 11.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
             <span style={{ flex: 1 }} />
+            <button onClick={() => doDownload(openFile!, name)} title="Download this file to your computer" style={{ padding: "3px 10px", borderRadius: 7, cursor: "pointer", border: "1px solid var(--border)", background: "transparent", color: "inherit", fontFamily: "var(--font-mono)", fontSize: 11 }}>
+              ⤓ download
+            </button>
             {read?.ok && read.encoding === "text" && md && (
               <button onClick={() => setMdMode((m) => (m === "preview" ? "edit" : "preview"))} style={{ padding: "3px 10px", borderRadius: 7, cursor: "pointer", border: "1px solid var(--border)", background: "transparent", color: "inherit", fontFamily: "var(--font-mono)", fontSize: 11 }}>
                 {mdMode === "preview" ? "✎ edit" : "▤ preview"}
@@ -399,7 +411,7 @@ export default function FileBrowserEdex({ cwd, machine, active = true }: { sessi
                   <span className="k">{ent.kind === "dir" ? "▸" : "⏎"}</span>{ent.kind === "dir" ? "Open folder" : "Open"}
                 </div>
                 {ent.kind === "file" && (
-                  <div className="rcw-fb-mi" onClick={act(() => doDownload(ent))}><span className="k">⤓</span>Download…</div>
+                  <div className="rcw-fb-mi" onClick={act(() => doDownload(ent.path, ent.name))}><span className="k">⤓</span>Download…</div>
                 )}
                 <div className="rcw-fb-mi danger" onClick={act(() => setDelTarget(ent))}>
                   <span className="k">⌫</span>Delete {ent.kind === "dir" ? "folder" : "file"}
