@@ -36,6 +36,7 @@ import {
 import { sshSetup, type SshSetupArgs } from "./ssh-setup";
 import { sshInstall, buildLaunchCommand } from "./ssh-install";
 import { captureClaudePane, sendClaudeKeys } from "./claude-login";
+import { listFolderSessions } from "./host-sessions";
 import { saveSshPassword, getSshPassword } from "./ssh-creds";
 import { listDir, readFileAt, writeFileAt, writeFileBase64, deletePath, makeDir, createFile, uploadLocalFile, searchFiles, searchFilesStream, downloadFileTo } from "./files";
 import { gitInfo } from "./git";
@@ -393,9 +394,10 @@ ipcMain.handle(IPC.serverInstall, async (e, a: { host: string; sshUser: string; 
 // Actually START a redstone-claude session on the server (no copy-paste). Same key →
 // saved-password → typed-password ladder as install. On success parses the new session
 // name; the cockpit picks it up via the poll window within a poll cycle.
-ipcMain.handle(IPC.sessionLaunch, async (e, a: { host: string; sshUser: string; sshPort: number; folder: string; danger: boolean; password?: string; savePassword?: boolean }) => {
+ipcMain.handle(IPC.folderSessions, (_e, a: { machine: string; folder: string }) => listFolderSessions(a.machine, a.folder));
+ipcMain.handle(IPC.sessionLaunch, async (e, a: { host: string; sshUser: string; sshPort: number; folder: string; danger: boolean; resumeId?: string; password?: string; savePassword?: boolean }) => {
   const send = (chunk: string) => { try { e.sender.send(IPC.serverInstallData, chunk); } catch { /* ignore */ } };
-  const command = buildLaunchCommand({ folder: a.folder, danger: a.danger });
+  const command = buildLaunchCommand({ folder: a.folder, danger: a.danger, resumeId: a.resumeId });
   const extraOpts = getSshCustom(a.host)?.opts ?? [];
   let res = await sshInstall({ host: a.host, sshUser: a.sshUser, sshPort: a.sshPort, command, password: a.password, extraOpts }, send);
   if (!res.ok && res.authFailed && !a.password) {
@@ -403,8 +405,11 @@ ipcMain.handle(IPC.sessionLaunch, async (e, a: { host: string; sshUser: string; 
     if (saved) { send("\r\n[auth] key not accepted — trying saved password…\r\n"); res = await sshInstall({ host: a.host, sshUser: a.sshUser, sshPort: a.sshPort, command, password: saved, extraOpts }, send); }
   }
   if (res.ok && a.password && a.savePassword) saveSshPassword(a.sshUser, a.host, a.password);
-  const m = res.output.match(/RCW_STARTED\s+(rcw-[0-9a-f]+)/);
+  const m = res.output.match(/RCW_STARTED\s+(rcw-([0-9a-f]+))/);
   const rcwErr = res.output.match(/RCW_ERR\s+(.+)/);
+  // Claim the wrapper for the signed-in agent so this session is owned by them once it
+  // attaches (matters on servers several people share). Best-effort — never blocks launch.
+  if (m?.[2]) { try { await api.sessionClaim(m[2]); } catch { /* ignore */ } }
   return { ok: res.ok && !!m, authFailed: res.authFailed, session: m?.[1] ?? null, output: res.output, error: rcwErr?.[1] ?? res.error };
 });
 // A ready-to-paste install command (Mac or Linux) for a machine the user sets up

@@ -26,6 +26,7 @@ export const IPC = {
   serverInstallData: "api:servers:install:data",
   serverSavedPassword: "api:servers:saved-password",
   sessionLaunch: "api:session:launch",
+  folderSessions: "api:session:folder-sessions",
   serverInstallCommand: "api:servers:install-command",
   sshSetCustom: "api:ssh:set-custom",
   accountsAnalytics: "api:accounts:analytics",

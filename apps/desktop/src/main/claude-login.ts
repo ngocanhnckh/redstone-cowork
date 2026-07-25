@@ -10,7 +10,7 @@ import { sshMuxOpts } from "./ssh-common";
 
 const shq = (v: string) => `'${v.replace(/'/g, `'\\''`)}'`;
 
-function runRemote(machine: string, cmd: string, timeoutMs: number): Promise<string> {
+export function runRemote(machine: string, cmd: string, timeoutMs: number): Promise<string> {
   return new Promise((resolve) => {
     const done = (out: string | null) => resolve(out ?? "");
     try {

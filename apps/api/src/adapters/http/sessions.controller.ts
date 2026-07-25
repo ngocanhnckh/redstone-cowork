@@ -29,6 +29,15 @@ export class SessionsController {
     }
   }
 
+  /** The app claims a wrapper for the signed-in agent at launch, so the session it starts
+   *  is owned by them once it attaches — even when several people share one server. */
+  @Post("claim")
+  @HttpCode(200)
+  async claim(@Req() req: GuardedRequest, @Body() body: { wrapperId?: string }) {
+    if (req.account?.id && body?.wrapperId) this.sessions.claimWrapper(String(body.wrapperId), req.account.id);
+    return { ok: true };
+  }
+
   // NOTE: static segments (queue, by-wrapper) must be declared BEFORE :id routes
   @Get("queue")
   async queue(@Req() req: GuardedRequest) {

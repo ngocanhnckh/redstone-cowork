@@ -550,6 +550,9 @@ export async function agencyGithubRoster(): Promise<unknown[]> { return (await r
 export async function serverInstallCommand(): Promise<{ serverUrl: string; command: string; commandRelay: string }> {
   return (await req("/servers/install-command")).json();
 }
+export async function sessionClaim(wrapperId: string): Promise<void> {
+  await req("/sessions/claim", { method: "POST", body: JSON.stringify({ wrapperId }) });
+}
 export async function agencyWeek(): Promise<unknown> { return (await req("/agency/week")).json(); }
 export async function agencyWeekConfig(cfg: { prize: string; startsAt: string | null; endsAt: string | null }): Promise<unknown> {
   return (await req("/agency/week/config", { method: "POST", body: JSON.stringify(cfg) })).json();

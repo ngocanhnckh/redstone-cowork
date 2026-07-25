@@ -129,6 +129,12 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
   const [newSrv, setNewSrv] = useState({ name: "", host: "", sshUser: "root", sshPort: 22, password: "" });
   const [closed, setClosed] = useState(false);
 
+  // Resumable PAST conversations in the chosen folder (no live tmux — `claude --resume`).
+  type FolderSess = { id: string; mtime: number; title: string; messages: number };
+  const [folderSess, setFolderSess] = useState<FolderSess[]>([]);
+  const [loadingSess, setLoadingSess] = useState(false);
+  const [resumeId, setResumeId] = useState<string | null>(null);
+
   const [provision, setProvision] = useState<{ installCommand: string; installCommandRelay: string } | null>(null);
   const [inv, setInv] = useState<{ hosts: HostRow[]; sessions: Discovered[] }>({ hosts: [], sessions: [] });
 
@@ -157,12 +163,12 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
   async function runLaunch(password?: string) {
     if (!server) return;
     setLaunching(true); setLaunchErr(""); setLaunchLog("");
-    log(`Starting Claude on ${server.name} in “${folder}” (${mode === "danger" ? "dangerous" : "normal"} mode) over SSH…`);
+    log(`${resumeId ? "Resuming a conversation" : "Starting Claude"} on ${server.name} in “${folder}” (${mode === "danger" ? "dangerous" : "normal"} mode) over SSH…`);
     const off = window.cowork.onServerInstallData((c) => setLaunchLog((l) => (l + c).slice(-8000)));
     try {
       const r = await window.cowork.sessionLaunch({
         host: server.host, sshUser: server.sshUser, sshPort: server.sshPort,
-        folder, danger: mode === "danger", password, savePassword: password ? savePw : false,
+        folder, danger: mode === "danger", resumeId: resumeId ?? undefined, password, savePassword: password ? savePw : false,
       });
       if (r.ok) {
         setLaunched(r.session); setLaunchNeedsPw(false);
@@ -235,6 +241,18 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
   );
   // Authoritative install signal comes from the API (`reporting`); fall back to a local match.
   const redstoneInstalled = !!server?.reporting || !!host;
+
+  // On the folder step, look up resumable past conversations in the chosen folder.
+  const folderMachine = host?.machine ?? server?.host ?? server?.name ?? "";
+  useEffect(() => {
+    if (step !== "folder" || resume || !folder || !folder.startsWith("/") || !folderMachine) { setFolderSess([]); return; }
+    let alive = true; setLoadingSess(true); setResumeId(null);
+    window.cowork.folderSessions({ machine: folderMachine, folder })
+      .then((r) => { if (alive) setFolderSess(r); })
+      .catch(() => { if (alive) setFolderSess([]); })
+      .finally(() => { if (alive) setLoadingSess(false); });
+    return () => { alive = false; };
+  }, [step, folder, folderMachine, resume]);
 
   const idx = STEPS.indexOf(step);
   const go = (s: Step) => { setErr(""); setStep(s); };
@@ -410,7 +428,22 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
               {resume ? (
                 <div style={{ fontSize: 12, color: "var(--text-soft)" }}>{resume.cwd}</div>
               ) : (
-                <FolderBrowser machine={host?.machine ?? server?.host ?? server?.name ?? ""} value={folder} onChange={setFolder} />
+                <>
+                  <FolderBrowser machine={host?.machine ?? server?.host ?? server?.name ?? ""} value={folder} onChange={setFolder} />
+                  {folder && folder.startsWith("/") && (
+                    <div style={{ marginTop: 14 }}>
+                      <div className="rcw-nw-label" style={{ marginTop: 0 }}>RESUME A PAST CONVERSATION HERE {loadingSess && <span className="faint" style={{ letterSpacing: 0 }}>· checking…</span>}</div>
+                      {!loadingSess && folderSess.length === 0 && <div className="faint" style={{ fontSize: 11 }}>None found — “Next” starts a fresh session in this folder.</div>}
+                      {folderSess.map((s) => (
+                        <div key={s.id} className={`rcw-nw-opt ${resumeId === s.id ? "sel" : ""}`} onClick={() => { setResumeId(s.id); go("mode"); }}>
+                          <b style={{ color: "#e6f2f4" }}>↻ {s.title || "(untitled conversation)"}</b>{" "}
+                          <span className="faint">· {s.messages} msgs · {new Date(s.mtime * 1000).toLocaleString()}</span>
+                        </div>
+                      ))}
+                      {folderSess.length > 0 && <div className="faint" style={{ fontSize: 10.5, marginTop: 5 }}>Pick one to resume it (you'll choose the mode next), or press <b>Next</b> to start fresh.</div>}
+                    </div>
+                  )}
+                </>
               )}
             </>
           )}
@@ -447,12 +480,12 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
               ) : (
                 <>
                   <div style={{ fontSize: 12, color: "var(--text-soft)", lineHeight: 1.6, marginBottom: 10 }}>
-                    Start the session in <b>{folder}</b> on <b>{server?.name}</b> in{" "}
+                    {resumeId ? <>Resume the conversation</> : <>Start a new session</>} in <b>{folder}</b> on <b>{server?.name}</b> in{" "}
                     <b>{mode === "danger" ? "DANGEROUS" : "normal"}</b> mode. The app launches it over SSH — it shows up in your cockpit automatically.
                   </div>
                   {!launchNeedsPw ? (
                     <button className="rcw-nw-btn" disabled={launching} onClick={() => runLaunch()}>
-                      {launching ? "◈ STARTING…" : "▶ START SESSION"}
+                      {launching ? "◈ STARTING…" : resumeId ? "↻ RESUME SESSION" : "▶ START SESSION"}
                     </button>
                   ) : (
                     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>

@@ -28,6 +28,23 @@ export class SessionsService {
     private readonly bus: EventsBus,
   ) {}
 
+  // Wrapper→account claims: the app knows the wrapperId the moment it launches a session
+  // (and it's signed in as an agent), but the session only ATTACHES minutes later via the
+  // host's hook, whose token may be anonymous/shared. The app POSTs a claim at launch so
+  // ownership is applied when the session attaches. Short-lived, in-memory (the window is
+  // seconds); a restart just falls back to unowned.
+  private wrapperClaims = new Map<string, { accountId: string; at: number }>();
+  private static readonly CLAIM_TTL_MS = 30 * 60_000;
+  claimWrapper(wrapperId: string, accountId: string): void {
+    if (wrapperId && accountId) this.wrapperClaims.set(wrapperId, { accountId, at: Date.now() });
+  }
+  private takeClaim(wrapperId: string): string | null {
+    const c = this.wrapperClaims.get(wrapperId);
+    if (!c) return null;
+    if (Date.now() - c.at > SessionsService.CLAIM_TTL_MS) { this.wrapperClaims.delete(wrapperId); return null; }
+    return c.accountId;
+  }
+
   async attach(input: unknown, accountId?: string | null): Promise<AgentSession> {
     const parsed = NewAgentSessionSchema.parse(input);
     const now = new Date();
@@ -56,8 +73,11 @@ export class SessionsService {
       tokensInput: existing?.tokensInput ?? 0,
       tokensOutput: existing?.tokensOutput ?? 0,
       tokenSeries: existing?.tokenSeries ?? [],
-      // First owner wins; sessions attached while signed in belong to that account.
-      accountId: existing?.accountId ?? accountId ?? null,
+      // First owner wins. A session attached while signed in belongs to that account;
+      // otherwise, if the app CLAIMED this wrapper for a user at launch (the host token
+      // is shared/anonymous — several people can share one server), honour that claim so
+      // the session is owned by whoever started it, not left ownerless.
+      accountId: existing?.accountId ?? accountId ?? (parsed.wrapperId ? this.takeClaim(parsed.wrapperId) : null) ?? null,
       pinned: false,
       snoozedUntil: null,
       closedAt: null, // a fresh attach reopens a previously-reaped/dismissed session

@@ -24,8 +24,9 @@ const shSingle = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
  *  pre-trusted in ~/.claude.json so claude doesn't block on the first-run trust prompt
  *  (where the session would be invisible to the cockpit). Base64-wrapped so no quoting of
  *  the folder path can break the shell. Prints `RCW_STARTED <session>` on success. */
-export function buildLaunchCommand(opts: { folder: string; danger: boolean }): string {
-  const flags = opts.danger ? "--dangerously-skip-permissions" : "";
+export function buildLaunchCommand(opts: { folder: string; danger: boolean; resumeId?: string }): string {
+  const resume = opts.resumeId ? `--resume ${opts.resumeId.replace(/[^a-zA-Z0-9-]/g, "")} ` : "";
+  const flags = `${resume}${opts.danger ? "--dangerously-skip-permissions" : ""}`.trim();
   const script = [
     `set -e`,
     `FOLDER=${shSingle(opts.folder)}`,

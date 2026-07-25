@@ -46,7 +46,8 @@ declare global {
       serverProvision(id: string): Promise<{ serverUrl: string; installCommand: string; installCommandRelay: string }>;
       serverSavedPassword(host: string, sshUser: string): Promise<{ has: boolean }>;
       serverInstall(a: { host: string; sshUser: string; sshPort: number; command: string; password?: string; savePassword?: boolean }): Promise<{ ok: boolean; authFailed?: boolean; output: string; error?: string }>;
-      sessionLaunch(a: { host: string; sshUser: string; sshPort: number; folder: string; danger: boolean; password?: string; savePassword?: boolean }): Promise<{ ok: boolean; authFailed?: boolean; session: string | null; output: string; error?: string }>;
+      sessionLaunch(a: { host: string; sshUser: string; sshPort: number; folder: string; danger: boolean; resumeId?: string; password?: string; savePassword?: boolean }): Promise<{ ok: boolean; authFailed?: boolean; session: string | null; output: string; error?: string }>;
+      folderSessions(a: { machine: string; folder: string }): Promise<Array<{ id: string; mtime: number; title: string; messages: number }>>;
       serverInstallCommand(): Promise<{ serverUrl: string; command: string; commandRelay: string }>;
       sshSetCustom(a: { address: string; host: string; opts: string[] }): Promise<{ ok: boolean }>;
       onServerInstallData(cb: (chunk: string) => void): () => void;
