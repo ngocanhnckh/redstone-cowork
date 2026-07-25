@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence, type Variants } from "motion/react";
 import { useStore } from "../store";
 import { HostTelemetryView } from "../types";
@@ -599,6 +599,26 @@ export function RightRail() {
 // ---------------------------------------------------------------------------
 const ACTIONABLE = ["question", "permission", "mode"];
 
+// Chat rows are memoized on their text so that while Claude streams — which grows only
+// the LAST message and re-renders the whole pane on every chunk — the earlier messages
+// don't re-render or (expensively) re-parse their markdown. Without this, every token
+// re-parsed the entire transcript, janking the main thread and making scroll lag.
+const UserMsg = memo(function UserMsg({ text }: { text: string }) {
+  return (
+    <div style={{ fontSize: 12.5, lineHeight: 1.55, color: "rgb(var(--accent))", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+      <span style={{ opacity: 0.7 }}>❯ </span>{text}
+    </div>
+  );
+});
+const ClaudeMsg = memo(function ClaudeMsg({ text }: { text: string }) {
+  return (
+    <div style={{ borderLeft: "2px solid rgb(var(--primary-soft) / 0.4)", paddingLeft: 12 }}>
+      <div className="mono faint" style={{ fontSize: 9, letterSpacing: "0.18em", textTransform: "uppercase", marginBottom: 5, opacity: 0.6 }}>◇ claude</div>
+      <div style={{ fontFamily: "var(--font-body)" }}><ErrorBoundary><Markdown>{text}</Markdown></ErrorBoundary></div>
+    </div>
+  );
+});
+
 /** Compact terminal-styled chat. Defaults to the focused session; pass an explicit
  * `sessionId` to bind it to one session (used by pop-out per-session windows). */
 function ChatPane({ sessionId }: { sessionId?: string } = {}) {
@@ -709,16 +729,7 @@ function ChatPane({ sessionId }: { sessionId?: string } = {}) {
         {!session && <span className="mono faint hud-blink" style={{ fontSize: 12 }}>no session selected</span>}
         {session && timeline.length === 0 && !session.latestAnswer && <span className="mono faint hud-blink" style={{ fontSize: 12 }}>awaiting output…</span>}
         {timeline.map((m, i) =>
-          m.role === "user" ? (
-            <div key={i} style={{ fontSize: 12.5, lineHeight: 1.55, color: "rgb(var(--accent))", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-              <span style={{ opacity: 0.7 }}>❯ </span>{m.text}
-            </div>
-          ) : (
-            <div key={i} style={{ borderLeft: "2px solid rgb(var(--primary-soft) / 0.4)", paddingLeft: 12 }}>
-              <div className="mono faint" style={{ fontSize: 9, letterSpacing: "0.18em", textTransform: "uppercase", marginBottom: 5, opacity: 0.6 }}>◇ claude</div>
-              <div style={{ fontFamily: "var(--font-body)" }}><ErrorBoundary><Markdown>{m.text}</Markdown></ErrorBoundary></div>
-            </div>
-          )
+          m.role === "user" ? <UserMsg key={i} text={m.text} /> : <ClaudeMsg key={i} text={m.text} />
         )}
         {isWorking && (
           <div style={{ display: "flex", alignItems: "center", gap: 9, color: "var(--text-soft)" }}>
