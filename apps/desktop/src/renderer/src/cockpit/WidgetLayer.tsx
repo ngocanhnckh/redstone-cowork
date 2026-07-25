@@ -548,7 +548,7 @@ function ReconRadar() {
         <div className="rcw-radar" style={{ position: "relative", width: "100%", maxWidth: 180, aspectRatio: "1 / 1" }}>
           {/* rings */}
           {[1, 0.66, 0.33].map((f, i) => (
-            <span key={i} style={{ position: "absolute", inset: `${(1 - f) * 50}%`, borderRadius: "50%", border: "1px solid rgb(var(--primary-soft) / 0.16)" }} />
+            <span key={i} className="rcw-round" style={{ position: "absolute", inset: `${(1 - f) * 50}%`, border: "1px solid rgb(var(--primary-soft) / 0.16)" }} />
           ))}
           <span style={{ position: "absolute", left: "50%", top: 0, bottom: 0, width: 1, background: "rgb(var(--primary-soft) / 0.12)" }} />
           <span style={{ position: "absolute", top: "50%", left: 0, right: 0, height: 1, background: "rgb(var(--primary-soft) / 0.12)" }} />
@@ -580,8 +580,8 @@ function ReconRadar() {
 type Proc = { pid: number; name: string; cpu: number; mem: number };
 // Load colour: chalk (idle) → soft chalk (busy) → signal red only when pegged.
 function loadColor(pct: number): string {
-  if (pct >= 80) return "#e63b2e";
-  if (pct >= 45) return "var(--text)";
+  if (pct >= 300) return "#e63b2e"; /* multi-core values run past 100% routinely */
+  if (pct >= 100) return "var(--text)";
   return "var(--text-soft)";
 }
 function Reactor() {
@@ -625,7 +625,7 @@ function Reactor() {
           {rows.map((p, i) => {
             const v = by === "cpu" ? p.cpu : p.mem;
             const c = loadColor(v);
-            const hot = i === 0 && v >= 80;
+            const hot = i === 0 && v >= 300;
             return (
               <div key={p.pid} title={`pid ${p.pid} · ${p.name} · cpu ${p.cpu}% · mem ${p.mem}%`} style={{ position: "relative", display: "flex", alignItems: "center", gap: 8, height: 17 }}>
                 {/* load bar behind the label */}
@@ -749,8 +749,8 @@ function WidgetStyles() {
       @keyframes rcw-w-pulse { 0%,100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.5); opacity: 0.5; } }
       .rcw-w-pulse { animation: rcw-w-pulse 1.3s ease-in-out infinite; }
       @keyframes rcw-radar-spin { to { transform: rotate(360deg); } }
-      .rcw-radar-sweep { position: absolute; inset: 0; border-radius: 50%; animation: rcw-radar-spin 3.4s linear infinite;
-        background: conic-gradient(from 0deg, transparent 0deg, rgb(var(--primary-soft) / 0.02) 300deg, rgb(var(--primary-soft) / 0.2) 355deg, rgb(var(--primary-soft) / 0.35) 360deg); }
+      .rcw-radar-sweep { position: absolute; inset: 0; clip-path: circle(50%); animation: rcw-radar-spin 4.2s linear infinite;
+        background: conic-gradient(from 0deg, rgba(230,59,46,0.28), rgba(230,59,46,0.04) 52deg, transparent 60deg); }
       .rcw-blip { border-radius: 50%; background: rgb(var(--primary-soft)); transform: translate(-50%, -50%);
         cursor: pointer; }
       .rcw-blip:hover { background: var(--text); }

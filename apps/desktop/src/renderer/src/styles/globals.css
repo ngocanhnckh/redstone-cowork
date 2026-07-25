@@ -46,6 +46,13 @@
 *::after {
     border-radius: 0 !important;
 }
+/* Escape hatch for genuinely circular instruments (radar rings/sweep, gauges).
+   Higher specificity than the flattener, so it wins among !important rules. */
+.rcw-round,
+.rcw-round::before,
+.rcw-round::after {
+    border-radius: 50% !important;
+}
 html {
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
@@ -76,11 +83,23 @@ body {
     background: transparent;
 }
 
-/* Optional custom background image (Settings › Appearance). */
+/* Default backdrop — the HQ lobby photo under a readability scrim (the thing
+   the glass blurs). A user-set background image (Settings › Appearance)
+   replaces the photo but keeps the scrim. */
+[data-app] {
+    background-image:
+        radial-gradient(ellipse at 50% 42%, rgba(6, 6, 6, 0.38), rgba(6, 6, 6, 0.72) 92%),
+        url("../assets/backdrop.png");
+    background-size: cover, cover;
+    background-position: center, center;
+    background-repeat: no-repeat;
+}
 .rcw-has-bg [data-app] {
-    background-image: var(--app-bg-image, none);
-    background-size: cover;
-    background-position: center;
+    background-image:
+        radial-gradient(ellipse at 50% 42%, rgba(6, 6, 6, 0.32), rgba(6, 6, 6, 0.6) 92%),
+        var(--app-bg-image, none);
+    background-size: cover, cover;
+    background-position: center, center;
     background-repeat: no-repeat;
 }
 

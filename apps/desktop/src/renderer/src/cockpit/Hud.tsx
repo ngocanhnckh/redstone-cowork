@@ -219,7 +219,7 @@ function RotatingGlobe({ geo, size = 150 }: { geo: { lat: number; long: number; 
   const near = Math.cos(mLon) > 0;
   const mx = cx + R * Math.cos(latRad) * Math.sin(mLon);
   const my = cy - R * Math.sin(latRad);
-  const P = "rgb(var(--primary))", PS = "rgb(var(--primary-soft))", A = "rgb(var(--accent))";
+  const P = "rgb(var(--primary-soft))", PS = "rgb(var(--primary-soft))", A = "rgb(var(--accent))";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
@@ -521,6 +521,12 @@ function TelemetryColumn({ tele }: { tele: HostTelemetryView[] }) {
         </AnimatePresence>
       </motion.div>
 
+      {/* Session-scoped uplink: host IPs + time-on-session + prompt count */}
+      <motion.div variants={RISE}><SessionInfoWidget /></motion.div>
+
+      {/* Operator dossier — sits under the uplink per the Signal Room layout */}
+      <motion.div variants={RISE}><AgentIdentityCard /></motion.div>
+
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 14 }}>
         <motion.div variants={RISE} className="hud-card" style={{ ...card, minWidth: 0 }}>
           <span className="hud-corner" />
@@ -534,9 +540,6 @@ function TelemetryColumn({ tele }: { tele: HostTelemetryView[] }) {
           <WaveLine height={30} color="rgb(var(--accent))" />
         </motion.div>
       </div>
-
-      {/* Session-scoped uplink: host IPs + time-on-session + prompt count */}
-      <motion.div variants={RISE}><SessionInfoWidget /></motion.div>
 
       {/* Token spend for the selected session */}
       <motion.div variants={RISE}><TokenSpendWidget /></motion.div>
@@ -618,7 +621,6 @@ export function RightRail() {
   return (
     <>
       <Clock />
-      <AgentIdentityCard />
       <WeekWidget />
       <TelemetryDeck />
     </>
@@ -742,9 +744,9 @@ function ChatPane({ sessionId }: { sessionId?: string } = {}) {
       {loginOpen && session && <ClaudeLoginModal session={session} onClose={() => setLoginOpen(false)} />}
       {/* Pinned reminder of the last message you sent to this session. */}
       {session && lastSent && (
-        <div style={{ flexShrink: 0, margin: "10px 14px 0", borderRadius: 12, border: "1px solid rgb(var(--accent) / 0.3)", background: "rgb(var(--accent) / 0.06)", overflow: "hidden" }}>
+        <div style={{ flexShrink: 0, margin: "10px 14px 0", borderRadius: 12, border: "1px solid var(--border)", background: "color-mix(in srgb, var(--app-elev) 32%, transparent)", borderLeft: "2px solid var(--border-strong)", overflow: "hidden" }}>
           <div onClick={toggleCtx} title="Your last message to this session" style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 11px", cursor: "pointer", userSelect: "none" }}>
-            <span className="mono" style={{ fontSize: 9, letterSpacing: "0.16em", textTransform: "uppercase", color: "rgb(var(--accent))" }}>↩ you last said</span>
+            <span className="mono" style={{ fontSize: 9, letterSpacing: "0.16em", textTransform: "uppercase", color: "var(--text-faint)" }}>↩ you last said</span>
             <span style={{ flex: 1 }} />
             <span className="mono faint" style={{ fontSize: 11 }}>{ctxOpen ? "▾" : "▸"}</span>
           </div>
