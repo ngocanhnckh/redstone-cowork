@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { findRank } from "./ranks";
-import type { AgencyMessage } from "../../../shared/agency";
+import type { AgencyMessage, AgencyGithubDay } from "../../../shared/agency";
 import AgencyProfile from "./AgencyProfile";
+import AgentIdentScan from "./AgentIdentScan";
 import AgentWeek from "./AgentWeek";
 import { Tiles, Bars, GithubHeatmap } from "./agencyCharts";
+import { IconComment, IconExternal, IconCrown, IconGlobe, IconKey, IconCheckCircle, IconContainer, IconMonitor } from "./Icons";
+import RankInsignia from "./RankInsignia";
 import { AgentDmPanel } from "./AgencyDm";
 import { IconTrophy } from "./Icons";
 import type { AgencyAgentDossier } from "../../../shared/agency";
@@ -121,15 +124,51 @@ const CSS = `
 
 /* Agent dossier modal (Arena card click) */
 .agc-modal { position:fixed; inset:0; z-index:420; background: rgb(2 6 10 / .74); backdrop-filter: blur(5px); display:flex; align-items:center; justify-content:center; padding:24px; }
-.agc-sheet { position:relative; width:720px; max-width:95vw; max-height:90vh; overflow-y:auto; border-radius:18px; padding:22px 24px 24px; font-family:var(--font-mono);
+.agc-sheet { position:relative; width:1040px; max-width:95vw; max-height:92vh; overflow-y:auto; border-radius:18px; padding:22px 24px 24px; font-family:var(--font-mono);
   border:1px solid rgb(var(--primary) / .4); background: rgb(8 14 20 / .98); box-shadow:0 30px 90px -20px rgb(0 0 0 / .85); }
 .agc-x { position:absolute; top:14px; right:14px; width:30px; height:30px; border:1px solid var(--border); background:none; color:var(--text-soft); border-radius:8px; cursor:pointer; z-index:2; }
 .agc-x:hover { color:#fff; border-color: rgb(var(--primary) / .6); }
 .agc-dhero { display:flex; gap:18px; align-items:flex-start; margin-bottom:12px; padding-right:34px; }
-.agc-dphoto { width:150px; height:150px; border-radius:16px; object-fit:cover; border:2px solid var(--tier-b); box-shadow:0 0 30px -6px var(--tier-b); background:#05090d; flex-shrink:0; }
+/* dossier split: portrait column left, all measurable info right */
+.agc-dsplit { display:grid; grid-template-columns: 300px 1fr; gap:18px; align-items:start; padding-right:30px; }
+@media (max-width:900px){ .agc-dsplit { grid-template-columns:1fr; } }
+.agc-dleft { min-width:0; }
+.agc-dright { min-width:0; }
+.agc-dovrbar { display:flex; align-items:flex-end; justify-content:space-between; gap:10px; margin-top:14px;
+  border-top:1px solid var(--border); border-bottom:1px solid var(--border); padding:10px 0; }
+.agc-dovrnum { font-family:var(--font-display); font-weight:700; font-size:34px; line-height:.95; color:var(--text); font-variant-numeric:tabular-nums; }
+.agc-dovrlbl { font-size:8px; letter-spacing:.2em; color:var(--text-faint); margin-top:3px; }
+.agc-dphoto { width:100%; height:300px; object-fit:cover; border:1px solid var(--border-strong); background:#05090d; flex-shrink:0; display:block; }
+.agc-dphotowrap { position:relative; width:100%; flex-shrink:0; animation: agc-reveal .5s cubic-bezier(.2,.9,.3,1) both; }
+@keyframes agc-reveal { 0% { clip-path: inset(49% 0 49% 0); opacity:0; } 45% { opacity:1; } 100% { clip-path: inset(0 0 0 0); opacity:1; } }
+.agc-dphotowrap .rt { position:absolute; width:16px; height:16px; border-color:#e63b2e; pointer-events:none; }
+.agc-dphotowrap .rt.tl { top:-1px; left:-1px; border-top:1px solid; border-left:1px solid; }
+.agc-dphotowrap .rt.tr { top:-1px; right:-1px; border-top:1px solid; border-right:1px solid; }
+.agc-dphotowrap .rt.bl { bottom:-1px; left:-1px; border-bottom:1px solid; border-left:1px solid; }
+.agc-dphotowrap .rt.br { bottom:-1px; right:-1px; border-bottom:1px solid; border-right:1px solid; }
+.agc-dphotowrap .idtag { position:absolute; left:0; bottom:0; right:0; padding:5px 9px; font-size:8px; letter-spacing:.22em;
+  background:rgb(10 10 10 / .82); color:var(--text-soft); display:flex; justify-content:space-between; }
+.agc-dphotowrap .idtag b { color:#e63b2e; font-weight:400; }
+/* staggered panel entrance */
+.agc-stg { animation: agc-rise .34s cubic-bezier(.2,.9,.3,1) both; }
+@keyframes agc-rise { from { opacity:0; transform:translateY(9px); } }
+@keyframes agc-grow { from { transform: scaleY(0); } }
+@keyframes agc-radar { from { transform: scale(.2); opacity:0; } }
 .agc-dphoto.ph { display:flex; align-items:center; justify-content:center; font-size:64px; color: rgb(var(--primary-soft) / .5); }
 .agc-dchip { font-size:10px; letter-spacing:.14em; padding:3px 10px; border-radius:999px; border:1px solid rgb(232 230 225 / .5); color:var(--text-soft); }
 .agc-dchip.alt { border-color: rgb(var(--primary) / .5); color: rgb(var(--primary-soft)); }
+.agc-dlink { display:flex; justify-content:flex-start; align-items:center; gap:6px; font-family:var(--font-mono); font-size:10px; letter-spacing:.1em;
+  padding:3px 9px; border:1px solid var(--border); background:transparent; color:var(--text-soft); cursor:pointer; }
+.agc-dlink:hover { border-color:#e63b2e; color:var(--text); }
+.agc-dlink-go { color:var(--text-faint); font-size:9px; }
+/* stat tiles (Tiles from agencyCharts) — AgencyProfile owns an identical block, but
+   it isn't mounted on the Arena tab, so the dossier carries its own. */
+.agc-sheet .agp-tiles { display:grid; grid-template-columns: repeat(3, 1fr); gap:8px; margin-top:0; }
+.agc-sheet .agp-tile { border:1px solid var(--border); padding:9px 11px; background: rgba(232,230,225,.02); min-width:0; }
+.agc-sheet .agp-tile-v { font-family:var(--font-display); font-weight:700; font-size:20px; line-height:1; color:var(--text); font-variant-numeric:tabular-nums; }
+.agc-sheet .agp-tile-l { font-size:8px; letter-spacing:.18em; color:var(--text-faint); margin-top:5px; text-transform:uppercase; }
+.agc-sheet .agp-tile-h { font-size:8.5px; color:var(--text-soft); margin-top:3px; }
+.agc-dlink:hover .agc-dlink-go { color:#e63b2e; }
 .agc-dovr { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:6px 14px; border-radius:14px; border:1px solid var(--tier-b); background: rgb(var(--primary) / .06); flex-shrink:0; }
 .agc-dovr b { font-family:var(--font-display); font-size:40px; line-height:.9; color: var(--tier-a); text-shadow:0 0 14px var(--tier-b); }
 .agc-dovr span { font-size:8.5px; letter-spacing:.22em; color: var(--text-soft); }
@@ -148,17 +187,159 @@ function polar2(cx: number, cy: number, r: number, i: number, n: number): [numbe
   return [cx + r * Math.cos(a), cy + r * Math.sin(a)];
 }
 /** Compact per-card radar of the five sub-ratings (inherits the card's tier colours). */
-function MiniRadar({ s }: { s: Stats }) {
-  const S = 108, cx = S / 2, cy = S / 2, R = 42, n = 5;
+function MiniRadar({ s, size = 108, labelled = false }: { s: Stats; size?: number; labelled?: boolean }) {
+  const S = size, cx = S / 2, cy = S / 2, R = S * (labelled ? 0.31 : 0.39), n = 5;
   const shape = RADAR_KEYS.map((k, i) => polar2(cx, cy, R * (s[k] / 99), i, n).join(",")).join(" ");
   return (
-    <svg width={S} height={S} viewBox={`0 0 ${S} ${S}`} style={{ flexShrink: 0 }}>
-      {[0.5, 1].map((rr, ri) => (
-        <polygon key={ri} points={RADAR_KEYS.map((_, i) => polar2(cx, cy, R * rr, i, n).join(",")).join(" ")} fill="none" stroke="rgb(255 255 255 / 0.13)" strokeWidth={1} />
+    <svg width={S} height={S} viewBox={`0 0 ${S} ${S}`} style={{ flexShrink: 0, overflow: "visible" }}>
+      {[0.25, 0.5, 0.75, 1].map((rr, ri) => (
+        <polygon key={ri} points={RADAR_KEYS.map((_, i) => polar2(cx, cy, R * rr, i, n).join(",")).join(" ")}
+          fill="none" stroke="rgba(232,230,225,0.11)" strokeWidth={1} />
       ))}
-      {RADAR_KEYS.map((_, i) => { const [x, y] = polar2(cx, cy, R, i, n); return <line key={i} x1={cx} y1={cy} x2={x} y2={y} stroke="rgb(255 255 255 / 0.1)" strokeWidth={1} />; })}
-      <polygon points={shape} fill="var(--tier-b)" fillOpacity={0.4} stroke="var(--tier-a)" strokeWidth={1.5} />
+      {RADAR_KEYS.map((_, i) => { const [x, y] = polar2(cx, cy, R, i, n); return <line key={i} x1={cx} y1={cy} x2={x} y2={y} stroke="rgba(232,230,225,0.09)" strokeWidth={1} />; })}
+      <polygon points={shape} fill="#e63b2e" fillOpacity={0.16} stroke="#e63b2e" strokeWidth={1.6}
+        style={{ animation: "agc-radar .55s cubic-bezier(.2,.9,.3,1) both", transformOrigin: `${cx}px ${cy}px` }} />
+      {RADAR_KEYS.map((k, i) => {
+        const [px, py] = polar2(cx, cy, R * (s[k] / 99), i, n);
+        return <rect key={`p${i}`} x={px - 2} y={py - 2} width={4} height={4} fill="#e63b2e" />;
+      })}
+      {labelled && STAT_LABELS.map(({ key, long }, i) => {
+        const [lx, ly] = polar2(cx, cy, R + S * 0.155, i, n);
+        const anchor = Math.abs(lx - cx) < 3 ? "middle" : lx > cx ? "start" : "end";
+        return (
+          <g key={`l${key}`}>
+            <text x={lx} y={ly - 2} textAnchor={anchor}
+              style={{ fontFamily: "var(--font-mono)", fontSize: 8, letterSpacing: "0.14em", fill: "var(--text-faint)" }}>{long}</text>
+            <text x={lx} y={ly + 10} textAnchor={anchor}
+              style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 12, fill: "var(--text)" }}>{s[key]}</text>
+          </g>
+        );
+      })}
     </svg>
+  );
+}
+
+/** Numbers tick up to their value when the dossier opens (data movement, not decoration). */
+function useCountUp(target: number, ms = 750): number {
+  const [v, setV] = useState(0);
+  useEffect(() => {
+    if (typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches) { setV(target); return; }
+    let raf = 0; const t0 = performance.now();
+    const step = (t: number) => {
+      const f = Math.min(1, (t - t0) / ms);
+      setV(Math.round(target * (1 - Math.pow(1 - f, 3))));
+      if (f < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [target, ms]);
+  return v;
+}
+
+/** Last-7-days contribution bars — real per-day GitHub counts, newest right. */
+function SevenDay({ days }: { days: AgencyGithubDay[] }) {
+  const last = days.slice(-7);
+  const max = Math.max(1, ...last.map((d) => d.count));
+  const total = last.reduce((a, d) => a + d.count, 0);
+  const shown = useCountUp(total);
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 10 }}>
+        <span className="mono agc-dlabel" style={{ margin: 0, display: "flex", alignItems: "center", gap: 6 }}><IconGlobe size={11} />CONTRIBUTIONS · LAST 7 DAYS</span>
+        <span className="mono" style={{ fontSize: 15, color: "var(--text)", fontVariantNumeric: "tabular-nums" }}>{shown}</span>
+      </div>
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: 74 }}>
+        {last.map((d, i) => {
+          const h = Math.max(2, (d.count / max) * 66);
+          const dt = new Date(d.date + "T00:00:00");
+          const today = i === last.length - 1;
+          return (
+            <div key={d.date} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, minWidth: 0 }}>
+              <span className="mono" style={{ fontSize: 8.5, color: d.count ? "var(--text-soft)" : "var(--text-faint)" }}>{d.count}</span>
+              <span title={`${d.date} · ${d.count}`} style={{
+                width: "100%", height: h, background: today ? "#e63b2e" : "rgba(232,230,225,.34)",
+                animation: `agc-grow .5s cubic-bezier(.2,.9,.3,1) ${i * 55}ms both`, transformOrigin: "bottom",
+              }} />
+              <span className="mono" style={{ fontSize: 7.5, letterSpacing: ".1em", color: "var(--text-faint)" }}>
+                {dt.toLocaleDateString(undefined, { weekday: "short" }).toUpperCase().slice(0, 2)}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/** Jira completion ring — done vs the rest of the assigned workload. */
+function MissionRing({ done, total }: { done: number; total: number }) {
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+  const shown = useCountUp(pct);
+  const R = 34, C = 2 * Math.PI * R;
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+      <div style={{ position: "relative", width: 84, height: 84, flexShrink: 0 }}>
+        <svg width={84} height={84} viewBox="0 0 84 84">
+          <circle cx={42} cy={42} r={R} fill="none" stroke="rgba(232,230,225,.12)" strokeWidth={3} />
+          <circle cx={42} cy={42} r={R} fill="none" stroke="#e8e6e1" strokeWidth={3}
+            strokeDasharray={C} strokeDashoffset={C - (C * shown) / 100} transform="rotate(-90 42 42)"
+            style={{ transition: "stroke-dashoffset .1s linear" }} />
+        </svg>
+        <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", textAlign: "center" }}>
+          <div>
+            <div className="mono" style={{ fontSize: 15, color: "var(--text)", lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{shown}%</div>
+            <div className="mono" style={{ fontSize: 7, letterSpacing: ".16em", color: "var(--text-faint)", marginTop: 2 }}>DONE</div>
+          </div>
+        </div>
+      </div>
+      <div style={{ minWidth: 0 }}>
+        <div className="mono" style={{ fontSize: 20, color: "var(--text)", fontVariantNumeric: "tabular-nums" }}>{done}</div>
+        <div className="mono" style={{ fontSize: 8, letterSpacing: ".16em", color: "var(--text-faint)" }}>MISSIONS CLOSED</div>
+        <div className="mono" style={{ fontSize: 10, color: "var(--text-soft)", marginTop: 6 }}>{total} assigned</div>
+      </div>
+    </div>
+  );
+}
+
+/** External profile links (GitHub / Jira / Mattermost) — open in the real browser.
+ *  Jira's host comes from the bound Jira profile; Mattermost's from a configured
+ *  custom app whose URL looks like a Mattermost server. */
+function ProfileLinks({ acc }: { acc: AgencyAgentDossier["account"] | undefined }) {
+  const [jiraBase, setJiraBase] = useState<string | null>(null);
+  const [mmBase, setMmBase] = useState<string | null>(null);
+  useEffect(() => {
+    window.cowork.jiraProfilesList()
+      .then((ps) => setJiraBase(ps?.[0]?.baseUrl?.replace(/\/+$/, "") ?? null))
+      .catch(() => setJiraBase(null));
+    // Mattermost host comes from the user's configured custom apps (same list the
+    // HUD dock reads); no separate setting to keep in sync.
+    try {
+      const raw = localStorage.getItem("rcw.customApps");
+      const apps: Array<{ name?: string; url?: string }> = raw ? JSON.parse(raw) : [];
+      const mm = Array.isArray(apps)
+        ? apps.find((x) => typeof x?.url === "string" && (/mattermost/i.test(x.url) || /mattermost/i.test(x.name ?? "")))
+        : null;
+      setMmBase(mm?.url ? mm.url.replace(/\/+$/, "") : null);
+    } catch { setMmBase(null); }
+  }, []);
+  if (!acc) return null;
+  const open = (url: string) => (e: React.MouseEvent) => {
+    e.stopPropagation();
+    window.cowork.openExternal(url).catch(() => {});
+  };
+  const links: Array<{ key: string; label: string; url: string; icon: React.ReactNode }> = [];
+  if (acc.github) links.push({ key: "gh", label: `GitHub · ${acc.github}`, url: `https://github.com/${encodeURIComponent(acc.github)}`, icon: <IconExternal size={11} /> });
+  if (acc.jira && jiraBase) links.push({ key: "jira", label: `Jira · ${acc.jira}`, url: `${jiraBase}/secure/ViewProfile.jspa?name=${encodeURIComponent(acc.jira)}`, icon: <IconExternal size={11} /> });
+  if (acc.mattermost && mmBase) links.push({ key: "mm", label: `Mattermost · ${acc.mattermost}`, url: `${mmBase}/_redirect/messages/@${encodeURIComponent(acc.mattermost)}`, icon: <IconComment size={11} /> });
+  if (!links.length) return null;
+  return (
+    <>
+      {links.map((l) => (
+        <button key={l.key} className="agc-dlink" onClick={open(l.url)} title={l.url}>
+          {l.icon}<span>{l.label}</span><span className="agc-dlink-go">↗</span>
+        </button>
+      ))}
+    </>
   );
 }
 
@@ -185,50 +366,83 @@ function AgentDossierModal({ a, input, meUsername, onClose }: { a: Analytics; in
     <div className="agc-modal" onClick={onClose}>
       <div className="agc-sheet" onClick={(e) => e.stopPropagation()} style={{ "--tier-a": tier.a, "--tier-b": tier.b } as React.CSSProperties}>
         <button className="agc-x" onClick={onClose}>✕</button>
-        <div className="agc-dhero">
-          {a.photo ? <img className="agc-dphoto" src={a.photo} alt="" /> : <div className="agc-dphoto ph">◍</div>}
-          <div style={{ minWidth: 0, flex: 1 }}>
-            <div className="mono" style={{ fontSize: 9.5, letterSpacing: "0.3em", color: "rgb(var(--primary-soft))" }}>SPECIAL AGENT</div>
-            <div style={{ fontSize: 24, fontWeight: 700, color: "var(--text)", lineHeight: 1.05 }}>{a.displayName || a.username}</div>
-            <div className="mono" style={{ fontSize: 10.5, color: "var(--text-faint)" }}>@{a.username}</div>
-            {rk?.insignia && <div style={{ fontSize: 13, letterSpacing: "0.24em", color: "var(--text-soft)", marginTop: 4 }}>{rk.insignia}</div>}
-            <div style={{ display: "flex", gap: 6, marginTop: 6, flexWrap: "wrap" }}>
-              <span className="agc-dchip">★ {a.level || rk?.name || "—"}</span>
-              {a.division && <span className="agc-dchip alt">◈ {a.division}</span>}
-              {acc?.github && <span className="agc-dchip alt">⌥ {acc.github}</span>}
-              {acc?.jira && <span className="agc-dchip alt">◇ {acc.jira}</span>}
+        <div className="agc-dsplit">
+          {/* ── LEFT: the portrait column ── */}
+          <aside className="agc-dleft">
+            <div className="agc-dphotowrap">
+              {a.photo ? <img className="agc-dphoto" src={a.photo} alt="" /> : <div className="agc-dphoto ph">◍</div>}
+              <span className="rt tl" /><span className="rt tr" /><span className="rt bl" /><span className="rt br" />
+              <span className="idtag"><span>ID {a.accountId.slice(0, 8).toUpperCase()}</span><b>VERIFIED</b></span>
+            </div>
+            <div className="mono" style={{ fontSize: 9, letterSpacing: "0.3em", color: "#e63b2e", display: "flex", alignItems: "center", gap: 6, marginTop: 14 }}>
+              <IconKey size={10} />SPECIAL AGENT
+            </div>
+            <div style={{ fontFamily: "var(--font-display)", fontSize: 25, fontWeight: 700, letterSpacing: "0.04em", color: "var(--text)", lineHeight: 1.1, marginTop: 4 }}>
+              {a.displayName || a.username}
+            </div>
+            <div className="mono" style={{ fontSize: 10.5, color: "var(--text-faint)", marginTop: 2 }}>@{a.username}</div>
+            {rk && (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 9, color: rk.tier === "general" ? "#e8e6e1" : "var(--text-soft)" }}>
+                <RankInsignia rank={rk.name} size={14} />
+                <span className="mono" style={{ fontSize: 9, letterSpacing: "0.2em", textTransform: "uppercase", color: "var(--text-faint)" }}>{rk.name}</span>
+              </div>
+            )}
+            <div className="agc-dovrbar">
+              <div><div className="agc-dovrnum">{ovr}</div><div className="mono agc-dovrlbl">OVERALL</div></div>
+              <div style={{ textAlign: "right" }}>
+                <div className="mono" style={{ fontSize: 11, letterSpacing: "0.16em", color: "var(--text)" }}>{tier.name}</div>
+                <div className="mono agc-dovrlbl">TIER</div>
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 6, marginTop: 12, flexWrap: "wrap" }}>
+              <span className="agc-dchip" style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><IconCrown size={10} />{a.level || rk?.name || "—"}</span>
+              {a.division && <span className="agc-dchip alt" style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><IconContainer size={10} />{a.division}</span>}
+            </div>
+            <div className="mono agc-dlabel" style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 16 }}><IconExternal size={10} />PROFILES</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}><ProfileLinks acc={acc} /></div>
+            {acc?.bio && <div style={{ fontSize: 11.5, color: "var(--text-soft)", lineHeight: 1.6, marginTop: 14, borderTop: "1px solid var(--border)", paddingTop: 12 }}>{acc.bio}</div>}
+          </aside>
+
+          {/* ── RIGHT: everything measurable ── */}
+          <div className="agc-dright">
+            <Tiles items={[
+              { label: "OVERALL", value: String(ovr) },
+              { label: "JIRA DONE", value: String(live.done), hint: `${live.jiraTotal} assigned` },
+              { label: "GH CONTRIB", value: gh?.found ? gh.contribTotal.toLocaleString() : "—", hint: gh?.found ? `${live.ghActiveDays} active days` : undefined },
+              { label: "TOKENS", value: fmtK(a.tokensInput + a.tokensOutput) },
+              { label: "TIME", value: fmtDur(a.timeSpentMs) },
+              { label: "SESSIONS", value: String(a.sessions) },
+            ]} />
+            <div className="agc-dgrid" style={{ marginTop: 12 }}>
+              <div className="agc-dpanel agc-stg" style={{ animationDelay: "40ms", display: "flex", flexDirection: "column", alignItems: "center" }}>
+                <div className="mono agc-dlabel" style={{ display: "flex", alignItems: "center", gap: 6, alignSelf: "flex-start" }}>
+                  <IconMonitor size={11} />CHARACTERISTICS
+                </div>
+                <MiniRadar s={s} size={236} labelled />
+              </div>
+              <div className="agc-dpanel agc-stg" style={{ animationDelay: "90ms" }}>
+                <div className="mono agc-dlabel" style={{ display: "flex", alignItems: "center", gap: 6 }}><IconCheckCircle size={11} />MISSION COMPLETION</div>
+                {jira && jira.total > 0 ? (
+                  <>
+                    <MissionRing done={jira.completed} total={jira.total} />
+                    <div style={{ marginTop: 14 }}>
+                      <Bars rows={[
+                        { label: "TO DO", value: jira.todo, color: "var(--text-faint)" },
+                        { label: "IN PROG", value: jira.inProgress, color: "#e63b2e" },
+                        { label: "DONE", value: jira.completed, color: "var(--text-soft)" },
+                      ]} />
+                    </div>
+                  </>
+                ) : <div className="soft" style={{ fontSize: 11.5 }}>No Jira workload.</div>}
+              </div>
+            </div>
+            <div className="agc-dpanel agc-stg" style={{ marginTop: 12, animationDelay: "140ms" }}>
+              {gh?.found ? <SevenDay days={gh.days} /> : <div className="soft" style={{ fontSize: 11.5 }}>{acc?.github ? "No public GitHub activity found." : "No GitHub linked."}</div>}
+            </div>
+            <div className="agc-dpanel agc-stg" style={{ marginTop: 12, animationDelay: "190ms" }}>
+              {gh?.found ? <GithubHeatmap days={gh.days} total={gh.contribTotal} /> : <div className="soft" style={{ fontSize: 11.5 }}>No contribution history.</div>}
             </div>
           </div>
-          <div className="agc-dovr"><b>{ovr}</b><span>OVR</span><span className="agc-tier">{tier.name}</span></div>
-        </div>
-        {acc?.bio && <div style={{ fontSize: 12.5, color: "var(--text-soft)", lineHeight: 1.6, margin: "0 2px 12px" }}>{acc.bio}</div>}
-        <Tiles items={[
-          { label: "OVERALL", value: String(ovr) },
-          { label: "JIRA DONE", value: String(live.done), hint: `${live.jiraTotal} assigned` },
-          { label: "GH CONTRIB", value: gh?.found ? gh.contribTotal.toLocaleString() : "—", hint: gh?.found ? `${live.ghActiveDays} active days` : undefined },
-          { label: "TOKENS", value: fmtK(a.tokensInput + a.tokensOutput) },
-          { label: "TIME", value: fmtDur(a.timeSpentMs) },
-          { label: "SESSIONS", value: String(a.sessions) },
-        ]} />
-        <div className="agc-dgrid">
-          <div className="agc-dpanel" style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-            <div className="mono agc-dlabel">CHARACTERISTICS</div>
-            <MiniRadar s={s} />
-            <div className="agc-dradarnums">
-              {STAT_LABELS.map(({ key, short }) => <span key={key}>{short} <b>{s[key]}</b></span>)}
-            </div>
-          </div>
-          <div className="agc-dpanel">
-            <div className="mono agc-dlabel">JIRA WORKLOAD</div>
-            {jira && jira.total > 0 ? <Bars rows={[
-              { label: "TO DO", value: jira.todo, color: "var(--text-faint)" },
-              { label: "IN PROG", value: jira.inProgress, color: "rgb(var(--accent))" },
-              { label: "DONE", value: jira.completed, color: "var(--text-soft)" },
-            ]} /> : <div className="soft" style={{ fontSize: 11.5 }}>No Jira workload.</div>}
-          </div>
-        </div>
-        <div className="agc-dpanel" style={{ marginTop: 12 }}>
-          {gh?.found ? <GithubHeatmap days={gh.days} total={gh.contribTotal} /> : <div className="soft" style={{ fontSize: 11.5 }}>{acc?.github ? "No public GitHub activity found." : "No GitHub linked."}</div>}
         </div>
         {a.username !== meUsername && (
           <div style={{ marginTop: 12 }}>
@@ -391,6 +605,7 @@ export default function AgencyView() {
   const [jiraByAccount, setJiraByAccount] = useState<Record<string, { completed: number; total: number }>>({});
   const [ghByAccount, setGhByAccount] = useState<Record<string, { contribTotal: number; activeDays: number }>>({});
   const [openAgent, setOpenAgent] = useState<Analytics | null>(null);
+  const [scanning, setScanning] = useState<Analytics | null>(null);
   const [search, setSearch] = useState("");
 
   const inputFor = (a: Analytics): StatInput => ({
@@ -473,10 +688,17 @@ export default function AgencyView() {
             if (shown.length === 0) return <div className="soft" style={{ padding: 24, fontSize: 13 }}>No agents match “{search}”.</div>;
             return (
               <div className="agc-list no-scrollbar">
-                {shown.map(({ a, rank }) => <LeaderEntry key={a.accountId} a={a} rank={rank} input={inputFor(a)} onOpen={() => setOpenAgent(a)} />)}
+                {shown.map(({ a, rank }) => <LeaderEntry key={a.accountId} a={a} rank={rank} input={inputFor(a)} onOpen={() => setScanning(a)} />)}
               </div>
             );
           })()}
+          {scanning && (
+            <AgentIdentScan
+              subject={{ photo: scanning.photo, name: scanning.displayName || scanning.username, username: scanning.username }}
+              candidates={(ranked ?? []).map((x) => ({ photo: x.photo, username: x.username }))}
+              onDone={() => { setOpenAgent(scanning); setScanning(null); }}
+            />
+          )}
           {openAgent && <AgentDossierModal a={openAgent} input={inputFor(openAgent)} meUsername={meUsername} onClose={() => setOpenAgent(null)} />}
         </>
       )}

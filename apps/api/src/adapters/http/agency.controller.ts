@@ -164,7 +164,7 @@ export class AgencyController {
     ]);
     const jr = jrows[0];
     return {
-      account: { id: a.id, username: a.username, displayName: a.displayName, photo: a.photo, level: a.level, division: a.division, bio: a.bio, github: a.github, jira: a.jira, role: a.role },
+      account: { id: a.id, username: a.username, displayName: a.displayName, photo: a.photo, level: a.level, division: a.division, bio: a.bio, github: a.github, jira: a.jira, mattermost: a.mattermost ?? "", role: a.role },
       github: gh,
       jira: jr ? { completed: jr.completed, inProgress: jr.inProgress, todo: jr.todo, total: jr.total } : { completed: 0, inProgress: 0, todo: 0, total: 0 },
     };

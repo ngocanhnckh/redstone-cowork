@@ -30,7 +30,7 @@ export type AgencyGithubStat = {
 
 /** Another agent's dossier (profile + GitHub + Jira) for the Arena card detail. */
 export type AgencyAgentDossier = {
-  account: { id: string; username: string; displayName: string; photo: string | null; level: string; division: string; bio: string; github: string; jira: string; role: string };
+  account: { id: string; username: string; displayName: string; photo: string | null; level: string; division: string; bio: string; github: string; jira: string; mattermost: string; role: string };
   github: AgencyGithubStat;
   jira: { completed: number; inProgress: number; todo: number; total: number };
 };
