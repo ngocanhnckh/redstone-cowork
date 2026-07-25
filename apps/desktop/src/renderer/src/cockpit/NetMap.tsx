@@ -31,14 +31,18 @@ const LAND_PATH = (() => {
   return parts.join("");
 })();
 
+// One muted, warm-leaning "instrument" family so the map sits inside the clay/amber HUD
+// instead of the old neon rainbow. Hues stay distinct enough to tell services apart, but
+// share a dusty, low-saturation quality so nothing screams. Web traffic (the bulk) is
+// amber — the theme's home key — so the map reads as part of the palette.
 function serviceColor(s: string | null): string {
   switch (s) {
-    case "https": case "http": return "#54e6ff";
-    case "ssh": return "#5ef2b0";
-    case "dns": return "#ffd166";
-    case "postgres": case "mysql": case "redis": case "mongo": case "mssql": case "oracle": return "#c792ff";
-    case "smtp": case "smtps": case "imaps": case "imap": return "#ff8fa3";
-    default: return "#8fb8ff";
+    case "https": case "http": return "#e0a45c"; // amber — everyday web
+    case "ssh": return "#8fc79f";                 // sage — secure shell
+    case "dns": return "#d4b968";                 // soft gold
+    case "postgres": case "mysql": case "redis": case "mongo": case "mssql": case "oracle": return "#bf9ad6"; // dusty lilac — data stores
+    case "smtp": case "smtps": case "imaps": case "imap": return "#dc9098"; // dusty rose — mail
+    default: return "#a6b3c4";                     // warm slate — other
   }
 }
 

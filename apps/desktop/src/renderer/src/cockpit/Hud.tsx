@@ -481,9 +481,8 @@ function TelemetryColumn({ tele }: { tele: HostTelemetryView[] }) {
     <motion.div className="no-scrollbar" style={{ flex: 1, minWidth: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: 14, minHeight: 0 }}
       variants={STAGGER} initial="hidden" animate="show">
       {/* System status — sits directly under the This Week widget. Only the host
-          machine of the selected session (with its live globe). */}
+          machine of the selected session (the host card already names the machine). */}
       <motion.div variants={RISE}>
-        <div className="kicker" style={{ marginBottom: 8 }}>System status{session ? ` · ${session.machine}` : ""}</div>
         <AnimatePresence mode="popLayout">
           {hostTele ? (
             <motion.div key={hostTele.hostId} layout initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.96 }} transition={{ type: "spring", stiffness: 240, damping: 26 }}>
