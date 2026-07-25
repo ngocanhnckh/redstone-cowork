@@ -20,30 +20,29 @@ const CSS = `
   backdrop-filter: blur(4px); animation: yia-in .15s ease both; }
 @keyframes yia-in { from { opacity:0; transform: translateY(8px);} to { opacity:1; transform:none; } }
 @keyframes rcw-nw-spin { to { transform: rotate(360deg); } }
-.rcw-nw-spin { width:44px; height:44px; border-radius:50%; border:3px solid rgb(84 230 255 / .16);
-  border-top-color: rgb(84 230 255 / .95); border-right-color: rgb(84 230 255 / .6); animation: rcw-nw-spin .8s linear infinite;
-  box-shadow: 0 0 22px -6px rgb(84 230 255 / .6); }
-.rcw-nw { width:560px; max-width:94vw; max-height:88vh; overflow-y:auto; border:1px solid rgb(84 230 255 / .3); border-radius:15px;
+.rcw-nw-spin { width:44px; height:44px; border-radius:50%; border:3px solid rgba(232,230,225,.16);
+  border-top-color: var(--text); border-right-color: rgba(232,230,225,.6); animation: rcw-nw-spin .8s linear infinite; }
+.rcw-nw { width:560px; max-width:94vw; max-height:88vh; overflow-y:auto; border:1px solid rgba(232,230,225,.3); border-radius:15px;
   background: color-mix(in srgb, var(--app-panel) 96%, transparent); -webkit-backdrop-filter: blur(28px) saturate(1.3); backdrop-filter: blur(28px) saturate(1.3);
   box-shadow: 0 22px 60px -16px rgb(0 0 0 / .75); font-family:var(--font-mono); }
 .rcw-nw-head { display:flex; align-items:center; gap:10px; padding:14px 18px; border-bottom:1px solid var(--border); }
 .rcw-nw-steps { display:flex; gap:6px; padding:10px 18px 0; }
 .rcw-nw-dot { flex:1; height:3px; border-radius:2px; background: var(--border); }
-.rcw-nw-dot.on { background: rgb(84 230 255 / .8); box-shadow:0 0 8px rgb(84 230 255 / .6); }
+.rcw-nw-dot.on { background: var(--text); }
 .rcw-nw-body { padding:16px 18px; }
-.rcw-nw-label { display:block; font-size:9.5px; letter-spacing:.28em; color: rgb(84 230 255 / .75); margin:12px 0 5px 2px; }
+.rcw-nw-label { display:block; font-size:9.5px; letter-spacing:.28em; color: var(--text-soft); margin:12px 0 5px 2px; }
 .rcw-nw-input { width:100%; box-sizing:border-box; padding:9px 12px; border-radius:8px; font-size:13px; font-family:inherit;
-  border:1px solid rgb(84 230 255 / .28); background: rgb(84 230 255 / .05); color:#e6f2f4; outline:none; }
+  border:1px solid rgba(232,230,225,.28); background: rgba(232,230,225,.05); color:var(--text); outline:none; }
 .rcw-nw-opt { padding:11px 13px; border-radius:9px; border:1px solid var(--border); cursor:pointer; margin-bottom:8px; transition: border-color .12s, background .12s; }
-.rcw-nw-opt:hover { border-color: rgb(84 230 255 / .5); background: rgb(84 230 255 / .05); }
-.rcw-nw-opt.sel { border-color: rgb(84 230 255 / .8); background: rgb(84 230 255 / .1); }
-.rcw-nw-btn { padding:9px 18px; border-radius:9px; border:1px solid rgb(84 230 255 / .6); cursor:pointer; font-family:inherit;
-  background: rgb(84 230 255 / .15); color:#d9f7ff; font-size:11.5px; font-weight:700; letter-spacing:.2em; }
-.rcw-nw-btn:hover:not(:disabled) { background: rgb(84 230 255 / .25); }
+.rcw-nw-opt:hover { border-color: rgba(232,230,225,.5); background: rgba(232,230,225,.05); }
+.rcw-nw-opt.sel { border-color: rgba(232,230,225,.8); background: rgba(232,230,225,.1); }
+.rcw-nw-btn { padding:9px 18px; border-radius:9px; border:1px solid var(--text); cursor:pointer; font-family:inherit;
+  background: var(--text); color:#0a0a0a; font-size:11.5px; font-weight:700; letter-spacing:.2em; }
+.rcw-nw-btn:hover:not(:disabled) { background:#e63b2e; border-color:#e63b2e; }
 .rcw-nw-btn:disabled { opacity:.4; cursor:not-allowed; }
 .rcw-nw-btn.ghost { border-color: var(--border); background: transparent; color: var(--text-soft); }
-.rcw-nw-cmd { position:relative; margin-top:8px; padding:11px 12px; border-radius:8px; border:1px solid rgb(84 230 255 / .25);
-  background: rgb(0 0 0 / .3); font-size:11px; line-height:1.5; color:#cfe9ef; word-break:break-all; }
+.rcw-nw-cmd { position:relative; margin-top:8px; padding:11px 12px; border-radius:8px; border:1px solid rgba(232,230,225,.25);
+  background: rgb(0 0 0 / .3); font-size:11px; line-height:1.5; color:var(--text-soft); word-break:break-all; }
 .rcw-nw-foot { display:flex; gap:8px; justify-content:space-between; padding:14px 18px; border-top:1px solid var(--border); }
 `;
 
@@ -79,17 +78,17 @@ function FolderBrowser({ machine, value, onChange }: { machine: string; value: s
           onChange={(e) => { setCur(e.target.value); onChange(e.target.value); }} onKeyDown={(e) => { if (e.key === "Enter") load(cur); }} />
         <button className="rcw-nw-btn ghost" style={{ padding: "6px 10px", fontSize: 10 }} onClick={() => load(cur)}>GO</button>
       </div>
-      {err && <div style={{ color: "#e0736a", fontSize: 11, marginBottom: 6 }}>⚠ {err}</div>}
+      {err && <div style={{ color: "#e63b2e", fontSize: 11, marginBottom: 6 }}>⚠ {err}</div>}
       <div className="no-scrollbar" style={{ maxHeight: 220, overflowY: "auto", border: "1px solid var(--border)", borderRadius: 8 }}>
         {loading && <div className="faint" style={{ fontSize: 11, padding: "10px 12px" }}>listing…</div>}
         {!loading && dirs.length === 0 && !err && <div className="faint" style={{ fontSize: 11, padding: "10px 12px" }}>no sub-folders here — this folder is selectable</div>}
         {dirs.map((d) => (
           <div key={d.path} onClick={() => load(d.path)} className="rcw-nw-opt" style={{ margin: 0, borderRadius: 0, borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ opacity: .7 }}>📁</span> <b style={{ color: "#e6f2f4", fontWeight: 500 }}>{d.name}</b>
+            <span style={{ opacity: .7 }}>📁</span> <b style={{ color: "var(--text)", fontWeight: 500 }}>{d.name}</b>
           </div>
         ))}
       </div>
-      <div className="faint" style={{ fontSize: 10.5, marginTop: 6 }}>Selected: <b style={{ color: "rgb(var(--primary-soft))" }}>{cur}</b> — click a folder to open it, or press Next.</div>
+      <div className="faint" style={{ fontSize: 10.5, marginTop: 6 }}>Selected: <b style={{ color: "var(--text)" }}>{cur}</b> — click a folder to open it, or press Next.</div>
     </div>
   );
 }
@@ -98,7 +97,7 @@ function Cmd({ cmd, label }: { cmd: string; label?: string }) {
   const [done, setDone] = useState(false);
   return (
     <div className="rcw-nw-cmd">
-      {label && <div style={{ fontSize: 9, letterSpacing: ".16em", color: "rgb(84 230 255 / .7)", marginBottom: 5 }}>{label}</div>}
+      {label && <div style={{ fontSize: 9, letterSpacing: ".16em", color: "var(--text-faint)", marginBottom: 5 }}>{label}</div>}
       <code>{cmd}</code>
       <button className="rcw-nw-btn" style={{ marginTop: 8, padding: "5px 12px", fontSize: 10 }}
         onClick={() => { navigator.clipboard.writeText(cmd); setDone(true); setTimeout(() => setDone(false), 1500); }}>
@@ -341,7 +340,7 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
       <style>{CSS}</style>
       <div className="rcw-nw no-scrollbar" onClick={(e) => e.stopPropagation()}>
         <div className="rcw-nw-head">
-          <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: ".26em", color: "rgb(84 230 255 / .9)" }}>NEW SESSION</span>
+          <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: ".26em", color: "var(--text)" }}>NEW SESSION</span>
           <span className="faint" style={{ fontSize: 9.5, letterSpacing: ".18em" }}>{server ? server.name : "SELECT TARGET"}</span>
           <span style={{ flex: 1 }} />
           <button className="rcw-nw-btn ghost" style={{ padding: "5px 12px", fontSize: 10 }} onClick={onClose}>ESC</button>
@@ -350,11 +349,11 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
 
         <div className="rcw-nw-body">
          <ErrorBoundary details label="New Session — this step crashed">
-          {err && <div style={{ color: "#ff7d72", fontSize: 11.5, marginBottom: 8 }}>⚠ {err}</div>}
+          {err && <div style={{ color: "#e63b2e", fontSize: 11.5, marginBottom: 8 }}>⚠ {err}</div>}
           {activity.length > 0 && (
             <div className="no-scrollbar" style={{ marginBottom: 10, maxHeight: 120, overflowY: "auto", border: "1px solid var(--border)", borderRadius: 8, padding: "7px 10px", background: "rgb(0 0 0 / .28)", fontFamily: "var(--font-mono)", fontSize: 10.5, lineHeight: 1.6 }}>
               {activity.map((a, i) => (
-                <div key={i} style={{ color: a.kind === "err" ? "#e0736a" : a.kind === "ok" ? "#7fd18b" : "var(--text-soft)" }}>
+                <div key={i} style={{ color: a.kind === "err" ? "#e63b2e" : a.kind === "ok" ? "var(--text-soft)" : "var(--text-soft)" }}>
                   {a.kind === "err" ? "⚠ " : a.kind === "ok" ? "✓ " : "· "}{a.text}
                 </div>
               ))}
@@ -366,8 +365,8 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
               <div className="rcw-nw-label">SELECT SERVER</div>
               {servers.map((s) => (
                 <div key={s.id} className="rcw-nw-opt" onClick={() => chooseServer(s)}>
-                  <b style={{ color: "#e6f2f4" }}>{s.name}</b> <span className="faint">{s.sshUser}@{s.host}:{s.sshPort}</span>
-                  {s.ownerAccountId ? <span style={{ color: "#7fd18b", fontSize: 9, marginLeft: 6 }}>MINE</span> : <span style={{ color: "rgb(84 230 255 / .7)", fontSize: 9, marginLeft: 6 }}>COMPANY</span>}
+                  <b style={{ color: "var(--text)" }}>{s.name}</b> <span className="faint">{s.sshUser}@{s.host}:{s.sshPort}</span>
+                  {s.ownerAccountId ? <span style={{ color: "var(--text-soft)", fontSize: 9, marginLeft: 6 }}>MINE</span> : <span style={{ color: "var(--text-faint)", fontSize: 9, marginLeft: 6 }}>COMPANY</span>}
                 </div>
               ))}
               {!connecting ? (
@@ -397,7 +396,7 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
             <>
               <div className="rcw-nw-label">REDSTONE ON {server.name.toUpperCase()}</div>
               {redstoneInstalled ? (
-                <div style={{ color: "#7fd18b", fontSize: 12, padding: "6px 2px" }}>◈ Redstone agent is reporting from this server — ready.</div>
+                <div style={{ color: "var(--text-soft)", fontSize: 12, padding: "6px 2px" }}>◈ Redstone agent is reporting from this server — ready.</div>
               ) : (
                 <>
                   <div style={{ fontSize: 12, color: "var(--text-soft)", lineHeight: 1.6, marginBottom: 8 }}>
@@ -423,7 +422,7 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
                     </div>
                   )}
 
-                  {installErr && <div style={{ color: "#e0736a", fontSize: 11.5, marginTop: 8 }}>⚠ {installErr}</div>}
+                  {installErr && <div style={{ color: "#e63b2e", fontSize: 11.5, marginTop: 8 }}>⚠ {installErr}</div>}
                   {installLog && (
                     <pre className="no-scrollbar" style={{ marginTop: 10, maxHeight: 160, overflowY: "auto", fontSize: 10.5, lineHeight: 1.5, color: "var(--text-soft)",
                       background: "rgb(0 0 0 / .35)", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{installLog}</pre>
@@ -448,12 +447,12 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
             <>
               <div className="rcw-nw-label">RESUME OR CREATE</div>
               <div className={`rcw-nw-opt ${createNew ? "sel" : ""}`} onClick={() => { setCreateNew(true); setResume(null); go("folder"); }}>
-                <b style={{ color: "#e6f2f4" }}>＋ New session</b> <span className="faint">— browse to a folder & pick a mode →</span>
+                <b style={{ color: "var(--text)" }}>＋ New session</b> <span className="faint">— browse to a folder & pick a mode →</span>
               </div>
               {hostSessions.length > 0 && <div className="rcw-nw-label">RUNNING NOW <span style={{ opacity: .6, letterSpacing: 0 }}>— click to open it in your cockpit</span></div>}
               {hostSessions.slice(0, 40).map((s) => (
                 <div key={s.id} className="rcw-nw-opt" onClick={() => resumeInCockpit(s)}>
-                  <b style={{ color: "#7fd18b" }}>● {s.folder}</b> <span className="faint">{s.title ?? s.cwd}</span>
+                  <b style={{ color: "var(--text-soft)" }}>● {s.folder}</b> <span className="faint">{s.title ?? s.cwd}</span>
                 </div>
               ))}
 
@@ -468,7 +467,7 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
                   .slice(0, 60)
                   .map((c) => (
                     <div key={c.id} className="rcw-nw-opt" onClick={() => pickConversation(c)} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                      <span><b style={{ color: "#e6f2f4", fontWeight: 500 }}>↻ {c.title || "(untitled conversation)"}</b></span>
+                      <span><b style={{ color: "var(--text)", fontWeight: 500 }}>↻ {c.title || "(untitled conversation)"}</b></span>
                       <span className="faint" style={{ fontSize: 10.5 }}>{c.cwd} · {new Date(c.mtime * 1000).toLocaleString()}</span>
                     </div>
                   ))}
@@ -490,7 +489,7 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
                       {!loadingSess && folderSess.length === 0 && <div className="faint" style={{ fontSize: 11 }}>None found — “Next” starts a fresh session in this folder.</div>}
                       {folderSess.map((s) => (
                         <div key={s.id} className={`rcw-nw-opt ${resumeId === s.id ? "sel" : ""}`} onClick={() => { setResumeId(s.id); go("mode"); }}>
-                          <b style={{ color: "#e6f2f4" }}>↻ {s.title || "(untitled conversation)"}</b>{" "}
+                          <b style={{ color: "var(--text)" }}>↻ {s.title || "(untitled conversation)"}</b>{" "}
                           <span className="faint">· {s.messages} msgs · {new Date(s.mtime * 1000).toLocaleString()}</span>
                         </div>
                       ))}
@@ -506,10 +505,10 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
             <>
               <div className="rcw-nw-label">PERMISSION MODE</div>
               <div className={`rcw-nw-opt ${mode === "normal" ? "sel" : ""}`} onClick={() => setMode("normal")}>
-                <b style={{ color: "#e6f2f4" }}>Normal</b> <span className="faint">— Claude asks before running tools</span>
+                <b style={{ color: "var(--text)" }}>Normal</b> <span className="faint">— Claude asks before running tools</span>
               </div>
               <div className={`rcw-nw-opt ${mode === "danger" ? "sel" : ""}`} onClick={() => setMode("danger")}>
-                <b style={{ color: "#e0a24a" }}>Dangerously Skip Permissions</b> <span className="faint">— auto-runs everything (--dangerously-skip-permissions)</span>
+                <b style={{ color: "#e63b2e" }}>Dangerously Skip Permissions</b> <span className="faint">— auto-runs everything (--dangerously-skip-permissions)</span>
               </div>
             </>
           )}
@@ -526,7 +525,7 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
               ) : sessConnecting ? (
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14, padding: "26px 2px" }}>
                   <span className="rcw-nw-spin" />
-                  <div style={{ fontSize: 13.5, fontWeight: 600, color: "rgb(84 230 255 / .95)", letterSpacing: ".04em" }}>
+                  <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--text)", letterSpacing: ".04em" }}>
                     {resumeId ? "RESUMING" : "STARTING"} — CONNECTING…<span className="hud-blink">▮</span>
                   </div>
                   <div className="faint" style={{ fontSize: 11.5, textAlign: "center", lineHeight: 1.6, maxWidth: 340 }}>
@@ -536,7 +535,7 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
                 </div>
               ) : launched ? (
                 <div style={{ padding: "10px 2px" }}>
-                  <div style={{ color: "#7fd18b", fontSize: 13, fontWeight: 600 }}>◈ Session started — {launched}</div>
+                  <div style={{ color: "var(--text-soft)", fontSize: 13, fontWeight: 600 }}>◈ Session started — {launched}</div>
                   <div className="faint" style={{ fontSize: 11.5, marginTop: 6, lineHeight: 1.6 }}>
                     Running in <b>{folder}</b> ({mode === "danger" ? "DANGEROUS" : "normal"} mode) on <b>{server?.name}</b>.
                     It should appear in your cockpit shortly — you can close this.
@@ -566,7 +565,7 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
                       </button>
                     </div>
                   )}
-                  {launchErr && <div style={{ color: "#e0736a", fontSize: 11.5, marginTop: 8 }}>⚠ {launchErr}</div>}
+                  {launchErr && <div style={{ color: "#e63b2e", fontSize: 11.5, marginTop: 8 }}>⚠ {launchErr}</div>}
                   {launchLog && (
                     <pre className="no-scrollbar" style={{ marginTop: 10, maxHeight: 140, overflowY: "auto", fontSize: 10.5, lineHeight: 1.5, color: "var(--text-soft)",
                       background: "rgb(0 0 0 / .35)", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{launchLog}</pre>

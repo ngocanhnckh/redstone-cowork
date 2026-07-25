@@ -16,14 +16,14 @@ type Meta = { label: string; icon: string; w: number; h: number; minW: number; m
 const CATALOG: Record<WidgetKind, Meta> = {
   attention:  { label: "Attention Radar", icon: "◉", w: 260, h: 158, minW: 200, minH: 120 },
   burn:       { label: "Fleet Burn ($)",  icon: "$", w: 210, h: 132, minW: 170, minH: 110 },
-  ticker:     { label: "Activity Ticker", icon: "⚡", w: 340, h: 74,  minW: 220, minH: 60  },
+  ticker:     { label: "Activity Ticker", icon: "↯", w: 340, h: 74,  minW: 220, minH: 60  },
   timer:      { label: "Focus Timer",     icon: "◔", w: 196, h: 150, minW: 170, minH: 130 },
   scratch:    { label: "Scratch Note",    icon: "✎", w: 224, h: 158, minW: 160, minH: 110 },
   throughput: { label: "Throughput",      icon: "▚", w: 224, h: 128, minW: 180, minH: 108 },
   radar:      { label: "Recon Radar",     icon: "◎", w: 244, h: 244, minW: 190, minH: 190 },
   reactor:    { label: "Top Processes",   icon: "⚛", w: 264, h: 190, minW: 210, minH: 140 },
   agenda:     { label: "Agenda",          icon: "▦", w: 286, h: 214, minW: 220, minH: 150 },
-  netmap:     { label: "Network Map",     icon: "🛰", w: 440, h: 340, minW: 320, minH: 250 },
+  netmap:     { label: "Network Map",     icon: "⌖", w: 440, h: 340, minW: 320, minH: 250 },
   weather:    { label: "Weather",         icon: "☀", w: 230, h: 180, minW: 190, minH: 150 },
 };
 const ORDER: WidgetKind[] = ["attention", "netmap", "weather", "agenda", "reactor", "radar", "burn", "throughput", "ticker", "timer", "scratch"];
@@ -337,7 +337,7 @@ function AttentionRadar() {
   return (
     <div style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 7 }}>
-        <span className={rows.length ? "rcw-w-pulse" : ""} style={{ width: 8, height: 8, borderRadius: "50%", background: rows.length ? "rgb(var(--accent))" : "var(--text-faint)", boxShadow: rows.length ? "0 0 10px 1px rgb(var(--accent))" : "none" }} />
+        <span className={rows.length ? "rcw-w-pulse" : ""} style={{ width: 8, height: 8, borderRadius: "50%", background: rows.length ? "rgb(var(--accent))" : "var(--text-faint)" }} />
         <span className="mono" style={{ fontSize: 10, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--text-soft)" }}>Needs you{rows.length ? ` · ${rows.length}` : ""}</span>
       </div>
       {rows.length === 0 ? (
@@ -348,10 +348,10 @@ function AttentionRadar() {
             const hot = r.age > 120; // >2m waiting → urgent
             return (
               <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ width: 6, height: 6, borderRadius: "50%", flexShrink: 0, background: hot ? "#ff7a6b" : "rgb(var(--accent))", boxShadow: `0 0 8px 1px ${hot ? "#ff7a6b" : "rgb(var(--accent))"}`, animation: `rcw-w-blink ${hot ? 0.7 : 1.6}s steps(1) infinite` }} />
+                <span style={{ width: 6, height: 6, borderRadius: "50%", flexShrink: 0, background: "#e63b2e" }} />
                 <span style={{ fontSize: 12, minWidth: 0, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.name}</span>
                 <span className="mono faint" style={{ fontSize: 10, flexShrink: 0 }}>{r.kind[0].toUpperCase()}</span>
-                <span className="mono" style={{ fontSize: 10.5, flexShrink: 0, color: hot ? "#ff9b8f" : "var(--text-soft)", fontVariantNumeric: "tabular-nums" }}>{fmtAge(r.age)}</span>
+                <span className="mono" style={{ fontSize: 10.5, flexShrink: 0, color: hot ? "#e63b2e" : "var(--text-soft)", fontVariantNumeric: "tabular-nums" }}>{fmtAge(r.age)}</span>
               </div>
             );
           })}
@@ -375,10 +375,10 @@ function FleetBurn() {
         <span style={{ fontSize: 24, fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>${totalCost.toFixed(2)}</span>
         <span className="mono faint" style={{ fontSize: 10 }}>total</span>
       </div>
-      <div className="mono" style={{ fontSize: 11.5, color: active ? "rgb(var(--accent))" : "var(--text-faint)", marginTop: 2, marginBottom: 6 }}>
+      <div className="mono" style={{ fontSize: 11.5, color: active ? "var(--text)" : "var(--text-faint)", marginTop: 2, marginBottom: 6 }}>
         {active ? <>${costPerHr.toFixed(2)} <span className="faint">/hr · last 60m</span></> : idleLabel}
       </div>
-      <div style={{ marginTop: "auto" }}><Spark data={costSpark} color="rgb(var(--accent))" height={26} /></div>
+      <div style={{ marginTop: "auto" }}><Spark data={costSpark} color="var(--text-soft)" height={26} /></div>
     </div>
   );
 }
@@ -400,31 +400,33 @@ function Throughput() {
 }
 
 // ── Widget: Activity Ticker ───────────────────────────────────────────────────
+// Static display of the single latest fleet item ("project › latest snippet").
+// No marquee — the display only changes when the data does (quick fade-in on change).
 function ActivityTicker() {
   const sessions = useStore((s) => s.sessions);
-  const text = useMemo(() => {
+  const latest = useMemo(() => {
     const items = sessions
       .map((s) => {
         const last = [...(s.transcript ?? [])].reverse().find((m) => m.role === "assistant");
         if (!last) return null;
-        const snip = last.text.replace(/\s+/g, " ").trim().slice(0, 80);
+        const snip = last.text.replace(/\s+/g, " ").trim().slice(0, 120);
         return { name: projectName(s.cwd), snip, at: s.lastSeenAt ? new Date(s.lastSeenAt).getTime() : 0 };
       })
       .filter(Boolean) as { name: string; snip: string; at: number }[];
     items.sort((a, b) => b.at - a.at);
-    return items.map((i) => `${i.name} › ${i.snip}`).join("     •     ");
+    return items[0] ?? null;
   }, [sessions]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 5 }}>
-        <span style={{ color: "rgb(var(--accent))", fontSize: 12 }}>⚡</span>
         <span className="mono faint" style={{ fontSize: 9, letterSpacing: "0.14em", textTransform: "uppercase" }}>Fleet activity</span>
       </div>
-      <div style={{ position: "relative", flex: 1, overflow: "hidden", display: "flex", alignItems: "center", maskImage: "linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent)", WebkitMaskImage: "linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent)" }}>
-        {text ? (
-          <div className="rcw-marquee mono" style={{ fontSize: 11.5, color: "var(--text-soft)", whiteSpace: "nowrap" }}>
-            <span>{text}</span><span style={{ paddingLeft: 60 }}>{text}</span>
+      <div style={{ position: "relative", flex: 1, overflow: "hidden", display: "flex", alignItems: "center" }}>
+        {latest ? (
+          <div key={`${latest.name}›${latest.snip}`} className="rcw-ticker-item mono"
+            style={{ fontSize: 11.5, color: "var(--text-soft)", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
+            <span style={{ color: "var(--text)" }}>{latest.name}</span> › {latest.snip}
           </div>
         ) : <span className="mono faint" style={{ fontSize: 11 }}>no fleet activity yet</span>}
       </div>
@@ -464,11 +466,11 @@ function FocusTimer() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", minHeight: 0, flex: 1, justifyContent: "center", gap: 6 }}>
-      <div className="mono faint" style={{ fontSize: 8.5, letterSpacing: "0.18em", textTransform: "uppercase", color: mode === "work" ? "rgb(var(--accent))" : "rgb(var(--primary-soft))" }}>{mode === "work" ? "Focus" : "Break"}</div>
+      <div className="mono faint" style={{ fontSize: 8.5, letterSpacing: "0.18em", textTransform: "uppercase", color: mode === "work" ? "var(--text)" : "var(--text-soft)" }}>{mode === "work" ? "Focus" : "Break"}</div>
       <div style={{ position: "relative", width: 76, height: 76 }}>
         <svg width="76" height="76" viewBox="0 0 76 76" style={{ transform: "rotate(-90deg)" }}>
           <circle cx="38" cy="38" r={R} fill="none" stroke="rgb(var(--primary-soft) / 0.15)" strokeWidth="3" />
-          <circle cx="38" cy="38" r={R} fill="none" stroke="rgb(var(--accent))" strokeWidth="3" strokeLinecap="round" strokeDasharray={C} strokeDashoffset={C * (1 - frac)} style={{ transition: "stroke-dashoffset 0.9s linear", filter: "drop-shadow(0 0 4px rgb(var(--accent) / 0.6))" }} />
+          <circle cx="38" cy="38" r={R} fill="none" stroke="var(--text)" strokeWidth="3" strokeLinecap="round" strokeDasharray={C} strokeDashoffset={C * (1 - frac)} style={{ transition: "stroke-dashoffset 0.9s linear" }} />
         </svg>
         <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--font-mono)", fontSize: 17, fontVariantNumeric: "tabular-nums" }}>{mm}:{String(ss).padStart(2, "0")}</div>
       </div>
@@ -553,7 +555,7 @@ function ReconRadar() {
           {/* sweep */}
           <span className="rcw-radar-sweep" />
           {/* center */}
-          <span style={{ position: "absolute", left: "calc(50% - 3px)", top: "calc(50% - 3px)", width: 6, height: 6, borderRadius: "50%", background: "rgb(var(--accent))", boxShadow: "0 0 8px 1px rgb(var(--accent))" }} />
+          <span style={{ position: "absolute", left: "calc(50% - 3px)", top: "calc(50% - 3px)", width: 6, height: 6, borderRadius: "50%", background: "var(--text)" }} />
           {/* blips */}
           {blips.map((b) => (
             <span key={b.p.ip}
@@ -565,7 +567,7 @@ function ReconRadar() {
         </div>
         {peers.length === 0 && <div className="mono faint" style={{ position: "absolute", fontSize: 10 }}>{machine ? "no external peers" : "focus a session"}</div>}
         {hover && (
-          <div className="mono" style={{ position: "absolute", bottom: 2, left: 2, right: 2, textAlign: "center", fontSize: 10.5, color: "rgb(var(--accent))", background: "color-mix(in srgb, var(--app-panel) 88%, transparent)", borderRadius: 6, padding: "2px 4px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <div className="mono" style={{ position: "absolute", bottom: 2, left: 2, right: 2, textAlign: "center", fontSize: 10.5, color: "var(--text)", background: "color-mix(in srgb, var(--app-panel) 88%, transparent)", borderRadius: 6, padding: "2px 4px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {hover.ip}{hover.port ? ` :${hover.port}` : ""} · ×{hover.count}
           </div>
         )}
@@ -576,11 +578,11 @@ function ReconRadar() {
 
 // ── Widget: Reactor (top processes on the remote host) ────────────────────────
 type Proc = { pid: number; name: string; cpu: number; mem: number };
-// A hot→cold colour for a load percentage: cyan (idle) → amber → red (pegged).
+// Load colour: chalk (idle) → soft chalk (busy) → signal red only when pegged.
 function loadColor(pct: number): string {
-  if (pct >= 80) return "#ff5c4d";
-  if (pct >= 45) return "#ffb454";
-  return "rgb(var(--accent))";
+  if (pct >= 80) return "#e63b2e";
+  if (pct >= 45) return "var(--text)";
+  return "var(--text-soft)";
 }
 function Reactor() {
   const focusId = useStore((s) => s.focusId);
@@ -627,7 +629,7 @@ function Reactor() {
             return (
               <div key={p.pid} title={`pid ${p.pid} · ${p.name} · cpu ${p.cpu}% · mem ${p.mem}%`} style={{ position: "relative", display: "flex", alignItems: "center", gap: 8, height: 17 }}>
                 {/* load bar behind the label */}
-                <span style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${Math.min(100, v)}%`, background: `linear-gradient(90deg, ${c}44, ${c}14)`, borderLeft: `2px solid ${c}`, borderRadius: 3, boxShadow: hot ? `0 0 10px ${c}` : "none", transition: "width .6s ease", animation: hot ? "rcw-w-pulse 1s ease-in-out infinite" : "none" }} />
+                <span style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${Math.min(100, v)}%`, background: `color-mix(in srgb, ${c} ${hot ? 22 : 14}%, transparent)`, borderLeft: `2px solid ${c}`, borderRadius: 3, transition: "width .6s ease" }} />
                 <span style={{ position: "relative", fontSize: 11.5, minWidth: 0, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", paddingLeft: 6 }}>{p.name}</span>
                 <span className="mono faint" style={{ position: "relative", fontSize: 8.5 }}>{p.pid}</span>
                 <span className="mono" style={{ position: "relative", fontSize: 11, color: c, fontVariantNumeric: "tabular-nums", minWidth: 38, textAlign: "right" }}>{v.toFixed(1)}%</span>
@@ -642,8 +644,8 @@ function Reactor() {
 
 // ── Widget: Agenda (macOS system calendar) ────────────────────────────────────
 type CalEvent = { title: string; start: string; end: string; allDay: boolean; calendar: string };
-// Stable per-calendar accent so each account reads as its own colour dot.
-const CAL_HUES = ["#54e6ff", "#7ee081", "#ffb454", "#c78bff", "#ff8fa3", "#6fb8ff", "#f0d264"];
+// Stable per-calendar shade (chalk monochrome) so each account still reads distinct.
+const CAL_HUES = ["#e8e6e1", "#98958f", "#c4c1bb", "#b0ada7", "#d6d3cd", "#8a8781", "#a8a59f"];
 function calColor(name: string): string { return CAL_HUES[Math.floor(hash01(name) * CAL_HUES.length) % CAL_HUES.length]; }
 function dayLabel(d: Date, now: Date): string {
   const a = new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -712,7 +714,7 @@ function Agenda() {
                   const soon = x.s.getTime() === nextStart;
                   return (
                     <div key={i} title={`${x.e.title}\n${x.e.calendar}`} style={{ display: "flex", alignItems: "baseline", gap: 7, opacity: soon ? 1 : 0.92 }}>
-                      <span style={{ width: 6, height: 6, borderRadius: "50%", flexShrink: 0, alignSelf: "center", background: calColor(x.e.calendar), boxShadow: soon ? `0 0 8px 1px ${calColor(x.e.calendar)}` : "none" }} />
+                      <span style={{ width: 6, height: 6, borderRadius: "50%", flexShrink: 0, alignSelf: "center", background: calColor(x.e.calendar) }} />
                       <span className="mono" style={{ fontSize: 10, flexShrink: 0, color: soon ? "rgb(var(--accent))" : "var(--text-soft)", fontVariantNumeric: "tabular-nums", minWidth: 46 }}>
                         {x.e.allDay ? "all-day" : hhmm(x.s)}
                       </span>
@@ -740,21 +742,19 @@ function WidgetStyles() {
       .rcw-widget-grip:active { cursor: grabbing; }
       .rcw-widget:hover .rcw-widget-grip { opacity: 1; }
       .rcw-widget-resize { position: absolute; right: 0; bottom: 0; width: 16px; height: 16px; cursor: nwse-resize; z-index: 5; opacity: 0; transition: opacity .15s;
-        background: linear-gradient(135deg, transparent 50%, rgb(var(--primary-soft) / 0.5) 50%); border-bottom-right-radius: 13px; }
+        background: rgb(var(--primary-soft) / 0.5); clip-path: polygon(100% 0, 100% 100%, 0 100%); border-bottom-right-radius: 13px; }
       .rcw-widget:hover .rcw-widget-resize { opacity: 1; }
-      @keyframes rcw-marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
-      .rcw-marquee { display: inline-flex; animation: rcw-marquee 26s linear infinite; }
-      .rcw-marquee:hover { animation-play-state: paused; }
-      @keyframes rcw-w-blink { 50% { opacity: 0.25; } }
+      @keyframes rcw-ticker-in { from { opacity: 0; } to { opacity: 1; } }
+      .rcw-ticker-item { animation: rcw-ticker-in .24s ease both; }
       @keyframes rcw-w-pulse { 0%,100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.5); opacity: 0.5; } }
       .rcw-w-pulse { animation: rcw-w-pulse 1.3s ease-in-out infinite; }
       @keyframes rcw-radar-spin { to { transform: rotate(360deg); } }
       .rcw-radar-sweep { position: absolute; inset: 0; border-radius: 50%; animation: rcw-radar-spin 3.4s linear infinite;
-        background: conic-gradient(from 0deg, transparent 0deg, rgb(var(--accent) / 0.02) 300deg, rgb(var(--accent) / 0.28) 355deg, rgb(var(--accent) / 0.5) 360deg); }
-      .rcw-blip { border-radius: 50%; background: rgb(var(--accent)); box-shadow: 0 0 7px 1px rgb(var(--accent)); transform: translate(-50%, -50%);
-        cursor: pointer; animation: rcw-w-pulse 2.4s ease-in-out infinite; }
-      .rcw-blip:hover { background: #fff; box-shadow: 0 0 10px 2px rgb(var(--accent)); }
-      body.rcw-hidden .rcw-marquee, body.rcw-hidden .rcw-radar-sweep, body.rcw-hidden .rcw-blip, body.rcw-hidden .rcw-w-pulse { animation-play-state: paused !important; }
+        background: conic-gradient(from 0deg, transparent 0deg, rgb(var(--primary-soft) / 0.02) 300deg, rgb(var(--primary-soft) / 0.2) 355deg, rgb(var(--primary-soft) / 0.35) 360deg); }
+      .rcw-blip { border-radius: 50%; background: rgb(var(--primary-soft)); transform: translate(-50%, -50%);
+        cursor: pointer; }
+      .rcw-blip:hover { background: var(--text); }
+      body.rcw-hidden .rcw-radar-sweep, body.rcw-hidden .rcw-w-pulse { animation-play-state: paused !important; }
     `}</style>
   );
 }

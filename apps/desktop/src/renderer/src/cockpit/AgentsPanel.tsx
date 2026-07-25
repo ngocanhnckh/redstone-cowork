@@ -39,17 +39,17 @@ function JiraUserPicker({ value, profile, onType, onPick }: {
         onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 180)} />
       {open && (results.length > 0 || loading) && (
         <div className="no-scrollbar" style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 40, marginTop: 3, maxHeight: 220, overflowY: "auto",
-          border: "1px solid rgb(84 230 255 / .4)", borderRadius: 9, background: "rgb(8 14 20 / .97)", backdropFilter: "blur(10px)", boxShadow: "0 12px 40px -10px rgb(0 0 0 / .7)" }}>
+          border: "1px solid var(--border-strong)", borderRadius: 9, background: "rgb(8 14 20 / .97)", backdropFilter: "blur(10px)", boxShadow: "0 12px 40px -10px rgb(0 0 0 / .7)" }}>
           {loading && <div className="faint" style={{ padding: "8px 10px", fontSize: 10.5 }}>searching…</div>}
           {results.map((u) => (
             <div key={(u.key || u.name) + u.displayName} onMouseDown={(e) => { e.preventDefault(); onPick(u); setQ(u.name); setOpen(false); }}
-              style={{ display: "flex", alignItems: "center", gap: 9, padding: "7px 10px", cursor: "pointer", borderBottom: "1px solid rgb(84 230 255 / .1)" }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = "rgb(84 230 255 / .12)")}
+              style={{ display: "flex", alignItems: "center", gap: 9, padding: "7px 10px", cursor: "pointer", borderBottom: "1px solid rgba(232,230,225,.1)" }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(232,230,225,.12)")}
               onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}>
               {u.avatarUrl ? <img src={u.avatarUrl} alt="" style={{ width: 24, height: 24, borderRadius: 6, objectFit: "cover" }} />
-                : <div style={{ width: 24, height: 24, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", background: "rgb(84 230 255 / .12)", fontSize: 11 }}>◍</div>}
+                : <div style={{ width: 24, height: 24, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(232,230,225,.12)", fontSize: 11 }}>◍</div>}
               <div style={{ minWidth: 0, flex: 1 }}>
-                <div style={{ fontSize: 12, color: "#e6f2f4", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{u.displayName}</div>
+                <div style={{ fontSize: 12, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{u.displayName}</div>
                 <div className="faint" style={{ fontSize: 10 }}>@{u.name}{u.email ? ` · ${u.email}` : ""}</div>
               </div>
             </div>
@@ -65,30 +65,30 @@ const CSS = `
 .rcw-ag { height:100%; min-height:0; display:flex; flex-direction:column; font-family:var(--font-mono); }
 .rcw-ag-head { display:flex; align-items:center; gap:10px; padding:10px 14px; border-bottom:1px solid var(--border); flex-shrink:0; }
 .rcw-ag-grid { flex:1; min-height:0; overflow-y:auto; padding:12px; display:grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap:10px; align-content:start; }
-.rcw-ag-card { position:relative; border:1px solid rgb(84 230 255 / .22); border-radius:12px; padding:14px 12px 11px; cursor:pointer;
-  background: rgb(84 230 255 / .04); animation: rcw-ag-in .22s ease both; transition: border-color .15s, box-shadow .15s; }
-.rcw-ag-card:hover { border-color: rgb(84 230 255 / .55); box-shadow: 0 0 24px -8px rgb(84 230 255 / .6); }
-.rcw-ag-card.sel { border-color: rgb(84 230 255 / .8); box-shadow: 0 0 26px -6px rgb(84 230 255 / .7); }
+.rcw-ag-card { position:relative; border:1px solid rgb(232 230 225 / .22); border-radius:12px; padding:14px 12px 11px; cursor:pointer;
+  background: rgb(232 230 225 / .04); animation: rcw-ag-in .22s ease both; transition: border-color .15s; }
+.rcw-ag-card:hover { border-color: rgb(232 230 225 / .55); }
+.rcw-ag-card.sel { border-color: rgb(232 230 225 / .8); }
 .rcw-ag-card.dis { opacity:.45; }
 .rcw-ag-photo { width:64px; height:64px; border-radius:50%; object-fit:cover; display:block; margin:0 auto 8px;
-  border:2px solid rgb(84 230 255 / .5); box-shadow: 0 0 16px -4px rgb(84 230 255 / .6); background:#05090d; }
-.rcw-ag-photo.ph { display:flex; align-items:center; justify-content:center; font-size:24px; color: rgb(84 230 255 / .5); }
-.rcw-ag-name { text-align:center; font-size:12.5px; font-weight:700; letter-spacing:.06em; color:#e6f2f4; }
+  border:2px solid rgb(232 230 225 / .5); background:#0a0a0a; }
+.rcw-ag-photo.ph { display:flex; align-items:center; justify-content:center; font-size:24px; color: rgb(232 230 225 / .5); }
+.rcw-ag-name { text-align:center; font-size:12.5px; font-weight:700; letter-spacing:.06em; color:var(--text); }
 .rcw-ag-user { text-align:center; font-size:10px; color:var(--text-faint); margin-top:2px; }
 .rcw-ag-badges { display:flex; justify-content:center; gap:5px; margin-top:7px; flex-wrap:wrap; }
-.rcw-ag-badge { font-size:9px; letter-spacing:.14em; padding:2px 8px; border-radius:999px; border:1px solid rgb(84 230 255 / .4); color: rgb(84 230 255 / .9); }
-.rcw-ag-badge.gold { border-color: rgb(224 162 74 / .55); color:#e0a24a; }
+.rcw-ag-badge { font-size:9px; letter-spacing:.14em; padding:2px 8px; border-radius:999px; border:1px solid rgb(232 230 225 / .4); color: rgb(232 230 225 / .9); }
+.rcw-ag-badge.gold { border-color: var(--border-strong); color:var(--text-soft); }
 .rcw-ag-badge.dim { border-color: var(--border); color: var(--text-soft); }
 .rcw-ag-side { width:340px; flex-shrink:0; border-left:1px solid var(--border); overflow-y:auto; padding:14px; }
-.rcw-ag-label { display:block; font-size:9px; letter-spacing:.26em; color: rgb(84 230 255 / .7); margin:10px 0 4px 2px; }
+.rcw-ag-label { display:block; font-size:9px; letter-spacing:.26em; color: rgb(232 230 225 / .7); margin:10px 0 4px 2px; }
 .rcw-ag-input { width:100%; box-sizing:border-box; padding:8px 10px; border-radius:7px; font-size:12px; font-family:inherit;
-  border:1px solid rgb(84 230 255 / .28); background: rgb(84 230 255 / .05); color:#e6f2f4; outline:none; }
-.rcw-ag-input:focus { border-color: rgb(84 230 255 / .7); }
-.rcw-ag-btn { padding:8px 14px; border-radius:8px; border:1px solid rgb(84 230 255 / .6); cursor:pointer; font-family:inherit;
-  background: rgb(84 230 255 / .14); color:#d9f7ff; font-size:11px; font-weight:700; letter-spacing:.18em; }
-.rcw-ag-btn:hover:not(:disabled) { background: rgb(84 230 255 / .24); }
+  border:1px solid rgb(232 230 225 / .28); background: rgb(232 230 225 / .05); color:var(--text); outline:none; }
+.rcw-ag-input:focus { border-color: rgb(232 230 225 / .7); }
+.rcw-ag-btn { padding:8px 14px; border-radius:8px; border:1px solid var(--text); cursor:pointer; font-family:inherit;
+  background: var(--text); color:#0a0a0a; font-size:11px; font-weight:700; letter-spacing:.18em; }
+.rcw-ag-btn:hover:not(:disabled) { background:#e63b2e; border-color:#e63b2e; }
 .rcw-ag-btn:disabled { opacity:.45; cursor:not-allowed; }
-.rcw-ag-btn.warn { border-color: rgb(224 115 106 / .6); background: rgb(224 115 106 / .12); color:#ff9d94; }
+.rcw-ag-btn.warn { border-color: rgb(230 59 46 / .6); background: rgb(230 59 46 / .12); color:#e63b2e; }
 .rcw-ag-audit { font-size:10px; line-height:1.7; }
 .rcw-ag-audit td { padding:2px 8px 2px 0; white-space:nowrap; }
 `;
@@ -382,15 +382,15 @@ export default function AgentsPanel() {
       <input ref={sampleRef} type="file" accept="image/*" style={{ display: "none" }} onChange={addFaceSample} />
 
       <div className="rcw-ag-head">
-        <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".3em", color: "rgb(84 230 255 / .9)" }}>ADMIN CONSOLE</span>
+        <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".3em", color: "rgb(232 230 225 / .9)" }}>ADMIN CONSOLE</span>
         <span className="faint" style={{ fontSize: 9.5, letterSpacing: ".2em" }}>YITEC INTELLIGENCE AGENCY</span>
         <span style={{ flex: 1 }} />
-        {msg && <span style={{ fontSize: 10, color: "#7fd18b", letterSpacing: ".14em" }}>{msg}</span>}
+        {msg && <span style={{ fontSize: 10, color: "var(--text-soft)", letterSpacing: ".14em" }}>{msg}</span>}
         {isAdmin && (
           <div style={{ display: "flex", gap: 4 }}>
             {(["roster", "console", "servers"] as const).map((v) => (
-              <button key={v} className="rcw-ag-btn" style={{ opacity: view === v ? 1 : 0.55, background: view === v ? "rgb(84 230 255 / .24)" : undefined }}
-                onClick={() => setView(v)}>{v === "roster" ? "ROSTER" : v === "console" ? "📊 CONSOLE" : "⬡ ACCESS"}</button>
+              <button key={v} className="rcw-ag-btn" style={{ opacity: view === v ? 1 : 0.55, background: view === v ? "rgb(232 230 225 / .24)" : undefined }}
+                onClick={() => setView(v)}>{v === "roster" ? "ROSTER" : v === "console" ? "CONSOLE" : "⬡ ACCESS"}</button>
             ))}
           </div>
         )}
@@ -401,11 +401,11 @@ export default function AgentsPanel() {
         )}
       </div>
 
-      {err && <div style={{ padding: "10px 14px", color: "#ff7d72", fontSize: 11.5 }}>⚠ {err}</div>}
+      {err && <div style={{ padding: "10px 14px", color: "#e63b2e", fontSize: 11.5 }}>⚠ {err}</div>}
 
       {view === "console" && isAdmin ? (
         <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: 14 }}>
-          <div style={{ fontSize: 11, letterSpacing: ".2em", color: "rgb(84 230 255 / .8)", marginBottom: 10 }}>TOKEN SPEND & ACTIVITY · PER AGENT</div>
+          <div style={{ fontSize: 11, letterSpacing: ".2em", color: "rgb(232 230 225 / .8)", marginBottom: 10 }}>TOKEN SPEND & ACTIVITY · PER AGENT</div>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11.5 }}>
             <thead><tr style={{ color: "var(--text-faint)", textAlign: "left", fontSize: 9.5, letterSpacing: ".14em" }}>
               <th style={{ padding: "4px 8px" }}>AGENT</th><th>SESSIONS</th><th>TOKENS IN</th><th>TOKENS OUT</th><th>EST. COST</th><th>LAST ACTIVE</th>
@@ -413,11 +413,11 @@ export default function AgentsPanel() {
             <tbody>
               {analytics.map((r) => (
                 <tr key={r.accountId} style={{ borderTop: "1px solid var(--border)" }}>
-                  <td style={{ padding: "7px 8px" }}><b style={{ color: "#e6f2f4" }}>{r.displayName}</b> <span className="faint">@{r.username}</span></td>
-                  <td>{r.sessions}{r.activeSessions > 0 && <span style={{ color: "#7fd18b" }}> ({r.activeSessions} live)</span>}</td>
+                  <td style={{ padding: "7px 8px" }}><b style={{ color: "var(--text)" }}>{r.displayName}</b> <span className="faint">@{r.username}</span></td>
+                  <td>{r.sessions}{r.activeSessions > 0 && <span style={{ color: "var(--text-soft)" }}> ({r.activeSessions} live)</span>}</td>
                   <td>{fmtK(r.tokensInput)}</td>
                   <td>{fmtK(r.tokensOutput)}</td>
-                  <td style={{ color: "#e0a24a", fontWeight: 700 }}>${r.estCostUsd.toFixed(2)}</td>
+                  <td style={{ color: "var(--text-soft)", fontWeight: 700 }}>${r.estCostUsd.toFixed(2)}</td>
                   <td className="faint">{r.lastActiveAt ? new Date(r.lastActiveAt).toLocaleString() : "—"}</td>
                 </tr>
               ))}
@@ -426,20 +426,20 @@ export default function AgentsPanel() {
           </table>
           {analytics.length > 0 && (
             <div style={{ marginTop: 14, fontSize: 12, color: "var(--text-soft)" }}>
-              Total est. spend: <b style={{ color: "#e0a24a" }}>${analytics.reduce((s, r) => s + r.estCostUsd, 0).toFixed(2)}</b> across {analytics.reduce((s, r) => s + r.sessions, 0)} sessions
+              Total est. spend: <b style={{ color: "var(--text-soft)" }}>${analytics.reduce((s, r) => s + r.estCostUsd, 0).toFixed(2)}</b> across {analytics.reduce((s, r) => s + r.sessions, 0)} sessions
             </div>
           )}
         </div>
       ) : view === "servers" && isAdmin ? (
         <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: 14 }}>
-          <div style={{ fontSize: 11, letterSpacing: ".2em", color: "rgb(84 230 255 / .8)", marginBottom: 4 }}>SERVER ACCESS · ASSIGN AGENTS TO MACHINES</div>
+          <div style={{ fontSize: 11, letterSpacing: ".2em", color: "rgb(232 230 225 / .8)", marginBottom: 4 }}>SERVER ACCESS · ASSIGN AGENTS TO MACHINES</div>
           <div className="faint" style={{ fontSize: 10, marginBottom: 12 }}>Each user@host is a distinct machine (redstone installs per user). Grant an agent access so it appears in their Servers app.</div>
           {svServers.map((s) => {
             const disc = (s as { discovered?: boolean }).discovered;
             return (
               <div key={s.id} style={{ border: "1px solid var(--border)", borderRadius: 10, padding: "10px 12px", marginBottom: 8 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <b style={{ color: "#e6f2f4", fontSize: 12.5 }}>{s.name}</b>
+                  <b style={{ color: "var(--text)", fontSize: 12.5 }}>{s.name}</b>
                   <span className="faint" style={{ fontSize: 10.5 }}>{s.sshUser ? `${s.sshUser}@` : ""}{s.host}{s.sshPort !== 22 ? `:${s.sshPort}` : ""}</span>
                   {s.ownerAccountId ? <span className="rcw-ag-badge dim">PRIVATE</span> : disc ? <span className="rcw-ag-badge">DISCOVERED</span> : <span className="rcw-ag-badge">COMPANY</span>}
                 </div>
@@ -447,8 +447,8 @@ export default function AgentsPanel() {
                   <div style={{ marginTop: 8 }}>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 5, alignItems: "center" }}>
                       {(s.access ?? []).map((u) => (
-                        <span key={u} className="rcw-ag-badge" style={{ borderColor: "rgb(127 209 139 / .5)", color: "#7fd18b" }}>{u}
-                          <span style={{ cursor: "pointer", color: "#ff9d94", marginLeft: 4 }} onClick={() => svRevoke(s.id, u)}>✕</span>
+                        <span key={u} className="rcw-ag-badge" style={{ borderColor: "rgb(232 230 225 / .5)", color: "var(--text-soft)" }}>{u}
+                          <span style={{ cursor: "pointer", color: "#e63b2e", marginLeft: 4 }} onClick={() => svRevoke(s.id, u)}>✕</span>
                         </span>
                       ))}
                       {!(s.access ?? []).length && !disc && <span className="faint" style={{ fontSize: 10 }}>no agents assigned</span>}
@@ -500,7 +500,7 @@ export default function AgentsPanel() {
           <div className="rcw-ag-side no-scrollbar">
             {mode === "recruit" ? (
               <>
-                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".24em", color: "rgb(84 230 255 / .9)", marginBottom: 6 }}>NEW AGENT DOSSIER</div>
+                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".24em", color: "rgb(232 230 225 / .9)", marginBottom: 6 }}>NEW AGENT DOSSIER</div>
                 <div style={{ display: "flex", justifyContent: "center", margin: "10px 0 2px" }}>
                   <div onClick={pickPhoto} style={{ cursor: "pointer" }} title="Upload face photo"><Photo a={{ photo: form.photo, displayName: "new" }} size={72} /></div>
                 </div>
@@ -559,7 +559,7 @@ export default function AgentsPanel() {
                         {sel.disabledAt ? "REACTIVATE" : "SUSPEND"}
                       </button>
                       <button className="rcw-ag-btn warn" disabled={busy} onClick={deleteAgent} title="Permanently delete this agent (sessions are kept, unassigned)">
-                        {confirmDel ? "⚠ CONFIRM DELETE" : "🗑 DELETE"}
+                        {confirmDel ? "⚠ CONFIRM DELETE" : "DELETE"}
                       </button>
                     </div>
                   </>
@@ -574,7 +574,7 @@ export default function AgentsPanel() {
                 <label className="rcw-ag-label" style={{ marginTop: 18 }}>ACCESS LOG</label>
                 <table className="rcw-ag-audit"><tbody>
                   {audit.slice(0, 14).map((e) => (
-                    <tr key={e.id} style={{ color: e.ok ? "var(--text-soft)" : "#ff9d94" }}>
+                    <tr key={e.id} style={{ color: e.ok ? "var(--text-soft)" : "#e63b2e" }}>
                       <td>{e.ok ? "◈" : "✕"}</td>
                       <td>{new Date(e.at).toLocaleString()}</td>
                       <td>{e.ip}</td>

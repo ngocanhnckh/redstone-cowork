@@ -7,7 +7,7 @@ import JiraIssueModal from "./JiraIssueModal";
 import JiraStatusSelect from "./JiraStatusSelect";
 
 type JiraIssue = { key: string; summary: string; status: string; statusCategory: "todo" | "inprogress" | "done"; assignee: string | null; url: string };
-const CAT_DOT: Record<string, string> = { todo: "var(--border-strong)", inprogress: "rgb(var(--primary-soft))", done: "#6bbf82" };
+const CAT_DOT: Record<string, string> = { todo: "var(--text-faint)", inprogress: "var(--text)", done: "var(--text-soft)" };
 
 /** A small square checkbox glyph shared by Claude's plan rows and user checklist rows. */
 function CheckBox({
@@ -30,11 +30,11 @@ function CheckBox({
         placeItems: "center",
         flexShrink: 0,
         cursor: onClick ? "pointer" : undefined,
-        background: done ? `rgb(var(--accent))` : active ? `rgb(var(--primary) / 0.25)` : "rgb(var(--primary) / 0.06)",
-        // Open-state border uses an accent color (not --border-strong, which the
+        background: done ? `var(--text-soft)` : active ? `rgba(232,230,225,0.16)` : "rgba(232,230,225,0.04)",
+        // Open-state border uses a visible chalk tint (not --border-strong, which the
         // transparent-HUD theme blanks — that made the unchecked box invisible).
-        border: done ? "none" : active ? `1.5px solid rgb(var(--primary-soft))` : `1.5px solid rgb(var(--primary-soft) / 0.55)`,
-        color: done ? "#2a1d09" : undefined,
+        border: done ? "none" : active ? `1.5px solid var(--text)` : `1.5px solid rgba(232,230,225,0.55)`,
+        color: done ? "#1b1712" : undefined,
         fontWeight: done ? 700 : undefined,
         fontSize: done ? 11 : undefined,
       }}
@@ -57,7 +57,7 @@ function PlanRow({ todo }: { todo: Todo }) {
         padding: "8px 9px",
         borderRadius: 9,
         fontSize: 13,
-        background: inProgress ? `rgb(var(--primary) / 0.12)` : undefined,
+        background: inProgress ? `rgba(232,230,225,0.07)` : undefined,
         color: completed ? "var(--text-faint)" : "var(--text)",
       }}
     >

@@ -221,7 +221,7 @@ export default function SettingsPanel() {
         )}
 
         {status.kind !== "idle" && (
-          <div className="mono" style={{ fontSize: 11.5, marginBottom: 12, color: status.kind === "err" ? "#e0736a" : "rgb(var(--accent))" }}>
+          <div className="mono" style={{ fontSize: 11.5, marginBottom: 12, color: status.kind === "err" ? "#e63b2e" : "rgb(var(--accent))" }}>
             {status.kind === "saving" ? "saving…" : status.text}
           </div>
         )}
@@ -231,7 +231,7 @@ export default function SettingsPanel() {
             Save & reconnect
           </button>
           <span style={{ flex: 1 }} />
-          <button onClick={signOut} style={{ ...iconBtn, width: "auto", padding: "8px 16px", borderRadius: 999, fontSize: 12.5, color: "#e0736a", borderColor: "rgba(224,115,106,0.4)" }}>
+          <button onClick={signOut} style={{ ...iconBtn, width: "auto", padding: "8px 16px", borderRadius: 999, fontSize: 12.5, color: "#e63b2e", borderColor: "rgba(230,59,46,0.4)" }}>
             Sign out
           </button>
         </div>
@@ -289,7 +289,7 @@ export default function SettingsPanel() {
               </label>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6, marginBottom: 18 }}>
                 {swatches.map((s) => {
-                  const value = appr.palette[s.key] ?? themeDefaults[s.key] ?? "#54e6ff";
+                  const value = appr.palette[s.key] ?? themeDefaults[s.key] ?? "#e8e6e1";
                   return (
                     <label key={s.key} style={{ display: "flex", flexDirection: "column", gap: 5, alignItems: "center", cursor: "pointer",
                       border: "1px solid var(--border)", borderRadius: 9, padding: "9px 6px" }}>
@@ -595,7 +595,7 @@ function KeyboardShortcuts() {
             return (
               <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "6px 2px" }}>
                 <span style={{ flex: 1, fontSize: 13 }}>{a.label}</span>
-                {conflict && !rec && <span title="This combo is also bound to another action" style={{ fontSize: 11, color: "#e6b450" }}>⚠ conflict</span>}
+                {conflict && !rec && <span title="This combo is also bound to another action" style={{ fontSize: 11, color: "#e63b2e" }}>⚠ conflict</span>}
                 <button
                   onClick={() => setRecording(rec ? null : a.id)}
                   className="mono"

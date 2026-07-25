@@ -140,9 +140,9 @@ export default function AnswerDock({ decision, working, sessionId: sessionIdProp
         }}
       >
         {undelivered && (
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, padding: "8px 12px", borderRadius: 10, border: "1px solid #e6b45055", background: "rgba(230,180,80,0.1)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, padding: "8px 12px", borderRadius: 10, border: "1px solid #e63b2e55", background: "rgba(230,59,46,0.1)" }}>
             <span style={{ fontSize: 12.5, color: "var(--text)", flex: 1, minWidth: 0 }}>
-              <b style={{ color: "#e6b450" }}>⚠ Your last message may not have reached the session.</b>{" "}
+              <b style={{ color: "#e63b2e" }}>⚠ Your last message may not have reached the session.</b>{" "}
               <span className="faint" style={{ overflowWrap: "anywhere" }}>“{undelivered.slice(0, 80)}{undelivered.length > 80 ? "…" : ""}”</span>
             </span>
             <button onClick={() => idleSessionId && retrySend(idleSessionId, undelivered)} className="glass-btn--clay" style={{ padding: "5px 13px", fontSize: 12, fontWeight: 600, flexShrink: 0 }}>Resend</button>
@@ -168,10 +168,10 @@ export default function AnswerDock({ decision, working, sessionId: sessionIdProp
           </button>
         </div>
         {idleSent && (
-          <span className="mono" style={{ display: "block", fontSize: 11, color: "rgb(var(--accent))", marginBottom: 6 }}>✓ sent</span>
+          <span className="mono" style={{ display: "block", fontSize: 11, color: "var(--text-soft)", marginBottom: 6 }}>✓ sent</span>
         )}
         {sendErr && (
-          <span className="mono" style={{ display: "block", fontSize: 11, color: "#e0736a", marginBottom: 6 }}>{sendErr}</span>
+          <span className="mono" style={{ display: "block", fontSize: 11, color: "#e63b2e", marginBottom: 6 }}>{sendErr}</span>
         )}
         {working ? (
           <button
@@ -352,7 +352,7 @@ export default function AnswerDock({ decision, working, sessionId: sessionIdProp
         </>
       )}
       {submitErr && (
-        <div className="mono" style={{ fontSize: 11, color: "#e0736a", marginTop: 8 }}>{submitErr}</div>
+        <div className="mono" style={{ fontSize: 11, color: "#e63b2e", marginTop: 8 }}>{submitErr}</div>
       )}
 
       <div style={{ display: "flex", gap: 9, marginTop: 11, alignItems: "flex-end", minWidth: 0 }}>
@@ -375,7 +375,7 @@ export default function AnswerDock({ decision, working, sessionId: sessionIdProp
         </button>
       </div>
       {sent && (
-        <span className="mono" style={{ display: "block", fontSize: 11, color: "rgb(var(--accent))", marginTop: 4 }}>✓ sent</span>
+        <span className="mono" style={{ display: "block", fontSize: 11, color: "var(--text-soft)", marginTop: 4 }}>✓ sent</span>
       )}
 
       <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 12 }}>

@@ -27,22 +27,18 @@ const projectName = (cwd: string): string => cwd.split("/").filter(Boolean).pop(
 
 const CSS = `
 @keyframes cn-in { from { opacity:0; transform: translateX(28px) scale(.96); } to { opacity:1; transform:none; } }
-@keyframes cn-sheen { from { background-position: -140% 0; } to { background-position: 240% 0; } }
 .cn-card { animation: cn-in .34s cubic-bezier(.2,.9,.2,1) both; position: relative; overflow: hidden;
-  border:1px solid rgb(var(--primary-soft) / 0.45); border-radius:14px; padding:14px 15px 13px;
+  border:1px solid var(--border-strong); border-radius:14px; padding:14px 15px 13px;
   /* Strong opaque glass so the text is readable even in transparent HUD mode
      (the theme's .glass-surface gets frosted to near-nothing there). */
   background: color-mix(in srgb, var(--app-panel, #1b1712) 93%, transparent) !important;
   backdrop-filter: blur(26px) saturate(1.45); -webkit-backdrop-filter: blur(26px) saturate(1.45);
-  box-shadow: 0 22px 60px rgb(0 0 0 / 0.6), 0 0 0 1px rgb(var(--primary-soft) / 0.14), inset 0 0 30px -18px rgb(var(--primary-soft)); }
-.cn-card::before { content:""; position:absolute; inset:0; pointer-events:none; opacity:.5;
-  background: linear-gradient(115deg, transparent 30%, rgb(var(--primary-soft) / 0.14) 48%, transparent 66%);
-  background-size: 220% 100%; animation: cn-sheen 3.6s ease-in-out infinite; }
-.cn-card.cn-ask { border-color: rgb(var(--accent) / 0.6); box-shadow: 0 14px 44px rgb(0 0 0 / 0.5), 0 0 22px -8px rgb(var(--accent) / 0.7); }
-.cn-jump { border:1px solid rgb(var(--primary-soft) / 0.5); background: rgb(var(--primary) / 0.28); color:#fff;
+  box-shadow: 0 22px 60px rgb(0 0 0 / 0.6); }
+.cn-card.cn-ask { border-color: rgb(230 59 46 / .6); box-shadow: 0 14px 44px rgb(0 0 0 / 0.5); }
+.cn-jump { border:1px solid var(--border-strong); background: rgba(232,230,225,0.1); color:var(--text);
   border-radius:9px; padding:5px 12px; font-size:11.5px; font-weight:600; cursor:pointer; font-family:var(--font-mono);
-  transition: background .15s, box-shadow .15s; }
-.cn-jump:hover { background: rgb(var(--primary) / 0.45); box-shadow: 0 0 16px -4px rgb(var(--primary-soft)); }
+  transition: background .15s; }
+.cn-jump:hover { background: rgba(232,230,225,0.18); }
 .cn-x { border:1px solid var(--border); background:transparent; color:var(--text-soft); border-radius:9px;
   padding:5px 10px; font-size:11.5px; cursor:pointer; font-family:var(--font-mono); }
 .cn-x:hover { color: var(--text); }
@@ -119,7 +115,7 @@ export default function CompletionNotifier() {
           <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 7 }}>
             <span className="ai-core" style={{ width: 15, height: 15, flexShrink: 0 }} />
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div className="mono" style={{ fontSize: 8.5, letterSpacing: "0.16em", textTransform: "uppercase", color: n.needsAnswer ? "rgb(var(--accent))" : "rgb(var(--primary-soft))" }}>
+              <div className="mono" style={{ fontSize: 8.5, letterSpacing: "0.16em", textTransform: "uppercase", color: n.needsAnswer ? "#e63b2e" : "var(--text-soft)" }}>
                 {n.needsAnswer ? "needs your answer" : "session complete"}
               </div>
               <div style={{ display: "flex", alignItems: "baseline", gap: 7, minWidth: 0 }}>

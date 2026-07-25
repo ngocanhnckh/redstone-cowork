@@ -10,7 +10,7 @@ type Detail = {
 };
 
 const CAT_COLOR: Record<string, string> = {
-  todo: "var(--text-faint)", inprogress: "rgb(var(--primary-soft))", done: "#6bbf82",
+  todo: "var(--text-faint)", inprogress: "rgb(var(--primary-soft))", done: "var(--text-soft)",
 };
 
 /** Minimal HTML sanitizer for Jira rendered fields — strips scripts/styles, inline
@@ -188,7 +188,7 @@ export default function JiraIssueModal({ sessionId, issueKey, onClose, startAddS
           {state === "loading" ? (
             <div className="faint mono hud-blink" style={{ fontSize: 12 }}>loading issue…</div>
           ) : state === "err" ? (
-            <div style={{ fontSize: 12.5, color: "#e0736a" }}>Could not load this issue from Jira.</div>
+            <div style={{ fontSize: 12.5, color: "#e63b2e" }}>Could not load this issue from Jira.</div>
           ) : detail ? (
             <>
               {editing ? (

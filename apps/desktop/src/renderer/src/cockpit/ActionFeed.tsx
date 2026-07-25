@@ -14,9 +14,17 @@ type Act = { key: string; kind: Kind; label: string; icon: string; detail: strin
 const META: Record<Kind, { color: string }> = {
   prompt: { color: "var(--text-soft)" },
   say: { color: "rgb(var(--primary-soft))" },
-  edit: { color: "rgb(var(--accent))" },
+  edit: { color: "var(--text)" },
   exec: { color: "rgb(var(--primary-soft))" },
 };
+
+// Inline SVG bolt (replaces the ⚡ emoji) — stroke currentColor, hairline weight.
+const IconBolt = ({ size = 13 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.6}
+    strokeLinecap="square" strokeLinejoin="miter" style={{ flexShrink: 0, display: "block" }} aria-hidden>
+    <path d="M9 1.5 L3.5 9 H7.5 L7 14.5 L12.5 7 H8.5 Z" />
+  </svg>
+);
 
 /** Turn the transcript into a flat activity stream. Best-effort parsing of the
  *  markdown the hook produces (edits render as "**✎ path**", commands as "$ cmd"). */
@@ -81,9 +89,9 @@ export default function ActionFeed({ active = true }: { sessionId?: string; acti
   // Suppress replay while the agent is actively working OR the user is scrolling.
   const [scrolling, setScrolling] = useState(false);
   const scrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Loop the replay continuously while idle; it stops the moment a new event or the
-  // user interacting suppresses it.
-  const relay = useRelay(relayItems, active && !!session, working || scrolling, { loop: true });
+  // The automatic idle replay loop is disabled (Signal Room register) — the hook
+  // only steps through a manually-seeded queue now.
+  const relay = useRelay(relayItems, active && !!session, working || scrolling);
 
   const bodyRef = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
@@ -104,15 +112,12 @@ export default function ActionFeed({ active = true }: { sessionId?: string; acti
       <style>{CSS}</style>
       <RelayStyles />
       <div className="rcw-af-hd">
-        <span style={{ fontSize: 13 }}>⚡</span>
+        <span style={{ color: "var(--text-soft)" }}><IconBolt /></span>
         <span className="mono" style={{ fontSize: 10, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--text-soft)" }}>
           Activity Stream{session ? ` · ${session.machine}` : ""}
         </span>
         <span style={{ flex: 1 }} />
         {working && <SciFiSpinner size={16} />}
-        {!relay.playing && acts.length > 0 && (
-          <span className="mono faint" style={{ fontSize: 9, letterSpacing: "0.1em" }} title="Next transmission replay">◈ {relay.secs}s</span>
-        )}
         <span className="mono faint" style={{ fontSize: 9.5 }}>{acts.length} events</span>
       </div>
       <div className="rcw-af-body no-scrollbar" ref={bodyRef} onScroll={onScroll}>

@@ -20,7 +20,7 @@ function TagChips({ session }: { session: DiscoveredSession }) {
   return (
     <span style={{ display: "inline-flex", alignItems: "center", flexWrap: "wrap", gap: 5 }}>
       {session.tags.map((t) => (
-        <span key={t} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10, fontFamily: "var(--font-mono)", padding: "2px 7px", borderRadius: 999, background: "rgb(var(--primary) / 0.14)", border: "1px solid rgb(var(--primary-soft) / 0.35)" }}>
+        <span key={t} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10, fontFamily: "var(--font-mono)", padding: "2px 7px", borderRadius: 999, background: "rgba(232,230,225,0.08)", border: "1px solid var(--border-strong)" }}>
           {t}<span onClick={() => removeTag(session.id, t)} style={{ cursor: "pointer", opacity: 0.6 }}>✕</span>
         </span>
       ))}
@@ -150,7 +150,7 @@ export default function AllSessions() {
                     {sessions.map((s) => (
                       <div key={s.id} onClick={() => setOpen(s)} className="glass-inset-hover" style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 11px", borderRadius: 9, cursor: "pointer" }}>
                         <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 12.5 }}>{s.title ?? <span className="faint">(untitled session)</span>}</span>
-                        {s.source === "cowork" && <span className="mono" style={{ fontSize: 9, padding: "1px 6px", borderRadius: 999, background: "rgb(var(--accent) / 0.16)", color: "rgb(var(--accent))" }}>cowork</span>}
+                        {s.source === "cowork" && <span className="mono" style={{ fontSize: 9, padding: "1px 6px", borderRadius: 999, background: "rgba(232,230,225,0.1)", color: "var(--text-soft)" }}>cowork</span>}
                         {s.tags.slice(0, 3).map((t) => <span key={t} className="mono faint" style={{ fontSize: 9.5 }}>#{t}</span>)}
                         <span className="mono faint" style={{ fontSize: 10.5 }}>{s.messageCount} · {timeAgo(s.lastActive)}</span>
                       </div>

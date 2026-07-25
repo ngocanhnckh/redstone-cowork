@@ -62,7 +62,7 @@ export default function AccessKeysManager() {
             <span className="mono faint" style={{ fontSize: 10.5 }}>{k.prefix}…</span>
             <span className="mono" style={{ fontSize: 9.5, padding: "1px 6px", borderRadius: 999, background: "rgb(var(--primary) / 0.16)" }}>{k.scope}</span>
             {k.revokedAt ? <span className="mono faint" style={{ fontSize: 10 }}>revoked</span>
-              : <button onClick={() => revoke(k.id)} style={{ border: 0, background: "transparent", color: "#e0736a", cursor: "pointer", fontSize: 11 }}>revoke</button>}
+              : <button onClick={() => revoke(k.id)} style={{ border: 0, background: "transparent", color: "#e63b2e", cursor: "pointer", fontSize: 11 }}>revoke</button>}
           </div>
         ))}
       </div>

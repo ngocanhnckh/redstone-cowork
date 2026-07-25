@@ -32,7 +32,7 @@ export function Bars({ rows }: { rows: Array<{ label: string; value: number; col
           <div style={{ flex: 1, height: 12, borderRadius: 6, background: "rgb(var(--primary) / 0.08)", overflow: "hidden" }}>
             <div style={{ width: `${(r.value / max) * 100}%`, height: "100%", borderRadius: 6, background: r.color, minWidth: r.value > 0 ? 4 : 0, transition: "width .5s ease" }} />
           </div>
-          <b style={{ width: 32, fontSize: 12, color: "#e6f2f4", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{r.value}</b>
+          <b style={{ width: 32, fontSize: 12, color: "var(--text)", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{r.value}</b>
         </div>
       ))}
     </div>
@@ -111,7 +111,7 @@ export function GithubHeatmap({ days, total }: { days: AgencyGithubDay[]; total:
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
         <span className="mono" style={{ fontSize: 9, letterSpacing: "0.22em", color: "rgb(var(--primary-soft))" }}>CONTRIBUTIONS · LAST YEAR</span>
-        <b style={{ fontSize: 13, color: "#e6f2f4" }}>{total.toLocaleString()}</b>
+        <b style={{ fontSize: 13, color: "var(--text)" }}>{total.toLocaleString()}</b>
       </div>
       <div style={{ overflowX: "auto" }} className="no-scrollbar">
         <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{ display: "block", minWidth: W }}>

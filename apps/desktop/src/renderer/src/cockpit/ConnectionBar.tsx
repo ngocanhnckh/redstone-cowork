@@ -175,7 +175,7 @@ export default function ConnectionBar({
       )}
       {setupDone && <span style={{ color: "rgb(var(--accent))" }}>✓ {setupDone}</span>}
       {setupError && (
-        <span style={{ color: "#e0736a", whiteSpace: "pre-wrap", fontSize: 10.5 }}>
+        <span style={{ color: "#e63b2e", whiteSpace: "pre-wrap", fontSize: 10.5 }}>
           {setupError}
         </span>
       )}

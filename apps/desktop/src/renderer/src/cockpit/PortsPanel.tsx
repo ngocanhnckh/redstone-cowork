@@ -11,9 +11,9 @@ type ForwardStatus = "local" | "starting" | "active" | "failed" | "stopped";
 
 const CHIP: Record<ForwardStatus, { label: string; color: string; bg: string }> = {
   local: { label: "local", color: "var(--text-soft)", bg: "rgba(255,255,255,0.06)" },
-  starting: { label: "starting", color: "#e6b450", bg: "rgba(230,180,80,0.12)" },
+  starting: { label: "starting", color: "#e63b2e", bg: "rgba(230,59,46,0.12)" },
   active: { label: "active", color: "rgb(var(--accent))", bg: "rgba(var(--accent),0.14)" },
-  failed: { label: "failed", color: "#e0736a", bg: "rgba(224,115,106,0.12)" },
+  failed: { label: "failed", color: "#e63b2e", bg: "rgba(230,59,46,0.12)" },
   stopped: { label: "off", color: "var(--text-soft)", bg: "rgba(255,255,255,0.04)" },
 };
 
@@ -195,7 +195,7 @@ export default function PortsPanel({ sessionId, cwd, machine }: Props) {
             {status && (
               <span
                 className="mono"
-                style={{ fontSize: 11, color: status.kind === "ok" ? "rgb(var(--accent))" : "#e0736a" }}
+                style={{ fontSize: 11, color: status.kind === "ok" ? "rgb(var(--accent))" : "#e63b2e" }}
               >
                 {status.text}
               </span>

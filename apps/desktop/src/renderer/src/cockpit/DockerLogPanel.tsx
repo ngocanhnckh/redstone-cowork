@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "../store";
 import { DockerContainer, DockerHostView } from "../types";
 import { bestDockerHost } from "./dockerHost";
+import { IconContainer } from "./Icons";
 import { playSfx } from "../sfx";
 import { useRelay, RelayOverlay, RelayStyles, RELAY_COUNT, type RelayItem } from "./relay";
 
@@ -54,8 +55,8 @@ const DLOG_CSS = `
   text-shadow: 0 0 3px rgb(var(--primary-soft) / 0.28); }
 .rcw-dlog-line.in { animation: rcw-dlog-in .26s cubic-bezier(.2,.8,.2,1) both; }
 @keyframes rcw-dlog-in { from { opacity: 0; transform: translateX(-9px); filter: brightness(1.9); } to { opacity: 1; transform: none; filter: none; } }
-.rcw-dlog-line.lvl-err  { color: #ff8f85; text-shadow: 0 0 5px rgb(255 107 107 / 0.45); }
-.rcw-dlog-line.lvl-warn { color: #ffcf7a; text-shadow: 0 0 5px rgb(255 178 84 / 0.4); }
+.rcw-dlog-line.lvl-err  { color: #e63b2e; }
+.rcw-dlog-line.lvl-warn { color: var(--text); }
 .rcw-dlog-line.lvl-info { color: #7ff0c0; text-shadow: 0 0 4px rgb(94 242 176 / 0.35); }
 .rcw-dlog-line.lvl-debug { color: var(--text-faint); text-shadow: none; font-weight: 400; }
 .rcw-dlog-rx { display: inline-flex; align-items: flex-end; gap: 1px; height: 12px; }
@@ -375,7 +376,7 @@ export default function DockerLogPanel({ streamId, active }: { streamId: string;
       <style>{DLOG_CSS}</style>
       {/* control row: container picker + live indicator */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 12px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
-        <span style={{ fontSize: 13 }}>🐳</span>
+        <IconContainer size={14} style={{ color: "var(--text-soft)" }} />
         {machine ? (
           containers.length > 0 ? (
             <ContainerPicker containers={containers} value={container} onChange={setContainer} />

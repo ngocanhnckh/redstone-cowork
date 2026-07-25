@@ -30,9 +30,9 @@ export default class ErrorBoundary extends Component<
     if (this.state.failed) {
       if (this.props.details) {
         return (
-          <div style={{ padding: "14px 16px", border: "1px solid #e0736a", borderRadius: 12, background: "rgb(224 115 106 / .08)", color: "#ffd7d2", fontFamily: "var(--font-mono)", maxWidth: "100%" }}>
+          <div style={{ padding: "14px 16px", border: "1px solid #e63b2e", borderRadius: 12, background: "rgb(230 59 46 / .08)", color: "var(--text)", fontFamily: "var(--font-mono)", maxWidth: "100%" }}>
             <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 6 }}>⚠ {this.props.label ?? "Something crashed"}</div>
-            <div style={{ fontSize: 12, marginBottom: 8, whiteSpace: "pre-wrap", wordBreak: "break-word", color: "#ffb3ab" }}>{this.state.message || "unknown error"}</div>
+            <div style={{ fontSize: 12, marginBottom: 8, whiteSpace: "pre-wrap", wordBreak: "break-word", color: "var(--text)" }}>{this.state.message || "unknown error"}</div>
             {this.state.stack && (
               <pre className="no-scrollbar" style={{ fontSize: 10, lineHeight: 1.5, maxHeight: 170, overflow: "auto", opacity: 0.72, whiteSpace: "pre-wrap", wordBreak: "break-word", margin: 0 }}>{this.state.stack}</pre>
             )}

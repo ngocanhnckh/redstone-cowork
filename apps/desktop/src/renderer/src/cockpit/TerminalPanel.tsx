@@ -11,9 +11,9 @@ import { playSfx } from "../sfx";
 const THEME = {
   background: "rgba(0,0,0,0)",
   foreground: "#E8F4F2",
-  cursor: "#54E6FF",
+  cursor: "#e8e6e1",
   cursorAccent: "#06121A",
-  selectionBackground: "rgba(84,230,255,0.24)",
+  selectionBackground: "rgba(232,230,225,0.24)",
   black: "#12242A",
   brightBlack: "#5F7D84",
   red: "#FF6B6B",

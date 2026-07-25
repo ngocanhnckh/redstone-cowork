@@ -138,7 +138,7 @@ export default function NotesPanel({ active }: { active: boolean }) {
                 </span>
                 {confirmDel === n.path ? (
                   <span onClick={(e) => { e.stopPropagation(); deleteNote(n.path); }} title="Confirm delete"
-                    className="mono" style={{ fontSize: 9, color: "#e0736a" }}>del?</span>
+                    className="mono" style={{ fontSize: 9, color: "#e63b2e" }}>del?</span>
                 ) : (
                   <span onClick={(e) => { e.stopPropagation(); setConfirmDel(n.path); }} title="Delete note"
                     style={{ fontSize: 11, opacity: 0.5, color: "var(--text-faint)" }}>✕</span>

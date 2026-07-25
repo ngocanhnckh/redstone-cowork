@@ -17,64 +17,60 @@ type ScanPhase = "idle" | "acquiring" | "scanning" | "locked" | "denied";
 
 const CSS = `
 @keyframes yia-in { from { opacity:0; transform: translateY(10px); } to { opacity:1; transform:none; } }
-@keyframes yia-flicker { 0%,100% { opacity:1; } 92% { opacity:1; } 94% { opacity:.55; } 96% { opacity:1; } }
 @keyframes yia-sweep { 0% { top:-6%; } 100% { top:104%; } }
 @keyframes yia-ring { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 @keyframes yia-ring-rev { from { transform: rotate(0deg); } to { transform: rotate(-360deg); } }
-@keyframes yia-pulse { 0%,100% { opacity:.35; } 50% { opacity:.9; } }
 @keyframes yia-grid-drift { from { background-position: 0 0; } to { background-position: 0 44px; } }
 .yia-root { min-height:100vh; display:flex; align-items:center; justify-content:center; position:relative; overflow:hidden;
   font-family: var(--font-mono, "SF Mono", ui-monospace, monospace); }
 .yia-grid { position:absolute; inset:0; pointer-events:none; opacity:.16;
-  background-image: linear-gradient(rgb(84 230 255 / .25) 1px, transparent 1px), linear-gradient(90deg, rgb(84 230 255 / .25) 1px, transparent 1px);
+  background-image: linear-gradient(rgba(232,230,225,.25) 1px, transparent 1px), linear-gradient(90deg, rgba(232,230,225,.25) 1px, transparent 1px);
   background-size: 44px 44px; animation: yia-grid-drift 6s linear infinite;
   mask-image: radial-gradient(ellipse 90% 75% at 50% 45%, black 30%, transparent 75%); -webkit-mask-image: radial-gradient(ellipse 90% 75% at 50% 45%, black 30%, transparent 75%); }
 .yia-card { position:relative; z-index:2; width:480px; max-width:94vw; padding:34px 38px 30px; border-radius:16px;
-  border:1px solid rgb(84 230 255 / .28); background: rgb(8 14 20 / .72);
+  border:1px solid rgba(232,230,225,.28); background: rgb(8 14 20 / .72);
   -webkit-backdrop-filter: blur(26px) saturate(1.3); backdrop-filter: blur(26px) saturate(1.3);
-  box-shadow: 0 0 60px -18px rgb(84 230 255 / .5), inset 0 0 40px -30px rgb(84 230 255 / .6);
   animation: yia-in .5s ease both; }
-.yia-corner { position:absolute; width:16px; height:16px; border-color: rgb(84 230 255 / .85); border-style:solid; }
-.yia-kicker { font-size:10px; letter-spacing:.42em; color: rgb(84 230 255 / .8); animation: yia-flicker 7s linear infinite; }
-.yia-title { font-size:21px; font-weight:700; letter-spacing:.14em; color:#e6f2f4; margin:6px 0 2px; }
+.yia-corner { position:absolute; width:16px; height:16px; border-color: rgba(232,230,225,.85); border-style:solid; }
+.yia-kicker { font-size:10px; letter-spacing:.42em; color: var(--text-soft); }
+.yia-title { font-size:21px; font-weight:700; letter-spacing:.14em; color:var(--text); margin:6px 0 2px; }
 .yia-sub { font-size:10.5px; letter-spacing:.2em; color: rgb(230 242 244 / .45); }
 .yia-scanwrap { position:relative; width:168px; height:168px; margin:20px auto 6px; }
-.yia-ring { position:absolute; inset:0; border-radius:50%; border:1px dashed rgb(84 230 255 / .5); animation: yia-ring 14s linear infinite; }
-.yia-ring2 { position:absolute; inset:10px; border-radius:50%; border:1px solid rgb(84 230 255 / .25);
-  border-top-color: rgb(84 230 255 / .9); animation: yia-ring-rev 3.2s linear infinite; }
-.yia-cam { position:absolute; inset:20px; border-radius:50%; overflow:hidden; border:1px solid rgb(84 230 255 / .45);
+.yia-ring { position:absolute; inset:0; border-radius:50%; border:1px dashed rgba(232,230,225,.5); animation: yia-ring 14s linear infinite; }
+.yia-ring2 { position:absolute; inset:10px; border-radius:50%; border:1px solid rgba(232,230,225,.25);
+  border-top-color: var(--text); animation: yia-ring-rev 3.2s linear infinite; }
+.yia-cam { position:absolute; inset:20px; border-radius:50%; overflow:hidden; border:1px solid rgba(232,230,225,.45);
   background:#03080c; display:flex; align-items:center; justify-content:center; }
 .yia-cam video { width:100%; height:100%; object-fit:cover; transform: scaleX(-1); filter: saturate(.7) contrast(1.1) brightness(.95); }
 .yia-sweepline { position:absolute; left:6%; right:6%; height:2px; z-index:3; border-radius:2px;
-  background: linear-gradient(90deg, transparent, rgb(84 230 255 / .95), transparent);
-  box-shadow: 0 0 18px 3px rgb(84 230 255 / .55); animation: yia-sweep 1.15s ease-in-out infinite alternate; }
+  background: rgba(232,230,225,.95); animation: yia-sweep 1.15s ease-in-out infinite alternate; }
 .yia-status { text-align:center; font-size:10.5px; letter-spacing:.24em; min-height:16px; margin-bottom:14px; }
-.yia-label { display:block; font-size:9.5px; letter-spacing:.3em; color: rgb(84 230 255 / .75); margin: 0 0 6px 2px; }
+.yia-label { display:block; font-size:9.5px; letter-spacing:.3em; color: var(--text-soft); margin: 0 0 6px 2px; }
 .yia-input { width:100%; box-sizing:border-box; padding:11px 14px; border-radius:8px; font-size:14px; letter-spacing:.06em;
-  border:1px solid rgb(84 230 255 / .3); background: rgb(84 230 255 / .05); color:#e6f2f4; outline:none;
-  font-family: inherit; transition: border-color .15s, box-shadow .15s; }
-.yia-input:focus { border-color: rgb(84 230 255 / .8); box-shadow: 0 0 0 1px rgb(84 230 255 / .35), 0 0 22px -6px rgb(84 230 255 / .5); }
-.yia-btn { width:100%; padding:13px 0; margin-top:18px; border-radius:9px; border:1px solid rgb(84 230 255 / .7);
-  background: linear-gradient(180deg, rgb(84 230 255 / .22), rgb(84 230 255 / .1)); color:#d9f7ff;
+  border:1px solid rgba(232,230,225,.3); background: rgba(232,230,225,.05); color:var(--text); outline:none;
+  font-family: inherit; transition: border-color .15s; }
+.yia-input:focus { border-color: rgba(232,230,225,.8); }
+.yia-btn { width:100%; padding:13px 0; margin-top:18px; border-radius:9px; border:1px solid var(--text);
+  background: var(--text); color:#0a0a0a;
   font-family:inherit; font-size:13px; font-weight:700; letter-spacing:.3em; cursor:pointer;
-  text-shadow: 0 0 12px rgb(84 230 255 / .8); transition: box-shadow .15s, background .15s; }
-.yia-btn:hover:not(:disabled) { box-shadow: 0 0 30px -6px rgb(84 230 255 / .8); background: linear-gradient(180deg, rgb(84 230 255 / .3), rgb(84 230 255 / .14)); }
+  transition: background .15s, border-color .15s; }
+.yia-btn:hover:not(:disabled) { background:#e63b2e; border-color:#e63b2e; }
 .yia-btn:disabled { opacity:.4; cursor:not-allowed; }
-.yia-jira { width:100%; padding:11px 0; margin-top:12px; border-radius:9px; border:1px solid rgb(38 132 255 / .6);
-  background: linear-gradient(180deg, rgb(38 132 255 / .22), rgb(38 132 255 / .1)); color:#cfe4ff;
+.yia-jira { width:100%; padding:11px 0; margin-top:12px; border-radius:9px; border:1px solid rgba(232,230,225,.4);
+  background: rgb(232 230 225 / .08); color:var(--text);
   font-family:inherit; font-size:12px; font-weight:700; letter-spacing:.22em; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:9px;
-  text-shadow:0 0 12px rgb(38 132 255 / .7); transition: box-shadow .15s, background .15s; }
-.yia-jira:hover:not(:disabled) { box-shadow:0 0 28px -6px rgb(38 132 255 / .85); background: linear-gradient(180deg, rgb(38 132 255 / .3), rgb(38 132 255 / .14)); }
+  transition: box-shadow .15s, background .15s; }
+.yia-jira:hover:not(:disabled) { background: rgb(232 230 225 / .16); }
 .yia-jira:disabled { opacity:.5; cursor:progress; }
 .yia-or { display:flex; align-items:center; gap:10px; margin:14px 0 2px; color: rgb(230 242 244 / .3); font-size:9px; letter-spacing:.3em; }
-.yia-or::before, .yia-or::after { content:""; flex:1; height:1px; background: rgb(84 230 255 / .18); }
+.yia-or::before, .yia-or::after { content:""; flex:1; height:1px; background: rgba(232,230,225,.18); }
 .yia-alt { background:none; border:none; color: rgb(230 242 244 / .4); font-family:inherit; font-size:10px;
   letter-spacing:.18em; cursor:pointer; padding:4px 8px; }
-.yia-alt:hover { color: rgb(84 230 255 / .85); }
-.yia-err { color:#ff7d72; font-size:11.5px; letter-spacing:.06em; margin-top:12px; line-height:1.5; }
+.yia-alt:hover { color: var(--text); }
+.yia-err { color:#e63b2e; font-size:11.5px; letter-spacing:.06em; margin-top:12px; line-height:1.5; }
 `;
 
-const CYAN = "rgb(84 230 255)";
+const CYAN = "var(--text)";
 
 function Corners() {
   return (
@@ -293,8 +289,8 @@ export default function Login({ onConnected }: LoginProps) {
     idle: { text: "", color: CYAN },
     acquiring: { text: "▲ ACQUIRING OPTICS…", color: CYAN },
     scanning: { text: "SCANNING BIOMETRIC SIGNATURE…", color: CYAN },
-    locked: { text: "◈ IDENTITY CAPTURED — ENTER CREDENTIALS", color: "#7fd18b" },
-    denied: { text: "OPTICS OFFLINE — CREDENTIAL ACCESS ONLY", color: "#e0a24a" },
+    locked: { text: "◈ IDENTITY CAPTURED — ENTER CREDENTIALS", color: "var(--text-soft)" },
+    denied: { text: "OPTICS OFFLINE — CREDENTIAL ACCESS ONLY", color: "var(--text-soft)" },
   };
 
   return (
@@ -309,7 +305,6 @@ export default function Login({ onConnected }: LoginProps) {
         style={{
           position: "absolute", left: "50%", top: "50%", transform: "translate(-50%, -50%)",
           width: "min(78vh, 820px)", opacity: 0.06, pointerEvents: "none", userSelect: "none",
-          filter: "drop-shadow(0 0 60px rgb(84 230 255 / 0.25))",
         }}
       />
 
@@ -320,7 +315,7 @@ export default function Login({ onConnected }: LoginProps) {
           <img
             src={yiaSealUrl}
             alt="YITEC Intelligence Agency seal"
-            style={{ width: 88, height: 88, margin: "0 auto 10px", display: "block", filter: "drop-shadow(0 0 18px rgb(84 230 255 / 0.45))" }}
+            style={{ width: 88, height: 88, margin: "0 auto 10px", display: "block" }}
           />
           <span className="yia-kicker">{orgName?.toUpperCase() ?? "YITEC INTELLIGENCE AGENCY"}</span>
           <div className="yia-title">SECURE ACCESS TERMINAL</div>
@@ -338,10 +333,10 @@ export default function Login({ onConnected }: LoginProps) {
               </div>
             </div>
             <div style={{ textAlign: "center", marginTop: 4 }}>
-              <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: ".08em", color: "#e6f2f4" }}>{deviceAgent.displayName}</div>
+              <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: ".08em", color: "var(--text)" }}>{deviceAgent.displayName}</div>
               <div className="yia-sub" style={{ marginTop: 2 }}>@{deviceAgent.username}</div>
             </div>
-            <div className="yia-status" style={{ marginTop: 14, color: faceMsg.startsWith("⚠") ? "#e0a24a" : faceMsg.startsWith("◈") ? "#7fd18b" : CYAN }}>{faceMsg}</div>
+            <div className="yia-status" style={{ marginTop: 14, color: faceMsg.startsWith("⚠") ? "#e63b2e" : faceMsg.startsWith("◈") ? "var(--text-soft)" : CYAN }}>{faceMsg}</div>
             <button type="button" className="yia-btn" onClick={() => { faceTriedRef.current = false; void attemptFaceUnlock(); }}>RESCAN</button>
             <div style={{ textAlign: "center", marginTop: 12 }}>
               <button type="button" className="yia-alt" onClick={() => { setMode("agency"); setError(""); }}>USE CREDENTIALS INSTEAD</button>
@@ -429,7 +424,7 @@ export default function Login({ onConnected }: LoginProps) {
           {accountsOn && mode !== "agency" && <button className="yia-alt" onClick={() => { setMode("agency"); setError(""); }}>AGENT LOGIN</button>}
           {redstoneOn && mode !== "redstone" && <button className="yia-alt" onClick={() => { setMode("redstone"); setError(""); }}>REDSTONE SSO</button>}
           {mode !== "token" && <button className="yia-alt" onClick={() => { setMode("token"); setError(""); }}>INSTANCE TOKEN</button>}
-          <button className="yia-alt" onClick={toggleSound}>{soundOn ? "🔊 SOUND ON" : "🔇 SOUND OFF"}</button>
+          <button className="yia-alt" onClick={toggleSound}>{soundOn ? "SOUND ON" : "SOUND OFF"}</button>
           <button className="yia-alt" onClick={() => setShowServer((s) => !s)}>{showServer ? "HIDE SERVER" : "SERVER"}</button>
         </div>
       </div>

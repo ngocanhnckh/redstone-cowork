@@ -1,5 +1,6 @@
 import { useEffect, type CSSProperties } from "react";
 import TerminalPanel from "./cockpit/TerminalPanel";
+import { IconMonitor } from "./cockpit/Icons";
 
 export type TermArgs = { sessionId: string; cwd: string; machine: string; ptyId?: string; title?: string };
 
@@ -36,7 +37,7 @@ export default function TerminalWindow({ args }: { args: TermArgs }) {
             borderBottom: "1px solid var(--border)", WebkitAppRegion: "drag",
           } as CSSProperties}
         >
-          <span style={{ fontSize: 12 }}>🖥️</span>
+          <IconMonitor size={13} style={{ color: "var(--text-soft)" }} />
           <span className="mono" style={{ fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--text-soft)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {label}
           </span>

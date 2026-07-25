@@ -27,6 +27,8 @@ Self-hosted AI cowork assistant: the user is the CEO of a simulated company; a v
 - Ports: uncommon by design — web `47100`, API `47101` (host side, from `.env`); containers use 3000/3001 internally.
 - Conventional commits (`feat(api): …`, `fix(deploy): …`); TDD for behavior-bearing code (failing test first).
 - Instance auth: single `INSTANCE_TOKEN` bearer; `/health` is the only public endpoint.
+- **UI iconography: NEVER use emoji or color glyphs anywhere in the desktop UI (including mockups/previews)** — use a real icon set: inline SVG sprites, Lucide-style 1.5–1.7px strokes with square caps.
+- **UI motion: blinking is reserved for cursors only.** Status dots, badges, and labels stay static; live-ness is shown by data movement (smoothly interpolated charts, sweeps), not opacity flicker.
 
 ## Process
 

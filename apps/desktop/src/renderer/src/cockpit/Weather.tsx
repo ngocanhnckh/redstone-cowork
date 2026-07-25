@@ -133,31 +133,29 @@ function WxStyles() {
     <style>{`
       .wx-icon { position: relative; flex-shrink: 0; }
       @keyframes wx-spin { to { transform: rotate(360deg); } }
-      @keyframes wx-pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.06); } }
       @keyframes wx-drift { 0%,100% { transform: translateX(-2px); } 50% { transform: translateX(2px); } }
       @keyframes wx-fall { 0% { transform: translateY(-6px); opacity: 0; } 30% { opacity: 1; } 100% { transform: translateY(14px); opacity: 0; } }
-      @keyframes wx-flash { 0%,92%,100% { opacity: .55; filter: none; } 94%,98% { opacity: 1; filter: drop-shadow(0 0 6px #ffe08a); } }
       .wx-sun { position: absolute; left: 6px; top: 6px; width: 22px; height: 22px; border-radius: 50%;
-        background: radial-gradient(circle at 40% 38%, #ffe9a8, #ffb454); box-shadow: 0 0 16px 3px rgb(255 180 84 / 0.7); animation: wx-pulse 3s ease-in-out infinite; }
+        background: #e8e6e1; box-shadow: 0 0 16px 3px rgb(232 230 225 / 0.35); }
       .wx-sun::before { content: ""; position: absolute; inset: -8px; border-radius: 50%;
-        background: repeating-conic-gradient(rgb(255 190 84 / 0.6) 0deg 3deg, transparent 3deg 30deg);
+        background: repeating-conic-gradient(rgb(232 230 225 / 0.5) 0deg 3deg, transparent 3deg 30deg);
         -webkit-mask: radial-gradient(circle, transparent 15px, #000 16px, #000 18px, transparent 19px);
         mask: radial-gradient(circle, transparent 15px, #000 16px, #000 18px, transparent 19px); animation: wx-spin 14s linear infinite; }
       .wx-moon { position: absolute; left: 8px; top: 6px; width: 22px; height: 22px; border-radius: 50%;
-        background: #dfeaf2; box-shadow: inset -7px -3px 0 0 rgb(30 40 55), 0 0 14px 2px rgb(150 190 230 / 0.5); animation: wx-pulse 4s ease-in-out infinite; }
+        background: #d6d4cf; box-shadow: inset -7px -3px 0 0 rgb(26 25 23), 0 0 14px 2px rgb(232 230 225 / 0.3); }
       .wx-cloud { position: absolute; right: 3px; bottom: 8px; width: 26px; height: 12px; border-radius: 10px;
-        background: linear-gradient(180deg, #cdd6de, #9aa7b3); box-shadow: 0 0 12px rgb(150 170 190 / 0.4); animation: wx-drift 5s ease-in-out infinite; }
-      .wx-cloud::before { content: ""; position: absolute; top: -7px; left: 5px; width: 13px; height: 13px; border-radius: 50%; background: #cdd6de; }
-      .wx-cloud::after { content: ""; position: absolute; top: -4px; left: 13px; width: 10px; height: 10px; border-radius: 50%; background: #b8c2cc; }
+        background: #a8a59e; box-shadow: 0 0 12px rgb(232 230 225 / 0.25); animation: wx-drift 5s ease-in-out infinite; }
+      .wx-cloud::before { content: ""; position: absolute; top: -7px; left: 5px; width: 13px; height: 13px; border-radius: 50%; background: #a8a59e; }
+      .wx-cloud::after { content: ""; position: absolute; top: -4px; left: 13px; width: 10px; height: 10px; border-radius: 50%; background: #93908a; }
       .wx-cloud.solo { left: 50%; right: auto; top: 50%; transform: translate(-50%,-50%); }
       .wx-rain, .wx-snow, .wx-fog { position: absolute; left: 10px; bottom: 0; width: 24px; height: 14px; }
-      .wx-rain i { position: absolute; top: 0; width: 2px; height: 7px; border-radius: 2px; background: rgb(120 200 255 / 0.9); box-shadow: 0 0 5px rgb(84 230 255 / 0.7); animation: wx-fall .9s linear infinite; }
+      .wx-rain i { position: absolute; top: 0; width: 2px; height: 7px; border-radius: 2px; background: rgb(232 230 225 / 0.85); box-shadow: none; animation: wx-fall .9s linear infinite; }
       .wx-rain i:nth-child(1) { left: 2px; animation-delay: 0s; } .wx-rain i:nth-child(2) { left: 10px; animation-delay: .3s; } .wx-rain i:nth-child(3) { left: 18px; animation-delay: .6s; }
-      .wx-snow i { position: absolute; top: 0; width: 4px; height: 4px; border-radius: 50%; background: #eaf4ff; box-shadow: 0 0 5px rgb(200 230 255 / 0.8); animation: wx-fall 1.6s linear infinite; }
+      .wx-snow i { position: absolute; top: 0; width: 4px; height: 4px; border-radius: 50%; background: #e8e6e1; box-shadow: none; animation: wx-fall 1.6s linear infinite; }
       .wx-snow i:nth-child(1) { left: 2px; animation-delay: 0s; } .wx-snow i:nth-child(2) { left: 10px; animation-delay: .5s; } .wx-snow i:nth-child(3) { left: 18px; animation-delay: 1s; }
-      .wx-bolt { position: absolute; left: 16px; bottom: 1px; width: 12px; height: 16px; background: #ffe08a;
-        clip-path: polygon(55% 0, 15% 55%, 45% 55%, 30% 100%, 85% 40%, 52% 40%); box-shadow: 0 0 8px #ffcf5a; animation: wx-flash 3s ease-in-out infinite; }
-      .wx-fog i { position: absolute; height: 2.5px; border-radius: 2px; background: rgb(180 200 220 / 0.55); animation: wx-drift 4s ease-in-out infinite; }
+      .wx-bolt { position: absolute; left: 16px; bottom: 1px; width: 12px; height: 16px; background: #e8e6e1;
+        clip-path: polygon(55% 0, 15% 55%, 45% 55%, 30% 100%, 85% 40%, 52% 40%); box-shadow: 0 0 8px rgb(232 230 225 / 0.5); }
+      .wx-fog i { position: absolute; height: 2.5px; border-radius: 2px; background: rgb(232 230 225 / 0.45); animation: wx-drift 4s ease-in-out infinite; }
       .wx-fog i:nth-child(1) { top: 2px; left: 0; width: 24px; } .wx-fog i:nth-child(2) { top: 7px; left: 3px; width: 20px; animation-delay: .6s; } .wx-fog i:nth-child(3) { top: 12px; left: 1px; width: 22px; animation-delay: 1.2s; }
       body.rcw-hidden .wx-sun, body.rcw-hidden .wx-sun::before, body.rcw-hidden .wx-moon, body.rcw-hidden .wx-cloud,
       body.rcw-hidden .wx-rain i, body.rcw-hidden .wx-snow i, body.rcw-hidden .wx-bolt, body.rcw-hidden .wx-fog i { animation-play-state: paused !important; }

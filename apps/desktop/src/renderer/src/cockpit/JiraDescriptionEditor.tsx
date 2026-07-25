@@ -23,7 +23,7 @@ class Boundary extends Component<{ children: ReactNode }, { error: string | null
   state = { error: null as string | null };
   static getDerivedStateFromError(e: unknown) { return { error: e instanceof Error ? e.message : String(e) }; }
   render() {
-    if (this.state.error) return <div className="mono" style={{ padding: 10, fontSize: 11.5, color: "#e0736a" }}>The editor hit an error: {this.state.error}</div>;
+    if (this.state.error) return <div className="mono" style={{ padding: 10, fontSize: 11.5, color: "#e63b2e" }}>The editor hit an error: {this.state.error}</div>;
     return this.props.children;
   }
 }

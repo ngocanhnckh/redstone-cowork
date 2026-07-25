@@ -30,8 +30,8 @@ function SpendChart({ series }: { series: { t: string; input: number; output: nu
         const outH = total > 0 ? (b.output / total) * h : 0;
         return (
           <div key={i} title={`turn: ${total.toLocaleString()} tok (out ${b.output.toLocaleString()}, in ${b.input.toLocaleString()})`}
-            style={{ flex: 1, minWidth: 2, height: Math.max(2, h), display: "flex", flexDirection: "column", justifyContent: "flex-end", borderRadius: 2, overflow: "hidden", background: "rgb(var(--primary-soft) / 0.35)" }}>
-            <div style={{ height: outH, background: "rgb(var(--accent))" }} />
+            style={{ flex: 1, minWidth: 2, height: Math.max(2, h), display: "flex", flexDirection: "column", justifyContent: "flex-end", borderRadius: 2, overflow: "hidden", background: "rgba(232,230,225,0.25)" }}>
+            <div style={{ height: outH, background: "#e63b2e" }} />
           </div>
         );
       })}
@@ -68,13 +68,13 @@ export default function TokenSpendWidget() {
         <>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(72px, 1fr))", gap: 12, marginBottom: 12 }}>
             {metric("Total", fmt(total))}
-            {metric("Output", fmt(output), "rgb(var(--accent))")}
-            {metric("Input", fmt(input), "rgb(var(--primary-soft))")}
+            {metric("Output", fmt(output), "#e63b2e")}
+            {metric("Input", fmt(input), "var(--text-soft)")}
           </div>
           <SpendChart series={session.tokenSeries ?? []} />
           <div style={{ display: "flex", gap: 12, marginTop: 6 }}>
-            <span className="mono faint" style={{ fontSize: 9 }}><span style={{ color: "rgb(var(--accent))" }}>▮</span> output</span>
-            <span className="mono faint" style={{ fontSize: 9 }}><span style={{ color: "rgb(var(--primary-soft))" }}>▮</span> input</span>
+            <span className="mono faint" style={{ fontSize: 9 }}><span style={{ color: "#e63b2e" }}>▮</span> output</span>
+            <span className="mono faint" style={{ fontSize: 9 }}><span style={{ color: "rgba(232,230,225,0.25)" }}>▮</span> input</span>
             <span style={{ flex: 1 }} />
             <span className="mono faint" style={{ fontSize: 9 }}>per turn</span>
           </div>

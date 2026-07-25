@@ -112,13 +112,13 @@ const DM_CSS = `
 .agdm-compose { display:flex; gap:8px; padding:8px 12px 12px; }
 .agdm-input { flex:1; padding:9px 13px; border-radius:10px; font-size:13px; font-family:inherit; border:1px solid rgb(var(--primary) / .3); background: rgb(var(--primary) / .05); color: var(--text); outline:none; }
 .agdm-input:focus { border-color: rgb(var(--primary) / .7); }
-.agdm-send { padding:0 16px; border-radius:10px; border:1px solid rgb(var(--primary) / .6); cursor:pointer; background: rgb(var(--primary) / .2); color:#d9f7ff; font-family:inherit; font-size:11px; font-weight:700; letter-spacing:.16em; }
+.agdm-send { padding:0 16px; border-radius:10px; border:1px solid rgb(var(--primary) / .6); cursor:pointer; background: rgb(var(--primary) / .2); color:var(--text); font-family:inherit; font-size:11px; font-weight:700; letter-spacing:.16em; }
 .agdm-send:disabled { opacity:.4; cursor:not-allowed; }
 
 @keyframes agdm-toast-in { from { opacity:0; transform: translateX(30px); } to { opacity:1; transform:none; } }
 .agdm-toast { position:fixed; right:20px; bottom:20px; z-index:600; width:300px; max-width:80vw; padding:14px 16px; border-radius:14px; cursor:pointer; font-family:var(--font-mono);
   border:1px solid rgb(var(--primary) / .5); background: rgb(8 14 20 / .97); box-shadow:0 20px 60px -14px rgb(0 0 0 / .8), inset 0 0 40px -30px rgb(var(--primary-soft)); animation: agdm-toast-in .3s ease both; }
 .agdm-toast-hd { font-size:9px; letter-spacing:.24em; color: rgb(var(--accent)); font-weight:700; }
-.agdm-toast-from { font-size:14px; font-weight:700; color:#e6f2f4; margin-top:5px; }
+.agdm-toast-from { font-size:14px; font-weight:700; color:var(--text); margin-top:5px; }
 .agdm-toast-body { font-size:12px; color: var(--text-soft); line-height:1.5; margin-top:4px; }
 `;

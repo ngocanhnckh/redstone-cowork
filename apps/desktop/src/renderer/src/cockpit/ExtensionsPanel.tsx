@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { IconPuzzle, IconTrash } from "./Icons";
 
 /**
  * Manager for Chrome extensions loaded into the shared workspace browser session.
@@ -67,7 +68,7 @@ export default function ExtensionsPanel({ onClose }: { onClose: () => void }) {
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-          <span style={{ fontSize: 18 }}>🧩</span>
+          <IconPuzzle size={18} style={{ color: "var(--text-soft)" }} />
           <h2 style={{ fontSize: 16, fontWeight: 600, margin: 0, flex: 1 }}>Browser extensions</h2>
           <button onClick={onClose} className="glass-inset-hover" style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "4px 10px", fontSize: 12, cursor: "pointer", color: "var(--text-soft)" }}>Done</button>
         </div>
@@ -105,7 +106,7 @@ export default function ExtensionsPanel({ onClose }: { onClose: () => void }) {
         </div>
 
         {error && (
-          <div style={{ fontSize: 11.5, color: "#e0736a", marginBottom: 12, lineHeight: 1.5 }}>⚠ {error}</div>
+          <div style={{ fontSize: 11.5, color: "#e63b2e", marginBottom: 12, lineHeight: 1.5 }}>⚠ {error}</div>
         )}
 
         {exts.length === 0 ? (
@@ -123,9 +124,9 @@ export default function ExtensionsPanel({ onClose }: { onClose: () => void }) {
                   <div className="mono faint" style={{ fontSize: 10.5, marginTop: 2 }}>
                     v{e.version}
                     {" · "}
-                    {e.error ? <span style={{ color: "#e0736a" }}>load failed</span> : e.enabled ? (e.loaded ? <span style={{ color: "rgb(var(--accent))" }}>active</span> : "enabled") : "disabled"}
+                    {e.error ? <span style={{ color: "#e63b2e" }}>load failed</span> : e.enabled ? (e.loaded ? <span style={{ color: "rgb(var(--accent))" }}>active</span> : "enabled") : "disabled"}
                   </div>
-                  {e.error && <div style={{ fontSize: 10.5, color: "#e0736a", marginTop: 3, lineHeight: 1.4 }}>{e.error}</div>}
+                  {e.error && <div style={{ fontSize: 10.5, color: "#e63b2e", marginTop: 3, lineHeight: 1.4 }}>{e.error}</div>}
                 </div>
                 <button
                   onClick={() => toggle(e)}
@@ -141,7 +142,7 @@ export default function ExtensionsPanel({ onClose }: { onClose: () => void }) {
                   title="Remove"
                   style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "5px 9px", fontSize: 12, cursor: "pointer", color: "var(--text-soft)", flexShrink: 0 }}
                 >
-                  🗑
+                  <IconTrash size={13} />
                 </button>
               </div>
             ))}

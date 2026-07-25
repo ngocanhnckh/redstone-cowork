@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { DockerHostView, DockerContainer } from "../types";
 import { useStore } from "../store";
 import { bestDockerHost } from "./dockerHost";
+import { IconContainer } from "./Icons";
 
 const fmtBytes = (b: number | null): string => {
   if (!b || b <= 0) return "—";
@@ -12,7 +13,7 @@ const fmtBytes = (b: number | null): string => {
 
 const stateColor = (s: string): string =>
   s === "running" ? "rgb(var(--accent))"
-  : s === "restarting" ? "#D8A76A"
+  : s === "restarting" ? "#e63b2e"
   : s === "paused" ? "#8FB0C8"
   : "var(--border-strong)"; // exited / created / dead
 
@@ -85,7 +86,7 @@ export default function DockerDeck() {
   return (
     <div style={{ display: "flex", flexDirection: "column", minHeight: 0, borderTop: "1px solid var(--border)", paddingTop: 10 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "0 4px 8px" }}>
-        <span style={{ fontSize: 13 }}>🐳</span>
+        <IconContainer size={14} style={{ color: "var(--text-soft)" }} />
         <span className="mono" style={{ fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-soft)" }}>
           Docker{machine ? ` · ${machine}` : ""}
         </span>

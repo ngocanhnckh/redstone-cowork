@@ -19,10 +19,10 @@ function ago(iso: string | null): string {
 
 // status → { color, label }
 const STATUS: Record<string, { color: string; label: string }> = {
-  waiting: { color: "rgb(var(--accent))", label: "needs you" },
-  active: { color: "#5fd0a0", label: "working" },
-  stale: { color: "#b9a06a", label: "idle" },
-  lost: { color: "#9a8e7c", label: "lost" },
+  waiting: { color: "#e63b2e", label: "needs you" },
+  active: { color: "var(--text)", label: "working" },
+  stale: { color: "var(--text-faint)", label: "idle" },
+  lost: { color: "var(--text-faint)", label: "lost" },
 };
 
 export default function AgentGrid() {
@@ -66,7 +66,6 @@ export default function AgentGrid() {
 
 function Tile({ s, onClick }: { s: SessionView; onClick: () => void }) {
   const st = STATUS[s.status] ?? STATUS.lost;
-  const live = s.status === "active" || s.status === "waiting";
   const preview = s.latestAnswer?.split("\n").find((l) => l.trim()) ?? s.summary ?? "";
 
   return (
@@ -121,8 +120,6 @@ function Tile({ s, onClick }: { s: SessionView; onClick: () => void }) {
             borderRadius: 99,
             background: st.color,
             flexShrink: 0,
-            boxShadow: live ? `0 0 0 0 ${st.color}` : undefined,
-            animation: live ? "pulse 2s infinite" : undefined,
           }}
         />
       </div>

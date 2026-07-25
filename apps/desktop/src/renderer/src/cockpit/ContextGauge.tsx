@@ -13,8 +13,8 @@ export default function ContextGauge({ contextTokens, model }: { contextTokens: 
   if (contextTokens == null) return null;
   const limit = contextLimit(model, contextTokens);
   const pct = Math.max(0, Math.min(100, (contextTokens / limit) * 100));
-  // Warm→amber→red as it fills; auto-compact tends to kick in ~75-80%.
-  const color = pct >= 85 ? "#e0736a" : pct >= 70 ? "#D8A76A" : "rgb(var(--primary-soft))";
+  // Quiet until it matters: red only at the top tier; auto-compact tends to kick in ~75-80%.
+  const color = pct >= 85 ? "#e63b2e" : pct >= 70 ? "var(--text)" : "var(--text-soft)";
 
   return (
     <span title={`Context: ${contextTokens.toLocaleString()} / ${limit.toLocaleString()} tokens${model ? ` · ${model}` : ""}`}

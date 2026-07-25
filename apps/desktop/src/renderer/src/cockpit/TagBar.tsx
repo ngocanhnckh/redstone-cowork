@@ -32,8 +32,8 @@ export default function TagBar({ sessionId, tags }: { sessionId: string; tags: s
             fontFamily: "var(--font-mono)",
             padding: "3px 8px",
             borderRadius: 999,
-            background: "rgb(var(--primary) / 0.14)",
-            border: "1px solid rgb(var(--primary-soft) / 0.35)",
+            background: "rgba(232,230,225,0.08)",
+            border: "1px solid var(--border-strong)",
             color: "var(--text)",
           }}
         >

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useStore } from "../store";
 import Markdown from "./Markdown";
 import Kbd from "./Kbd";
+import { IconGlobe } from "./Icons";
 
 type AgentStep = { tool: string; args: string; result: string };
 type Msg = { role: "user" | "assistant"; text: string; error?: boolean; steps?: AgentStep[] };
@@ -253,7 +254,7 @@ export default function AssistPanel() {
                   style={miniInput}
                 />
               ))}
-              {formErr && <div style={{ color: "#e0736a", fontSize: 10.5 }}>{formErr}</div>}
+              {formErr && <div style={{ color: "#e63b2e", fontSize: 10.5 }}>{formErr}</div>}
               <button onClick={addEndpoint} className="glass-btn--clay" style={{ alignSelf: "flex-start", padding: "5px 14px", fontSize: 11.5, fontWeight: 600 }}>
                 Add endpoint
               </button>
@@ -276,7 +277,7 @@ export default function AssistPanel() {
               title="Agent mode — web search & research, grounded in sources"
               style={{ ...chip, background: mode === "agent" ? "rgb(var(--accent) / 0.28)" : chip.background, color: mode === "agent" ? "#fff" : chip.color }}
             >
-              🌐 Agent (web)
+              <IconGlobe size={11} style={{ display: "inline-block", verticalAlign: "-1.5px", marginRight: 5 }} /> Agent (web)
             </button>
           )}
         </div>
@@ -292,11 +293,11 @@ export default function AssistPanel() {
           )}
           {msgs.map((m, i) =>
             m.role === "assistant" ? (
-              <div key={i} className="glass-inset" style={{ padding: "11px 13px", borderRadius: 12, color: m.error ? "#e0736a" : "var(--text)" }}>
+              <div key={i} className="glass-inset" style={{ padding: "11px 13px", borderRadius: 12, color: m.error ? "#e63b2e" : "var(--text)" }}>
                 {m.steps && m.steps.length > 0 && (
                   <details style={{ marginBottom: 8 }}>
                     <summary className="mono" style={{ fontSize: 10.5, color: "var(--text-soft)", cursor: "pointer" }}>
-                      🔎 {m.steps.length} tool step{m.steps.length > 1 ? "s" : ""}
+                      {m.steps.length} tool step{m.steps.length > 1 ? "s" : ""}
                     </summary>
                     <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 5 }}>
                       {m.steps.map((s, j) => (

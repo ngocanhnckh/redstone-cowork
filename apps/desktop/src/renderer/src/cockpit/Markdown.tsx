@@ -12,7 +12,7 @@ function DiffCode({ text }: { text: string }) {
         const color = line.startsWith("+")
           ? "rgb(var(--accent))"
           : line.startsWith("-")
-            ? "#e0736a"
+            ? "#e63b2e"
             : undefined;
         return (
           <span key={i} style={color ? { color } : undefined}>

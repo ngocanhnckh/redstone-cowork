@@ -33,7 +33,7 @@ const GUEST = `(() => {
   if (window.__rcwAnnot && window.__rcwAnnot.mode === MODE) return;
   if (window.__rcwAnnot) { try { window.__rcwAnnot.teardown(); } catch (e) {} }
 
-  var ACCENT = "#ff7a3c";
+  var ACCENT = "#e63b2e";
   var nodes = [];
   var pins = [];        // {id, el, note, badge, outline}
   var nextId = 1;
@@ -123,7 +123,7 @@ const GUEST = `(() => {
     hover = mk("div", "position:fixed;z-index:2147483640;pointer-events:none;border:2px solid " + ACCENT + ";background:" + ACCENT + "22;border-radius:3px;display:none;");
     var panel = mk("div", "position:fixed;right:14px;bottom:14px;z-index:2147483646;width:300px;max-height:60vh;overflow:auto;background:#1b1712;color:#f4ece2;font:12px/1.4 -apple-system,system-ui,sans-serif;border:1px solid #ffffff26;border-radius:12px;box-shadow:0 18px 50px #000a;padding:10px;");
     var head = mk("div", "position:absolute;left:-9999px;"); // placeholder to keep node order tidy
-    panel.innerHTML = '<div data-drag style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;cursor:move;user-select:none"><b style="font-size:12.5px">⠿ Comment mode</b><span style="opacity:.6;font-size:11px;text-align:right">drag to move · Esc to exit</span></div><div data-list></div><div data-empty style="opacity:.6;padding:6px 2px">Hover and click an element to pin it.</div><div style="display:flex;gap:8px;margin-top:10px"><button data-send style="flex:1;background:' + ACCENT + ';color:#1b1006;border:0;border-radius:8px;padding:7px 10px;font-weight:700;cursor:pointer">Send review (0)</button><button data-cancel style="background:#ffffff1a;color:#f4ece2;border:0;border-radius:8px;padding:7px 10px;cursor:pointer">Cancel</button></div>';
+    panel.innerHTML = '<div data-drag style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;cursor:move;user-select:none"><b style="font-size:12.5px">⠿ Comment mode</b><span style="opacity:.6;font-size:11px;text-align:right">drag to move · Esc to exit</span></div><div data-list></div><div data-empty style="opacity:.6;padding:6px 2px">Hover and click an element to pin it.</div><div style="display:flex;gap:8px;margin-top:10px"><button data-send style="flex:1;background:' + ACCENT + ';color:#fff;border:0;border-radius:8px;padding:7px 10px;font-weight:700;cursor:pointer">Send review (0)</button><button data-cancel style="background:#ffffff1a;color:#f4ece2;border:0;border-radius:8px;padding:7px 10px;cursor:pointer">Cancel</button></div>';
     var listEl = panel.querySelector("[data-list]");
     var emptyEl = panel.querySelector("[data-empty]");
     var sendBtn = panel.querySelector("[data-send]");
@@ -159,7 +159,7 @@ const GUEST = `(() => {
         row.style.cssText = "border-top:1px solid #ffffff14;padding:8px 0";
         var top = document.createElement("div");
         top.style.cssText = "display:flex;gap:6px;align-items:center;margin-bottom:4px";
-        top.innerHTML = '<span style="background:' + ACCENT + ';color:#1b1006;border-radius:999px;min-width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:800">' + p.id + '</span><code style="font-size:10.5px;opacity:.85;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">' + p.selector.replace(/</g, "&lt;") + '</code><button style="background:none;border:0;color:#f4ece2;opacity:.6;cursor:pointer">✕</button>';
+        top.innerHTML = '<span style="background:' + ACCENT + ';color:#fff;border-radius:999px;min-width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:800">' + p.id + '</span><code style="font-size:10.5px;opacity:.85;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">' + p.selector.replace(/</g, "&lt;") + '</code><button style="background:none;border:0;color:#f4ece2;opacity:.6;cursor:pointer">✕</button>';
         top.querySelector("button").addEventListener("click", function () { removePin(p.id); });
         var inp = document.createElement("input");
         inp.setAttribute("data-rcw-annot", "1");
@@ -220,7 +220,7 @@ const GUEST = `(() => {
       e.preventDefault(); e.stopPropagation();
       var id = nextId++;
       var outline = mk("div", "position:fixed;z-index:2147483641;pointer-events:none;border:2px solid " + ACCENT + ";border-radius:3px;");
-      var badge = mk("div", "position:fixed;z-index:2147483642;pointer-events:none;transform:translate(-4px,-10px);background:" + ACCENT + ";color:#1b1006;font:800 10px system-ui;border-radius:999px;min-width:16px;height:16px;display:flex;align-items:center;justify-content:center;padding:0 3px");
+      var badge = mk("div", "position:fixed;z-index:2147483642;pointer-events:none;transform:translate(-4px,-10px);background:" + ACCENT + ";color:#fff;font:800 10px system-ui;border-radius:999px;min-width:16px;height:16px;display:flex;align-items:center;justify-content:center;padding:0 3px");
       badge.textContent = String(id);
       var p = { id: id, el: el, note: "", outline: outline, badge: badge, selector: selectorFor(el) };
       pins.push(p);
@@ -270,7 +270,7 @@ const GUEST = `(() => {
       var bar = mk("div", "position:fixed;z-index:2147483646;background:#1b1712f5;border:1px solid #ffffff26;border-radius:10px;box-shadow:0 14px 40px #000a;padding:8px;display:flex;gap:8px;align-items:center;width:min(460px,80vw)");
       bar.style.left = Math.max(8, Math.min(b.x, window.innerWidth - 470)) + "px";
       bar.style.top = Math.min(b.y + b.h + 8, window.innerHeight - 60) + "px";
-      bar.innerHTML = '<input data-cmd placeholder="Command for this screenshot…" style="flex:1;background:#0000003a;border:1px solid #ffffff1f;color:#f4ece2;border-radius:7px;padding:7px 9px;font:13px system-ui"/><button data-go style="background:' + ACCENT + ';color:#1b1006;border:0;border-radius:8px;padding:7px 12px;font-weight:700;cursor:pointer">Send</button>';
+      bar.innerHTML = '<input data-cmd placeholder="Command for this screenshot…" style="flex:1;background:#0000003a;border:1px solid #ffffff1f;color:#f4ece2;border-radius:7px;padding:7px 9px;font:13px system-ui"/><button data-go style="background:' + ACCENT + ';color:#fff;border:0;border-radius:8px;padding:7px 12px;font-weight:700;cursor:pointer">Send</button>';
       var input = bar.querySelector("[data-cmd]");
       var go = bar.querySelector("[data-go]");
       function submit() { signal({ t: "region-send", url: urlNow(), command: input.value || "" }); teardown(); }

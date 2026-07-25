@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "../store";
 import type { NetPeer, NetworkMap } from "../types";
+import { IconSatellite } from "./Icons";
 import land from "../assets/geo/land.json";
 
 // Network Map widget: a futuristic equirectangular world map of the focused host's
@@ -37,12 +38,12 @@ const LAND_PATH = (() => {
 // amber — the theme's home key — so the map reads as part of the palette.
 function serviceColor(s: string | null): string {
   switch (s) {
-    case "https": case "http": return "#e0a45c"; // amber — everyday web
-    case "ssh": return "#8fc79f";                 // sage — secure shell
-    case "dns": return "#d4b968";                 // soft gold
-    case "postgres": case "mysql": case "redis": case "mongo": case "mssql": case "oracle": return "#bf9ad6"; // dusty lilac — data stores
-    case "smtp": case "smtps": case "imaps": case "imap": return "#dc9098"; // dusty rose — mail
-    default: return "#a6b3c4";                     // warm slate — other
+    case "https": case "http": return "#e8e6e1"; // brightest — everyday web (the bulk)
+    case "ssh": return "#b5b2ab";                 // secure shell
+    case "dns": return "#cfcdc7";                 // dns
+    case "postgres": case "mysql": case "redis": case "mongo": case "mssql": case "oracle": return "#96938c"; // data stores
+    case "smtp": case "smtps": case "imaps": case "imap": return "#7a776f"; // mail
+    default: return "#5f5c55";                     // other
   }
 }
 
@@ -76,7 +77,7 @@ export default function NetMap() {
     <div style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1, gap: 6 }}>
       <NetStyles />
       <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-        <span style={{ fontSize: 12 }}>🛰</span>
+        <IconSatellite size={13} style={{ color: "var(--text-soft)" }} />
         <span className="mono" style={{ fontSize: 9.5, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--text-soft)" }}>Network</span>
         <span className="mono faint" style={{ fontSize: 9, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{machine ?? "no host"}</span>
         <span style={{ flex: 1 }} />

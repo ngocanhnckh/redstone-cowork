@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>REDSTONE COWORK — Signal Room redesign preview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   SIGNAL ROOM — tactical broadcast console register
+   Rule 0: red appears ONLY where the operator must act.
+   Rule 1: zero border-radius. Hairlines, not shadows.
+   Rule 2: data is the texture. No decorative gradients.
+   ============================================================ */
+:root{
+  --bg:        #060606;
+  --panel:     #0a0a0a;
+  --panel-2:   #0e0e0e;
+  --ink:       #e8e6e1;
+  --dim:       #98958f;
+  --faint:     #55524d;
+  --line:      rgba(232,230,225,.13);
+  --line-soft: rgba(232,230,225,.06);
+  --red:       #e63b2e;
+  --red-dim:   #8c2218;
+  --red-wash:  rgba(230,59,46,.08);
+  --mono:      "IBM Plex Mono", monospace;
+  --disp:      "Chakra Petch", sans-serif;
+  --glass:     rgba(10,10,10,.42);
+  --glass-2:   rgba(12,12,12,.34);
+  --edge:      rgba(232,230,225,.22);
+  --glass-hi:  inset 0 1px 0 rgba(255,255,255,.12);
+}
+*{margin:0;padding:0;box-sizing:border-box;border-radius:0 !important}
+html{background:var(--bg)}
+body{
+  font-family:var(--mono); color:var(--ink); background:var(--bg);
+  font-size:12px; line-height:1.5; -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+}
+::selection{background:var(--red); color:#fff}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-thumb{background:#222;border:2px solid var(--bg)}
+::-webkit-scrollbar-track{background:transparent}
+
+/* ---- shared micro-typography ---- */
+.kick{font-family:var(--disp);font-size:9px;font-weight:600;letter-spacing:.34em;text-transform:uppercase;color:var(--dim)}
+.kick b{color:var(--ink);font-weight:600}
+.micro{font-size:9px;letter-spacing:.12em;color:var(--faint);text-transform:uppercase}
+.num{font-family:var(--disp);font-weight:300}
+
+/* ---- panel chrome: hairline box + corner ticks ---- */
+.pane{position:relative;border:1px solid var(--line-soft);background:var(--panel)}
+.pane>.tick{position:absolute;width:7px;height:7px;pointer-events:none}
+.tick.tl{top:-1px;left:-1px;border-top:1px solid var(--dim);border-left:1px solid var(--dim)}
+.tick.tr{top:-1px;right:-1px;border-top:1px solid var(--dim);border-right:1px solid var(--dim)}
+.tick.bl{bottom:-1px;left:-1px;border-bottom:1px solid var(--dim);border-left:1px solid var(--dim)}
+.tick.br{bottom:-1px;right:-1px;border-bottom:1px solid var(--dim);border-right:1px solid var(--dim)}
+.pane-h{display:flex;align-items:center;justify-content:space-between;gap:8px;
+  padding:8px 12px;border-bottom:1px solid var(--line-soft)}
+
+/* ---- background: registration dot grid ---- */
+/* HQ lobby photo backdrop — the thing the glass blurs */
+.photo{position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:url(backdrop.png) center/cover no-repeat}
+.scrim{position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:radial-gradient(ellipse at 50% 42%, rgba(6,6,6,.30), rgba(6,6,6,.72) 92%)}
+.dotfield{position:fixed;inset:0;z-index:0;pointer-events:none;
+  background-image:radial-gradient(rgba(232,230,225,.055) 1px, transparent 1px);
+  background-size:26px 26px}
+/* studio glow — gives the glass something to refract; static, not a drifting blob */
+.glowfield{position:fixed;inset:0;z-index:0;pointer-events:none;background:
+  radial-gradient(720px 540px at 22% 24%, rgba(230,59,46,.17), transparent 68%),
+  radial-gradient(900px 640px at 82% 76%, rgba(232,230,225,.10), transparent 70%),
+  radial-gradient(420px 320px at 62% 12%, rgba(232,230,225,.07), transparent 70%)}
+
+/* ---- faked glass: per-surface pre-blurred photo layer (zero per-frame cost).
+   backdrop-filter re-blurs every frame; this blurs ONCE and the GPU caches it. ---- */
+.glassy{isolation:isolate}
+.frost{position:absolute;inset:-18px;z-index:-1;pointer-events:none;
+  filter:blur(6px);clip-path:inset(18px);background-repeat:no-repeat}
+.frost::after{content:"";position:absolute;inset:0}
+.t1>.frost::after{background:var(--glass)}
+.t2>.frost::after{background:var(--glass-2)}
+.frosted .titlebar,.frosted .dock,.frosted .statusbar,.frosted .wiz,.frosted .rail,.frosted .tele,.frosted .stage-h,.frosted .card,.frosted .working,.frosted .stage{background:transparent}
+.stage.glassy>.frost::after{background:rgba(8,8,8,.52)}
+
+/* ============ APP FRAME ============ */
+.app{position:relative;z-index:1;height:100vh;min-height:720px;display:flex;flex-direction:column}
+
+/* ---- title bar ---- */
+.titlebar{height:44px;flex:none;display:flex;align-items:stretch;border-bottom:1px solid var(--edge);background:var(--glass);box-shadow:var(--glass-hi)}
+.brand{display:flex;align-items:center;gap:10px;padding:0 16px 0 84px;border-right:1px solid var(--line-soft)}
+.brand .glyph{width:14px;height:14px;border:1px solid var(--ink);position:relative}
+.brand .glyph::after{content:"";position:absolute;inset:3px;background:var(--red)}
+.brand .word{font-family:var(--disp);font-size:11px;font-weight:600;letter-spacing:.3em}
+.brand .word span{color:var(--faint)}
+.modes{display:flex;align-items:stretch}
+.mode{display:flex;align-items:center;padding:0 16px;font-family:var(--disp);font-size:9.5px;font-weight:500;
+  letter-spacing:.22em;color:var(--faint);border-right:1px solid var(--line-soft);cursor:pointer;position:relative}
+.mode:hover{color:var(--dim)}
+.mode.on{color:var(--ink);background:var(--panel-2)}
+.mode.on::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:1px;background:var(--ink)}
+.mode .n{margin-left:6px;color:var(--faint);font-family:var(--mono);font-size:9px}
+.titlebar .flex{flex:1}
+/* the one red object in the chrome: command queue */
+.cmdq{display:flex;align-items:center;gap:10px;padding:0 16px;background:var(--red);color:#0a0a0a;
+  font-family:var(--disp);font-weight:600;font-size:10px;letter-spacing:.24em;cursor:pointer}
+.cmdq .qn{font-size:15px;font-weight:700}
+.tb-utils{display:flex;align-items:stretch;border-left:1px solid var(--line-soft)}
+.tb-btn{display:flex;align-items:center;gap:7px;padding:0 14px;border-right:1px solid var(--line-soft);
+  color:var(--dim);font-size:9.5px;letter-spacing:.18em;text-transform:uppercase;cursor:pointer}
+.tb-btn:hover{color:var(--ink);background:var(--panel-2)}
+.tb-btn .dot{width:5px;height:5px;background:var(--dim)}
+.tb-btn .dot.live{background:var(--ink);animation:blink 1.6s steps(2) infinite}
+
+/* ---- body grid ---- */
+.deck{flex:1;display:grid;grid-template-columns:236px 1fr 312px;min-height:0}
+
+/* ============ LEFT: SESSIONS RAIL ============ */
+.rail{border-right:1px solid var(--edge);display:flex;flex-direction:column;min-height:0;background:var(--glass-2)}
+.rail-h{flex:none;display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--line-soft)}
+.add{width:20px;height:20px;border:1px solid var(--line);display:grid;place-items:center;color:var(--dim);cursor:pointer;font-size:12px;line-height:1}
+.add:hover{color:var(--ink);border-color:var(--dim)}
+.slist{flex:1;overflow-y:auto;min-height:0}
+.sess{display:block;width:100%;text-align:left;background:none;border:0;color:inherit;font:inherit;cursor:pointer;
+  padding:10px 14px 10px 11px;border-bottom:1px solid var(--line-soft);border-left:3px solid transparent;position:relative}
+.sess:hover{background:var(--panel-2)}
+.sess .row1{display:flex;align-items:baseline;gap:8px}
+.sess .idx{font-size:8.5px;color:var(--faint);letter-spacing:.1em;width:26px;flex:none}
+.sess .name{font-family:var(--disp);font-size:11.5px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sess .row2{display:flex;align-items:center;gap:8px;margin-top:3px;padding-left:34px}
+.sess .mach{font-size:8.5px;color:var(--faint);letter-spacing:.08em}
+.sess .st{font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin-left:auto}
+/* focused */
+.sess.focus{background:var(--panel-2);border-left-color:var(--ink)}
+/* WAITING = the red state. nothing else on this rail is red */
+.sess.wait{border-left-color:var(--red)}
+.sess.wait .st{color:var(--red);animation:blink 1.4s steps(2) infinite}
+.sess.wait .name::after{content:"";display:inline-block;width:6px;height:6px;background:var(--red);margin-left:8px;vertical-align:1px}
+/* working = white activity bars */
+.eq{display:inline-flex;gap:2px;align-items:flex-end;height:8px;margin-left:auto}
+.eq i{width:2px;background:var(--dim);animation:eq .9s ease-in-out infinite}
+.eq i:nth-child(2){animation-delay:.15s}.eq i:nth-child(3){animation-delay:.3s}
+.sess.idle{opacity:.45}
+.rail-f{flex:none;border-top:1px solid var(--line-soft);padding:10px 14px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+.rf{display:flex;flex-direction:column;gap:2px}
+.rf .v{font-family:var(--disp);font-weight:400;font-size:15px}
+.rf .v.red{color:var(--red)}
+.rf .k{font-size:7.5px;letter-spacing:.2em;color:var(--faint);text-transform:uppercase}
+
+/* ============ CENTER: FOCUS STAGE ============ */
+.stage{display:flex;flex-direction:column;min-width:0;min-height:0;background:rgba(8,8,8,.52)}
+.stage-h{flex:none;padding:14px 20px 0;border-bottom:1px solid var(--edge);background:var(--glass-2)}
+.stage-h .top{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+.stitle{font-family:var(--disp);font-size:21px;font-weight:600;letter-spacing:.14em;text-transform:uppercase}
+.smeta{display:flex;gap:14px;font-size:9px;color:var(--faint);letter-spacing:.1em;align-items:baseline}
+.smeta b{color:var(--dim);font-weight:400}
+.pmodes{margin-left:auto;display:flex;border:1px solid var(--line-soft)}
+.pm{padding:4px 10px;font-size:8.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);cursor:pointer;border-right:1px solid var(--line-soft)}
+.pm:last-child{border-right:0}
+.pm.on{background:var(--ink);color:#0a0a0a;font-weight:600}
+/* context gauge: ruled bar with ticks */
+.ctx{display:flex;align-items:center;gap:10px;margin:12px 0 0}
+.ctx .bar{position:relative;flex:none;width:220px;height:8px;border:1px solid var(--line)}
+.ctx .bar i{position:absolute;top:0;bottom:0;left:0;background:var(--ink);opacity:.85}
+.ctx .bar .rules{position:absolute;inset:0;background:repeating-linear-gradient(90deg,transparent 0 21px,var(--line-soft) 21px 22px)}
+.ctx .lbl{font-size:8.5px;letter-spacing:.2em;color:var(--faint)}
+.ctx .val{font-family:var(--disp);font-size:11px;color:var(--dim)}
+.tabs{display:flex;gap:0;margin-top:12px}
+.tab{padding:8px 16px;font-family:var(--disp);font-size:9px;font-weight:500;letter-spacing:.24em;text-transform:uppercase;
+  color:var(--faint);cursor:pointer;border:1px solid transparent;border-bottom:0;position:relative;top:1px}
+.tab .kbd{margin-left:7px;color:var(--faint);font-family:var(--mono);font-size:8px;opacity:.7}
+.tab.on{color:var(--ink);background:var(--bg);border-color:var(--line)}
+/* transcript */
+.feed{flex:1;overflow-y:auto;min-height:0;padding:20px;display:flex;flex-direction:column;gap:14px}
+.msg{max-width:760px}
+.msg .who{display:flex;align-items:baseline;gap:10px;margin-bottom:5px}
+.msg .who .tag{font-family:var(--disp);font-size:8px;font-weight:600;letter-spacing:.3em;color:var(--dim)}
+.msg .who .t{font-size:8px;color:var(--faint);letter-spacing:.1em}
+.msg.you .who .tag{color:var(--faint)}
+.msg .body{border-left:1px solid var(--line);padding:2px 0 2px 14px;color:var(--dim);font-size:11.5px;line-height:1.65}
+.msg .body .hl{color:var(--ink)}
+.msg .body code{background:var(--panel-2);border:1px solid var(--line-soft);padding:1px 5px;font-size:10.5px;color:var(--ink)}
+.msg.claude .body{border-left-color:var(--dim)}
+/* working strip — replaces thinking-card/shimmer */
+.working{display:flex;align-items:center;gap:12px;border:1px solid var(--line-soft);border-left:2px solid var(--ink);
+  padding:9px 14px;max-width:760px;background:var(--glass-2)}
+.working .eq i{background:var(--ink)}
+.working .txt{font-size:9.5px;letter-spacing:.22em;text-transform:uppercase;color:var(--dim)}
+.working .el{margin-left:auto;font-size:9px;color:var(--faint)}
+/* decision block — actionable ⇒ red frame */
+.decision{border:1px solid var(--red-dim);background:var(--red-wash);max-width:760px;position:relative}
+.decision .dh{display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px solid var(--red-dim)}
+.decision .dh .plate{background:var(--red);color:#0a0a0a;font-family:var(--disp);font-weight:700;font-size:8.5px;
+  letter-spacing:.26em;padding:2px 8px}
+.decision .dh .q{font-size:10px;color:var(--ink);letter-spacing:.06em}
+.decision .opts{display:flex;flex-wrap:wrap;gap:8px;padding:12px 14px}
+.opt{border:1px solid var(--line);background:var(--panel);color:var(--ink);font:inherit;font-size:10px;
+  letter-spacing:.1em;padding:7px 14px;cursor:pointer;text-transform:uppercase}
+.opt:hover{border-color:var(--ink)}
+.opt.yes{background:var(--ink);color:#0a0a0a;border-color:var(--ink);font-weight:600}
+/* answer dock */
+.dock{flex:none;border-top:1px solid var(--edge);background:var(--glass);padding:12px 20px;display:flex;gap:12px;align-items:center}
+.dock .in{flex:1;display:flex;align-items:center;gap:10px;border:1px solid var(--line);padding:9px 14px;background:var(--bg)}
+.dock .in .pr{color:var(--red);font-weight:600}
+.dock .in .ph{color:var(--faint);font-size:11px;letter-spacing:.04em}
+.dock .in .cur{width:7px;height:13px;background:var(--ink);animation:blink 1.1s steps(2) infinite}
+.dock .stop{border:1px solid var(--line);background:none;color:var(--dim);font:inherit;font-size:9px;
+  letter-spacing:.22em;padding:9px 16px;cursor:pointer;text-transform:uppercase}
+.dock .stop:hover{border-color:var(--red);color:var(--red)}
+
+/* ============ RIGHT: TELEMETRY RAIL ============ */
+.tele{border-left:1px solid var(--edge);overflow-y:auto;min-height:0;background:var(--glass-2);
+  display:flex;flex-direction:column}
+.tele .pane{border:0;border-bottom:1px solid var(--line-soft);background:transparent}
+/* mission clock */
+.clock{padding:16px 16px 14px}
+.clock .big{font-family:var(--disp);font-weight:300;font-size:40px;letter-spacing:.06em;line-height:1;display:flex;align-items:baseline;gap:2px}
+.clock .big .sec{font-size:18px;color:var(--dim)}
+.clock .big .cur{display:inline-block;width:10px;height:26px;background:var(--red);margin-left:8px;animation:blink 1s steps(2) infinite;align-self:center}
+.clock .sub{display:flex;justify-content:space-between;margin-top:8px}
+/* operator */
+.oper{padding:14px 16px;display:grid;grid-template-columns:52px 1fr;gap:12px;align-items:center}
+.oper .ph{width:52px;height:52px;border:1px solid var(--line);position:relative;background:
+  repeating-linear-gradient(45deg,var(--panel-2) 0 3px,transparent 3px 6px)}
+.oper .ph::after{content:"NA";position:absolute;inset:0;display:grid;place-items:center;
+  font-family:var(--disp);font-weight:600;font-size:15px;letter-spacing:.1em;color:var(--dim)}
+.oper .nm{font-family:var(--disp);font-weight:600;font-size:13px;letter-spacing:.12em;text-transform:uppercase}
+.oper .rk{font-size:8.5px;color:var(--faint);letter-spacing:.18em;text-transform:uppercase;margin-top:3px}
+.oper .ins{margin-top:5px;display:flex;gap:3px}
+.oper .ins i{width:9px;height:5px;background:var(--dim)}
+.oper .ins i.f{background:var(--faint)}
+.week{display:grid;grid-template-columns:1fr 1fr 1fr;border-top:1px solid var(--line-soft)}
+.wk{padding:10px 16px;border-right:1px solid var(--line-soft)}
+.wk:last-child{border-right:0}
+.wk .v{font-family:var(--disp);font-weight:300;font-size:22px;line-height:1}
+.wk .k{font-size:7.5px;letter-spacing:.2em;color:var(--faint);text-transform:uppercase;margin-top:4px}
+/* host telemetry */
+.host{padding:12px 16px 14px}
+.hrow{display:grid;grid-template-columns:34px 1fr 58px;gap:10px;align-items:center;margin-top:10px}
+.hrow .k{font-size:8px;letter-spacing:.18em;color:var(--faint)}
+.hbar{height:6px;border:1px solid var(--line);position:relative}
+.hbar i{position:absolute;top:0;bottom:0;left:0;background:var(--dim)}
+.hbar i.hot{background:var(--ink)}
+.hrow .v{font-size:9px;color:var(--dim);text-align:right;letter-spacing:.06em}
+.spark{display:block;width:100%;height:22px;margin-top:12px}
+/* twin ring gauges — the moodboard circles */
+.rings{display:grid;grid-template-columns:1fr 1fr;padding:14px 16px 16px;gap:10px}
+.ring{position:relative;display:grid;place-items:center;padding:6px 0}
+.ring svg{display:block}
+.ring .cv{position:absolute;text-align:center}
+.ring .cv .v{font-family:var(--disp);font-weight:300;font-size:19px;line-height:1}
+.ring .cv .k{font-size:7px;letter-spacing:.22em;color:var(--faint);text-transform:uppercase;margin-top:3px}
+/* token bars */
+.tok{padding:12px 16px 16px}
+.tokbars{display:flex;align-items:flex-end;gap:2px;height:44px;margin-top:10px}
+.tokbars i{flex:1;background:var(--faint);min-height:2px}
+.tokbars i.o{background:var(--dim)}
+.tokbars i.r{background:var(--red)}
+.tok .leg{display:flex;gap:14px;margin-top:8px}
+.tok .leg span{font-size:7.5px;letter-spacing:.16em;color:var(--faint);text-transform:uppercase;display:flex;gap:5px;align-items:center}
+.tok .leg i{width:7px;height:7px;display:inline-block;background:var(--dim)}
+.tok .leg i.rr{background:var(--red)}
+/* directives (todos) */
+.dir{padding:12px 16px 18px}
+.d-item{display:flex;gap:10px;align-items:baseline;padding:6px 0;border-bottom:1px solid var(--line-soft);font-size:10.5px;color:var(--dim)}
+.d-item .bx{flex:none;width:10px;height:10px;border:1px solid var(--dim);position:relative;top:1px}
+.d-item.done{color:var(--faint);text-decoration:line-through}
+.d-item.done .bx{background:var(--dim);border-color:var(--dim)}
+.d-item.now .bx{border-color:var(--ink)}
+.d-item.now{color:var(--ink)}
+.d-item .key{font-size:8.5px;color:var(--faint);letter-spacing:.08em;white-space:nowrap;flex:none}
+.d-item .tx{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.d-item.late .key,.d-item.late{color:var(--red)}
+.d-item.late .bx{border-color:var(--red)}
+
+/* ---- status bar ---- */
+.statusbar{flex:none;height:26px;border-top:1px solid var(--edge);background:var(--glass);
+  display:flex;align-items:center;gap:0;font-size:8.5px;letter-spacing:.14em;color:var(--faint);text-transform:uppercase}
+.sb{padding:0 14px;display:flex;align-items:center;gap:8px;border-right:1px solid var(--line-soft);height:100%}
+.sb .dot{width:5px;height:5px;background:var(--ink);animation:blink 2s steps(2) infinite}
+.sb.tx{flex:1;overflow:hidden;border-right:0;color:var(--faint)}
+.sb.tx b{color:var(--dim);font-weight:400}
+.ticks{flex:none;display:flex;gap:3px;align-items:center;padding:0 14px;height:100%}
+.ticks i{width:1px;height:8px;background:var(--faint);opacity:.5}
+.ticks i:nth-child(5n){height:12px;opacity:.9}
+
+/* ============ PREVIEW SECTIONS BELOW ============ */
+.section{position:relative;z-index:1;background:rgba(6,6,6,.92);border-top:1px solid var(--line);padding:64px 48px;max-width:1280px;margin:0 auto}
+.sec-h{display:flex;align-items:baseline;gap:16px;margin-bottom:8px}
+.sec-h .no{font-family:var(--disp);font-weight:300;font-size:30px;color:var(--faint)}
+.sec-h h2{font-family:var(--disp);font-weight:600;font-size:15px;letter-spacing:.3em;text-transform:uppercase}
+.sec-sub{color:var(--faint);font-size:10.5px;max-width:620px;margin-bottom:32px;letter-spacing:.04em}
+/* grid cards */
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:1px;background:var(--line-soft);border:1px solid var(--line-soft)}
+.card{background:var(--glass-2);padding:16px;position:relative;box-shadow:var(--glass-hi)}
+.card .ch{display:flex;justify-content:space-between;align-items:baseline}
+.card .cn{font-family:var(--disp);font-weight:500;font-size:12px;letter-spacing:.1em;text-transform:uppercase}
+.card .cs{font-size:8px;letter-spacing:.18em;color:var(--dim);text-transform:uppercase}
+.card.wait{box-shadow:inset 3px 0 0 var(--red)}
+.card.wait .cs{color:var(--red)}
+.card .cm{margin-top:10px;font-size:9px;color:var(--faint);line-height:1.8;letter-spacing:.05em}
+.card .cm b{color:var(--dim);font-weight:400}
+.card .cfoot{margin-top:12px;padding-top:10px;border-top:1px solid var(--line-soft);display:flex;justify-content:space-between;align-items:center}
+.minibar{width:70px;height:4px;border:1px solid var(--line);position:relative}
+.minibar i{position:absolute;inset:0;right:auto;background:var(--dim)}
+/* wizard */
+.wizwrap{display:grid;place-items:center;padding:48px 0;border:1px solid var(--line-soft);
+  background-image:radial-gradient(rgba(232,230,225,.04) 1px,transparent 1px);background-size:26px 26px}
+.wiz{width:560px;max-width:92%;border:1px solid var(--edge);background:var(--glass);position:relative;box-shadow:0 24px 80px rgba(0,0,0,.6),var(--glass-hi)}
+.wiz-h{padding:14px 18px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}
+.wiz-h .t{font-family:var(--disp);font-weight:600;font-size:11px;letter-spacing:.3em;text-transform:uppercase}
+.steps{display:flex;border-bottom:1px solid var(--line-soft)}
+.step{flex:1;padding:7px 0;text-align:center;font-size:7.5px;letter-spacing:.2em;color:var(--faint);
+  text-transform:uppercase;border-right:1px solid var(--line-soft);position:relative}
+.step:last-child{border-right:0}
+.step.done{color:var(--dim)}
+.step.on{color:var(--ink);background:var(--panel-2)}
+.step.on::after{content:"";position:absolute;left:0;right:0;top:-1px;height:1px;background:var(--red)}
+.wiz-b{padding:20px 18px}
+.field{margin-bottom:14px}
+.field label{display:block;font-size:8px;letter-spacing:.24em;color:var(--faint);text-transform:uppercase;margin-bottom:6px}
+.field input{width:100%;background:var(--bg);border:1px solid var(--line);color:var(--ink);
+  font:inherit;font-size:11px;padding:9px 12px;letter-spacing:.04em}
+.field input:focus{outline:none;border-color:var(--dim)}
+.srv{display:flex;justify-content:space-between;align-items:center;border:1px solid var(--line);padding:10px 14px;margin-bottom:8px;cursor:pointer}
+.srv:hover{border-color:var(--dim)}
+.srv.sel{border-color:var(--ink);background:var(--panel-2)}
+.srv .sn{font-family:var(--disp);font-size:11px;font-weight:500;letter-spacing:.12em;text-transform:uppercase}
+.srv .si{font-size:8.5px;color:var(--faint);letter-spacing:.08em;margin-top:2px}
+.srv .own{font-size:7.5px;letter-spacing:.2em;color:var(--dim);border:1px solid var(--line);padding:2px 7px;text-transform:uppercase}
+.wiz-f{display:flex;justify-content:space-between;padding:14px 18px;border-top:1px solid var(--line)}
+.wbtn{border:1px solid var(--line);background:none;color:var(--dim);font:inherit;font-size:9px;
+  letter-spacing:.24em;padding:9px 18px;cursor:pointer;text-transform:uppercase}
+.wbtn:hover{color:var(--ink);border-color:var(--dim)}
+.wbtn.go{background:var(--ink);color:#0a0a0a;border-color:var(--ink);font-weight:600}
+.wbtn.go:hover{background:var(--red);border-color:var(--red);color:#0a0a0a}
+/* tokens strip */
+.chips{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:1px;background:var(--line-soft);border:1px solid var(--line-soft)}
+.chip{background:var(--panel);padding:14px}
+.chip .sw{height:34px;border:1px solid var(--line-soft);margin-bottom:10px}
+.chip .cn2{font-size:9px;letter-spacing:.14em;color:var(--dim);text-transform:uppercase}
+.chip .cv2{font-size:8.5px;color:var(--faint);margin-top:2px}
+.type-spec{border:1px solid var(--line-soft);background:var(--panel);padding:24px;margin-top:1px}
+.ts-row{display:grid;grid-template-columns:190px 1fr;gap:24px;padding:16px 0;border-bottom:1px solid var(--line-soft);align-items:baseline}
+.ts-row:last-child{border-bottom:0}
+.motion-list{border:1px solid var(--line-soft)}
+.mo{display:grid;grid-template-columns:200px 1fr 110px;gap:20px;padding:13px 18px;border-bottom:1px solid var(--line-soft);background:var(--panel);align-items:baseline}
+.mo:last-child{border-bottom:0}
+.mo .mn{font-family:var(--disp);font-size:10px;font-weight:600;letter-spacing:.16em;text-transform:uppercase}
+.mo .md{font-size:10px;color:var(--faint);letter-spacing:.03em}
+.mo .mt{font-size:8.5px;color:var(--dim);text-align:right;letter-spacing:.1em}
+.mo .mn.cut{color:var(--red);text-decoration:line-through;text-decoration-thickness:1px}
+
+/* ---- animation (all of it) ---- */
+@keyframes blink{50%{opacity:0}}
+@keyframes eq{0%,100%{height:3px}50%{height:8px}}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none !important;transition:none !important}
+}
+@media (max-width:1100px){.deck{grid-template-columns:200px 1fr}.tele{display:none}}
+</style>
+</head>
+<body>
+<div class="photo"></div>
+<div class="scrim"></div>
+<div class="dotfield"></div>
+<div class="glowfield"></div>
+
+<!-- ================= 01 · THE COCKPIT ================= -->
+<div class="app">
+
+  <!-- title bar -->
+  <header class="titlebar">
+    <div class="brand">
+      <div class="glyph"></div>
+      <div class="word">REDSTONE<span>&nbsp;//&nbsp;</span>COWORK</div>
+    </div>
+    <nav class="modes">
+      <div class="mode on">FLOW<span class="n">04</span></div>
+      <div class="mode">GRID<span class="n">04</span></div>
+      <div class="mode">SESSIONS</div>
+      <div class="mode">HUD</div>
+      <div class="mode">AGENCY</div>
+    </nav>
+    <div class="flex"></div>
+    <div class="cmdq"><span class="qn">2</span> AWAITING COMMAND</div>
+    <div class="tb-utils">
+      <div class="tb-btn"><span class="dot live"></span>CONTABO2</div>
+      <div class="tb-btn">ASSIST</div>
+      <div class="tb-btn">SKILLS</div>
+    </div>
+  </header>
+
+  <div class="deck">
+
+    <!-- left: sessions -->
+    <aside class="rail">
+      <div class="rail-h">
+        <span class="kick">SESSIONS <b>04</b></span>
+        <div class="add">+</div>
+      </div>
+      <div class="slist">
+        <button class="sess focus wait">
+          <div class="row1"><span class="idx">S-01</span><span class="name">redstone-cowork</span></div>
+          <div class="row2"><span class="mach">contabo2</span><span class="st">WAITING 03:12</span></div>
+        </button>
+        <button class="sess">
+          <div class="row1"><span class="idx">S-02</span><span class="name">redstone-agent</span></div>
+          <div class="row2"><span class="mach">contabo2</span>
+            <span class="eq"><i></i><i></i><i></i></span></div>
+        </button>
+        <button class="sess wait">
+          <div class="row1"><span class="idx">S-03</span><span class="name">yitec-portal</span></div>
+          <div class="row2"><span class="mach">contabo2</span><span class="st">WAITING 00:41</span></div>
+        </button>
+        <button class="sess idle">
+          <div class="row1"><span class="idx">S-04</span><span class="name">hook-cli</span></div>
+          <div class="row2"><span class="mach">macbook-m1</span><span class="st">IDLE</span></div>
+        </button>
+      </div>
+      <div class="rail-f">
+        <div class="rf"><span class="v">01</span><span class="k">ACTIVE</span></div>
+        <div class="rf"><span class="v red">02</span><span class="k">WAITING</span></div>
+        <div class="rf"><span class="v">14h</span><span class="k">UPTIME</span></div>
+      </div>
+    </aside>
+
+    <!-- center: focus stage -->
+    <main class="stage">
+      <div class="stage-h">
+        <div class="top">
+          <h1 class="stitle">REDSTONE-COWORK</h1>
+          <div class="smeta">
+            <span>HOST <b>contabo2</b></span>
+            <span>BRANCH <b>cockpit-optimistic-stream</b></span>
+            <span>TMUX <b>rcw-8241</b></span>
+          </div>
+          <div class="pmodes">
+            <span class="pm">DEFAULT</span><span class="pm on">ACCEPT EDITS</span><span class="pm">PLAN</span><span class="pm">AUTO</span>
+          </div>
+        </div>
+        <div class="ctx">
+          <span class="lbl">CTX</span>
+          <div class="bar"><i style="width:38%"></i><div class="rules"></div></div>
+          <span class="val">38% · 76.4K / 200K</span>
+          <span class="lbl" style="margin-left:auto">MODEL&nbsp;·&nbsp;FABLE&nbsp;5</span>
+        </div>
+        <div class="tabs">
+          <span class="tab on">CHAT<span class="kbd">^1</span></span>
+          <span class="tab">TERMINAL<span class="kbd">^2</span></span>
+          <span class="tab">BROWSER<span class="kbd">^3</span></span>
+          <span class="tab">SETTINGS<span class="kbd">^4</span></span>
+          <span class="tab">FILES<span class="kbd">^5</span></span>
+        </div>
+      </div>
+
+      <div class="feed">
+        <div class="msg you">
+          <div class="who"><span class="tag">YOU</span><span class="t">22:41:07</span></div>
+          <div class="body">Resume past folder conversations should also list conversations from other machines that mounted the same repo. Check ownership first.</div>
+        </div>
+        <div class="msg claude">
+          <div class="who"><span class="tag">CLAUDE</span><span class="t">22:41:23</span></div>
+          <div class="body">Ownership check added in <code>sessions.usecase.ts</code>. Past conversations are now filtered by <span class="hl">account id before machine</span>, so shared servers only surface your own resumable sessions. Two integration tests cover the cross-account case — both green.</div>
+        </div>
+        <div class="msg claude">
+          <div class="who"><span class="tag">CLAUDE</span><span class="t">22:44:51</span></div>
+          <div class="body">The wizard RESUME step now lists <span class="hl">all resumable past conversations</span>, searchable by folder and title. Ready to deploy — this rebuilds <code>api</code>, so <code>web</code> must restart after.</div>
+        </div>
+
+        <div class="working">
+          <span class="eq"><i></i><i></i><i></i></span>
+          <span class="txt">CLAUDE WORKING — DEPLOY DRY-RUN</span>
+          <span class="el">00:47</span>
+        </div>
+
+        <div class="decision">
+          <div class="dh">
+            <span class="plate">DECISION</span>
+            <span class="q">Deploy to contabo2 now? Rebuild api + restart web (≈40s downtime)</span>
+          </div>
+          <div class="opts">
+            <button class="opt yes">1 · DEPLOY NOW</button>
+            <button class="opt">2 · AFTER SMOKE TEST</button>
+            <button class="opt">3 · HOLD</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="dock">
+        <div class="in">
+          <span class="pr">❯</span>
+          <span class="ph">Send an instruction — / for commands</span>
+          <span class="cur"></span>
+        </div>
+        <button class="stop">ESC · STOP</button>
+      </div>
+    </main>
+
+    <!-- right: telemetry -->
+    <aside class="tele">
+
+      <section class="pane clock">
+        <span class="kick">MISSION TIME</span>
+        <div class="big">22:47<span class="sec">:31</span><span class="cur"></span></div>
+        <div class="sub">
+          <span class="micro">FRI 25 JUL 2026</span>
+          <span class="micro">ASIA/HO_CHI_MINH</span>
+        </div>
+      </section>
+
+      <section class="pane">
+        <div class="oper">
+          <div class="ph"></div>
+          <div>
+            <div class="nm">NGOC ANH</div>
+            <div class="rk">DIRECTOR · OPERATIONS</div>
+            <div class="ins"><i></i><i></i><i></i><i class="f"></i><i class="f"></i></div>
+          </div>
+        </div>
+        <div class="week">
+          <div class="wk"><div class="v">27</div><div class="k">COMMITS</div></div>
+          <div class="wk"><div class="v">09</div><div class="k">JIRA DONE</div></div>
+          <div class="wk"><div class="v">4.2M</div><div class="k">TOKENS</div></div>
+        </div>
+      </section>
+
+      <section class="pane host">
+        <div style="display:flex;justify-content:space-between;align-items:baseline">
+          <span class="kick">HOST · <b>CONTABO2</b></span>
+          <span class="micro">UP 41D 07H</span>
+        </div>
+        <div class="hrow"><span class="k">CPU</span><div class="hbar"><i class="hot" style="width:34%"></i></div><span class="v">34%</span></div>
+        <div class="hrow"><span class="k">RAM</span><div class="hbar"><i style="width:62%"></i></div><span class="v">9.9/16G</span></div>
+        <div class="hrow"><span class="k">NET</span><div class="hbar"><i style="width:18%"></i></div><span class="v">↓412K ↑88K</span></div>
+        <svg class="spark" viewBox="0 0 280 22" preserveAspectRatio="none">
+          <polyline fill="none" stroke="rgba(232,230,225,.35)" stroke-width="1"
+            points="0,16 14,15 28,17 42,12 56,13 70,9 84,11 98,7 112,10 126,6 140,9 154,5 168,8 182,4 196,7 210,9 224,6 238,8 252,5 266,7 280,4"/>
+          <line x1="0" y1="21" x2="280" y2="21" stroke="rgba(232,230,225,.12)" stroke-width="1"/>
+        </svg>
+      </section>
+
+      <section class="pane rings">
+        <div class="ring">
+          <svg width="86" height="86" viewBox="0 0 86 86">
+            <circle cx="43" cy="43" r="38" fill="none" stroke="rgba(232,230,225,.1)" stroke-width="1"/>
+            <circle cx="43" cy="43" r="38" fill="none" stroke="#e8e6e1" stroke-width="2"
+              stroke-dasharray="238.7" stroke-dashoffset="148" transform="rotate(-90 43 43)"/>
+          </svg>
+          <div class="cv"><div class="v">38</div><div class="k">CTX %</div></div>
+        </div>
+        <div class="ring">
+          <svg width="86" height="86" viewBox="0 0 86 86">
+            <circle cx="43" cy="43" r="38" fill="none" stroke="rgba(232,230,225,.1)" stroke-width="1"/>
+            <circle cx="43" cy="43" r="38" fill="none" stroke="#e63b2e" stroke-width="2"
+              stroke-dasharray="238.7" stroke-dashoffset="60" transform="rotate(-90 43 43)"/>
+          </svg>
+          <div class="cv"><div class="v">75</div><div class="k">SPRINT %</div></div>
+        </div>
+      </section>
+
+      <section class="pane tok">
+        <div style="display:flex;justify-content:space-between;align-items:baseline">
+          <span class="kick">TOKEN SPEND</span>
+          <span class="micro">1.34M SESSION</span>
+        </div>
+        <div class="tokbars" id="tokbars"></div>
+        <div class="leg"><span><i></i>INPUT</span><span><i class="rr"></i>OUTPUT</span></div>
+      </section>
+
+      <section class="pane dir" style="border-bottom:0">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
+          <span class="kick">DIRECTIVES <b>2/5</b></span>
+          <span class="micro">RCW · SPRINT 12</span>
+        </div>
+        <div class="d-item done"><span class="bx"></span><span class="key">RCW-31</span><span class="tx">Resume past folder conversations</span></div>
+        <div class="d-item done"><span class="bx"></span><span class="key">RCW-33</span><span class="tx">Session ownership on shared servers</span></div>
+        <div class="d-item now"><span class="bx"></span><span class="key">RCW-34</span><span class="tx">Wizard lists all resumable conversations</span></div>
+        <div class="d-item late"><span class="bx"></span><span class="key">RCW-29</span><span class="tx">Reaper edge case — overdue 2d</span></div>
+        <div class="d-item"><span class="bx"></span><span class="key">RCW-35</span><span class="tx">Optimistic stream reconnect</span></div>
+      </section>
+    </aside>
+  </div>
+
+  <!-- status bar -->
+  <footer class="statusbar">
+    <div class="sb"><span class="dot"></span>LINK ONLINE</div>
+    <div class="sb">⎇ cockpit-optimistic-stream · 5748288</div>
+    <div class="sb tx">LAST TX — <b>redstone-agent</b> · edited sessions.usecase.ts · 00:12 ago</div>
+    <div class="ticks">
+      <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+      <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+      <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+    </div>
+    <div class="sb">V 0.5.35</div>
+  </footer>
+</div>
+
+<!-- ================= 02 · GRID VIEW ================= -->
+<section class="section">
+  <div class="sec-h"><span class="no">02</span><h2>GRID VIEW — AGENT CARDS</h2></div>
+  <p class="sec-sub">Same card data as today. Waiting cards carry the red rule and are the only color on the board — you can find them from across the room.</p>
+  <div class="cards">
+    <div class="card wait">
+      <div class="ch"><span class="cn">redstone-cowork</span><span class="cs">WAITING 03:12</span></div>
+      <div class="cm">contabo2 · ⎇ cockpit-optimistic-stream<br><b>Deploy to contabo2 now? Rebuild api…</b></div>
+      <div class="cfoot"><span class="micro">CTX 38%</span><div class="minibar"><i style="width:38%"></i></div></div>
+    </div>
+    <div class="card">
+      <div class="ch"><span class="cn">redstone-agent</span><span class="cs">WORKING</span></div>
+      <div class="cm">contabo2 · ⎇ main<br><b>Refactoring connector scheduler…</b></div>
+      <div class="cfoot"><span class="micro">CTX 61%</span><div class="minibar"><i style="width:61%"></i></div></div>
+    </div>
+    <div class="card wait">
+      <div class="ch"><span class="cn">yitec-portal</span><span class="cs">WAITING 00:41</span></div>
+      <div class="cm">contabo2 · ⎇ feat/tenant-billing<br><b>Question: apply migration 014 now?</b></div>
+      <div class="cfoot"><span class="micro">CTX 22%</span><div class="minibar"><i style="width:22%"></i></div></div>
+    </div>
+    <div class="card" style="opacity:.5">
+      <div class="ch"><span class="cn">hook-cli</span><span class="cs">IDLE</span></div>
+      <div class="cm">macbook-m1 · ⎇ main<br><b>Last active 2h ago</b></div>
+      <div class="cfoot"><span class="micro">CTX 8%</span><div class="minibar"><i style="width:8%"></i></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 03 · NEW SESSION WIZARD ================= -->
+<section class="section">
+  <div class="sec-h"><span class="no">03</span><h2>NEW SESSION WIZARD</h2></div>
+  <p class="sec-sub">The cyan is gone. Same six steps, same provisioning flow — the active step carries the single red rule, primary action is chalk, and it turns red only on hover-to-commit.</p>
+  <div class="wizwrap">
+    <div class="wiz pane">
+      <span class="tick tl"></span><span class="tick tr"></span><span class="tick bl"></span><span class="tick br"></span>
+      <div class="wiz-h"><span class="t">NEW SESSION</span><span class="micro">ESC CLOSE</span></div>
+      <div class="steps">
+        <span class="step done">SERVER</span><span class="step done">PROVISION</span><span class="step on">SESSION</span>
+        <span class="step">FOLDER</span><span class="step">MODE</span><span class="step">LAUNCH</span>
+      </div>
+      <div class="wiz-b">
+        <div class="field">
+          <label>SEARCH PAST CONVERSATIONS</label>
+          <input value="cowork" />
+        </div>
+        <div class="srv sel">
+          <div><div class="sn">redstone-cowork</div><div class="si">/home/youruser/redstone-cowork · resumed 2h ago · 214 turns</div></div>
+          <span class="own">RESUME</span>
+        </div>
+        <div class="srv">
+          <div><div class="sn">redstone-agent</div><div class="si">/home/youruser/redstone-agent · 3d ago · 96 turns</div></div>
+          <span class="own">RESUME</span>
+        </div>
+        <div class="srv">
+          <div><div class="sn">START FRESH</div><div class="si">new conversation in a folder you pick next</div></div>
+          <span class="own">NEW</span>
+        </div>
+      </div>
+      <div class="wiz-f">
+        <button class="wbtn">← BACK</button>
+        <button class="wbtn go">NEXT →</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 04 · SYSTEM ================= -->
+<section class="section" style="padding-bottom:96px">
+  <div class="sec-h"><span class="no">04</span><h2>SYSTEM — TOKENS &amp; MOTION</h2></div>
+  <p class="sec-sub">Five colors, two typefaces, and a short motion budget. Everything cut is listed struck-through — that is the point.</p>
+
+  <div class="chips">
+    <div class="chip"><div class="sw" style="background:#060606"></div><div class="cn2">VOID</div><div class="cv2">#060606 · app bg</div></div>
+    <div class="chip"><div class="sw" style="background:#0a0a0a"></div><div class="cn2">PANEL</div><div class="cv2">#0A0A0A · surfaces</div></div>
+    <div class="chip"><div class="sw" style="background:#e8e6e1"></div><div class="cn2">CHALK</div><div class="cv2">#E8E6E1 · ink</div></div>
+    <div class="chip"><div class="sw" style="background:#98958f"></div><div class="cn2">ASH</div><div class="cv2">#98958F · secondary</div></div>
+    <div class="chip"><div class="sw" style="background:#e63b2e"></div><div class="cn2">SIGNAL</div><div class="cv2">#E63B2E · needs you — nothing else</div></div>
+  </div>
+
+  <div class="type-spec">
+    <div class="ts-row">
+      <span class="micro">DISPLAY · CHAKRA PETCH</span>
+      <span style="font-family:var(--disp);font-weight:600;font-size:24px;letter-spacing:.14em">AWAITING COMMAND</span>
+    </div>
+    <div class="ts-row">
+      <span class="micro">DATA · IBM PLEX MONO</span>
+      <span style="font-size:12px;color:var(--dim)">contabo2 · ⎇ cockpit-optimistic-stream · tmux rcw-8241 · ctx 38%</span>
+    </div>
+    <div class="ts-row">
+      <span class="micro">MICRO LABEL</span>
+      <span class="kick">SESSIONS <b>04</b> — 9PX / 0.34EM TRACKING, THE DOMINANT TEXTURE</span>
+    </div>
+  </div>
+
+  <div style="height:32px"></div>
+  <div class="motion-list">
+    <div class="mo"><span class="mn">DECODE-ONCE</span><span class="md">focus title scrambles → resolves in 400ms — only on real focus change, never on a loop</span><span class="mt">400MS / ONCE</span></div>
+    <div class="mo"><span class="mn">RED BLINK</span><span class="md">waiting timers and the command-queue plate blink at 1.4s steps(2) — a cursor, not a glow</span><span class="mt">1.4S STEPS</span></div>
+    <div class="mo"><span class="mn">ACTIVITY BARS</span><span class="md">3-bar equalizer on working sessions; replaces spinner, orbit arc, and thinking-card sweep</span><span class="mt">0.9S LOOP</span></div>
+    <div class="mo"><span class="mn">GAUGE DRAW</span><span class="md">ring gauges + bars draw to value once on mount, motion.dev spring, no bounce</span><span class="mt">600MS / ONCE</span></div>
+    <div class="mo"><span class="mn cut">MARQUEE RUNNING LINE</span><span class="md">idle "incoming transmission" replay loop — replaced by the static LAST TX slot in the status bar</span><span class="mt">CUT</span></div>
+    <div class="mo"><span class="mn cut">ATMOSPHERE BLOBS</span><span class="md">drifting blob gradients + film grain — glass stays, but it floats over a static studio glow, nothing drifts</span><span class="mt">CUT</span></div>
+    <div class="mo"><span class="mn cut">SHIMMER / SHEEN / ORBIT</span><span class="md">gradient text shimmer, agent-card sheen sweep, orbiting card border</span><span class="mt">CUT</span></div>
+  </div>
+</section>
+
+<script>
+// token spend bars — deterministic pseudo-data, output turns render in signal red
+(function(){
+  const el = document.getElementById('tokbars');
+  let seed = 7;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < 40; i++){
+    const b = document.createElement('i');
+    const h = 4 + rnd() * 40;
+    b.style.height = h + 'px';
+    if (rnd() > 0.72) b.className = 'r';
+    el.appendChild(b);
+  }
+})();
+// decode-once on the focus title — the only scripted animation on the page
+(function(){
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const el = document.querySelector('.stitle');
+  const target = el.textContent;
+  const glyphs = '01<>/\\|=+*#';
+  let frame = 0;
+  const iv = setInterval(() => {
+    frame++;
+    const resolved = Math.floor((frame / 14) * target.length);
+    el.textContent = target.split('').map((c, i) =>
+      i < resolved || c === '-' ? c : glyphs[(i * 7 + frame * 3) % glyphs.length]).join('');
+    if (resolved >= target.length){ el.textContent = target; clearInterval(iv); }
+  }, 28);
+})();
+
+// fake-glass: align a blurred copy of the backdrop under each surface (computed once + on resize)
+(function(){
+  var img = new Image(); img.src = 'backdrop.png';
+  function layout(){
+    var vw = innerWidth, vh = innerHeight;
+    var s = Math.max(vw / img.naturalWidth, vh / img.naturalHeight);
+    var w = img.naturalWidth * s, h = img.naturalHeight * s;
+    var ox = (vw - w) / 2, oy = (vh - h) / 2;
+    document.querySelectorAll('.frost').forEach(function(f){
+      var r = f.parentElement.getBoundingClientRect();
+      f.style.backgroundImage = 'url(backdrop.png)';
+      f.style.backgroundSize = w + 'px ' + h + 'px';
+      f.style.backgroundPosition = (ox - (r.left - 18)) + 'px ' + (oy - (r.top - 18)) + 'px';
+    });
+  }
+  function init(){
+    [['.titlebar,.dock,.statusbar,.wiz', 't1'], ['.rail,.tele,.stage-h,.card,.working,.stage', 't2']].forEach(function(pair){
+      document.querySelectorAll(pair[0]).forEach(function(el){
+        el.classList.add('glassy', pair[1]);
+        if (getComputedStyle(el).position === 'static') el.style.position = 'relative';
+        var f = document.createElement('i'); f.className = 'frost';
+        el.prepend(f);
+      });
+    });
+    layout();
+    document.documentElement.classList.add('frosted');
+  }
+  var t; addEventListener('resize', function(){ clearTimeout(t); t = setTimeout(layout, 120); });
+  img.decode().then(init).catch(init);
+})();
+</script>
+</body>
+</html>

@@ -109,7 +109,7 @@ export default function JiraSettings({ sessionId }: { sessionId: string }) {
               <div className="mono" style={{ fontSize: 12.5, color: "var(--text)" }}>{binding.projectKey} · {binding.profile}</div>
               <div className="faint" style={{ fontSize: 10.5 }}>{boundProfile?.baseUrl}{boundProfile?.account ? ` · ${boundProfile.account}` : ""}</div>
             </div>
-            <button onClick={disconnect} style={{ border: "1px solid var(--border)", background: "transparent", color: "#e0736a", borderRadius: 8, padding: "5px 11px", fontSize: 11, cursor: "pointer" }}>Disconnect</button>
+            <button onClick={disconnect} style={{ border: "1px solid var(--border)", background: "transparent", color: "#e63b2e", borderRadius: 8, padding: "5px 11px", fontSize: 11, cursor: "pointer" }}>Disconnect</button>
           </div>
         ) : profiles.length === 0 ? (
           <div className="faint" style={{ fontSize: 11.5 }}>Add a Jira profile below, then connect this session to a project.</div>
@@ -143,7 +143,7 @@ export default function JiraSettings({ sessionId }: { sessionId: string }) {
               <span className="mono" style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: "0 0 auto", color: "var(--text)" }}>{p.name}</span>
               <span className="faint" style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 10.5 }}>{p.baseUrl}</span>
               {p.account && <span className="mono" style={{ fontSize: 9.5, padding: "1px 6px", borderRadius: 999, background: "rgb(var(--primary) / 0.16)", color: "var(--text-soft)" }}>{p.account}</span>}
-              <button onClick={() => deleteProfile(p.name)} style={{ border: 0, background: "transparent", color: "#e0736a", cursor: "pointer", fontSize: 11 }}>delete</button>
+              <button onClick={() => deleteProfile(p.name)} style={{ border: 0, background: "transparent", color: "#e63b2e", cursor: "pointer", fontSize: 11 }}>delete</button>
             </div>
           ))}
         </div>
@@ -162,7 +162,7 @@ export default function JiraSettings({ sessionId }: { sessionId: string }) {
         )}
       </div>
 
-      {status && <span className="mono" style={{ fontSize: 11, color: status.kind === "ok" ? "rgb(var(--accent))" : "#e0736a" }}>{status.text}</span>}
+      {status && <span className="mono" style={{ fontSize: 11, color: status.kind === "ok" ? "rgb(var(--accent))" : "#e63b2e" }}>{status.text}</span>}
     </div>
   );
 }

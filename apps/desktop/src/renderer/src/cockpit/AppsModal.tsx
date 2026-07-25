@@ -147,7 +147,7 @@ export default function AppsModal({
                     </div>
                     <div className="mono faint" style={{ fontSize: 10, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.url}</div>
                   </div>
-                  <button onClick={() => onRemove(a.id)} title="Remove app" style={{ border: "1px solid var(--border)", background: "transparent", color: "#e0736a", borderRadius: 8, padding: "3px 9px", cursor: "pointer", fontSize: 12 }}>remove</button>
+                  <button onClick={() => onRemove(a.id)} title="Remove app" style={{ border: "1px solid var(--border)", background: "transparent", color: "#e63b2e", borderRadius: 8, padding: "3px 9px", cursor: "pointer", fontSize: 12 }}>remove</button>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <span className="mono faint" style={{ fontSize: 9.5, letterSpacing: "0.08em", textTransform: "uppercase" }}>Theme</span>
@@ -216,7 +216,7 @@ export default function AppsModal({
             spellCheck={false}
             style={{ ...cssBox, minHeight: 48 }}
           />
-          {err && <div className="mono" style={{ color: "#e0736a", fontSize: 11 }}>{err}</div>}
+          {err && <div className="mono" style={{ color: "#e63b2e", fontSize: 11 }}>{err}</div>}
           <button className="glass-btn--clay" onClick={submit} style={{ padding: "9px 16px", fontSize: 13, fontWeight: 600, alignSelf: "flex-start" }}>＋ Add app</button>
         </div>
       </div>

@@ -85,3 +85,53 @@ export const IconComment = (p: IconProps) => (
 export const IconCrop = (p: IconProps) => (
   <Svg {...p}><path d="M4.5 1.5 V11 a1 1 0 0 0 1 1 H14.5" /><path d="M1.5 4.5 H11 a1 1 0 0 1 1 1 V14.5" /></Svg>
 );
+
+export const IconTrophy = (p: IconProps) => (
+  <Svg {...p}><path d="M5 2.5 h6 v4 a3 3 0 0 1-6 0 Z" /><path d="M5 3.5 H2.8 a2.2 2.2 0 0 0 2.4 2.6" /><path d="M11 3.5 h2.2 a2.2 2.2 0 0 1-2.4 2.6" /><path d="M8 9.5 v2" /><path d="M5.5 13.5 h5" /><path d="M6.5 11.5 h3 l.5 2 h-4 Z" /></Svg>
+);
+
+export const IconGift = (p: IconProps) => (
+  <Svg {...p}><rect x="2.5" y="5.5" width="11" height="3" /><path d="M3.5 8.5 v5 h9 v-5" /><path d="M8 5.5 v8" /><path d="M8 5.5 C8 3.5 6.8 2.3 5.6 2.3 a1.5 1.5 0 0 0 0 3.2" /><path d="M8 5.5 C8 3.5 9.2 2.3 10.4 2.3 a1.5 1.5 0 0 1 0 3.2" /></Svg>
+);
+
+export const IconCrown = (p: IconProps) => (
+  <Svg {...p}><path d="M2.5 4.5 L5.2 7.2 L8 3.2 L10.8 7.2 L13.5 4.5 V11 H2.5 Z" /><path d="M2.5 13 h11" /></Svg>
+);
+
+// Docker / containers — a stack of boxes (container deck).
+export const IconContainer = (p: IconProps) => (
+  <Svg {...p}><rect x="2" y="7" width="3.4" height="3" /><rect x="6.3" y="7" width="3.4" height="3" /><rect x="10.6" y="7" width="3.4" height="3" /><rect x="6.3" y="3" width="3.4" height="3" /><path d="M2 12.5 h12" /></Svg>
+);
+
+export const IconPaperclip = (p: IconProps) => (
+  <Svg {...p}><path d="M11.5 7 L7.3 11.2 a2.4 2.4 0 0 1-3.4-3.4 L8.6 3.1 a1.7 1.7 0 0 1 2.4 2.4 L6.4 10" /></Svg>
+);
+
+export const IconLock = (p: IconProps) => (
+  <Svg {...p}><rect x="3.5" y="7" width="9" height="6.5" rx="1" /><path d="M5.5 7 V5 a2.5 2.5 0 0 1 5 0 v2" /><circle cx="8" cy="10.2" r="0.9" fill="currentColor" stroke="none" /></Svg>
+);
+
+export const IconGlobe = (p: IconProps) => (
+  <Svg {...p}><circle cx="8" cy="8" r="5.8" /><ellipse cx="8" cy="8" rx="2.6" ry="5.8" /><path d="M2.4 8 h11.2" /></Svg>
+);
+
+export const IconMonitor = (p: IconProps) => (
+  <Svg {...p}><rect x="2" y="3" width="12" height="8" rx="1" /><path d="M6 13.5 h4" /><path d="M8 11 v2.5" /></Svg>
+);
+
+// Satellite dish — network / uplink map.
+export const IconSatellite = (p: IconProps) => (
+  <Svg {...p}><path d="M3 8.5 a5.5 5.5 0 0 0 9.6 3.6 L4.4 4 A5.5 5.5 0 0 0 3 8.5 Z" /><path d="M7.5 8.5 l5-5" /><circle cx="13" cy="3" r="1" /><path d="M6 13.8 h4.5" /></Svg>
+);
+
+export const IconSearch = (p: IconProps) => (
+  <Svg {...p}><circle cx="7" cy="7" r="4.2" /><path d="M10.2 10.2 L13.8 13.8" /></Svg>
+);
+
+export const IconTrash = (p: IconProps) => (
+  <Svg {...p}><path d="M2.8 4.5 h10.4" /><path d="M6 4.5 V3 h4 v1.5" /><path d="M4.2 4.5 l.6 9 h6.4 l.6-9" /><path d="M6.6 7 v4" /><path d="M9.4 7 v4" /></Svg>
+);
+
+export const IconCheckCircle = (p: IconProps) => (
+  <Svg {...p}><circle cx="8" cy="8" r="5.8" /><path d="M5.3 8.2 L7.2 10 L10.8 6" /></Svg>
+);

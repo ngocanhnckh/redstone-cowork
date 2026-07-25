@@ -21,7 +21,7 @@ class EditorBoundary extends Component<{ children: ReactNode }, { error: string 
   render() {
     if (this.state.error) {
       return (
-        <div className="mono" style={{ padding: 14, fontSize: 12, color: "#e0736a", lineHeight: 1.6 }}>
+        <div className="mono" style={{ padding: 14, fontSize: 12, color: "#e63b2e", lineHeight: 1.6 }}>
           The note editor hit an error and was paused to protect the app.
           <div className="faint" style={{ fontSize: 10.5, marginTop: 6 }}>{this.state.error}</div>
           <button onClick={() => this.setState({ error: null })} style={{ marginTop: 10, border: "1px solid var(--border)", background: "transparent", color: "var(--text-soft)", borderRadius: 8, padding: "4px 10px", cursor: "pointer", fontSize: 11 }}>Retry</button>
@@ -115,7 +115,7 @@ function MermaidBlockView({ block, editor }: { block: { props: { code: string } 
           {busy ? "…" : "✦ generate"}
         </button>
       </div>
-      {err && <div className="mono" style={{ color: "#e0736a", fontSize: 10.5, marginBottom: 6 }}>{err}</div>}
+      {err && <div className="mono" style={{ color: "#e63b2e", fontSize: 10.5, marginBottom: 6 }}>{err}</div>}
 
       {editing && (
         <textarea
@@ -271,7 +271,7 @@ export default function NotesEditor({
       <style>{NOTES_CSS}</style>
       <EditorBoundary>
       <div className="notes-editor" style={{ flex: 1, minHeight: 0, overflowY: "auto", background: "transparent" }}>
-        {loadErr && <div className="mono" style={{ color: "#e0736a", fontSize: 11, padding: "8px 12px" }}>could not read note: {loadErr}</div>}
+        {loadErr && <div className="mono" style={{ color: "#e63b2e", fontSize: 11, padding: "8px 12px" }}>could not read note: {loadErr}</div>}
         <BlockNoteView editor={editor} theme="dark" onChange={scheduleSave} slashMenu={false}>
           <SuggestionMenuController
             triggerCharacter="/"

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { IconMonitor, IconGlobe } from "./Icons";
 
 type Req = {
   screens: Array<{ id: string; name: string; kind: string; thumb: string }>;
@@ -56,14 +57,14 @@ export default function ScreenSharePicker() {
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-          <span style={{ fontSize: 17 }}>🖥️</span>
+          <IconMonitor size={17} style={{ color: "var(--text-soft)" }} />
           <h2 style={{ fontSize: 16, fontWeight: 600, margin: 0, flex: 1 }}>Choose what to share</h2>
           <button onClick={cancel} className="glass-inset-hover" style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "4px 12px", fontSize: 12, cursor: "pointer", color: "var(--text-soft)" }}>Cancel</button>
         </div>
 
         <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
-          <button onClick={() => setTab("tab")} style={chip(tab === "tab")}>🌐 Browser tab ({req.tabs.length})</button>
-          <button onClick={() => setTab("screen")} style={chip(tab === "screen")}>🖥 Screen &amp; window ({req.screens.length})</button>
+          <button onClick={() => setTab("tab")} style={chip(tab === "tab")}><IconGlobe size={11} style={{ display: "inline-block", verticalAlign: "-1.5px", marginRight: 5 }} /> Browser tab ({req.tabs.length})</button>
+          <button onClick={() => setTab("screen")} style={chip(tab === "screen")}><IconMonitor size={11} style={{ display: "inline-block", verticalAlign: "-1.5px", marginRight: 5 }} /> Screen &amp; window ({req.screens.length})</button>
         </div>
 
         {tab === "tab" ? (
@@ -74,7 +75,7 @@ export default function ScreenSharePicker() {
               {req.tabs.map((t) => (
                 <div key={t.id} onClick={() => pick("tab", t.id)} className="glass-inset glass-inset-hover"
                   style={{ display: "flex", alignItems: "center", gap: 11, padding: "11px 13px", borderRadius: 11, cursor: "pointer" }}>
-                  <span style={{ fontSize: 15 }}>🌐</span>
+                  <IconGlobe size={14} style={{ color: "var(--text-soft)" }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13.5, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.title}</div>
                     <div className="mono faint" style={{ fontSize: 10, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.url}</div>

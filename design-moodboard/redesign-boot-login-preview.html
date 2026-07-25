@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>REDSTONE COWORK — Splash + Login preview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+/* SIGNAL ROOM · splash → login. red = the only color. */
+@font-face{font-family:"SFU Futura";src:url(fonts/SFUFuturaBook.ttf) format("truetype");font-weight:400;font-display:swap}
+@font-face{font-family:"SFU Futura";src:url(fonts/SFUFuturaBold.ttf) format("truetype");font-weight:600;font-display:swap}
+@font-face{font-family:"SFU Futura";src:url(fonts/SFUFuturaHeavy.ttf) format("truetype");font-weight:700;font-display:swap}
+:root{
+  --bg:#060606; --ink:#e8e6e1; --dim:#98958f; --faint:#5c5953;
+  --line:rgba(232,230,225,.14); --line-soft:rgba(232,230,225,.07);
+  --red:#e63b2e; --red-dim:#8c2218;
+  --mono:"IBM Plex Mono",monospace; --disp:"SFU Futura","IBM Plex Mono",sans-serif;
+  --glass:rgba(10,10,10,.5); --edge:rgba(232,230,225,.22);
+}
+*{margin:0;padding:0;box-sizing:border-box;border-radius:0 !important}
+html,body{height:100%}
+body{font-family:var(--mono);color:var(--ink);background:var(--bg);font-size:12px;overflow:hidden;
+  -webkit-font-smoothing:antialiased}
+::selection{background:var(--red);color:#fff}
+.micro{font-size:8.5px;letter-spacing:.14em;color:var(--faint);text-transform:uppercase}
+@keyframes blink{0%,49.9%{opacity:1}50%,100%{opacity:0}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none !important;transition:none !important}}
+
+/* ================= SPLASH ================= */
+.splash{position:fixed;inset:0;z-index:20;background:var(--bg);display:grid;place-items:center;
+  transition:opacity .45s ease-out;
+  background-image:radial-gradient(rgba(232,230,225,.05) 1px,transparent 1px);background-size:26px 26px}
+.splash.off{opacity:0;pointer-events:none}
+.sp-inner{text-align:center;position:relative}
+.sp-seal{position:relative;width:190px;height:190px;margin:0 auto 26px}
+.sp-seal img{position:absolute;inset:18px;width:154px;height:154px;object-fit:contain;
+  filter:grayscale(1);opacity:0;transition:opacity .8s ease-out .5s}
+.splash.go .sp-seal img{opacity:.92}
+.sp-seal svg{position:absolute;inset:0;transform:rotate(-90deg)}
+.sp-seal .track{fill:none;stroke:rgba(232,230,225,.1);stroke-width:1}
+.sp-seal .draw{fill:none;stroke:var(--red);stroke-width:1.5;stroke-dasharray:590;stroke-dashoffset:590;
+  transition:stroke-dashoffset 2.4s cubic-bezier(.4,0,.3,1) .15s}
+.splash.go .sp-seal .draw{stroke-dashoffset:0}
+.sp-agency{font-family:var(--disp);font-weight:700;font-size:15px;letter-spacing:.42em;text-transform:uppercase;padding-left:.42em}
+.sp-sub{font-family:var(--disp);font-weight:400;font-size:9px;letter-spacing:.5em;color:var(--dim);
+  text-transform:uppercase;margin-top:7px;padding-left:.5em}
+.sp-log{margin:26px auto 0;width:320px;text-align:left;height:64px}
+.sp-log div{font-size:8.5px;color:var(--faint);letter-spacing:.1em;text-transform:uppercase;
+  opacity:0;transform:translateY(3px);transition:all .25s ease-out;line-height:1.9}
+.sp-log div.on{opacity:1;transform:none}
+.sp-log b{color:var(--dim);font-weight:400}
+.sp-bar{margin:10px auto 0;width:320px;height:2px;background:var(--line-soft);position:relative}
+.sp-bar i{position:absolute;top:0;bottom:0;left:0;width:0;background:var(--red);transition:width .5s ease-out}
+.sp-cur{display:inline-block;width:6px;height:11px;background:var(--red);vertical-align:-1px;
+  animation:blink 1.06s linear infinite;margin-left:6px}
+
+/* ================= LOGIN ================= */
+.photo{position:fixed;inset:0;z-index:0;background:url(backdrop.png) center/cover no-repeat}
+.scrim{position:fixed;inset:0;z-index:0;background:radial-gradient(ellipse at 50% 40%, rgba(6,6,6,.42), rgba(6,6,6,.8) 95%)}
+.dotfield{position:fixed;inset:0;z-index:0;
+  background-image:radial-gradient(rgba(232,230,225,.05) 1px,transparent 1px);background-size:26px 26px}
+.login{position:relative;z-index:1;height:100vh;display:grid;place-items:center;opacity:0;transition:opacity .5s ease-out}
+.login.on{opacity:1}
+.card{position:relative;width:400px;border:1px solid var(--edge);isolation:isolate;
+  box-shadow:0 24px 80px rgba(0,0,0,.65), inset 0 1px 0 rgba(255,255,255,.1)}
+.frost{position:absolute;inset:-18px;z-index:-1;pointer-events:none;
+  filter:blur(6px);clip-path:inset(18px);background-repeat:no-repeat}
+.frost::after{content:"";position:absolute;inset:0;background:var(--glass)}
+.tick{position:absolute;width:8px;height:8px;pointer-events:none}
+.tick.tl{top:-1px;left:-1px;border-top:1px solid var(--dim);border-left:1px solid var(--dim)}
+.tick.tr{top:-1px;right:-1px;border-top:1px solid var(--dim);border-right:1px solid var(--dim)}
+.tick.bl{bottom:-1px;left:-1px;border-bottom:1px solid var(--dim);border-left:1px solid var(--dim)}
+.tick.br{bottom:-1px;right:-1px;border-bottom:1px solid var(--dim);border-right:1px solid var(--dim)}
+.card-h{display:flex;align-items:center;gap:10px;padding:13px 18px;border-bottom:1px solid var(--line-soft)}
+.card-h img{width:30px;height:30px;object-fit:contain;filter:grayscale(1);opacity:.9}
+.card-h .a{font-family:var(--disp);font-weight:700;font-size:10px;letter-spacing:.3em;text-transform:uppercase}
+.card-h .b{font-size:8px;color:var(--faint);letter-spacing:.2em;text-transform:uppercase;margin-top:2px}
+.card-h .st{margin-left:auto;display:flex;align-items:center;gap:6px;font-size:7.5px;color:var(--faint);
+  letter-spacing:.16em;text-transform:uppercase}
+.card-h .st i{width:5px;height:5px;background:var(--red)}
+.card-b{padding:22px 18px 20px}
+.idy{font-family:var(--disp);font-weight:700;font-size:19px;letter-spacing:.2em;text-transform:uppercase;margin-bottom:4px}
+.idy-sub{font-size:9px;color:var(--faint);letter-spacing:.08em;margin-bottom:20px}
+.fld{margin-bottom:14px}
+.fld label{display:block;font-size:8px;letter-spacing:.26em;color:var(--faint);text-transform:uppercase;margin-bottom:6px}
+.fld .inwrap{display:flex;align-items:center;gap:9px;border:1px solid var(--line);background:rgba(6,6,6,.55);padding:10px 12px}
+.fld .inwrap:focus-within{border-color:var(--dim)}
+.fld .pr{color:var(--red);font-weight:600}
+.fld input{flex:1;background:none;border:0;outline:0;color:var(--ink);font:inherit;font-size:12px;letter-spacing:.28em;min-width:0}
+.fld input::placeholder{color:var(--faint);letter-spacing:.08em}
+.srv{display:flex;justify-content:space-between;align-items:center;border:1px solid var(--line);padding:9px 12px;cursor:pointer}
+.srv:hover{border-color:var(--dim)}
+.srv .sn{font-family:var(--disp);font-weight:600;font-size:10px;letter-spacing:.14em;text-transform:uppercase}
+.srv .si{font-size:8px;color:var(--faint);margin-top:1px}
+.srv .chg{font-size:7.5px;letter-spacing:.2em;color:var(--dim);border:1px solid var(--line-soft);padding:2px 7px;text-transform:uppercase}
+.connect{width:100%;margin-top:18px;border:1px solid var(--ink);background:var(--ink);color:#0a0a0a;
+  font-family:var(--disp);font-weight:700;font-size:11px;letter-spacing:.3em;padding:11px 0;cursor:pointer;text-transform:uppercase}
+.connect:hover{background:var(--red);border-color:var(--red)}
+.err[hidden]{display:none}
+.err{margin-top:12px;border:1px solid var(--red-dim);background:rgba(230,59,46,.07);padding:7px 11px;
+  font-size:9px;color:var(--red);letter-spacing:.05em;display:flex;gap:8px}
+.err::before{content:"✕";flex:none}
+.card-f{display:flex;justify-content:space-between;padding:11px 18px;border-top:1px solid var(--line-soft)}
+.foot{position:fixed;z-index:2;left:0;right:0;bottom:0;display:flex;justify-content:space-between;
+  padding:10px 16px;font-size:8px;color:var(--faint);letter-spacing:.16em;text-transform:uppercase}
+.replay{position:fixed;z-index:30;right:14px;top:12px;font-size:8.5px;color:var(--faint);letter-spacing:.16em;
+  text-transform:uppercase;cursor:pointer;border:1px solid var(--line-soft);padding:5px 10px;background:rgba(6,6,6,.6)}
+.replay:hover{color:var(--ink);border-color:var(--dim)}
+</style>
+</head>
+<body>
+<div class="photo"></div>
+<div class="scrim"></div>
+<div class="dotfield"></div>
+
+<!-- LOGIN (revealed after splash) -->
+<div class="login" id="login">
+  <div class="card" id="card">
+    <span class="tick tl"></span><span class="tick tr"></span><span class="tick bl"></span><span class="tick br"></span>
+    <div class="card-h">
+      <img src="yia-seal.png" alt="">
+      <div><div class="a">YITEC INTELLIGENCE AGENCY</div><div class="b">REDSTONE COWORK · SECURE UPLINK</div></div>
+      <span class="st"><i></i>REC</span>
+    </div>
+    <div class="card-b">
+      <div class="idy">Identify yourself</div>
+      <div class="idy-sub">Phiên làm việc được mã hoá — cần mã thông hành để tiếp tục.</div>
+      <div class="fld">
+        <label>INSTANCE TOKEN</label>
+        <div class="inwrap"><span class="pr">❯</span><input type="password" value="••••••••••••••••" /></div>
+      </div>
+      <div class="fld">
+        <label>UPLINK</label>
+        <div class="srv">
+          <div><div class="sn">cowork.example.com</div><div class="si">cloudflared tunnel · contabo2</div></div>
+          <span class="chg">CHANGE</span>
+        </div>
+      </div>
+      <button class="connect">CONNECT</button>
+      <div class="err" hidden id="err">Token không hợp lệ — kiểm tra INSTANCE_TOKEN trên máy chủ.</div>
+    </div>
+    <div class="card-f">
+      <span class="micro">UNAUTHORIZED ACCESS IS LOGGED</span>
+      <span class="micro">V 0.5.35</span>
+    </div>
+  </div>
+</div>
+
+<!-- SPLASH -->
+<div class="splash" id="splash">
+  <div class="sp-inner">
+    <div class="sp-seal">
+      <svg viewBox="0 0 190 190">
+        <circle class="track" cx="95" cy="95" r="93"/>
+        <circle class="draw" cx="95" cy="95" r="93"/>
+      </svg>
+      <img src="yia-seal.png" alt="">
+    </div>
+    <div class="sp-agency" id="agency">YITEC INTELLIGENCE AGENCY</div>
+    <div class="sp-sub">REDSTONE COWORK · SIGNAL ROOM</div>
+    <div class="sp-log" id="splog">
+      <div>▸ VERIFYING LOCAL VAULT <b>OK</b></div>
+      <div>▸ WAKING UPLINK — cowork.example.com <b>200</b></div>
+      <div>▸ FLEET SCAN — 4 SESSIONS · <b>2 AWAITING COMMAND</b></div>
+      <div>▸ RENDERING SIGNAL ROOM<span class="sp-cur"></span></div>
+    </div>
+    <div class="sp-bar"><i id="spbar"></i></div>
+  </div>
+</div>
+
+<svg style="display:none" aria-hidden="true"><defs>
+<symbol id="i-replay" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></symbol>
+</defs></svg>
+<div class="replay" id="replay" style="display:flex;align-items:center;gap:6px"><svg style="width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:1.7"><use href="#i-replay"/></svg>REPLAY SEQUENCE</div>
+
+<script>
+var reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* frost under the login card */
+(function(){
+  var card = document.getElementById('card');
+  var f = document.createElement('i'); f.className = 'frost';
+  card.prepend(f);
+  var img = new Image(); img.src = 'backdrop.png';
+  function place(){
+    if (!img.naturalWidth) return;
+    var vw = innerWidth, vh = innerHeight;
+    var s = Math.max(vw / img.naturalWidth, vh / img.naturalHeight);
+    var w = img.naturalWidth * s, h = img.naturalHeight * s;
+    var r = card.getBoundingClientRect();
+    f.style.backgroundImage = 'url(backdrop.png)';
+    f.style.backgroundSize = w + 'px ' + h + 'px';
+    f.style.backgroundPosition = ((vw - w) / 2 - (r.left - 18)) + 'px ' + ((vh - h) / 2 - (r.top - 18)) + 'px';
+  }
+  img.decode().then(place).catch(function(){});
+  addEventListener('resize', place);
+  window.__placeFrost = place;
+})();
+
+/* decode-once helper */
+function decode(el, delay){
+  if (reduced) return;
+  var target = el.dataset.t || (el.dataset.t = el.textContent);
+  var glyphs = '01<>/\\|=+*#';
+  var frame = 0;
+  setTimeout(function(){
+    var iv = setInterval(function(){
+      frame++;
+      var res = Math.floor((frame / 16) * target.length);
+      el.textContent = target.split('').map(function(c, i){
+        return (i < res || c === ' ') ? c : glyphs[(i * 7 + frame * 3) % glyphs.length];
+      }).join('');
+      if (res >= target.length){ el.textContent = target; clearInterval(iv); }
+    }, 28);
+  }, delay);
+}
+
+/* splash sequence → login */
+var timers = [];
+function later(fn, t){ timers.push(setTimeout(fn, reduced ? 0 : t)); }
+function run(){
+  timers.forEach(clearTimeout); timers = [];
+  var splash = document.getElementById('splash');
+  var login = document.getElementById('login');
+  var logs = document.querySelectorAll('#splog div');
+  var bar = document.getElementById('spbar');
+  splash.classList.remove('off', 'go');
+  login.classList.remove('on');
+  logs.forEach(function(l){ l.classList.remove('on'); });
+  bar.style.transition = 'none'; bar.style.width = '0';
+  void splash.getBoundingClientRect();
+  bar.style.transition = '';
+  splash.classList.add('go');
+  decode(document.getElementById('agency'), 300);
+  logs.forEach(function(l, i){ later(function(){ l.classList.add('on'); }, 600 + i * 480); });
+  [22, 47, 74, 100].forEach(function(w, i){ later(function(){ bar.style.width = w + '%'; }, 500 + i * 480); });
+  later(function(){
+    splash.classList.add('off');
+    login.classList.add('on');
+    window.__placeFrost && window.__placeFrost();
+  }, 3050);
+}
+run();
+document.getElementById('replay').addEventListener('click', run);
+</script>
+</body>
+</html>

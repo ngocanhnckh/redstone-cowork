@@ -8,33 +8,27 @@ import { findRank } from "./ranks";
 type Ident = { name: string; username: string; rank: string; division: string; photo: string | null };
 
 const CSS = `
-@keyframes aic-sheen { from { background-position: -140% 0; } to { background-position: 240% 0; } }
-@keyframes aic-corner { 0%,100% { opacity:.5; } 50% { opacity:1; } }
 .aic { position:relative; overflow:hidden; margin:0 0 14px; padding:14px 14px 13px; border-radius:14px;
-  border:1px solid rgb(84 230 255 / .3); background: color-mix(in srgb, var(--app-panel) 90%, transparent);
+  border:1px solid var(--border); background: color-mix(in srgb, var(--app-panel) 90%, transparent);
   -webkit-backdrop-filter: blur(20px) saturate(1.3); backdrop-filter: blur(20px) saturate(1.3);
-  box-shadow: 0 12px 34px -12px rgb(0 0 0 / .65), inset 0 0 34px -22px rgb(84 230 255 / .9);
   display:flex; flex-direction:column; align-items:center; font-family:var(--font-mono); }
-.aic::before { content:""; position:absolute; inset:0; pointer-events:none; opacity:.5;
-  background: linear-gradient(115deg, transparent 34%, rgb(84 230 255 / .12) 50%, transparent 66%);
-  background-size: 220% 100%; animation: aic-sheen 4.4s ease-in-out infinite; }
 .aic-frame { position:relative; width:100%; aspect-ratio:1/1; border-radius:11px; overflow:hidden;
-  border:1px solid rgb(84 230 255 / .5); box-shadow: 0 0 22px -6px rgb(84 230 255 / .7), inset 0 0 30px -20px rgb(84 230 255); background:#05090d; }
+  border:1px solid var(--border-strong); background:#0a0a0a; }
 .aic-photo { width:100%; height:100%; object-fit:cover; display:block; }
-.aic-photo.ph { display:flex; align-items:center; justify-content:center; font-size:64px; color: rgb(84 230 255 / .4); }
-.aic-corner { position:absolute; width:14px; height:14px; border-color:#54e6ff; border-style:solid; animation: aic-corner 2.2s ease-in-out infinite; }
-.aic-kick { font-size:9px; letter-spacing:.36em; color: rgb(84 230 255 / .85); font-weight:700; margin-top:12px; }
-.aic-name { font-size:16px; font-weight:700; letter-spacing:.05em; color:#e6f2f4; line-height:1.15; margin-top:3px; text-align:center; }
+.aic-photo.ph { display:flex; align-items:center; justify-content:center; font-size:64px; color: var(--text-faint); }
+.aic-corner { position:absolute; width:14px; height:14px; border-color:rgba(232,230,225,.4); border-style:solid; }
+.aic-kick { font-size:9px; letter-spacing:.36em; color:#e63b2e; font-weight:700; margin-top:12px; }
+.aic-name { font-size:16px; font-weight:700; letter-spacing:.05em; color:var(--text); line-height:1.15; margin-top:3px; text-align:center; }
 .aic-user { font-size:10px; letter-spacing:.14em; color: var(--text-faint); margin-top:2px; }
 /* Rank insignia — a glyph strip (stars/bars/chevrons) above the rank name. */
-.aic-insignia { margin-top:10px; font-size:13px; letter-spacing:.28em; line-height:1; color:#e0a24a; text-shadow:0 0 10px rgb(224 162 74 / .55); }
-.aic-insignia.general { color:#ffd166; }
+.aic-insignia { margin-top:10px; font-size:13px; letter-spacing:.28em; line-height:1; color:var(--text-soft); }
+.aic-insignia.general { color:var(--text-soft); }
 /* Dossier strip: RANK | DIVISION as label/value columns, split by a hairline. */
-.aic-strip { display:flex; width:100%; margin-top:10px; padding-top:11px; border-top:1px solid rgb(84 230 255 / .18); }
+.aic-strip { display:flex; width:100%; margin-top:10px; padding-top:11px; border-top:1px solid var(--border); }
 .aic-cell { flex:1; min-width:0; display:flex; flex-direction:column; align-items:center; gap:3px; padding:0 6px; }
-.aic-cell + .aic-cell { border-left:1px solid rgb(84 230 255 / .18); }
-.aic-clabel { font-size:8px; letter-spacing:.24em; color: rgb(84 230 255 / .6); }
-.aic-cval { font-size:11px; letter-spacing:.04em; color:#e6f2f4; font-weight:600; text-align:center; line-height:1.2;
+.aic-cell + .aic-cell { border-left:1px solid var(--border); }
+.aic-clabel { font-size:8px; letter-spacing:.24em; color: var(--text-faint); }
+.aic-cval { font-size:11px; letter-spacing:.04em; color:var(--text); font-weight:600; text-align:center; line-height:1.2;
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
 `;
 
@@ -94,7 +88,7 @@ export default function AgentIdentityCard() {
         </div>
         <div className="aic-cell">
           <span className="aic-clabel">DIVISION</span>
-          <span className="aic-cval" style={{ color: id.division ? "#e6f2f4" : "var(--text-faint)" }}>{id.division || "—"}</span>
+          <span className="aic-cval" style={{ color: id.division ? "var(--text)" : "var(--text-faint)" }}>{id.division || "—"}</span>
         </div>
       </div>
     </div>

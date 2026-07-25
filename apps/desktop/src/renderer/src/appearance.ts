@@ -25,8 +25,10 @@ export const EMPTY_PALETTE: Palette = { primary: null, primarySoft: null, accent
 /** Each theme's built-in accent colours (as hex), shown as the picker's value when the
  *  user hasn't overridden that token. Mirror globals.css [data-theme] token blocks. */
 export const THEME_PALETTE: Record<Theme, Palette> = {
-  warm: { primary: "#e54d2e", primarySoft: "#f06e50", accent: "#e2a95b" },
-  hitech: { primary: "#22d3ee", primarySoft: "#7dd3fc", accent: "#fbbf24" },
+  // Signal Room: red = needs you, chalk = working. Both themes share the register;
+  // "hitech" adds the scan-grid + corner ticks (see globals.css).
+  warm: { primary: "#e63b2e", primarySoft: "#e8e6e1", accent: "#e63b2e" },
+  hitech: { primary: "#e63b2e", primarySoft: "#e8e6e1", accent: "#e63b2e" },
 };
 
 export type Appearance = {
@@ -63,7 +65,7 @@ export type Appearance = {
   palette: Palette;
 };
 
-export const DEFAULT_APPEARANCE: Appearance = { font: "default", theme: "hitech", sfxVolume: 0, ambientVolume: 0, veil: 6, blur: 28, bgAnim: true, dockPos: "bottom", dockScale: 1, hudClear: false, glass: 94, videoMuted: false, palette: { ...EMPTY_PALETTE } };
+export const DEFAULT_APPEARANCE: Appearance = { font: "futura", theme: "hitech", sfxVolume: 0, ambientVolume: 0, veil: 6, blur: 14, bgAnim: true, dockPos: "bottom", dockScale: 1, hudClear: false, glass: 94, videoMuted: false, palette: { ...EMPTY_PALETTE } };
 
 const KEY = "rcw.appearance";
 

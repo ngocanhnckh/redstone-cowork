@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { SessionView } from "../types";
+import { IconLock, IconCheckCircle, IconGlobe } from "./Icons";
 
 // Re-login Claude, the easy way. Instead of making the user SSH in and juggle the TUI,
 // this drives Claude Code's `/login` for them: types `/login` into the session, scrapes
@@ -44,7 +45,7 @@ const CSS = `
 .clg-num { width:22px; height:22px; flex-shrink:0; border-radius:50%; border:1px solid rgb(var(--primary) / .5);
   color:rgb(var(--primary-soft)); font-size:11px; display:flex; align-items:center; justify-content:center; font-weight:700; }
 .clg-num.on { background:rgb(var(--primary) / .2); }
-.clg-num.ok { background:#1f7a3d; border-color:#2f9d52; color:#dfffe9; }
+.clg-num.ok { background:rgb(232 230 225 / .15); border-color:rgb(232 230 225 / .5); color:var(--text); }
 .clg-t { font-size:12.5px; color:var(--text-soft); line-height:1.5; }
 .clg-t b { color:var(--text); }
 .clg-input { width:100%; box-sizing:border-box; background:rgb(0 0 0 / .3); border:1px solid var(--border);
@@ -55,8 +56,8 @@ const CSS = `
 .clg-btn:disabled { opacity:.5; cursor:default; }
 .clg-btn.ghost { background:transparent; border:1px solid var(--border); color:var(--text-soft); font-weight:600; }
 .clg-note { font-size:11px; color:var(--text-faint); margin-top:6px; line-height:1.5; }
-.clg-ok { color:#7fd18b; font-size:13px; font-weight:600; }
-.clg-err { color:#e0736a; font-size:11.5px; margin-top:6px; }
+.clg-ok { color:var(--text-soft); font-size:13px; font-weight:600; }
+.clg-err { color:#e63b2e; font-size:11.5px; margin-top:6px; }
 `;
 
 export default function ClaudeLoginModal({ session, onClose }: { session: SessionView; onClose: () => void }) {
@@ -129,7 +130,7 @@ export default function ClaudeLoginModal({ session, onClose }: { session: Sessio
       <style>{CSS}</style>
       <div className="clg" onClick={(e) => e.stopPropagation()}>
         <div className="clg-head">
-          <span style={{ fontSize: 16 }}>🔐</span>
+          <IconLock size={16} style={{ color: "var(--text-soft)" }} />
           <b>RE-LOGIN CLAUDE</b>
           <span style={{ flex: 1 }} />
           <button className="clg-btn ghost" style={{ padding: "5px 11px" }} onClick={onClose}>CLOSE</button>
@@ -141,7 +142,7 @@ export default function ClaudeLoginModal({ session, onClose }: { session: Sessio
 
           {phase === "done" ? (
             <div style={{ textAlign: "center", padding: "18px 0" }}>
-              <div style={{ fontSize: 34 }}>✅</div>
+              <IconCheckCircle size={34} style={{ margin: "0 auto", color: "var(--text-soft)" }} />
               <div className="clg-ok" style={{ marginTop: 8 }}>Claude is logged in on this session.</div>
               <div className="clg-note">Credentials are saved on the host — you won't need to do this again until it expires.</div>
               <button className="clg-btn" style={{ marginTop: 14 }} onClick={onClose}>DONE</button>
@@ -169,7 +170,7 @@ export default function ClaudeLoginModal({ session, onClose }: { session: Sessio
                   <b>Open the link &amp; authorize</b> in your browser.
                   <input className="clg-input" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://claude.ai/oauth/authorize… (auto-filled, or paste it here)" spellCheck={false} />
                   <div className="clg-row">
-                    <button className="clg-btn" disabled={!url} onClick={openBrowser}>🌐 OPEN IN BROWSER</button>
+                    <button className="clg-btn" disabled={!url} onClick={openBrowser}><IconGlobe size={12} style={{ display: "inline-block", verticalAlign: "-2px", marginRight: 6 }} /> OPEN IN BROWSER</button>
                     <button className="clg-btn ghost" disabled={!url} onClick={copy}>{copied ? "✓ COPIED" : "COPY LINK"}</button>
                   </div>
                 </div>

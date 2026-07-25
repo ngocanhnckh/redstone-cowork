@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { AgentOfWeek, WeekEntry } from "../../../shared/agency";
+import { IconTrophy, IconGift, IconCrown } from "./Icons";
 
 // Agent of the Week — a weighted weekly competition. Each agent's commits, resolved Jira
 // tickets and tokens burned inside the contest window are scored against the roster's best
@@ -9,24 +10,24 @@ const CSS = `
 .aow-root { padding: 4px 20px 30px; }
 .aow-head { display:flex; align-items:flex-end; gap:14px; flex-wrap:wrap; margin:6px 0 14px; }
 .aow-head h2 { font-family:var(--font-display); font-size:24px; font-weight:800; letter-spacing:.02em; margin:0;
-  background:linear-gradient(90deg,#ffd166,#ff9e57); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  color:var(--text); }
 .aow-clock { margin-left:auto; text-align:right; }
 .aow-clock .lbl { font-size:9px; letter-spacing:.22em; color:var(--text-faint); }
-.aow-clock .val { font-family:var(--font-display); font-size:26px; font-weight:700; color:#ffd166; line-height:1.05; font-variant-numeric:tabular-nums; }
-.aow-clock .val.ended { color:#ff8a80; }
+.aow-clock .val { font-family:var(--font-display); font-size:26px; font-weight:700; color:var(--text-soft); line-height:1.05; font-variant-numeric:tabular-nums; }
+.aow-clock .val.ended { color:#e63b2e; }
 .aow-prize { display:flex; align-items:center; gap:12px; padding:12px 16px; border-radius:14px; margin-bottom:16px;
-  background:linear-gradient(100deg, rgb(255 209 102 / .14), rgb(255 158 87 / .05)); border:1px solid rgb(255 209 102 / .3); }
+  background:rgb(232 230 225 / .06); border:1px solid rgb(232 230 225 / .25); }
 .aow-prize .tp { font-size:26px; }
-.aow-prize .pl { font-size:9px; letter-spacing:.2em; color:#ffd166; opacity:.9; }
-.aow-prize .pt { font-size:14px; color:#f3ead0; font-weight:600; margin-top:2px; }
+.aow-prize .pl { font-size:9px; letter-spacing:.2em; color:var(--text-soft); opacity:.9; }
+.aow-prize .pt { font-size:14px; color:var(--text); font-weight:600; margin-top:2px; }
 .aow-weights { font-size:10.5px; letter-spacing:.06em; color:var(--text-faint); margin-bottom:14px; }
 .aow-weights b { color:var(--text-soft); font-weight:600; }
 
 .aow-spot { display:flex; gap:18px; align-items:center; padding:18px 20px; border-radius:18px; margin-bottom:16px;
-  background:radial-gradient(120% 140% at 0% 0%, rgb(255 209 102 / .14), rgb(10 16 22 / .5)); border:1.5px solid rgb(255 209 102 / .4);
-  box-shadow:0 0 40px -14px rgb(255 209 102 / .5); }
+  background:rgb(232 230 225 / .05); border:1.5px solid rgb(232 230 225 / .35);
+  box-shadow:0 0 40px -14px rgb(232 230 225 / .35); }
 .aow-spot .crown { position:absolute; font-size:20px; margin-top:-46px; margin-left:-4px; }
-.aow-photo { width:104px; height:104px; border-radius:16px; object-fit:cover; border:2px solid #ffd166; box-shadow:0 0 26px -6px #ffd166; background:#05090d; flex-shrink:0; }
+.aow-photo { width:104px; height:104px; border-radius:16px; object-fit:cover; border:2px solid rgb(232 230 225 / .7); box-shadow:0 0 26px -6px rgb(232 230 225 / .6); background:#05090d; flex-shrink:0; }
 .aow-photo.ph { display:flex; align-items:center; justify-content:center; font-size:44px; color:rgb(255 255 255 / .35); }
 .aow-spot-main { flex:1; min-width:0; }
 .aow-spot-name { font-family:var(--font-display); font-size:22px; font-weight:800; color:#fff; }
@@ -36,13 +37,13 @@ const CSS = `
 .aow-m .n { font-family:var(--font-display); font-size:20px; font-weight:700; color:var(--text-soft); font-variant-numeric:tabular-nums; }
 .aow-m .k { font-size:9px; letter-spacing:.14em; color:var(--text-faint); text-transform:uppercase; }
 .aow-spot-score { text-align:center; flex-shrink:0; padding-left:6px; }
-.aow-spot-score .sv { font-family:var(--font-display); font-size:44px; font-weight:800; color:#ffd166; line-height:1; }
+.aow-spot-score .sv { font-family:var(--font-display); font-size:44px; font-weight:800; color:var(--text-soft); line-height:1; }
 .aow-spot-score .sl { font-size:9px; letter-spacing:.2em; color:var(--text-faint); }
 
 .aow-row { display:grid; grid-template-columns:34px 1fr auto; align-items:center; gap:12px; padding:11px 14px; border-radius:12px;
   border:1px solid var(--border); background:rgb(255 255 255 / .015); margin-bottom:8px; }
 .aow-row .rk { font-family:var(--font-display); font-size:20px; font-weight:700; color:var(--text-faint); text-align:center; }
-.aow-row.top3 .rk { color:#ffd166; }
+.aow-row.top3 .rk { color:var(--text-soft); }
 .aow-rp { width:38px; height:38px; border-radius:9px; object-fit:cover; border:1px solid var(--border); background:#05090d; }
 .aow-rp.ph { display:flex; align-items:center; justify-content:center; color:rgb(255 255 255 / .3); }
 .aow-rmid { min-width:0; }
@@ -52,7 +53,7 @@ const CSS = `
 .aow-rright { text-align:right; }
 .aow-rscore { font-family:var(--font-display); font-size:18px; font-weight:700; color:var(--text-soft); }
 .aow-bar { width:120px; height:5px; border-radius:3px; background:rgb(255 255 255 / .08); margin-top:5px; overflow:hidden; }
-.aow-bar > i { display:block; height:100%; background:linear-gradient(90deg,#ffd166,#ff9e57); border-radius:3px; }
+.aow-bar > i { display:block; height:100%; background:var(--text-soft); border-radius:3px; }
 
 .aow-admin { margin-top:22px; border-top:1px dashed var(--border); padding-top:14px; }
 .aow-admin summary { cursor:pointer; font-size:11px; letter-spacing:.14em; color:var(--text-faint); }
@@ -61,7 +62,7 @@ const CSS = `
 .aow-admin input { width:100%; box-sizing:border-box; background:rgb(0 0 0 / .3); border:1px solid var(--border); border-radius:8px;
   color:var(--text); padding:8px 10px; font-size:12.5px; }
 .aow-admin .full { grid-column:1 / -1; }
-.aow-btn { background:linear-gradient(90deg,#ffd166,#ff9e57); color:#1a1206; border:0; border-radius:9px; padding:8px 16px; font-size:11px;
+.aow-btn { background:var(--text); color:#111013; border:0; border-radius:9px; padding:8px 16px; font-size:11px;
   font-weight:700; letter-spacing:.1em; cursor:pointer; }
 .aow-btn.ghost { background:transparent; border:1px solid var(--border); color:var(--text-soft); font-weight:600; }
 .aow-empty { padding:26px; color:var(--text-faint); font-size:13px; }
@@ -147,7 +148,7 @@ export default function AgentWeek({ isAdmin }: { isAdmin: boolean }) {
     <div className="aow-root">
       <style>{CSS}</style>
       <div className="aow-head">
-        <h2>🏆 Agent of the Week</h2>
+        <h2><IconTrophy size={20} style={{ display: "inline-block", verticalAlign: "-3px", marginRight: 8 }} /> Agent of the Week</h2>
         <div className="aow-clock">
           <div className="lbl">{cd.ended ? "COMPETITION" : "ENDS IN"}</div>
           <div className={`val${cd.ended ? " ended" : ""}`}>{cd.text}</div>
@@ -156,7 +157,7 @@ export default function AgentWeek({ isAdmin }: { isAdmin: boolean }) {
 
       {data?.config.prize && (
         <div className="aow-prize">
-          <span className="tp">🎁</span>
+          <span className="tp"><IconGift size={22} /></span>
           <div><div className="pl">THIS WEEK'S PRIZE</div><div className="pt">{data.config.prize}</div></div>
         </div>
       )}
@@ -165,7 +166,7 @@ export default function AgentWeek({ isAdmin }: { isAdmin: boolean }) {
         Fair-weighted score — <b>Jira {Math.round((data?.weights.jira ?? .6) * 100)}%</b> · <b>Commits {Math.round((data?.weights.commits ?? .25) * 100)}%</b> · <b>Tokens {Math.round((data?.weights.tokens ?? .15) * 100)}%</b>, each scored against the roster's best.
       </div>
 
-      {err && <div style={{ color: "#ff9d94", fontSize: 12, marginBottom: 10 }}>⚠ {err}</div>}
+      {err && <div style={{ color: "#e63b2e", fontSize: 12, marginBottom: 10 }}>⚠ {err}</div>}
 
       {!data ? (
         <div className="aow-empty">Loading competition…</div>
@@ -175,7 +176,7 @@ export default function AgentWeek({ isAdmin }: { isAdmin: boolean }) {
         <>
           {winner && (
             <div className="aow-spot" style={{ position: "relative" }}>
-              <span className="crown">👑</span>
+              <span className="crown"><IconCrown size={20} /></span>
               <Photo src={winner.photo} cls="aow-photo" />
               <div className="aow-spot-main">
                 <div className="aow-spot-name">{winner.displayName}</div>

@@ -25,6 +25,7 @@ import OverdueAlert from "./OverdueAlert";
 import JiraNotifier from "./JiraNotifier";
 import AgentIdentityCard from "./AgentIdentityCard";
 import AppsModal, { AppIcon } from "./AppsModal";
+import { IconKey } from "./Icons";
 import ContextColumn from "./ContextColumn";
 import AnswerDock from "./AnswerDock";
 import yiaSealUrl from "../assets/yia-seal.png?url";
@@ -155,23 +156,49 @@ function ScanBar({ pct, segments = 22 }: { pct: number; segments?: number }) {
   );
 }
 
-/** Header text that "decodes" from scramble to the real string on mount. */
+/** Header text typed out once (left→right) on mount — no scramble, no loop. */
 function Decode({ text, className, style }: { text: string; className?: string; style?: React.CSSProperties }) {
-  const [out, setOut] = useState(text);
+  const [n, setN] = useState(text.length);
   useEffect(() => {
-    const chars = "▚▞░▒▓#%*01";
-    let frame = 0;
-    const total = 14;
+    setN(0);
+    let i = 0;
     const timer = setInterval(() => {
-      frame++;
-      const reveal = Math.floor((frame / total) * text.length);
-      setOut(text.split("").map((c, i) => (i < reveal || c === " " ? c : chars[(Math.random() * chars.length) | 0])).join(""));
-      if (frame >= total) { setOut(text); clearInterval(timer); }
-    }, 45);
+      i++;
+      setN(i);
+      if (i >= text.length) clearInterval(timer);
+    }, 24);
     return () => clearInterval(timer);
   }, [text]);
-  return <span className={className} style={style}>{out}</span>;
+  return <span className={className} style={style}>{text.slice(0, Math.max(0, n))}</span>;
 }
+
+// Small inline SVG icons (Lucide-style: stroke currentColor, 1.6, square caps) that
+// replace the colour emoji previously used in the dock / titlebars.
+const hudSvg = (size: number, children: React.ReactNode) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.6}
+    strokeLinecap="square" strokeLinejoin="miter" style={{ flexShrink: 0, display: "block" }} aria-hidden>
+    {children}
+  </svg>
+);
+const IconBoltSm = ({ size = 15 }: { size?: number }) => hudSvg(size, <path d="M9 1.5 L3.5 9 H7.5 L7 14.5 L12.5 7 H8.5 Z" />);
+const IconDockerSm = ({ size = 15 }: { size?: number }) => hudSvg(size, (
+  <>
+    <rect x="2.2" y="6.4" width="2.5" height="2.5" />
+    <rect x="5.4" y="6.4" width="2.5" height="2.5" />
+    <rect x="8.6" y="6.4" width="2.5" height="2.5" />
+    <rect x="5.4" y="3.2" width="2.5" height="2.5" />
+    <path d="M1.6 9.4 h12.6 c-0.7 2.8-3 4.4-6.4 4.4 -3.3 0-5.6-1.6-6.2-4.4Z" />
+  </>
+));
+const IconTrophySm = ({ size = 12 }: { size?: number }) => hudSvg(size, (
+  <>
+    <path d="M5 2.5 h6 v3.5 a3 3 0 0 1 -6 0 Z" />
+    <path d="M5 3.5 H2.7 a2.3 2.3 0 0 0 2.4 2.7" />
+    <path d="M11 3.5 h2.3 a2.3 2.3 0 0 1 -2.4 2.7" />
+    <path d="M8 9 v2.6" />
+    <path d="M5.5 13.5 h5" />
+  </>
+));
 
 /**
  * A lit, atmosphere-wrapped holo-globe that rotates. One hue only — the theme's primary
@@ -354,7 +381,7 @@ function HostSkeleton() {
         <span className="ai-core" style={{ width: 8, height: 8 }} />
         <Decode text="AWAITING HOST" className="mono" style={{ fontSize: 12, letterSpacing: "0.12em" }} />
         <span style={{ flex: 1 }} />
-        <span className="mono faint hud-blink" style={{ fontSize: 10 }}>SCANNING…</span>
+        <span className="mono faint" style={{ fontSize: 10 }}>SCANNING…</span>
       </div>
       <div style={{ display: "grid", gap: 12 }}>
         <div><div className="mono faint" style={{ fontSize: 9.5, marginBottom: 3 }}>CPU</div><ScanBar pct={45} /></div>
@@ -418,10 +445,10 @@ function GitPane() {
       {!session ? (
         <span className="mono faint" style={{ fontSize: 11 }}>no session selected</span>
       ) : loading && !info ? (
-        <span className="mono faint hud-blink" style={{ fontSize: 11 }}>reading repo…</span>
+        <span className="mono faint" style={{ fontSize: 11 }}>reading repo…</span>
       ) : info && !info.ok ? (
         <div style={{ fontSize: 11 }}>
-          <div style={{ color: "#e0736a" }}>couldn't read repo</div>
+          <div style={{ color: "#e63b2e" }}>couldn't read repo</div>
           <div className="mono faint" style={{ fontSize: 10, marginTop: 4, lineHeight: 1.5, wordBreak: "break-word" }}>{info.error}</div>
           {/(resolve|connect|timed out|refused|Host)/i.test(info.error ?? "") && (
             <div className="mono faint" style={{ fontSize: 10, marginTop: 4 }}>SSH host for <b>{session.machine}</b> may not be set up — configure it in the Terminal/Browser tab.</div>
@@ -569,7 +596,11 @@ function WeekWidget() {
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         {kicker("This Week")}
         <span style={{ flex: 1 }} />
-        {mine && mine.rank > 0 && <span className="mono" style={{ fontSize: 11, color: "#ffd166" }}>🏆 #{mine.rank}</span>}
+        {mine && mine.rank > 0 && (
+          <span className="mono" style={{ fontSize: 11, color: "var(--text-soft)", display: "inline-flex", alignItems: "center", gap: 4 }}>
+            <IconTrophySm /> #{mine.rank}
+          </span>
+        )}
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginTop: 8 }}>
         {tile(String(mine?.commits ?? "—"), "Commits")}
@@ -704,7 +735,7 @@ function ChatPane({ sessionId }: { sessionId?: string } = {}) {
               flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 5, whiteSpace: "nowrap",
             }}
           >
-            <span style={{ fontSize: 11, lineHeight: 1 }}>🔐</span>login
+            <IconKey size={11} />login
           </button>
         </div>
       )}
@@ -726,8 +757,8 @@ function ChatPane({ sessionId }: { sessionId?: string } = {}) {
       )}
       <div ref={scrollRef} onScroll={() => { const el = scrollRef.current; if (el) stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80; }}
         className="no-scrollbar" style={{ flex: 1, overflowY: "auto", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 12, fontFamily: "var(--font-mono)" }}>
-        {!session && <span className="mono faint hud-blink" style={{ fontSize: 12 }}>no session selected</span>}
-        {session && timeline.length === 0 && !session.latestAnswer && <span className="mono faint hud-blink" style={{ fontSize: 12 }}>awaiting output…</span>}
+        {!session && <span className="mono faint" style={{ fontSize: 12 }}>no session selected</span>}
+        {session && timeline.length === 0 && !session.latestAnswer && <span className="mono faint" style={{ fontSize: 12 }}>awaiting output…</span>}
         {timeline.map((m, i) =>
           m.role === "user" ? <UserMsg key={i} text={m.text} /> : <ClaudeMsg key={i} text={m.text} />
         )}
@@ -751,7 +782,7 @@ type GridKey = "chat" | "term" | "files" | "browser";
 type ConsoleView = "ctf" | "cb" | "ctb" | "fb";
 type HudLayout = "grid" | "windows";
 
-const FIXED: { key: FixedKey; title: string; icon: string }[] = [
+const FIXED: { key: FixedKey; title: string; icon: React.ReactNode }[] = [
   { key: "chat", title: "Chat", icon: "◇" },
   { key: "term", title: "Terminal", icon: "❯_" },
   { key: "files", title: "Files", icon: "▤" },
@@ -760,7 +791,7 @@ const FIXED: { key: FixedKey; title: string; icon: string }[] = [
   { key: "notes", title: "Notes", icon: "✎" },
   { key: "ports", title: "Settings", icon: "⚙" },
   { key: "devtools", title: "Inspector", icon: "◫" },
-  { key: "activity", title: "Activity", icon: "⚡" },
+  { key: "activity", title: "Activity", icon: <IconBoltSm /> },
   { key: "explorer", title: "Explorer", icon: "◲" },
   { key: "agents", title: "Admin", icon: "⛨" },
   { key: "servers", title: "Servers", icon: "⬡" },
@@ -1904,7 +1935,7 @@ function HudConsole() {
                 onContextMenu={(e) => { e.preventDefault(); setDockerMenu((m) => !m); }}
                 title="Docker logs — click to focus/minimize · right-click for options"
                 style={dockBtnStyle(anyDockerOpen, dockerFront)}>
-                <span style={{ fontSize: 15, lineHeight: 1 }}>🐳</span>
+                <span style={{ height: 15, display: "grid", placeItems: "center" }}><IconDockerSm /></span>
                 <span style={{ fontSize: 8, letterSpacing: "0.08em", textTransform: "uppercase" }}>
                   Docker{wins.dockerIds.length > 1 ? ` ·${wins.dockerIds.length}` : ""}
                 </span>
@@ -1927,8 +1958,8 @@ function HudConsole() {
                     {wins.dockerIds.map((id, i) => (
                       <div key={id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 8px", borderRadius: 8 }} className="hud-rail-row">
                         <span onClick={() => { dockClick(id); setDockerMenu(false); }}
-                          style={{ flex: 1, minWidth: 0, cursor: "pointer", fontFamily: "var(--font-mono)", fontSize: 11, color: wins.wins[id]?.min ? "var(--text-soft)" : "var(--text)" }}>
-                          🐳 Docker {i + 1}{wins.wins[id]?.min ? " (minimized)" : ""}
+                          style={{ flex: 1, minWidth: 0, cursor: "pointer", fontFamily: "var(--font-mono)", fontSize: 11, display: "inline-flex", alignItems: "center", gap: 6, color: wins.wins[id]?.min ? "var(--text-soft)" : "var(--text)" }}>
+                          <IconDockerSm size={12} /> Docker {i + 1}{wins.wins[id]?.min ? " (minimized)" : ""}
                         </span>
                         <span onClick={() => closeDocker(id)} title="Close window"
                           style={{ cursor: "pointer", color: "var(--text-faint)", fontSize: 12 }}>✕</span>
@@ -1957,7 +1988,7 @@ function HudConsole() {
             })}
             <button onClick={() => setAppsModal(true)} title="Add or manage custom apps"
               style={{ ...dockBtnStyle(false, false), border: "1px dashed var(--border-strong)" }}>
-              <span style={{ fontSize: 15, lineHeight: 1 }}>➕</span>
+              <span style={{ fontSize: 15, lineHeight: 1 }}>＋</span>
               <span style={{ fontSize: 8, letterSpacing: "0.08em", textTransform: "uppercase" }}>App</span>
               <span style={{ width: 4, height: 4, marginTop: 1 }} />
             </button>
@@ -2136,18 +2167,15 @@ export default function Hud() {
 function HudStyles() {
   return (
     <style>{`
+      /* Static faint grid — no panning; liveness comes from real data movement. */
       .hud-grid { position:absolute; inset:0; pointer-events:none; opacity:0.5;
         background-image:
           linear-gradient(rgb(var(--primary-soft) / 0.05) 1px, transparent 1px),
           linear-gradient(90deg, rgb(var(--primary-soft) / 0.05) 1px, transparent 1px);
-        background-size: 44px 44px; animation: hud-pan 24s linear infinite; }
-      /* Oversized agency seal watermark, centred behind everything. */
+        background-size: 44px 44px; }
+      /* Oversized agency seal watermark, centred behind everything — static. */
       .hud-seal { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
-        width:min(78vh, 62vw); height:auto; z-index:0; pointer-events:none; opacity:0.05;
-        filter: drop-shadow(0 0 60px rgb(var(--primary-soft) / 0.4)); animation: hud-seal-spin 240s linear infinite; }
-      @keyframes hud-seal-spin { from { transform:translate(-50%,-50%) rotate(0deg);} to { transform:translate(-50%,-50%) rotate(360deg);} }
-      body.rcw-hidden .hud-seal { animation: none; }
-      @keyframes hud-pan { from { background-position: 0 0, 0 0; } to { background-position: 44px 44px, 44px 44px; } }
+        width:min(78vh, 62vw); height:auto; z-index:0; pointer-events:none; opacity:0.05; }
       .hud-blink { animation: hud-blink 1.1s steps(1) infinite; }
       @keyframes hud-blink { 50% { opacity: 0; } }
       .hud-pulse { animation: hud-pulse 1.4s ease-in-out infinite; }

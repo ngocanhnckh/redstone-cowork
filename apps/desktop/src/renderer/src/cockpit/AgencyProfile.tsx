@@ -39,7 +39,7 @@ function Radar({ stats }: { stats: Stats }) {
           <g key={ax.key}>
             <circle cx={x} cy={y} r={3} fill="rgb(var(--accent))" />
             <text x={lx} y={ly} textAnchor="middle" dominantBaseline="middle" fontSize={9} fontFamily="var(--font-mono)" letterSpacing="0.1em" fill="rgb(var(--primary-soft))">{ax.label}</text>
-            <text x={lx} y={ly + 11} textAnchor="middle" fontSize={10} fontWeight={700} fontFamily="var(--font-mono)" fill="#e6f2f4">{stats[ax.key]}</text>
+            <text x={lx} y={ly + 11} textAnchor="middle" fontSize={10} fontWeight={700} fontFamily="var(--font-mono)" fill="var(--text)">{stats[ax.key]}</text>
           </g>
         );
       })}
@@ -82,11 +82,11 @@ function MissionDetail({ mission, onClose, onChanged }: { mission: AgencyMission
         <div className="agp-sheet-hd">
           <div style={{ minWidth: 0 }}>
             <span className="mono" style={{ fontSize: 10, color: "rgb(var(--primary-soft))", letterSpacing: "0.14em" }}>{mission.key}{mission.project ? ` · ${mission.project.name}` : ""}</span>
-            <div style={{ fontSize: 16, fontWeight: 700, color: "#e6f2f4", marginTop: 3 }}>{detail?.summary ?? mission.summary}</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "var(--text)", marginTop: 3 }}>{detail?.summary ?? mission.summary}</div>
           </div>
           <button className="agp-x" onClick={onClose}>✕</button>
         </div>
-        {err && <div style={{ color: "#ff9d94", fontSize: 12, marginBottom: 8 }}>⚠ {err}</div>}
+        {err && <div style={{ color: "#e63b2e", fontSize: 12, marginBottom: 8 }}>⚠ {err}</div>}
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 12 }}>
           <span className="agp-status">{detail?.status ?? mission.status}</span>
           {transitions.map((t) => (
@@ -116,7 +116,7 @@ function MissionDetail({ mission, onClose, onChanged }: { mission: AgencyMission
   );
 }
 
-const catColor: Record<string, string> = { todo: "var(--text-faint)", inprogress: "rgb(var(--accent))", done: "#5ef2b0" };
+const catColor: Record<string, string> = { todo: "var(--text-faint)", inprogress: "rgb(var(--accent))", done: "var(--text-soft)" };
 
 export default function AgencyProfile() {
   const [me, setMe] = useState<Me | null>(null);
@@ -199,9 +199,9 @@ export default function AgencyProfile() {
         {me.photo ? <img className="agp-photo" src={me.photo} alt="" /> : <div className="agp-photo ph">◍</div>}
         <div style={{ minWidth: 0, flex: 1 }}>
           <div className="mono" style={{ fontSize: 10, letterSpacing: "0.3em", color: "rgb(var(--primary-soft))" }}>SPECIAL AGENT</div>
-          <div style={{ fontSize: 28, fontWeight: 700, color: "#e6f2f4", lineHeight: 1.05 }}>{me.displayName}</div>
+          <div style={{ fontSize: 28, fontWeight: 700, color: "var(--text)", lineHeight: 1.05 }}>{me.displayName}</div>
           <div className="mono" style={{ fontSize: 11, color: "var(--text-faint)", letterSpacing: "0.1em" }}>@{me.username}</div>
-          {rk?.insignia && <div style={{ fontSize: 14, letterSpacing: "0.24em", color: "#ffd166", marginTop: 5 }}>{rk.insignia}</div>}
+          {rk?.insignia && <div style={{ fontSize: 14, letterSpacing: "0.24em", color: "var(--text-soft)", marginTop: 5 }}>{rk.insignia}</div>}
           <div style={{ display: "flex", gap: 7, marginTop: 7, flexWrap: "wrap" }}>
             <span className="agp-chip">★ {me.level}</span>
             {me.division && <span className="agp-chip alt">◈ {me.division}</span>}
@@ -242,7 +242,7 @@ export default function AgencyProfile() {
             <Bars rows={[
               { label: "TO DO", value: jira.todo, color: "var(--text-faint)" },
               { label: "IN PROG", value: jira.inProgress, color: "rgb(var(--accent))" },
-              { label: "DONE", value: jira.completed, color: "#5ef2b0" },
+              { label: "DONE", value: jira.completed, color: "var(--text-soft)" },
             ]} />
           ) : <div className="soft" style={{ fontSize: 11.5 }}>{me.jira ? "No Jira issues assigned." : "Link a Jira username to see workload."}</div>}
         </div>
@@ -265,7 +265,7 @@ export default function AgencyProfile() {
           <button key={m.key} className="agp-mission" onClick={() => setOpen(m)}>
             <span className="agp-dot" style={{ background: catColor[m.statusCategory] }} />
             <div style={{ minWidth: 0, flex: 1, textAlign: "left" }}>
-              <div style={{ fontSize: 13, color: "#e6f2f4", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{m.summary}</div>
+              <div style={{ fontSize: 13, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{m.summary}</div>
               <div className="mono" style={{ fontSize: 9.5, color: "var(--text-faint)", letterSpacing: "0.08em", marginTop: 2 }}>{m.key}{m.project ? ` · ${m.project.name}` : ""}</div>
             </div>
             <span className="agp-mstatus" style={{ color: catColor[m.statusCategory] }}>{m.status}</span>
@@ -284,14 +284,14 @@ const CSS = `
   border:1px solid rgb(var(--primary) / 0.28); background: rgb(var(--primary) / 0.05); }
 .agp-photo { width:118px; height:118px; border-radius:16px; object-fit:cover; border:2px solid rgb(var(--primary) / 0.6); box-shadow:0 0 26px -6px rgb(var(--primary-soft)); background:#05090d; flex-shrink:0; }
 .agp-photo.ph { display:flex; align-items:center; justify-content:center; font-size:52px; color: rgb(var(--primary-soft) / 0.5); }
-.agp-chip { font-size:10px; letter-spacing:.14em; padding:3px 10px; border-radius:999px; border:1px solid rgb(224 162 74 / 0.5); color:#e0a24a; }
+.agp-chip { font-size:10px; letter-spacing:.14em; padding:3px 10px; border-radius:999px; border:1px solid rgb(232 230 225 / 0.5); color:var(--text-soft); }
 .agp-chip.alt { border-color: rgb(var(--primary) / 0.5); color: rgb(var(--primary-soft)); }
 .agp-ovr { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:6px 14px; border-radius:14px; border:1px solid rgb(var(--accent) / 0.5); background: rgb(var(--accent) / 0.08); }
 .agp-ovr b { font-family:var(--font-display); font-size:46px; line-height:.9; color: rgb(var(--accent)); text-shadow:0 0 16px rgb(var(--accent) / 0.6); }
 .agp-ovr span { font-size:9px; letter-spacing:.24em; color: var(--text-soft); }
 .agp-tiles { display:grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap:10px; margin-top:14px; }
 .agp-tile { border:1px solid var(--border); border-radius:12px; padding:11px 13px; background: rgb(var(--primary) / 0.04); }
-.agp-tile-v { font-family:var(--font-display); font-size:24px; line-height:1; color:#e6f2f4; }
+.agp-tile-v { font-family:var(--font-display); font-size:24px; line-height:1; color:var(--text); }
 .agp-tile-l { font-size:8.5px; letter-spacing:.18em; color: rgb(var(--primary-soft)); margin-top:6px; }
 .agp-tile-h { font-size:9px; color: var(--text-faint); margin-top:2px; }
 .agp-charts { display:grid; grid-template-columns: 1fr 1fr; gap:14px; margin-top:14px; }
@@ -323,6 +323,6 @@ const CSS = `
 .agp-comment-body img { max-width:100%; }
 .agp-input { flex:1; padding:10px 13px; border-radius:10px; font-size:13px; font-family:inherit; border:1px solid rgb(var(--primary) / 0.3); background: rgb(var(--primary) / 0.05); color: var(--text); outline:none; }
 .agp-input:focus { border-color: rgb(var(--primary) / 0.7); }
-.agp-send { padding:0 16px; border-radius:10px; border:1px solid rgb(var(--primary) / 0.6); cursor:pointer; background: rgb(var(--primary) / 0.2); color:#d9f7ff; font-family:inherit; font-size:11px; font-weight:700; letter-spacing:.16em; }
+.agp-send { padding:0 16px; border-radius:10px; border:1px solid rgb(var(--primary) / 0.6); cursor:pointer; background: rgb(var(--primary) / 0.2); color:var(--text); font-family:inherit; font-size:11px; font-weight:700; letter-spacing:.16em; }
 .agp-send:disabled { opacity:.4; cursor:not-allowed; }
 `;

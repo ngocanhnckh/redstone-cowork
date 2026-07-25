@@ -9,21 +9,21 @@ const CSS = `
 .rcw-sv { height:100%; min-height:0; display:flex; flex-direction:column; font-family:var(--font-mono); }
 .rcw-sv-head { display:flex; align-items:center; gap:10px; padding:10px 14px; border-bottom:1px solid var(--border); flex-shrink:0; }
 .rcw-sv-body { flex:1; min-height:0; overflow-y:auto; padding:12px; display:flex; flex-direction:column; gap:10px; }
-.rcw-sv-card { border:1px solid rgb(84 230 255 / .2); border-radius:11px; padding:12px 14px; background: rgb(84 230 255 / .04); }
-.rcw-sv-card.owned { border-color: rgb(127 209 139 / .35); }
-.rcw-sv-name { font-size:13px; font-weight:700; letter-spacing:.05em; color:#e6f2f4; }
+.rcw-sv-card { border:1px solid var(--border); border-radius:11px; padding:12px 14px; background: rgba(232,230,225,.04); }
+.rcw-sv-card.owned { border-color: var(--border-strong); }
+.rcw-sv-name { font-size:13px; font-weight:700; letter-spacing:.05em; color:var(--text); }
 .rcw-sv-host { font-size:11px; color:var(--text-soft); }
-.rcw-sv-badge { font-size:9px; letter-spacing:.14em; padding:2px 8px; border-radius:999px; border:1px solid rgb(84 230 255 / .4); color: rgb(84 230 255 / .9); }
-.rcw-sv-badge.green { border-color: rgb(127 209 139 / .5); color:#7fd18b; }
-.rcw-sv-badge.warn { border-color: rgb(224 162 74 / .5); color:#e0a24a; }
-.rcw-sv-label { display:block; font-size:9px; letter-spacing:.26em; color: rgb(84 230 255 / .7); margin:8px 0 4px 2px; }
+.rcw-sv-badge { font-size:9px; letter-spacing:.14em; padding:2px 8px; border-radius:999px; border:1px solid var(--border-strong); color: var(--text-soft); }
+.rcw-sv-badge.green { border-color: var(--border-strong); color:var(--text-soft); }
+.rcw-sv-badge.warn { border-color: rgba(230,59,46,.5); color:#e63b2e; }
+.rcw-sv-label { display:block; font-size:9px; letter-spacing:.26em; color: var(--text-soft); margin:8px 0 4px 2px; }
 .rcw-sv-input { width:100%; box-sizing:border-box; padding:8px 10px; border-radius:7px; font-size:12px; font-family:inherit;
-  border:1px solid rgb(84 230 255 / .28); background: rgb(84 230 255 / .05); color:#e6f2f4; outline:none; }
-.rcw-sv-btn { padding:7px 13px; border-radius:8px; border:1px solid rgb(84 230 255 / .55); cursor:pointer; font-family:inherit;
-  background: rgb(84 230 255 / .13); color:#d9f7ff; font-size:10.5px; font-weight:700; letter-spacing:.16em; }
-.rcw-sv-btn:hover:not(:disabled) { background: rgb(84 230 255 / .22); }
+  border:1px solid rgba(232,230,225,.28); background: rgba(232,230,225,.05); color:var(--text); outline:none; }
+.rcw-sv-btn { padding:7px 13px; border-radius:8px; border:1px solid var(--text); cursor:pointer; font-family:inherit;
+  background: var(--text); color:#0a0a0a; font-size:10.5px; font-weight:700; letter-spacing:.16em; }
+.rcw-sv-btn:hover:not(:disabled) { background:#e63b2e; border-color:#e63b2e; }
 .rcw-sv-btn:disabled { opacity:.45; cursor:not-allowed; }
-.rcw-sv-btn.warn { border-color: rgb(224 115 106 / .55); background: rgb(224 115 106 / .1); color:#ff9d94; }
+.rcw-sv-btn.warn { border-color: rgba(230,59,46,.55); background: rgba(230,59,46,.1); color:#e63b2e; }
 .rcw-sv-chip { display:inline-flex; align-items:center; gap:4px; font-size:9.5px; padding:2px 7px; border-radius:999px; border:1px solid var(--border); color:var(--text-soft); margin:2px 3px 0 0; }
 `;
 
@@ -81,14 +81,14 @@ export default function ServersPanel() {
     <div className="rcw-sv">
       <style>{CSS}</style>
       <div className="rcw-sv-head">
-        <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".3em", color: "rgb(84 230 255 / .9)" }}>SERVER REGISTRY</span>
+        <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".3em", color: "var(--text)" }}>SERVER REGISTRY</span>
         <span className="faint" style={{ fontSize: 9.5, letterSpacing: ".2em" }}>YOUR CONNECTED MACHINES</span>
         <span style={{ flex: 1 }} />
-        {msg && <span style={{ fontSize: 10, color: "#7fd18b", letterSpacing: ".14em" }}>{msg}</span>}
+        {msg && <span style={{ fontSize: 10, color: "var(--text-soft)", letterSpacing: ".14em" }}>{msg}</span>}
         <button className="rcw-sv-btn" onClick={() => setAdding((a) => !a)}>{adding ? "CANCEL" : "＋ ADD SERVER"}</button>
       </div>
 
-      {err && <div style={{ padding: "10px 14px", color: "#ff7d72", fontSize: 11.5 }}>⚠ {err}</div>}
+      {err && <div style={{ padding: "10px 14px", color: "#e63b2e", fontSize: 11.5 }}>⚠ {err}</div>}
 
       <div className="rcw-sv-body no-scrollbar">
         {adding && (
@@ -103,8 +103,8 @@ export default function ServersPanel() {
             <label className="rcw-sv-label">DESCRIPTION</label>
             <input className="rcw-sv-input" value={form.description} onChange={set("description")} placeholder="optional" />
             {coworkKey && (
-              <div style={{ marginTop: 10, padding: 9, borderRadius: 7, background: "rgb(84 230 255 / .06)", border: "1px solid rgb(84 230 255 / .2)" }}>
-                <div style={{ fontSize: 9.5, letterSpacing: ".14em", color: "rgb(84 230 255 / .8)", marginBottom: 4 }}>INSTALL THIS KEY ON THE VPS (authorized_keys):</div>
+              <div style={{ marginTop: 10, padding: 9, borderRadius: 7, background: "rgba(232,230,225,.06)", border: "1px solid var(--border)" }}>
+                <div style={{ fontSize: 9.5, letterSpacing: ".14em", color: "var(--text-soft)", marginBottom: 4 }}>INSTALL THIS KEY ON THE VPS (authorized_keys):</div>
                 <code style={{ fontSize: 9.5, wordBreak: "break-all", color: "var(--text-soft)" }}>{coworkKey}</code>
                 <button className="rcw-sv-btn" style={{ marginTop: 6 }} onClick={() => navigator.clipboard.writeText(coworkKey)}>COPY KEY</button>
               </div>

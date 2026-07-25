@@ -45,7 +45,7 @@ function Loading({ label }: { label: string }) {
   return <div className="faint mono hud-blink" style={{ fontSize: 12, padding: 16 }}>{label}</div>;
 }
 function ErrBox({ msg }: { msg: string }) {
-  return <div style={{ fontSize: 12.5, color: "#e0736a", padding: 16, lineHeight: 1.5 }}>⚠ {msg}</div>;
+  return <div style={{ fontSize: 12.5, color: "#e63b2e", padding: 16, lineHeight: 1.5 }}>⚠ {msg}</div>;
 }
 
 /* ------------------------------ Excel ------------------------------ */

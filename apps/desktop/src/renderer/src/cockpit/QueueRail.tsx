@@ -41,11 +41,11 @@ function loadOrder(): string[] {
 
 type Kind = "waiting" | "working" | "active" | "idle" | "lost";
 const META: Record<Kind, { label: string; color: string; pulse: boolean }> = {
-  waiting: { label: "waiting for you", color: "rgb(var(--accent))", pulse: true },
-  working: { label: "working…", color: "rgb(var(--primary-soft))", pulse: true },
-  active: { label: "online", color: "rgb(var(--primary-soft))", pulse: false },
-  idle: { label: "idle", color: "var(--border-strong)", pulse: false },
-  lost: { label: "offline", color: "var(--border-strong)", pulse: false },
+  waiting: { label: "waiting for you", color: "#e63b2e", pulse: false },
+  working: { label: "working…", color: "var(--text)", pulse: false },
+  active: { label: "online", color: "var(--text-soft)", pulse: false },
+  idle: { label: "idle", color: "var(--text-faint)", pulse: false },
+  lost: { label: "offline", color: "var(--text-faint)", pulse: false },
 };
 
 export default function QueueRail() {
@@ -142,8 +142,8 @@ export default function QueueRail() {
             title="New session — pick a server, resume or create, choose folder & mode"
             style={{
               width: 22, height: 22, borderRadius: 7, cursor: "pointer", flexShrink: 0,
-              border: "1px solid rgb(var(--primary) / 0.45)", background: "rgb(var(--primary) / 0.12)",
-              color: "rgb(var(--primary-soft))", display: "flex", alignItems: "center", justifyContent: "center",
+              border: "1px solid var(--border-strong)", background: "rgba(232,230,225,0.06)",
+              color: "var(--text-soft)", display: "flex", alignItems: "center", justifyContent: "center",
               fontSize: 15, lineHeight: 1, padding: 0,
             }}
           >＋</button>
@@ -173,23 +173,23 @@ export default function QueueRail() {
               display: "flex", gap: 11, alignItems: "center", padding: "11px 12px", borderRadius: 13,
               cursor: "pointer", position: "relative", width: "100%",
               opacity: dragId === session.id ? 0.4 : kind === "lost" ? 0.55 : 1,
-              background: focused ? `rgba(var(--primary), 0.12)` : undefined,
-              borderLeft: focused ? `3px solid rgb(var(--primary-soft))` : undefined,
+              background: focused ? `rgba(232,230,225,0.07)` : undefined,
+              borderLeft: focused ? `3px solid var(--text)` : kind === "waiting" ? `3px solid #e63b2e` : undefined,
               boxShadow: overId === session.id && dragId && dragId !== session.id ? "inset 0 2px 0 rgb(var(--accent))" : undefined,
             }}
           >
             {/* Orbiting glow while the session is thinking (a light circling the border). */}
             {kind === "working" && <span className="rcw-orbit" aria-hidden />}
             {focused && (
-              <span style={{ position: "absolute", left: 0, top: 14, bottom: 14, width: 3, borderRadius: 9, background: `linear-gradient(rgb(var(--primary-soft)), rgb(var(--accent)))` }} />
+              <span style={{ position: "absolute", left: 0, top: 14, bottom: 14, width: 3, borderRadius: 9, background: "var(--text)" }} />
             )}
             <span style={{ position: "relative", flexShrink: 0, zIndex: 1 }}>
               <span
                 style={{
                   width: 30, height: 30, borderRadius: 9, display: "grid", placeItems: "center",
                   fontFamily: "var(--font-mono)", fontWeight: 600, fontSize: 12,
-                  background: focused ? `rgb(var(--primary) / 0.3)` : `rgb(var(--accent) / 0.22)`,
-                  color: focused ? undefined : `rgb(var(--accent))`,
+                  background: focused ? `rgba(232,230,225,0.16)` : `rgba(232,230,225,0.07)`,
+                  color: focused ? undefined : `var(--text-soft)`,
                 }}
               >
                 {initials(session.cwd)}
@@ -200,7 +200,6 @@ export default function QueueRail() {
                 style={{
                   position: "absolute", right: -2, bottom: -2, width: 10, height: 10, borderRadius: 999,
                   background: meta.color, border: "2px solid var(--app-panel, #1b1712)",
-                  animation: meta.pulse ? "pulse 2s infinite" : undefined,
                 }}
               />
             </span>
@@ -208,7 +207,7 @@ export default function QueueRail() {
               <div style={{ fontSize: 11, fontWeight: 600, lineHeight: 1.25, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {projectName(session.cwd)}
               </div>
-              <div className="mono faint" style={{ fontSize: 9, color: kind === "waiting" ? "rgb(var(--accent))" : undefined }}>
+              <div className="mono faint" style={{ fontSize: 9, color: kind === "waiting" ? "#e63b2e" : undefined }}>
                 {detail}
               </div>
             </div>
@@ -234,7 +233,7 @@ export default function QueueRail() {
                   width: 18, height: 18, borderRadius: 6, padding: 0, display: "grid", placeItems: "center", cursor: "pointer",
                   border: "none", background: "transparent", lineHeight: 1, fontSize: 13, color: "var(--border-strong)",
                 }}
-                onMouseEnter={(e) => { e.currentTarget.style.color = "#e0736a"; }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = "#e63b2e"; }}
                 onMouseLeave={(e) => { e.currentTarget.style.color = "var(--border-strong)"; }}
               >
                 ✕

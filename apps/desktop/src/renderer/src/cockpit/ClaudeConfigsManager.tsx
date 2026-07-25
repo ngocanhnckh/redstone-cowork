@@ -98,7 +98,7 @@ export default function ClaudeConfigsManager() {
               {copied === `run-${n}` ? "copied" : "copy run"}
             </button>
             <button onClick={() => startEdit(n)} style={{ border: 0, background: "transparent", color: "rgb(var(--primary-soft))", cursor: "pointer", fontSize: 11.5 }}>edit</button>
-            <button onClick={() => del(n)} disabled={busy} style={{ border: 0, background: "transparent", color: "#e0736a", cursor: "pointer", fontSize: 11.5 }}>delete</button>
+            <button onClick={() => del(n)} disabled={busy} style={{ border: 0, background: "transparent", color: "#e63b2e", cursor: "pointer", fontSize: 11.5 }}>delete</button>
           </div>
         ))}
       </div>
@@ -131,7 +131,7 @@ export default function ClaudeConfigsManager() {
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12 }}>
             <button onClick={save} disabled={busy || !draftName.trim()} className="glass-btn--clay" style={{ padding: "7px 16px", borderRadius: 8, fontSize: 12.5, fontWeight: 600, opacity: draftName.trim() ? 1 : 0.5 }}>{busy ? "…" : "Save profile"}</button>
             <button onClick={cancel} style={{ border: "1px solid var(--border)", background: "transparent", color: "var(--text-soft)", borderRadius: 8, padding: "7px 14px", fontSize: 12.5, cursor: "pointer" }}>Cancel</button>
-            {status && <span className="mono" style={{ fontSize: 11, color: status.kind === "ok" ? "rgb(var(--accent))" : "#e0736a" }}>{status.text}</span>}
+            {status && <span className="mono" style={{ fontSize: 11, color: status.kind === "ok" ? "rgb(var(--accent))" : "#e63b2e" }}>{status.text}</span>}
           </div>
 
           {draftName.trim() && (

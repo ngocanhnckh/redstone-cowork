@@ -605,7 +605,7 @@ export default function FilesPanel({ sessionId, cwd, machine }: Props) {
                 </button>
               </div>
               {treeError && (
-                <div className="mono" style={{ fontSize: 11, color: "#e0736a", padding: "6px 10px" }}>
+                <div className="mono" style={{ fontSize: 11, color: "#e63b2e", padding: "6px 10px" }}>
                   {treeError}
                 </div>
               )}
@@ -686,7 +686,7 @@ export default function FilesPanel({ sessionId, cwd, machine }: Props) {
                 {saveState.kind !== "idle" && (
                   <span
                     className="mono"
-                    style={{ fontSize: 10.5, color: saveState.kind === "err" ? "#e0736a" : saveState.kind === "ok" ? "rgb(var(--accent))" : "var(--text-soft)" }}
+                    style={{ fontSize: 10.5, color: saveState.kind === "err" ? "#e63b2e" : saveState.kind === "ok" ? "rgb(var(--accent))" : "var(--text-soft)" }}
                   >
                     {saveState.kind === "saving" ? "saving…" : saveState.text}
                   </span>
@@ -833,7 +833,7 @@ export default function FilesPanel({ sessionId, cwd, machine }: Props) {
             padding: "8px 16px",
             borderRadius: 999,
             border: "1px solid var(--border-strong)",
-            color: toast ? "rgb(var(--accent))" : "#e0736a",
+            color: toast ? "rgb(var(--accent))" : "#e63b2e",
             boxShadow: "0 14px 40px -16px rgba(0,0,0,.7)",
           }}
         >
@@ -918,7 +918,7 @@ export default function FilesPanel({ sessionId, cwd, machine }: Props) {
             placeholder={creating.kind === "file" ? "file-name.ext" : "folder-name"}
             style={modalInput}
           />
-          {opError && <div style={{ color: "#e0736a", fontSize: 11, marginTop: 8 }}>{opError}</div>}
+          {opError && <div style={{ color: "#e63b2e", fontSize: 11, marginTop: 8 }}>{opError}</div>}
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 14 }}>
             <button onClick={() => setCreating(null)} style={modalBtn}>Cancel</button>
             <button onClick={submitCreate} className="glass-btn--clay" style={{ ...modalBtn, color: "#fff" }} disabled={!entryName.trim()}>
@@ -938,12 +938,12 @@ export default function FilesPanel({ sessionId, cwd, machine }: Props) {
           <div className="faint" style={{ fontSize: 11.5, lineHeight: 1.5 }}>
             {deleteTarget.isDir ? "This removes the folder and everything inside it. " : ""}This can't be undone.
           </div>
-          {opError && <div style={{ color: "#e0736a", fontSize: 11, marginTop: 8 }}>{opError}</div>}
+          {opError && <div style={{ color: "#e63b2e", fontSize: 11, marginTop: 8 }}>{opError}</div>}
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
             <button onClick={() => setDeleteTarget(null)} style={modalBtn}>Cancel</button>
             <button
               onClick={confirmDelete}
-              style={{ ...modalBtn, background: "rgba(224,115,106,0.18)", color: "#e0736a", border: "1px solid rgba(224,115,106,0.4)" }}
+              style={{ ...modalBtn, background: "rgba(230,59,46,0.18)", color: "#e63b2e", border: "1px solid rgba(230,59,46,0.4)" }}
             >
               Delete
             </button>
@@ -965,7 +965,7 @@ function MenuItem({ children, onClick, danger }: { children: React.ReactNode; on
         padding: "7px 10px",
         borderRadius: 7,
         cursor: "pointer",
-        color: danger ? "#e0736a" : "var(--text)",
+        color: danger ? "#e63b2e" : "var(--text)",
       }}
     >
       {children}
@@ -1043,7 +1043,7 @@ function Centered({ children, error }: { children: React.ReactNode; error?: bool
         padding: 24,
         fontSize: 12.5,
         fontStyle: error ? "normal" : "italic",
-        color: error ? "#e0736a" : undefined,
+        color: error ? "#e63b2e" : undefined,
       }}
     >
       {children}

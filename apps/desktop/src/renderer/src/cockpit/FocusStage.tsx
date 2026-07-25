@@ -146,8 +146,7 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
               width: 8,
               height: 8,
               borderRadius: 999,
-              background: isWaiting ? "rgb(var(--accent))" : "rgb(var(--primary-soft))",
-              boxShadow: isWaiting ? "0 0 0 3px rgb(var(--accent) / 0.18)" : "none",
+              background: isWaiting ? "#e63b2e" : "var(--text-soft)",
             }}
           />
           <h2
@@ -299,9 +298,9 @@ export default function FocusStage({ sessionId }: { sessionId?: string } = {}) {
       <>
       {/* Pinned reminder of the last message you sent to this session */}
       {lastSent && (
-        <div style={{ flexShrink: 0, margin: "12px 32px 0", borderRadius: 12, border: "1px solid rgb(var(--accent) / 0.3)", background: "rgb(var(--accent) / 0.06)", overflow: "hidden" }}>
+        <div style={{ flexShrink: 0, margin: "12px 32px 0", borderRadius: 12, border: "1px solid var(--border)", background: "rgba(232,230,225,0.04)", overflow: "hidden" }}>
           <div onClick={toggleCtx} title="Your last message to this session" style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 12px", cursor: "pointer", userSelect: "none" }}>
-            <span className="mono" style={{ fontSize: 9, letterSpacing: "0.16em", textTransform: "uppercase", color: "rgb(var(--accent))" }}>↩ you last said</span>
+            <span className="mono" style={{ fontSize: 9, letterSpacing: "0.16em", textTransform: "uppercase", color: "var(--text-soft)" }}>↩ you last said</span>
             <span style={{ flex: 1 }} />
             <span className="mono faint" style={{ fontSize: 11 }}>{ctxOpen ? "▾" : "▸"}</span>
           </div>

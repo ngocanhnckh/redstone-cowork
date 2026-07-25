@@ -47,7 +47,7 @@ function fmtTime(ts: number): string {
 type LevelMeta = { label: string; color: string; text: string; bg: string };
 function levelMeta(level: string): LevelMeta {
   if (level === "error")
-    return { label: "ERR", color: "#e0736a", text: "#f0a59d", bg: "rgba(224,115,106,0.09)" };
+    return { label: "ERR", color: "#e63b2e", text: "#e63b2e", bg: "rgba(230,59,46,0.09)" };
   if (level === "warning" || level === "warn")
     return { label: "WRN", color: "rgb(var(--accent))", text: "rgb(var(--accent))", bg: "rgb(var(--accent) / 0.07)" };
   if (level === "info")
@@ -55,13 +55,13 @@ function levelMeta(level: string): LevelMeta {
   return { label: "LOG", color: "var(--text-faint)", text: "var(--text-soft)", bg: "transparent" };
 }
 function statusColor(r: NetRow): string {
-  if (r.failed) return "#e0736a";
+  if (r.failed) return "#e63b2e";
   const s = r.status ?? 0;
   if (s === 0) return "var(--text-faint)";
-  if (s >= 500) return "#e0736a";
+  if (s >= 500) return "#e63b2e";
   if (s >= 400) return "rgb(var(--accent))";
   if (s >= 300) return "rgb(var(--primary-soft))";
-  return "#6bbf82";
+  return "var(--text-soft)";
 }
 
 const DT_CSS = `
@@ -94,8 +94,7 @@ const DT_CSS = `
 .dt-wf-bar { position:absolute; top:0; height:100%; min-width:2px; border-radius:999px; background:currentColor;
   box-shadow: 0 0 9px -2px currentColor; opacity:.9;
   background-image: linear-gradient(90deg, rgb(255 255 255 / 0.28), transparent 55%); }
-.dt-wf-live { animation: dt-wf-pulse 1s ease-in-out infinite; }
-@keyframes dt-wf-pulse { 0%,100% { opacity:.5; } 50% { opacity:1; } }
+.dt-wf-live { opacity:.85; }
 .dt-nrow.dt-sel td { background: rgb(var(--primary) / 0.14) !important; }
 .dt-modal { position:absolute; inset:0; z-index:20; display:flex; flex-direction:column;
   background: color-mix(in srgb, var(--app-panel) 80%, transparent); backdrop-filter: blur(16px) saturate(1.35);
@@ -234,7 +233,7 @@ export default function DevToolsPanel({ sessionId, active }: { sessionId?: strin
           </button>
         ))}
         {errCount > 0 && (
-          <span className="dt-pill mono" style={{ color: "#e0736a", flexShrink: 0 }} title={`${errCount} console errors`}>✖ {errCount}</span>
+          <span className="dt-pill mono" style={{ color: "#e63b2e", flexShrink: 0 }} title={`${errCount} console errors`}>✖ {errCount}</span>
         )}
         <input
           value={filter}
@@ -247,7 +246,7 @@ export default function DevToolsPanel({ sessionId, active }: { sessionId?: strin
           }}
         />
         <span title={attached ? "Inspector attached to the browser" : "Waiting for the browser…"}
-          className="mono" style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 9.5, letterSpacing: "0.1em", textTransform: "uppercase", flexShrink: 0, color: attached ? "#6bbf82" : "var(--text-faint)" }}>
+          className="mono" style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 9.5, letterSpacing: "0.1em", textTransform: "uppercase", flexShrink: 0, color: attached ? "var(--text-soft)" : "var(--text-faint)" }}>
           <span style={{ width: 6, height: 6, borderRadius: 999, background: "currentColor", boxShadow: attached ? "0 0 8px 1px currentColor" : "none" }} className={attached ? "hud-pulse" : undefined} />
           {attached ? "live" : "idle"}
         </span>
@@ -503,7 +502,7 @@ function NetDetail({ row, sessionId, onClose }: { row: NetRow; sessionId?: strin
         {sub === "response" && (
           bodyState === "loading" ? <div className="faint mono hud-blink" style={{ fontSize: 11.5, paddingTop: 6 }}>fetching response body…</div>
             : bodyState === "empty" ? <div className="faint" style={{ fontSize: 11.5, paddingTop: 6 }}>Body not available (it may have been evicted, or the request is still in flight — reload to re-capture).</div>
-            : bodyState === "err" ? <div style={{ fontSize: 11.5, paddingTop: 6, color: "#e0736a" }}>Could not read the response body.</div>
+            : bodyState === "err" ? <div style={{ fontSize: 11.5, paddingTop: 6, color: "#e63b2e" }}>Could not read the response body.</div>
             : body !== null ? (() => {
                 const json = asJson(body);
                 const showTree = json !== undefined && respView === "pretty";

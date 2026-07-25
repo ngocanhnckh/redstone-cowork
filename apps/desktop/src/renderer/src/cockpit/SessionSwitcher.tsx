@@ -7,9 +7,9 @@ const projectName = (cwd: string): string => cwd.split("/").filter(Boolean).pop(
 type Status = { label: string; color: string };
 function statusOf(s: SessionView, waiting: boolean, stale: boolean): Status {
   if (s.status === "lost") return { label: "lost", color: "var(--text-faint)" };
-  if (waiting) return { label: "waiting for you", color: "rgb(var(--accent))" };
-  if (s.working && !stale) return { label: "working…", color: "rgb(var(--primary-soft))" };
-  return { label: "idle", color: "var(--text-soft)" };
+  if (waiting) return { label: "waiting for you", color: "#e63b2e" };
+  if (s.working && !stale) return { label: "working…", color: "var(--text)" };
+  return { label: "idle", color: "var(--text-faint)" };
 }
 
 /**

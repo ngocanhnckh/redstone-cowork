@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { IconKey, IconTrash } from "./Icons";
 
 /** Short host label for an origin (drops the scheme). */
 function hostOf(origin: string): string {
@@ -45,7 +46,7 @@ export default function VaultPanel({ onClose }: { onClose: () => void }) {
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-          <span style={{ fontSize: 18 }}>🔑</span>
+          <IconKey size={18} style={{ color: "var(--text-soft)" }} />
           <h2 style={{ fontSize: 16, fontWeight: 600, margin: 0, flex: 1 }}>Saved passwords</h2>
           <button onClick={onClose} className="glass-inset-hover" style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "4px 10px", fontSize: 12, cursor: "pointer", color: "var(--text-soft)" }}>Done</button>
         </div>
@@ -79,7 +80,7 @@ export default function VaultPanel({ onClose }: { onClose: () => void }) {
                   title="Remove"
                   style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "5px 9px", fontSize: 12, cursor: "pointer", color: "var(--text-soft)", flexShrink: 0 }}
                 >
-                  🗑
+                  <IconTrash size={13} />
                 </button>
               </div>
             ))}

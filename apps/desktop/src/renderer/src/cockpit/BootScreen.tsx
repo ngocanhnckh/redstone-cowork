@@ -97,7 +97,7 @@ const CSS = `
 .rcw-boot-log .l { white-space:pre; animation: rcw-boot-line .1s ease both; }
 .rcw-boot-log .ok { color: rgb(var(--accent)); }
 .rcw-boot-log .hl { color: rgb(var(--primary-soft)); text-shadow: 0 0 10px rgb(var(--primary-soft) / 0.4); }
-.rcw-boot-log .warn { color: #e0a24a; }
+.rcw-boot-log .warn { color: #e63b2e; }
 
 /* Phase 2: centered glitch title. */
 .rcw-boot-titlewrap { flex:1; min-height:0; z-index:2; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; animation: rcw-boot-fadein .25s ease both; }
@@ -115,7 +115,7 @@ const CSS = `
   box-shadow:0 0 34px -6px rgb(var(--primary-soft)); background:#05090d; }
 .rcw-boot-agent.ph { display:flex; align-items:center; justify-content:center; font-size:64px; color: rgb(var(--primary-soft) / 0.5); }
 .rcw-boot-chip { font-family:var(--font-mono); font-size:10px; letter-spacing:.16em; padding:3px 10px; border-radius:999px;
-  border:1px solid rgb(224 162 74 / 0.5); color:#e0a24a; }
+  border:1px solid rgb(232 230 225 / 0.5); color:var(--text-soft); }
 .rcw-boot-chip.alt { border-color: rgb(var(--primary) / 0.5); color: rgb(var(--primary-soft)); }
 .rcw-boot-h1.rcw-glitch { border-color: transparent; color: transparent; }
 .rcw-boot-h1.rcw-glitch::before, .rcw-boot-h1.rcw-glitch::after {
@@ -157,7 +157,7 @@ export default function BootScreen() {
   }, []);
   const iRef = useRef(0);
   const done = useRef(false);
-  const accent = failed ? "#e0736a" : "rgb(var(--accent))";
+  const accent = failed ? "#e63b2e" : "rgb(var(--accent))";
 
   // Boot chime — once per launch, at the very start of the sequence.
   useEffect(() => {
@@ -227,9 +227,9 @@ export default function BootScreen() {
                   <div className="mono" style={{ fontSize: 10, letterSpacing: "0.34em", color: "rgb(var(--primary-soft))" }}>
                     WELCOME {agent.role === "admin" ? "DIRECTOR" : "AGENT"}
                   </div>
-                  <div style={{ fontSize: 34, fontWeight: 700, letterSpacing: "0.02em", color: "#e6f2f4", lineHeight: 1.05 }}>{agent.name}</div>
+                  <div style={{ fontSize: 34, fontWeight: 700, letterSpacing: "0.02em", color: "var(--text)", lineHeight: 1.05 }}>{agent.name}</div>
                   <div className="mono" style={{ fontSize: 11, color: "var(--text-faint)", letterSpacing: "0.12em" }}>@{agent.username}</div>
-                  {rk?.insignia && <div style={{ fontSize: 14, letterSpacing: "0.24em", color: "#ffd166", marginTop: 2 }}>{rk.insignia}</div>}
+                  {rk?.insignia && <div style={{ fontSize: 14, letterSpacing: "0.24em", color: "var(--text-soft)", marginTop: 2 }}>{rk.insignia}</div>}
                   <div style={{ display: "flex", gap: 8, marginTop: 4, flexWrap: "wrap" }}>
                     <span className="rcw-boot-chip">★ {agent.rank}</span>
                     {agent.division && <span className="rcw-boot-chip alt">◈ {agent.division}</span>}
@@ -255,7 +255,7 @@ export default function BootScreen() {
       <div className="rcw-boot-foot">
         {failed ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "flex-start" }}>
-            <div className="mono" style={{ fontSize: 12.5, color: "#e0736a", fontWeight: 600, letterSpacing: "0.06em" }}>◈ UPLINK FAILED</div>
+            <div className="mono" style={{ fontSize: 12.5, color: "#e63b2e", fontWeight: 600, letterSpacing: "0.06em" }}>◈ UPLINK FAILED</div>
             <p style={{ fontSize: 13, color: "var(--text-soft)", lineHeight: 1.6, margin: 0, maxWidth: 520 }}>{humanizeError(error)}</p>
             <div style={{ display: "flex", gap: 10, marginTop: 2 }}>
               {authRejected && (

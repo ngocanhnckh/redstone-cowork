@@ -38,19 +38,19 @@ function iconFor(e: DirEntry): Ico {
   if (e.kind === "dir") return { ch: "▸", c: "rgb(var(--accent))" };
   const x = ext(e.name);
   const name = e.name.toLowerCase();
-  if (name.startsWith(".git") || name === ".gitignore") return { ch: "⎇", c: "#e0736a" };
-  if (name.startsWith("dockerfile") || name === "docker-compose.yml") return { ch: "❒", c: "#59a7e0" };
-  if (IMG.includes(x)) return { ch: "▦", c: "#7fd18b" };
-  if (VIDEO.includes(x)) return { ch: "▶", c: "#c8a0f0" };
-  if (AUDIO.includes(x)) return { ch: "♪", c: "#e58fc4" };
-  if (STYLE.includes(x)) return { ch: "❖", c: "#59a7e0" };
-  if (WEB.includes(x)) return { ch: "◍", c: "#e0a24a" };
+  if (name.startsWith(".git") || name === ".gitignore") return { ch: "⎇", c: "var(--text-soft)" };
+  if (name.startsWith("dockerfile") || name === "docker-compose.yml") return { ch: "❒", c: "var(--text-soft)" };
+  if (IMG.includes(x)) return { ch: "▦", c: "var(--text-soft)" };
+  if (VIDEO.includes(x)) return { ch: "▶", c: "var(--text-soft)" };
+  if (AUDIO.includes(x)) return { ch: "♪", c: "var(--text-soft)" };
+  if (STYLE.includes(x)) return { ch: "❖", c: "var(--text-soft)" };
+  if (WEB.includes(x)) return { ch: "◍", c: "var(--text-soft)" };
   if (CODE.includes(x)) return { ch: "‹›", c: "rgb(var(--primary-soft))" };
-  if (SHELL.includes(x)) return { ch: "❯", c: "#7fd18b" };
-  if (CONFIG.includes(x)) return { ch: "⚙", c: "#e0a24a" };
-  if (SHEET.includes(x)) return { ch: "▦", c: "#7fd18b" };
+  if (SHELL.includes(x)) return { ch: "❯", c: "var(--text-soft)" };
+  if (CONFIG.includes(x)) return { ch: "⚙", c: "var(--text-soft)" };
+  if (SHEET.includes(x)) return { ch: "▦", c: "var(--text-soft)" };
   if (DOC.includes(x)) return { ch: "≣", c: "var(--text-soft)" };
-  if (ARCHIVE.includes(x)) return { ch: "▤", c: "#e0a24a" };
+  if (ARCHIVE.includes(x)) return { ch: "▤", c: "var(--text-soft)" };
   if (LOCK.includes(x)) return { ch: "⎉", c: "var(--text-faint)" };
   return { ch: "◈", c: "rgb(var(--primary-soft))" };
 }
@@ -58,7 +58,6 @@ function iconFor(e: DirEntry): Ico {
 const CSS = `
 @keyframes rcw-fb-in { from { opacity:0; transform: translateY(6px) scale(.98); } to { opacity:1; transform:none; } }
 @keyframes rcw-fb-scan { 0% { top:-4%; } 100% { top:104%; } }
-@keyframes rcw-fb-blink { 0%,100% { background: rgb(var(--primary) / 0); } 50% { background: rgb(var(--primary) / 0.7); } }
 .rcw-fb { display:flex; flex-direction:column; height:100%; min-height:0; position:relative; }
 .rcw-fb-bar { display:flex; align-items:center; gap:6px; padding:8px 12px; border-bottom:1px solid var(--border); flex-shrink:0; font-family:var(--font-mono); font-size:11px; overflow-x:auto; }
 .rcw-fb-crumb { cursor:pointer; color:var(--text-soft); white-space:nowrap; }
@@ -89,7 +88,7 @@ const CSS = `
   box-shadow: 0 10px 34px -10px rgb(0 0 0 / 0.7); font-family:var(--font-mono); font-size:11.5px; animation: rcw-fb-in .12s ease both; }
 .rcw-fb-mi { display:flex; align-items:center; gap:9px; padding:7px 10px; border-radius:7px; cursor:pointer; color:var(--text-soft); white-space:nowrap; }
 .rcw-fb-mi:hover { background: rgb(var(--primary) / 0.16); color: rgb(var(--primary-soft)); }
-.rcw-fb-mi.danger:hover { background: rgb(224 115 106 / 0.18); color:#e0736a; }
+.rcw-fb-mi.danger:hover { background: rgb(230 59 46 / 0.18); color:#e63b2e; }
 .rcw-fb-mi .k { width:15px; text-align:center; opacity:.85; }
 .rcw-fb-sep { height:1px; margin:4px 6px; background:var(--border); }
 .rcw-fb-scrim { position:fixed; inset:0; z-index:60; display:flex; align-items:center; justify-content:center; background: rgb(0 0 0 / 0.4); animation: rcw-fb-in .12s ease both; }
@@ -301,7 +300,7 @@ export default function FileBrowserEdex({ cwd, machine, active = true }: { sessi
       <div className="rcw-fb-grid no-scrollbar" ref={gridRef} onContextMenu={(e) => openMenu(e, null)}>
         <span key={scanKey} className="rcw-fb-scan" />
         {loading && entries.length === 0 && <span className="mono faint" style={{ fontSize: 11.5, gridColumn: "1/-1", padding: "10px 2px" }}>Scanning…</span>}
-        {error && <span className="mono" style={{ color: "#e0736a", fontSize: 11.5, gridColumn: "1/-1", padding: "10px 2px" }}>{error}</span>}
+        {error && <span className="mono" style={{ color: "#e63b2e", fontSize: 11.5, gridColumn: "1/-1", padding: "10px 2px" }}>{error}</span>}
         {!loading && !error && entries.length === 0 && <span className="mono faint" style={{ fontSize: 11.5, gridColumn: "1/-1", padding: "10px 2px" }}>Empty folder.</span>}
         {!loading && !error && entries.length > 0 && shown.length === 0 && <span className="mono faint" style={{ fontSize: 11.5, gridColumn: "1/-1", padding: "10px 2px" }}>No match for “{query}”.</span>}
         {shown.map((e, i) => {
@@ -360,7 +359,7 @@ export default function FileBrowserEdex({ cwd, machine, active = true }: { sessi
             {reading ? (
               <span className="mono faint" style={{ fontSize: 11.5, padding: 14, display: "block" }}>Reading…</span>
             ) : !read?.ok ? (
-              <span className="mono" style={{ color: "#e0736a", fontSize: 12, padding: 14, display: "block" }}>{read?.error ?? "Failed to read."}</span>
+              <span className="mono" style={{ color: "#e63b2e", fontSize: 12, padding: 14, display: "block" }}>{read?.error ?? "Failed to read."}</span>
             ) : isOfficeFile(name) && read.encoding === "base64" ? (
               <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column" }}>
                 <OfficeViewer cwd={cwd} machine={machine} path={openFile} base64={read.content} name={name} />
@@ -457,12 +456,12 @@ export default function FileBrowserEdex({ cwd, machine, active = true }: { sessi
         <div className="rcw-fb-scrim" onClick={() => !busy && setDelTarget(null)}>
           <div className="rcw-fb-dlg" onClick={(e) => e.stopPropagation()}>
             <div className="mono" style={{ fontSize: 12.5, lineHeight: 1.5 }}>
-              Delete {delTarget.kind === "dir" ? "folder" : "file"} <span style={{ color: "#e0736a" }}>{delTarget.name}</span>?
+              Delete {delTarget.kind === "dir" ? "folder" : "file"} <span style={{ color: "#e63b2e" }}>{delTarget.name}</span>?
               {delTarget.kind === "dir" && <div className="faint" style={{ fontSize: 11, marginTop: 6 }}>This removes the folder and everything inside it.</div>}
             </div>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
               <button onClick={() => setDelTarget(null)} disabled={busy} style={{ padding: "5px 14px", borderRadius: 8, cursor: "pointer", border: "1px solid var(--border)", background: "transparent", color: "inherit", fontFamily: "var(--font-mono)", fontSize: 11.5 }}>Cancel</button>
-              <button onClick={doDelete} disabled={busy} style={{ padding: "5px 16px", borderRadius: 8, fontSize: 11.5, fontWeight: 600, border: "none", cursor: busy ? "not-allowed" : "pointer", background: "#c8524a", color: "#fff", opacity: busy ? 0.6 : 1 }}>{busy ? "Deleting…" : "Delete"}</button>
+              <button onClick={doDelete} disabled={busy} style={{ padding: "5px 16px", borderRadius: 8, fontSize: 11.5, fontWeight: 600, border: "none", cursor: busy ? "not-allowed" : "pointer", background: "#e63b2e", color: "#fff", opacity: busy ? 0.6 : 1 }}>{busy ? "Deleting…" : "Delete"}</button>
             </div>
           </div>
         </div>

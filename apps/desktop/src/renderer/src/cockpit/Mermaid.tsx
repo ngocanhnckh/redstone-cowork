@@ -41,7 +41,7 @@ export default function MermaidView({ code }: { code: string }) {
   if (!code.trim()) return <span className="mono faint" style={{ fontSize: 11 }}>empty diagram</span>;
   if (err) {
     return (
-      <pre className="mono" style={{ color: "#e0736a", fontSize: 11, whiteSpace: "pre-wrap", margin: 0 }}>
+      <pre className="mono" style={{ color: "#e63b2e", fontSize: 11, whiteSpace: "pre-wrap", margin: 0 }}>
         mermaid error: {err}
       </pre>
     );

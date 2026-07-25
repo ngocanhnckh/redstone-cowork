@@ -1,5 +1,6 @@
 import { forwardRef, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { CapItem } from "../types";
+import { IconPaperclip } from "./Icons";
 
 type Props = {
   commands: CapItem[];
@@ -144,13 +145,13 @@ const SlashTextarea = forwardRef<HTMLTextAreaElement, Props>(function SlashTexta
             style={{ position: "absolute", right: 8, bottom: 8, width: 26, height: 26, borderRadius: 7, cursor: "pointer",
               border: "1px solid var(--border)", background: "rgb(var(--primary) / 0.08)", color: "rgb(var(--primary-soft))",
               display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13 }}>
-            {uploading > 0 ? "…" : "📎"}
+            {uploading > 0 ? "…" : <IconPaperclip size={13} />}
           </button>
         </>
       )}
       {(uploading > 0 || note) && (
         <div className="mono" style={{ position: "absolute", left: 4, bottom: "calc(100% + 4px)", fontSize: 10, letterSpacing: ".04em",
-          color: note ? "#e0736a" : "rgb(var(--accent))" }}>
+          color: note ? "#e63b2e" : "rgb(var(--accent))" }}>
           {uploading > 0 ? `↑ uploading ${uploading} file${uploading > 1 ? "s" : ""}…` : note}
         </div>
       )}

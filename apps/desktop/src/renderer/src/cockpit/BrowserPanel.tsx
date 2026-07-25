@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "../store";
 import { wireOpenTab } from "./openTabIntercept";
+import { IconKey } from "./Icons";
 import { fillJs, SAVE_DETECT_JS, decodeCred } from "./credAutofill";
 import { recordVisit, updateTitle, suggestions, type HistEntry } from "./browserHistory";
 import { playSfx } from "../sfx";
@@ -666,7 +667,7 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, isAct
             border: "1px solid var(--border)", boxShadow: "0 10px 32px rgba(0,0,0,0.45)", maxWidth: "92%",
           }}
         >
-          <span style={{ fontSize: 15 }}>🔑</span>
+          <IconKey size={15} style={{ color: "var(--text-soft)" }} />
           <span style={{ fontSize: 12.5, minWidth: 0 }}>
             Save password for <b style={{ overflowWrap: "anywhere" }}>{hostLabel(savePrompt.origin)}</b>
             {savePrompt.username ? <span className="faint"> · {savePrompt.username}</span> : null}?
@@ -805,7 +806,7 @@ export default function BrowserPanel({ sessionId, cwd, machine, ephemeral, isAct
           <span
             className="mono"
             title={status.text}
-            style={{ fontSize: 11, color: status.kind === "ok" ? "rgb(var(--accent))" : "#e0736a", flexShrink: 0 }}
+            style={{ fontSize: 11, color: status.kind === "ok" ? "rgb(var(--accent))" : "#e63b2e", flexShrink: 0 }}
           >
             {status.kind === "ok" ? "✓" : "⚠"}
           </span>
@@ -932,10 +933,8 @@ const LOADER_CSS = `
 @keyframes rcwl-spin { to { transform: rotate(360deg); } }
 @keyframes rcwl-spin-rev { to { transform: rotate(-360deg); } }
 @keyframes rcwl-sweep { to { transform: rotate(360deg); } }
-@keyframes rcwl-pulse { 0%,100% { opacity:.35; transform: scale(.9); } 50% { opacity:1; transform: scale(1.05); } }
 @keyframes rcwl-bar { 0% { left:-40%; } 100% { left:100%; } }
 @keyframes rcwl-grid { to { background-position: 0 -34px, -34px 0; } }
-@keyframes rcwl-blink { 0%,100% { opacity:1; } 50% { opacity:.2; } }
 @keyframes rcwl-in { from { opacity:0; } to { opacity:1; } }
 .rcwl { position:absolute; inset:0; z-index:6; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:22px;
   overflow:hidden; animation: rcwl-in .18s ease both;
@@ -959,7 +958,7 @@ const LOADER_CSS = `
   -webkit-mask: radial-gradient(circle, transparent 26px, #000 27px); }
 .rcwl-core { position:absolute; top:50%; left:50%; width:16px; height:16px; margin:-8px 0 0 -8px; border-radius:50%;
   background: radial-gradient(circle, #fff, rgb(var(--accent)) 55%, transparent 72%);
-  box-shadow: 0 0 22px 4px rgb(var(--accent) / 0.7); animation: rcwl-pulse 1.1s ease-in-out infinite; }
+  box-shadow: 0 0 22px 4px rgb(var(--accent) / 0.7); }
 .rcwl-track { position:relative; width:min(58%, 340px); height:3px; border-radius:999px; overflow:hidden;
   background: rgb(var(--primary-soft) / 0.12); box-shadow: inset 0 0 0 1px rgb(var(--primary-soft) / 0.1); }
 .rcwl-track > i { position:absolute; top:0; height:100%; width:38%; border-radius:999px;
@@ -968,7 +967,7 @@ const LOADER_CSS = `
 .rcwl-label { display:flex; align-items:center; gap:9px; font-family:var(--font-mono); font-size:10.5px; letter-spacing:.28em;
   text-transform:uppercase; color: rgb(var(--primary-soft)); text-shadow: 0 0 12px rgb(var(--primary-soft) / 0.6); }
 .rcwl-label b { color: var(--text-soft); font-weight:500; letter-spacing:.12em; text-transform:none; }
-.rcwl-dot { width:6px; height:6px; border-radius:50%; background: rgb(var(--accent)); box-shadow:0 0 10px 1px rgb(var(--accent)); animation: rcwl-blink 1s steps(1) infinite; }
+.rcwl-dot { width:6px; height:6px; border-radius:50%; background: rgb(var(--accent)); box-shadow:0 0 10px 1px rgb(var(--accent)); }
 /* layering: hex stream sits behind the reticle/readout, scanline rides on top */
 .rcwl-reticle, .rcwl-track, .rcwl-readout, .rcwl-label { position:relative; z-index:2; }
 /* running byte text — two mirrored columns of scrolling hex, faded toward center */
@@ -984,7 +983,7 @@ const LOADER_CSS = `
 /* big centered % inside the reticle */
 .rcwl-pct { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); z-index:3;
   font-family:var(--font-mono); font-size:30px; font-weight:600; letter-spacing:.02em; line-height:1;
-  color:#eafcff; text-shadow:0 0 22px rgb(var(--primary-soft) / 0.85); }
+  color:var(--text); text-shadow:0 0 22px rgb(var(--primary-soft) / 0.85); }
 .rcwl-pct i { font-size:12px; font-style:normal; opacity:.55; margin-left:1px; }
 /* running hex readout line under the progress bar */
 .rcwl-readout { display:flex; align-items:center; gap:9px; font-size:10.5px; letter-spacing:.16em;

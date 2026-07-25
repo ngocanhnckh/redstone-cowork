@@ -30,7 +30,7 @@ function Mermaid({ code }: { code: string }) {
   }, [code]);
   if (err) {
     return (
-      <pre className="mono" style={{ color: "#e0736a", fontSize: 11, whiteSpace: "pre-wrap", padding: "8px 10px", border: "1px solid rgb(224 115 106 / 0.4)", borderRadius: 8 }}>
+      <pre className="mono" style={{ color: "#e63b2e", fontSize: 11, whiteSpace: "pre-wrap", padding: "8px 10px", border: "1px solid rgb(230 59 46 / 0.4)", borderRadius: 8 }}>
         mermaid error: {err}
       </pre>
     );
