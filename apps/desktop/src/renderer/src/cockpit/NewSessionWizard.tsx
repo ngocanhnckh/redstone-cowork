@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ServerView } from "../../../shared/servers";
+import { useStore } from "../store";
 
 // ——— NEW SESSION WIZARD ———
 // Guided flow: Server → Provision (redstone) → Session (resume/new) → Folder → Mode.
@@ -103,6 +104,10 @@ function Cmd({ cmd, label }: { cmd: string; label?: string }) {
 }
 
 export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
+  const setFocus = useStore((s) => s.setFocus);
+  // Resuming a discovered session just means "open the running one" — focus it in the
+  // cockpit and close the wizard. No folder/mode/launch steps (it's already running).
+  const resumeInCockpit = useCallback((sessionId: string) => { setFocus(sessionId); onClose(); }, [setFocus, onClose]);
   const [step, setStep] = useState<Step>("server");
   const [servers, setServers] = useState<ServerView[]>([]);
   const [server, setServer] = useState<ServerView | null>(null);
@@ -348,9 +353,9 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
               <div className={`rcw-nw-opt ${createNew ? "sel" : ""}`} onClick={() => { setCreateNew(true); setResume(null); go("folder"); }}>
                 <b style={{ color: "#e6f2f4" }}>＋ New session</b> <span className="faint">— browse to a folder & pick a mode →</span>
               </div>
-              {hostSessions.length > 0 && <div className="rcw-nw-label">RESUME A DISCOVERED SESSION</div>}
+              {hostSessions.length > 0 && <div className="rcw-nw-label">RESUME A RUNNING SESSION <span style={{ opacity: .6, letterSpacing: 0 }}>— click to open it in your cockpit</span></div>}
               {hostSessions.slice(0, 40).map((s) => (
-                <div key={s.id} className={`rcw-nw-opt ${resume?.id === s.id ? "sel" : ""}`} onClick={() => { setResume(s); setCreateNew(false); go("folder"); }}>
+                <div key={s.id} className="rcw-nw-opt" onClick={() => resumeInCockpit(s.id)}>
                   <b style={{ color: "#e6f2f4" }}>{s.folder}</b> <span className="faint">{s.title ?? s.cwd}</span>
                 </div>
               ))}
