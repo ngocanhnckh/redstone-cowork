@@ -265,7 +265,12 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
   const redstoneInstalled = !!server?.reporting || !!host;
 
   // On the RESUME step, list ALL recent resumable conversations on the host.
-  const folderMachine = host?.machine ?? server?.host ?? server?.name ?? "";
+  // SSH target for browsing/listing on the selected server. Use the server's REAL
+  // sshUser@host (authoritative, what install used) rather than the agent-reported
+  // machine NAME (e.g. "csd3"), which usually doesn't resolve from the operator's Mac.
+  const folderMachine = server
+    ? (server.sshUser ? `${server.sshUser}@${server.host}` : server.host)
+    : (host?.machine ?? "");
   useEffect(() => {
     if (step !== "session" || !folderMachine) return;
     let alive = true; setLoadingConvos(true);
@@ -482,7 +487,7 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
                 <div style={{ fontSize: 12, color: "var(--text-soft)" }}>{resume.cwd}</div>
               ) : (
                 <>
-                  <FolderBrowser machine={host?.machine ?? server?.host ?? server?.name ?? ""} value={folder} onChange={setFolder} />
+                  <FolderBrowser machine={folderMachine} value={folder} onChange={setFolder} />
                   {folder && folder.startsWith("/") && (
                     <div style={{ marginTop: 14 }}>
                       <div className="rcw-nw-label" style={{ marginTop: 0 }}>RESUME A PAST CONVERSATION HERE {loadingSess && <span className="faint" style={{ letterSpacing: 0 }}>· checking…</span>}</div>
