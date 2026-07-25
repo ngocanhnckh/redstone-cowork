@@ -6,7 +6,7 @@ import { existsSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
 import { saveConfig, loadConfig, clearConfig, saveDeviceTrust, loadDeviceTrust, getDeviceSecret, clearDeviceTrust } from "./config";
 import * as api from "./api";
-import { getWorkspaceConfig, saveWorkspaceConfig, getSshHost, setSshHost, isLocalMachine, setServerHosts, warmSshMaster } from "./workspace";
+import { getWorkspaceConfig, saveWorkspaceConfig, getSshHost, setSshHost, isLocalMachine, setServerHosts, warmSshMaster, setSshCustom, getSshCustom } from "./workspace";
 import { getHostIps, getHostConnections, getHostProcesses } from "./host-info";
 import { getCalendarEvents } from "./calendar";
 import { requestCalendarPermission } from "./calendar-permission";
@@ -378,12 +378,14 @@ ipcMain.handle(IPC.serverProvision, (_e, a: { id: string }) => api.serverProvisi
 ipcMain.handle(IPC.serverSavedPassword, (_e, a: { host: string; sshUser: string }) => ({ has: !!getSshPassword(a.sshUser, a.host) }));
 ipcMain.handle(IPC.serverInstall, async (e, a: { host: string; sshUser: string; sshPort: number; command: string; password?: string; savePassword?: boolean }) => {
   const send = (chunk: string) => { try { e.sender.send(IPC.serverInstallData, chunk); } catch { /* ignore */ } };
+  // Cloudflare-Access / jump-host / custom-key hosts carry extra ssh opts (ProxyCommand).
+  const extraOpts = getSshCustom(a.host)?.opts ?? [];
   // First attempt: exactly what the caller asked (key-only when no password typed).
-  let res = await sshInstall({ host: a.host, sshUser: a.sshUser, sshPort: a.sshPort, command: a.command, password: a.password }, send);
+  let res = await sshInstall({ host: a.host, sshUser: a.sshUser, sshPort: a.sshPort, command: a.command, password: a.password, extraOpts }, send);
   // If key auth was refused and we have a remembered password for this user@host, retry with it.
   if (!res.ok && res.authFailed && !a.password) {
     const saved = getSshPassword(a.sshUser, a.host);
-    if (saved) { send("\r\n[auth] key not accepted — trying saved password…\r\n"); res = await sshInstall({ host: a.host, sshUser: a.sshUser, sshPort: a.sshPort, command: a.command, password: saved }, send); }
+    if (saved) { send("\r\n[auth] key not accepted — trying saved password…\r\n"); res = await sshInstall({ host: a.host, sshUser: a.sshUser, sshPort: a.sshPort, command: a.command, password: saved, extraOpts }, send); }
   }
   if (res.ok && a.password && a.savePassword) saveSshPassword(a.sshUser, a.host, a.password);
   return res;
@@ -394,15 +396,24 @@ ipcMain.handle(IPC.serverInstall, async (e, a: { host: string; sshUser: string; 
 ipcMain.handle(IPC.sessionLaunch, async (e, a: { host: string; sshUser: string; sshPort: number; folder: string; danger: boolean; password?: string; savePassword?: boolean }) => {
   const send = (chunk: string) => { try { e.sender.send(IPC.serverInstallData, chunk); } catch { /* ignore */ } };
   const command = buildLaunchCommand({ folder: a.folder, danger: a.danger });
-  let res = await sshInstall({ host: a.host, sshUser: a.sshUser, sshPort: a.sshPort, command, password: a.password }, send);
+  const extraOpts = getSshCustom(a.host)?.opts ?? [];
+  let res = await sshInstall({ host: a.host, sshUser: a.sshUser, sshPort: a.sshPort, command, password: a.password, extraOpts }, send);
   if (!res.ok && res.authFailed && !a.password) {
     const saved = getSshPassword(a.sshUser, a.host);
-    if (saved) { send("\r\n[auth] key not accepted — trying saved password…\r\n"); res = await sshInstall({ host: a.host, sshUser: a.sshUser, sshPort: a.sshPort, command, password: saved }, send); }
+    if (saved) { send("\r\n[auth] key not accepted — trying saved password…\r\n"); res = await sshInstall({ host: a.host, sshUser: a.sshUser, sshPort: a.sshPort, command, password: saved, extraOpts }, send); }
   }
   if (res.ok && a.password && a.savePassword) saveSshPassword(a.sshUser, a.host, a.password);
   const m = res.output.match(/RCW_STARTED\s+(rcw-[0-9a-f]+)/);
   const rcwErr = res.output.match(/RCW_ERR\s+(.+)/);
   return { ok: res.ok && !!m, authFailed: res.authFailed, session: m?.[1] ?? null, output: res.output, error: rcwErr?.[1] ?? res.error };
+});
+// A ready-to-paste install command (Mac or Linux) for a machine the user sets up
+// themselves — carries a fresh account-bound host token.
+ipcMain.handle(IPC.serverInstallCommand, () => api.serverInstallCommand());
+// Store a custom SSH dial config (ProxyCommand / jump host / key) for a host address.
+ipcMain.handle(IPC.sshSetCustom, (_e, a: { address: string; host: string; opts: string[] }) => {
+  setSshCustom(a.address, a.host ? { host: a.host, opts: a.opts ?? [] } : null);
+  return { ok: true };
 });
 ipcMain.handle(IPC.accountsAnalytics, () => api.accountsAnalytics());
 ipcMain.handle(IPC.jiraNotifications, () => api.jiraNotifications());

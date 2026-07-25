@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ServerView } from "../../../shared/servers";
 import { useStore } from "../store";
+import ErrorBoundary from "./ErrorBoundary";
 
 // ——— NEW SESSION WIZARD ———
 // Guided flow: Server → Provision (redstone) → Session (resume/new) → Folder → Mode.
@@ -105,9 +106,22 @@ function Cmd({ cmd, label }: { cmd: string; label?: string }) {
 
 export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
   const setFocus = useStore((s) => s.setFocus);
-  // Resuming a discovered session just means "open the running one" — focus it in the
-  // cockpit and close the wizard. No folder/mode/launch steps (it's already running).
-  const resumeInCockpit = useCallback((sessionId: string) => { setFocus(sessionId); onClose(); }, [setFocus, onClose]);
+  const storeSessions = useStore((s) => s.sessions);
+  const storeQueue = useStore((s) => s.queue);
+  // A visible activity log so nothing ever "just disappears" — every connect/create/
+  // launch/resume step and every error is shown to the user right here.
+  const [activity, setActivity] = useState<{ text: string; kind: "info" | "ok" | "err" }[]>([]);
+  const log = useCallback((text: string, kind: "info" | "ok" | "err" = "info") => setActivity((a) => [...a, { text, kind }].slice(-30)), []);
+  // Resuming a discovered session = open the already-running one. Verify it's actually in
+  // the cockpit's session list before focusing (an inventory row the cockpit doesn't hold
+  // would focus nothing and look like it "disappeared"); tell the user if it isn't.
+  const resumeInCockpit = useCallback((s: Discovered) => {
+    const inCockpit = [...storeSessions, ...storeQueue].some((x) => x.id === s.id);
+    log(`Opening “${s.folder}” on this machine…`);
+    setFocus(s.id);
+    if (inCockpit) { log(`Opened “${s.folder}” — switching to it.`, "ok"); setTimeout(onClose, 500); }
+    else { log(`“${s.folder}” isn't active in your cockpit right now — try refreshing the grid, or start a new session instead.`, "err"); }
+  }, [storeSessions, storeQueue, setFocus, onClose, log]);
   const [step, setStep] = useState<Step>("server");
   const [servers, setServers] = useState<ServerView[]>([]);
   const [server, setServer] = useState<ServerView | null>(null);
@@ -143,6 +157,7 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
   async function runLaunch(password?: string) {
     if (!server) return;
     setLaunching(true); setLaunchErr(""); setLaunchLog("");
+    log(`Starting Claude on ${server.name} in “${folder}” (${mode === "danger" ? "dangerous" : "normal"} mode) over SSH…`);
     const off = window.cowork.onServerInstallData((c) => setLaunchLog((l) => (l + c).slice(-8000)));
     try {
       const r = await window.cowork.sessionLaunch({
@@ -151,16 +166,20 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
       });
       if (r.ok) {
         setLaunched(r.session); setLaunchNeedsPw(false);
+        log(`Session started (${r.session}). Waiting for it to appear in your cockpit…`, "ok");
         // Nudge the inventory so the freshly-started session appears in the cockpit.
         for (let i = 0; i < 8; i++) { await new Promise((res) => setTimeout(res, 2500)); refreshInv(); }
       } else if (r.authFailed) {
         setLaunchNeedsPw(true);
         setLaunchErr(password ? "That password was rejected — try again." : "SSH needs a password for this server.");
+        log("SSH needs a password for this server.", "err");
       } else {
-        setLaunchErr(r.error || "Couldn't start the session — see the log below.");
+        const msg = r.error || "Couldn't start the session — see the log below.";
+        setLaunchErr(msg); log(msg, "err");
       }
     } catch (e) {
-      setLaunchErr(e instanceof Error ? e.message : String(e));
+      const msg = e instanceof Error ? e.message : String(e);
+      setLaunchErr(msg); log(`Launch failed: ${msg}`, "err");
     } finally {
       off(); setLaunching(false);
     }
@@ -224,11 +243,16 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
     setBusy(true); setErr("");
     try {
       const { password, ...srv } = newSrv; // password stays client-side (used for the SSH install)
+      log(`Adding server ${srv.name.trim() || srv.host.trim()} (${srv.sshUser}@${srv.host.trim()}:${srv.sshPort})…`);
       const created = await window.cowork.serverCreate({ ...srv, name: srv.name.trim(), host: srv.host.trim() });
+      log(`Server added. Checking whether redstone is installed…`, "ok");
       setServers((prev) => [...prev, created]); setConnecting(false);
       autoInstall.current = true; autoInstallPw.current = password.trim() || undefined; setSavePw(!!password.trim());
       await chooseServer(created);
-    } catch (e) { setErr(`Connect failed (${e instanceof Error ? e.message : e})`); }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setErr(`Couldn't add the server: ${msg}`); log(`Couldn't add the server: ${msg}`, "err");
+    }
     finally { setBusy(false); }
   }
   async function loadProvision() {
@@ -262,7 +286,17 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
         <div className="rcw-nw-steps">{STEPS.map((s, i) => <span key={s} className={`rcw-nw-dot ${i <= idx ? "on" : ""}`} />)}</div>
 
         <div className="rcw-nw-body">
+         <ErrorBoundary details label="New Session — this step crashed">
           {err && <div style={{ color: "#ff7d72", fontSize: 11.5, marginBottom: 8 }}>⚠ {err}</div>}
+          {activity.length > 0 && (
+            <div className="no-scrollbar" style={{ marginBottom: 10, maxHeight: 120, overflowY: "auto", border: "1px solid var(--border)", borderRadius: 8, padding: "7px 10px", background: "rgb(0 0 0 / .28)", fontFamily: "var(--font-mono)", fontSize: 10.5, lineHeight: 1.6 }}>
+              {activity.map((a, i) => (
+                <div key={i} style={{ color: a.kind === "err" ? "#e0736a" : a.kind === "ok" ? "#7fd18b" : "var(--text-soft)" }}>
+                  {a.kind === "err" ? "⚠ " : a.kind === "ok" ? "✓ " : "· "}{a.text}
+                </div>
+              ))}
+            </div>
+          )}
 
           {step === "server" && (
             <>
@@ -355,7 +389,7 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
               </div>
               {hostSessions.length > 0 && <div className="rcw-nw-label">RESUME A RUNNING SESSION <span style={{ opacity: .6, letterSpacing: 0 }}>— click to open it in your cockpit</span></div>}
               {hostSessions.slice(0, 40).map((s) => (
-                <div key={s.id} className="rcw-nw-opt" onClick={() => resumeInCockpit(s.id)}>
+                <div key={s.id} className="rcw-nw-opt" onClick={() => resumeInCockpit(s)}>
                   <b style={{ color: "#e6f2f4" }}>{s.folder}</b> <span className="faint">{s.title ?? s.cwd}</span>
                 </div>
               ))}
@@ -436,6 +470,7 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
               )}
             </>
           )}
+         </ErrorBoundary>
         </div>
 
         <div className="rcw-nw-foot">

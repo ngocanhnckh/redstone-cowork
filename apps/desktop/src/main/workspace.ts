@@ -112,6 +112,47 @@ export function setSshHost(machine: string, host: string): void {
 }
 
 // ---------------------------------------------------------------------------
+// Custom SSH opts (userData/ssh-custom.json) — for hosts reached via a ProxyCommand
+// (Cloudflare Access `cloudflared access ssh`), a jump host, or a specific key. Keyed by
+// the bare host ADDRESS (lowercased) so it matches whether resolution goes via the ssh
+// string or the agent-reported address. Value: the ssh host string to dial + extra ssh
+// args (`-o …`, `-J …`, `-i …`). User intent — takes priority over probe/relay.
+// ---------------------------------------------------------------------------
+export type SshCustom = { host: string; opts: string[] };
+function sshCustomStorePath(): string { return path.join(app.getPath("userData"), "ssh-custom.json"); }
+function readSshCustom(): Record<string, SshCustom> {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(sshCustomStorePath(), "utf8"));
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch { return {}; }
+}
+/** Store (or clear, when cfg is null) a custom SSH dial config for a host address. */
+export function setSshCustom(address: string, cfg: SshCustom | null): void {
+  try {
+    const all = readSshCustom();
+    const key = (address || "").trim().toLowerCase();
+    if (!key) return;
+    if (cfg) all[key] = cfg; else delete all[key];
+    fs.writeFileSync(sshCustomStorePath(), JSON.stringify(all, null, 2), "utf8");
+    probeCache.clear(); // resolution changed
+  } catch { /* best-effort; never throw */ }
+}
+/** Custom dial host + extra ssh args for an address (or null if none stored). Used by the
+ *  install/launch paths, which build ssh directly rather than via getSshTarget. */
+export function getSshCustom(address: string): SshCustom | null {
+  return lookupSshCustom([address, hostAddress(address)]);
+}
+/** Return the custom config matching ANY of the given keys (machine / addresses), or null. */
+function lookupSshCustom(keys: (string | null | undefined)[]): SshCustom | null {
+  const all = readSshCustom();
+  for (const k of keys) {
+    const v = k ? all[k.toLowerCase()] : undefined;
+    if (v && typeof v.host === "string" && Array.isArray(v.opts)) return v;
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
 // SSH target resolution WITH relay fallback (getSshTarget).
 //
 // Returns the host string (unchanged — kept for host-key identity / ssh config /
@@ -184,6 +225,13 @@ async function resolveSshTarget(machine: string): Promise<Resolved> {
   //    agent-reported address(es) (authoritative) first, then the bare ssh address.
   //    Reachable via EITHER → direct (ssh itself still connects via `host`).
   const candidates = [...new Set([...recs.map((r) => r.address), hostAddress(host)].filter((a): a is string => !!a))];
+
+  // 0. User-provided custom dial config (Cloudflare Access ProxyCommand / jump host /
+  //    key). Highest priority — these hosts are deliberately NOT directly reachable, so
+  //    we must not probe/relay them. Matched by machine name or any known address.
+  const custom = lookupSshCustom([machine, ...candidates]);
+  if (custom) return { host: custom.host, opts: custom.opts, cacheable: true };
+
   for (const addr of candidates) {
     try {
       if (await probeReachable(addr, port, PROBE_TIMEOUT_MS)) {

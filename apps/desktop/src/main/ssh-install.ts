@@ -12,7 +12,7 @@ function loadPty(): typeof import("node-pty") {
   return ptyModule;
 }
 
-export type InstallArgs = { host: string; sshUser: string; sshPort: number; command: string; password?: string };
+export type InstallArgs = { host: string; sshUser: string; sshPort: number; command: string; password?: string; extraOpts?: string[] };
 export type InstallResult = { ok: boolean; authFailed?: boolean; output: string; error?: string };
 
 const shSingle = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
@@ -54,14 +54,14 @@ const baseOpts = (port: number) => ["-o", "StrictHostKeyChecking=accept-new", "-
 /** Run the install command on `sshUser@host`. Without a password → key-only (fast fail on
  *  auth → authFailed=true). With a password → PTY + auto-answer the password prompt. */
 export function sshInstall(args: InstallArgs, onData: (s: string) => void): Promise<InstallResult> {
-  const { host, sshUser, sshPort, command, password } = args;
+  const { host, sshUser, sshPort, command, password, extraOpts = [] } = args;
   const target = `${sshUser}@${host}`;
 
   if (!password) {
     return new Promise((resolve) => {
       execFile(
         "ssh",
-        ["-o", "BatchMode=yes", ...baseOpts(sshPort), target, command],
+        ["-o", "BatchMode=yes", ...extraOpts, ...baseOpts(sshPort), target, command],
         { maxBuffer: 8 * 1024 * 1024, timeout: 240000 },
         (err, stdout, stderr) => {
           const output = (stdout || "") + (stderr || "");
@@ -78,7 +78,7 @@ export function sshInstall(args: InstallArgs, onData: (s: string) => void): Prom
   return new Promise((resolve) => {
     let term: IPty;
     try {
-      term = loadPty().spawn("ssh", ["-tt", "-o", "NumberOfPasswordPrompts=2", ...baseOpts(sshPort), target, command], {
+      term = loadPty().spawn("ssh", ["-tt", "-o", "NumberOfPasswordPrompts=2", ...extraOpts, ...baseOpts(sshPort), target, command], {
         name: "xterm-256color", cols: 110, rows: 40, cwd: process.env.HOME, env: process.env as Record<string, string>,
       });
     } catch (e) {

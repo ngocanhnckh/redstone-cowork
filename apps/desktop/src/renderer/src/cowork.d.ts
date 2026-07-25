@@ -47,6 +47,8 @@ declare global {
       serverSavedPassword(host: string, sshUser: string): Promise<{ has: boolean }>;
       serverInstall(a: { host: string; sshUser: string; sshPort: number; command: string; password?: string; savePassword?: boolean }): Promise<{ ok: boolean; authFailed?: boolean; output: string; error?: string }>;
       sessionLaunch(a: { host: string; sshUser: string; sshPort: number; folder: string; danger: boolean; password?: string; savePassword?: boolean }): Promise<{ ok: boolean; authFailed?: boolean; session: string | null; output: string; error?: string }>;
+      serverInstallCommand(): Promise<{ serverUrl: string; command: string; commandRelay: string }>;
+      sshSetCustom(a: { address: string; host: string; opts: string[] }): Promise<{ ok: boolean }>;
       onServerInstallData(cb: (chunk: string) => void): () => void;
       onSessionExpired(cb: () => void): () => void;
       accountsAnalytics(): Promise<Array<{ accountId: string; username: string; displayName: string; role: string; photo: string | null; level: string; division: string; sessions: number; activeSessions: number; tokensInput: number; tokensOutput: number; estCostUsd: number; timeSpentMs: number; lastActiveAt: string | null }>>;

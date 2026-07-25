@@ -85,6 +85,20 @@ export class ServersController {
     return { publicKey: this.servers.coworkPublicKey() };
   }
 
+  /** A ready-to-paste install command (carrying a fresh account-bound host token) for a
+   *  machine the user will set up THEMSELVES — no SSH from the app. Runs on macOS or
+   *  Linux; the installed agent reports back and the host shows up in the cockpit. */
+  @Get("install-command")
+  async installCommand(@Req() req: GuardedRequest) {
+    const accountId = req.account?.id;
+    const token = accountId
+      ? await this.accounts.mintHostToken(accountId, "manual host install")
+      : process.env.INSTANCE_TOKEN ?? "";
+    const base = (process.env.COWORK_PUBLIC_URL ?? "https://cowork.chatredstone.com").replace(/\/$/, "");
+    const direct = `curl -fsSL ${base}/install.sh | bash -s -- --server ${base} --token ${token}`;
+    return { serverUrl: base, command: direct, commandRelay: direct + " --relay" };
+  }
+
   /** Provisioning bundle for a server: ready-to-paste install commands (direct &
    *  reverse-relay for closed hosts) carrying a fresh long-lived host token bound to
    *  the caller, so the installed redstone agent authenticates as this account. */

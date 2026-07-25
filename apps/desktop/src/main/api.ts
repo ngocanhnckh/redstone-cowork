@@ -547,6 +547,9 @@ export async function agencyGithubStats(): Promise<unknown> { return (await req(
 export async function agencyMyJira(): Promise<unknown> { return (await req("/agency/my-jira")).json(); }
 export async function agencyAgent(id: string): Promise<unknown> { return (await req(`/agency/agents/${encodeURIComponent(id)}`)).json(); }
 export async function agencyGithubRoster(): Promise<unknown[]> { return (await req("/agency/github-roster")).json(); }
+export async function serverInstallCommand(): Promise<{ serverUrl: string; command: string; commandRelay: string }> {
+  return (await req("/servers/install-command")).json();
+}
 export async function agencyWeek(): Promise<unknown> { return (await req("/agency/week")).json(); }
 export async function agencyWeekConfig(cfg: { prize: string; startsAt: string | null; endsAt: string | null }): Promise<unknown> {
   return (await req("/agency/week/config", { method: "POST", body: JSON.stringify(cfg) })).json();
