@@ -122,7 +122,28 @@ export class SessionsService {
     forAccount?: string,
   ): Promise<SessionView[]> {
     const now = new Date();
+    await this.reapDead(now);
     return (await this.list(forAccount)).map((s) => this.toView(s, pendingBySession[s.id] ?? 0, oldestPendingAt, now));
+  }
+
+  // A live session's poller heartbeats every ~25s regardless of user activity, so a
+  // session silent for many minutes is genuinely dead — its tmux/poller is gone (e.g.
+  // the host OOM-killed it). The scan-based reaper misses these because the transcript
+  // file persists after the process dies, so the scan still "sees" the id. Close them on
+  // a time basis so dead sessions stop lingering as open (polluting inventory / the
+  // resume list, where `tmux attach` then fails). 15 min = 36× the heartbeat interval.
+  private static readonly DEAD_MS = 15 * 60_000;
+  private lastReapAt = 0;
+  async reapDead(now = new Date()): Promise<void> {
+    if (now.getTime() - this.lastReapAt < 30_000) return; // throttle — list() is hot
+    this.lastReapAt = now.getTime();
+    for (const s of await this.store.list()) {
+      if (s.closedAt) continue;
+      if (now.getTime() - s.lastSeenAt.getTime() > SessionsService.DEAD_MS) {
+        await this.store.close(s.id, now);
+        this.bus.emit({ type: "session.updated", payload: { id: s.id } });
+      }
+    }
   }
 
   /** All open sessions, or only those owned by `forAccount` (member visibility). */

@@ -225,7 +225,14 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
       return (a && (a === sh || a === sn)) || (m && (m === sn || m === sh));
     }) ?? null;
   }, [server, inv]);
-  const hostSessions = useMemo(() => host ? inv.sessions.filter((s) => s.folder && s.machine === host.machine) : [], [host, inv]);
+  // Only offer sessions the cockpit is actually holding LIVE (in the store's session/queue
+  // list) — inventory alone can include dead sessions (e.g. an OOM-killed poller whose
+  // transcript still exists), and resuming one lands on a `tmux` that no longer exists.
+  const liveIds = useMemo(() => new Set([...storeSessions, ...storeQueue].map((s) => s.id)), [storeSessions, storeQueue]);
+  const hostSessions = useMemo(
+    () => host ? inv.sessions.filter((s) => s.folder && s.machine === host.machine && liveIds.has(s.id)) : [],
+    [host, inv, liveIds],
+  );
   // Authoritative install signal comes from the API (`reporting`); fall back to a local match.
   const redstoneInstalled = !!server?.reporting || !!host;
 
