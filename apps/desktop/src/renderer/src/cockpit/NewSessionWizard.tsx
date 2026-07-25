@@ -19,6 +19,10 @@ const CSS = `
 .rcw-nw-scrim { position:fixed; inset:0; z-index:80; display:flex; align-items:center; justify-content:center; background: rgb(0 0 0 / .55);
   backdrop-filter: blur(4px); animation: yia-in .15s ease both; }
 @keyframes yia-in { from { opacity:0; transform: translateY(8px);} to { opacity:1; transform:none; } }
+@keyframes rcw-nw-spin { to { transform: rotate(360deg); } }
+.rcw-nw-spin { width:44px; height:44px; border-radius:50%; border:3px solid rgb(84 230 255 / .16);
+  border-top-color: rgb(84 230 255 / .95); border-right-color: rgb(84 230 255 / .6); animation: rcw-nw-spin .8s linear infinite;
+  box-shadow: 0 0 22px -6px rgb(84 230 255 / .6); }
 .rcw-nw { width:560px; max-width:94vw; max-height:88vh; overflow-y:auto; border:1px solid rgb(84 230 255 / .3); border-radius:15px;
   background: color-mix(in srgb, var(--app-panel) 96%, transparent); -webkit-backdrop-filter: blur(28px) saturate(1.3); backdrop-filter: blur(28px) saturate(1.3);
   box-shadow: 0 22px 60px -16px rgb(0 0 0 / .75); font-family:var(--font-mono); }
@@ -106,8 +110,10 @@ function Cmd({ cmd, label }: { cmd: string; label?: string }) {
 
 export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
   const setFocus = useStore((s) => s.setFocus);
+  const refreshStore = useStore((s) => s.refresh);
   const storeSessions = useStore((s) => s.sessions);
   const storeQueue = useStore((s) => s.queue);
+  const [sessConnecting, setSessConnecting] = useState(false);
   // A visible activity log so nothing ever "just disappears" — every connect/create/
   // launch/resume step and every error is shown to the user right here.
   const [activity, setActivity] = useState<{ text: string; kind: "info" | "ok" | "err" }[]>([]);
@@ -177,9 +183,21 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
       });
       if (r.ok) {
         setLaunched(r.session); setLaunchNeedsPw(false);
-        log(`Session started (${r.session}). Waiting for it to appear in your cockpit…`, "ok");
-        // Nudge the inventory so the freshly-started session appears in the cockpit.
-        for (let i = 0; i < 8; i++) { await new Promise((res) => setTimeout(res, 2500)); refreshInv(); }
+        const wid = (r.session ?? "").replace(/^rcw-/, "");
+        setSessConnecting(true);
+        log(`${resumeId ? "Resuming" : "Session started"} (${r.session}) — connecting to your cockpit…`, "ok");
+        // Poll the STORE (what the cockpit/sidebar renders) until the session attaches,
+        // then focus it and close — so it opens for the user automatically.
+        for (let i = 0; i < 30; i++) {
+          await new Promise((res) => setTimeout(res, 2000));
+          refreshInv();
+          try { await refreshStore(); } catch { /* ignore */ }
+          const st = useStore.getState();
+          const found = [...st.sessions, ...st.queue].find((x) => (wid && x.wrapperId === wid) || x.id === r.session);
+          if (found) { log("Connected — opening it.", "ok"); setSessConnecting(false); setFocus(found.id); setTimeout(onClose, 500); return; }
+        }
+        setSessConnecting(false);
+        log("Started — it should appear in your cockpit shortly. You can close this.", "info");
       } else if (r.authFailed) {
         setLaunchNeedsPw(true);
         setLaunchErr(password ? "That password was rejected — try again." : "SSH needs a password for this server.");
@@ -505,12 +523,23 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
                     <b>{resume.folder}</b> is already running on <b>{server?.name}</b> — it's in your cockpit. Close this and open it from the grid.
                   </div>
                 </>
+              ) : sessConnecting ? (
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14, padding: "26px 2px" }}>
+                  <span className="rcw-nw-spin" />
+                  <div style={{ fontSize: 13.5, fontWeight: 600, color: "rgb(84 230 255 / .95)", letterSpacing: ".04em" }}>
+                    {resumeId ? "RESUMING" : "STARTING"} — CONNECTING…<span className="hud-blink">▮</span>
+                  </div>
+                  <div className="faint" style={{ fontSize: 11.5, textAlign: "center", lineHeight: 1.6, maxWidth: 340 }}>
+                    {resumeId ? "Bringing your conversation back" : "Booting Claude"} in <b>{folder.split("/").pop() || folder}</b> on <b>{server?.name}</b> ·
+                    {mode === "danger" ? " DANGEROUS" : " normal"} mode.<br />It'll open automatically the moment it connects.
+                  </div>
+                </div>
               ) : launched ? (
                 <div style={{ padding: "10px 2px" }}>
                   <div style={{ color: "#7fd18b", fontSize: 13, fontWeight: 600 }}>◈ Session started — {launched}</div>
                   <div className="faint" style={{ fontSize: 11.5, marginTop: 6, lineHeight: 1.6 }}>
                     Running in <b>{folder}</b> ({mode === "danger" ? "DANGEROUS" : "normal"} mode) on <b>{server?.name}</b>.
-                    It appears in your cockpit within a few seconds — close this and open it.
+                    It should appear in your cockpit shortly — you can close this.
                   </div>
                 </div>
               ) : (
