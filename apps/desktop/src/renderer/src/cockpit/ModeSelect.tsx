@@ -15,7 +15,7 @@ export default function ModeSelect({ session }: { session: SessionView }) {
       title="Permission mode"
       style={{
         fontFamily: "var(--font-mono)", fontSize: 11, padding: "3px 6px", borderRadius: 7,
-        border: "1px solid var(--border)", background: "rgb(var(--primary) / 0.14)", color: "var(--text)",
+        border: "1px solid var(--border)", background: "rgba(232,230,225,0.1)", color: "var(--text)",
         outline: "none", cursor: "pointer",
       }}
     >

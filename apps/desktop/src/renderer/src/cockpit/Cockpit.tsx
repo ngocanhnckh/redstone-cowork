@@ -126,8 +126,8 @@ export default function Cockpit() {
         fontWeight: 500,
         cursor: "pointer",
         border: 0,
-        background: mode === m ? "rgb(var(--primary) / 0.32)" : "transparent",
-        color: mode === m ? "#fff" : "var(--text-soft)",
+        background: mode === m ? "var(--text)" : "transparent",
+        color: mode === m ? "#0a0a0a" : "var(--text-soft)",
       }}
     >
       {label}
