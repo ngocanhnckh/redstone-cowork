@@ -28,6 +28,7 @@ export const IPC = {
   sessionLaunch: "api:session:launch",
   folderSessions: "api:session:folder-sessions",
   hostConversations: "api:session:host-conversations",
+  ipInfo: "api:net:ip-info",
   serverInstallCommand: "api:servers:install-command",
   sshSetCustom: "api:ssh:set-custom",
   accountsAnalytics: "api:accounts:analytics",

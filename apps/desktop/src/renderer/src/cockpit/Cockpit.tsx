@@ -18,6 +18,7 @@ import { useKeybindings } from "./useKeybindings";
 import SessionSwitcher from "./SessionSwitcher";
 import AssistPanel from "./AssistPanel";
 import SettingsPanel from "./SettingsPanel";
+import IpInspector from "./IpInspector";
 import CapsModal from "./CapsModal";
 import { useAppearance } from "../appearance";
 
@@ -410,6 +411,7 @@ export default function Cockpit() {
       <CapsModal />
       <SessionSwitcher />
       <DmNotifier />
+      <IpInspector />
     </div>
   );
 }

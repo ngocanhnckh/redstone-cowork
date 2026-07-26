@@ -37,6 +37,7 @@ import { sshSetup, type SshSetupArgs } from "./ssh-setup";
 import { sshInstall, buildLaunchCommand } from "./ssh-install";
 import { captureClaudePane, sendClaudeKeys } from "./claude-login";
 import { listFolderSessions, listHostConversations } from "./host-sessions";
+import { ipInfo } from "./ip-info";
 import { saveSshPassword, getSshPassword } from "./ssh-creds";
 import { listDir, readFileAt, writeFileAt, writeFileBase64, deletePath, makeDir, createFile, uploadLocalFile, searchFiles, searchFilesStream, downloadFileTo } from "./files";
 import { gitInfo } from "./git";
@@ -396,6 +397,7 @@ ipcMain.handle(IPC.serverInstall, async (e, a: { host: string; sshUser: string; 
 // name; the cockpit picks it up via the poll window within a poll cycle.
 ipcMain.handle(IPC.folderSessions, (_e, a: { machine: string; folder: string }) => listFolderSessions(a.machine, a.folder));
 ipcMain.handle(IPC.hostConversations, (_e, a: { machine: string }) => listHostConversations(a.machine));
+ipcMain.handle(IPC.ipInfo, (_e, a: { ip: string }) => ipInfo(a.ip));
 ipcMain.handle(IPC.sessionLaunch, async (e, a: { host: string; sshUser: string; sshPort: number; folder: string; danger: boolean; resumeId?: string; password?: string; savePassword?: boolean }) => {
   const send = (chunk: string) => { try { e.sender.send(IPC.serverInstallData, chunk); } catch { /* ignore */ } };
   const command = buildLaunchCommand({ folder: a.folder, danger: a.danger, resumeId: a.resumeId });

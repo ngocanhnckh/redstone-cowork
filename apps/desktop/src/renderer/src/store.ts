@@ -188,6 +188,7 @@ type State = {
   focusId: string | null;
   mode: "flow" | "grid" | "history" | "hud" | "agency";
   detailId: string | null; // session shown in the grid's drill-in detail
+  ipInspect: { ip: string; domain: string | null; service: string | null; port: number | null; proc: string | null } | null; // IP Inspector window
   hosts: Host[]; // machines reporting via the redstone agent
   inventory: DiscoveredSession[]; // all discovered Claude Code sessions
   caps: CapsHostView[]; // installed skills + slash commands per host
@@ -228,6 +229,8 @@ type State = {
   setActiveTab: (sessionId: string, tab: "chat" | "terminal" | "browser" | "ports" | "files") => void;
   openBrowser: (sessionId: string) => void;
   openUrlInBrowser: (sessionId: string, url: string) => void;
+  openIpInspect: (ctx: { ip: string; domain?: string | null; service?: string | null; port?: number | null; proc?: string | null }) => void;
+  closeIpInspect: () => void;
   openSessionWindow: (sessionId: string) => void;
   openTerminal: (sessionId: string) => void;
   toggleContext: () => void;
@@ -287,6 +290,7 @@ export const useStore = create<State>((set, get) => ({
     return "flow";
   })(),
   detailId: null,
+  ipInspect: null,
   hosts: [],
   inventory: [],
   caps: [],
@@ -419,6 +423,9 @@ export const useStore = create<State>((set, get) => ({
   setFocus: (id: string) => {
     set({ focusId: id });
   },
+
+  openIpInspect: (ctx) => set({ ipInspect: { ip: ctx.ip, domain: ctx.domain ?? null, service: ctx.service ?? null, port: ctx.port ?? null, proc: ctx.proc ?? null } }),
+  closeIpInspect: () => set({ ipInspect: null }),
 
   cycleFocus: (dir) => {
     const { sessions, queue, focusId } = get();

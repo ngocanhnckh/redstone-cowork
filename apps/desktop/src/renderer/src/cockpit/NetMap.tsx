@@ -69,7 +69,7 @@ export default function NetMap() {
   const queue = useStore((s) => s.queue);
   const machine = useMemo(() => [...sessions, ...queue].find((x) => x.id === focusId)?.machine ?? null, [focusId, sessions, queue]);
   const [map, setMap] = useState<NetworkMap | null>(null);
-  const [selIp, setSelIp] = useState<string | null>(null);
+  const openIp = useStore((s) => s.openIpInspect);
 
   useEffect(() => {
     if (!machine) { setMap(null); return; }
@@ -84,7 +84,6 @@ export default function NetMap() {
   const hostPt = host && host.lat != null && host.lon != null ? { x: projX(host.lon), y: projY(host.lat) } : null;
   const peers = map?.peers ?? [];
   const mapped = useMemo(() => peers.filter((p) => p.lat != null && p.lon != null).map((p) => ({ p, x: projX(p.lon!), y: projY(p.lat!) })), [peers]);
-  const sel = peers.find((p) => p.ip === selIp) ?? null;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1, gap: 6 }}>
@@ -111,7 +110,7 @@ export default function NetMap() {
           {hostPt && mapped.map(({ p, x, y }) => {
             const cx = (hostPt.x + x) / 2, cy = (hostPt.y + y) / 2 - Math.hypot(x - hostPt.x, y - hostPt.y) * 0.28;
             const d = `M${hostPt.x.toFixed(1)},${hostPt.y.toFixed(1)} Q${cx.toFixed(1)},${cy.toFixed(1)} ${x.toFixed(1)},${y.toFixed(1)}`;
-            const on = p.ip === selIp;
+            const on = false;
             return (
               <path key={p.ip} d={d} fill="none" className="rcw-net-arc"
                 stroke="#e63b2e" strokeWidth={on ? 0.8 : 0.45} opacity={on ? 0.95 : 0.55}
@@ -121,14 +120,15 @@ export default function NetMap() {
 
           {/* peer nodes */}
           {mapped.map(({ p, x, y }) => {
-            const on = p.ip === selIp; const col = serviceColor(p.service);
+            const col = serviceColor(p.service);
             return (
-              <rect key={p.ip} x={x - (on ? 2.2 : 1.5)} y={y - (on ? 2.2 : 1.5)}
-                width={on ? 4.4 : 3} height={on ? 4.4 : 3} fill={on ? "#e8e6e1" : col}
-                style={{ cursor: "pointer" }}
-                onClick={() => setSelIp((s) => (s === p.ip ? null : p.ip))}>
-                <title>{peerLabel(p)} · {locLabel(p)}</title>
-              </rect>
+              <g key={p.ip} style={{ cursor: "pointer" }}
+                onClick={() => openIp({ ip: p.ip, domain: p.domain, service: p.service, port: p.port, proc: p.proc })}>
+                {/* glow lights up as the radar sweep passes this longitude */}
+                <circle cx={x} cy={y} r={3.6} fill="#e8e6e1" className="rcw-net-glow" style={{ animationDelay: `${(-(x / W) * 5).toFixed(2)}s` }} />
+                <rect x={x - 1.5} y={y - 1.5} width={3} height={3} fill={col} />
+                <title>{peerLabel(p)} · {locLabel(p)} — click to inspect</title>
+              </g>
             );
           })}
 
@@ -140,6 +140,7 @@ export default function NetMap() {
             </g>
           )}
         </svg>
+        {mapped.length > 0 && <div className="rcw-net-sweepline" />}
         {map && !map.geo && (
           <div className="mono faint" style={{ position: "absolute", bottom: 4, left: 6, right: 6, fontSize: 8.5, textAlign: "center" }}>geo DB missing — run “pnpm --filter @rcw/desktop geoip”</div>
         )}
@@ -152,9 +153,9 @@ export default function NetMap() {
         ) : peers.length === 0 ? (
           <span className="mono faint" style={{ fontSize: 10.5 }}>{map ? "no external connections" : "scanning…"}</span>
         ) : peers.map((p) => {
-          const on = p.ip === selIp; const col = serviceColor(p.service);
+          const on = false; const col = serviceColor(p.service);
           return (
-            <div key={p.ip} onClick={() => setSelIp((s) => (s === p.ip ? null : p.ip))}
+            <div key={p.ip} onClick={() => openIp({ ip: p.ip, domain: p.domain, service: p.service, port: p.port, proc: p.proc })}
               style={{ display: "flex", alignItems: "center", gap: 7, padding: "2px 5px", borderRadius: 5, cursor: "pointer", background: on ? "rgba(232,230,225,0.16)" : "transparent" }}>
               <span style={{ width: 6, height: 6, borderRadius: "50%", flexShrink: 0, background: col }} />
               <span className="mono" style={{ fontSize: 10.5, minWidth: 0, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{peerLabel(p)}</span>
@@ -165,37 +166,10 @@ export default function NetMap() {
         })}
       </div>
 
-      {/* Detail overlay */}
-      {sel && (
-        <div className="rcw-net-detail" onClick={() => setSelIp(null)}>
-          <div className="rcw-net-detail-card" onClick={(e) => e.stopPropagation()}>
-            <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 7 }}>
-              <span style={{ width: 8, height: 8, borderRadius: "50%", background: serviceColor(sel.service) }} />
-              <span className="mono" style={{ fontSize: 12, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{peerLabel(sel)}</span>
-              <span style={{ flex: 1 }} />
-              <button onClick={() => setSelIp(null)} style={{ border: "1px solid var(--border)", background: "transparent", color: "var(--text-soft)", borderRadius: 6, padding: "1px 7px", cursor: "pointer", fontSize: 11 }}>✕</button>
-            </div>
-            <DetailRow k="IP" v={sel.ip} />
-            {sel.domain && <DetailRow k="Domain" v={sel.domain} />}
-            <DetailRow k="Service" v={sel.service ? `${sel.service}${sel.port != null ? ` · :${sel.port}` : ""}` : (sel.port != null ? `:${sel.port}` : "—")} />
-            <DetailRow k="Process" v={sel.proc ?? "— (needs ss -p perms)"} />
-            <DetailRow k="Location" v={locLabel(sel)} />
-            <DetailRow k="Connections" v={`×${sel.count}`} />
-          </div>
-        </div>
-      )}
     </div>
   );
 }
 
-function DetailRow({ k, v }: { k: string; v: string }) {
-  return (
-    <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, padding: "2px 0" }}>
-      <span className="mono faint" style={{ fontSize: 9, letterSpacing: "0.1em", textTransform: "uppercase", flexShrink: 0 }}>{k}</span>
-      <span className="mono" style={{ fontSize: 11, color: "var(--text)", minWidth: 0, textAlign: "right", overflowWrap: "anywhere" }}>{v}</span>
-    </div>
-  );
-}
 
 function NetStyles() {
   return (
@@ -207,6 +181,14 @@ function NetStyles() {
       @keyframes rcw-net-fade { from { opacity:0; } to { opacity:1; } }
       .rcw-net-ping { animation: rcw-net-ping 2.2s ease-out infinite; transform-box: fill-box; }
       body.rcw-hidden .rcw-net-ping { animation-play-state: paused !important; }
+      /* radar sweep line + per-blip flash (delay is set inline so each lights as the line passes) */
+      @keyframes rcw-net-sweepx { from { left:0%; } to { left:100%; } }
+      .rcw-net-sweepline { position:absolute; top:0; bottom:0; width:2px; z-index:3; pointer-events:none;
+        background: linear-gradient(180deg, transparent, rgba(232,230,225,.85), transparent); opacity:.5;
+        box-shadow: 0 0 16px 3px rgba(232,230,225,.18); animation: rcw-net-sweepx 5s linear infinite; }
+      @keyframes rcw-net-flash { 0% { opacity:.95; } 12% { opacity:0; } 100% { opacity:0; } }
+      .rcw-net-glow { animation: rcw-net-flash 5s linear infinite; transform-box: fill-box; }
+      body.rcw-hidden .rcw-net-sweepline, body.rcw-hidden .rcw-net-glow { animation-play-state: paused !important; }
       .rcw-net-detail { position:absolute; inset:0; z-index:8; display:flex; align-items:center; justify-content:center; padding:12px;
         background: rgba(4,8,12,0.55); backdrop-filter: blur(2px); border-radius:12px; animation: rcw-net-fade .18s ease both; }
       .rcw-net-detail-card { width:100%; max-width:240px; border:1px solid var(--border-strong); border-radius:11px; padding:11px 13px;
