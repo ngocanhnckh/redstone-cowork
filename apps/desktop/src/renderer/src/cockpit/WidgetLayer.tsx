@@ -612,6 +612,7 @@ function ReconRadar() {
   }, [focusId, sessions, queue]);
   const [peers, setPeers] = useState<Peer[]>([]);
   const [hover, setHover] = useState<Peer | null>(null);
+  const openIp = useStore((s) => s.openIpInspect);
 
   useEffect(() => {
     if (!machine) { setPeers([]); return; }
@@ -627,7 +628,13 @@ function ReconRadar() {
   const blips = useMemo(() => peers.map((p) => {
     const a = hash01(p.ip) * Math.PI * 2;
     const r = 0.34 + hash01(p.ip + "r") * 0.6; // 0.34..0.94 of radius
-    return { p, x: 50 + Math.cos(a) * r * 46, y: 50 + Math.sin(a) * r * 46 };
+    const x = 50 + Math.cos(a) * r * 46, y = 50 + Math.sin(a) * r * 46;
+    // Angle of this blip in the sweep's conic frame (0deg = north, clockwise), so the glow
+    // pulse can be phase-delayed to fire exactly when the rotating sweep edge crosses it —
+    // a real radar contact lighting up as the cone passes. Sweep spins 360deg / 4.2s.
+    const phi = (Math.atan2(x - 50, -(y - 50)) * 180 / Math.PI + 360) % 360;
+    const glowDelay = ((phi / 360 - 1) * 4.2).toFixed(2);
+    return { p, x, y, glowDelay };
   }), [peers]);
 
   return (
@@ -650,14 +657,22 @@ function ReconRadar() {
           <span className="rcw-radar-sweep" />
           {/* center */}
           <span className="rcw-round" style={{ position: "absolute", left: "calc(50% - 3px)", top: "calc(50% - 3px)", width: 6, height: 6, background: "var(--text)" }} />
-          {/* blips */}
-          {blips.map((b) => (
-            <span key={b.p.ip}
-              onMouseEnter={() => setHover(b.p)} onMouseLeave={() => setHover((h) => (h?.ip === b.p.ip ? null : h))}
-              title={`${b.p.ip}${b.p.port ? " :" + b.p.port : ""} · ×${b.p.count}`}
-              className="rcw-blip"
-              style={{ position: "absolute", left: `${b.x}%`, top: `${b.y}%`, width: Math.min(11, 5 + b.p.count), height: Math.min(11, 5 + b.p.count) }} />
-          ))}
+          {/* blips: each has a sweep-synced glow that flashes as the cone crosses it, and
+              opens the IP inspector on click (same modal as the network map) */}
+          {blips.map((b) => {
+            const d = Math.min(11, 5 + b.p.count);
+            return (
+              <span key={b.p.ip} style={{ position: "absolute", left: `${b.x}%`, top: `${b.y}%` }}>
+                <span className="rcw-blip-glow" style={{ animationDelay: `${b.glowDelay}s` }} />
+                <span
+                  onClick={() => openIp({ ip: b.p.ip, port: b.p.port })}
+                  onMouseEnter={() => setHover(b.p)} onMouseLeave={() => setHover((h) => (h?.ip === b.p.ip ? null : h))}
+                  title={`${b.p.ip}${b.p.port ? " :" + b.p.port : ""} · ×${b.p.count} — click to inspect`}
+                  className="rcw-blip"
+                  style={{ position: "absolute", left: 0, top: 0, width: d, height: d }} />
+              </span>
+            );
+          })}
         </div>
         {peers.length === 0 && <div className="mono faint" style={{ position: "absolute", fontSize: 10 }}>{machine ? "no external peers" : "focus a session"}</div>}
         {hover && (
@@ -920,9 +935,16 @@ function WidgetStyles() {
       .rcw-radar-sweep { position: absolute; inset: 0; clip-path: circle(50%); animation: rcw-radar-spin 4.2s linear infinite;
         background: conic-gradient(from 0deg, rgba(230,59,46,0.28), rgba(230,59,46,0.04) 52deg, transparent 60deg); }
       .rcw-blip { border-radius: 50% !important; background: rgb(var(--primary-soft)); transform: translate(-50%, -50%);
-        cursor: pointer; }
-      .rcw-blip:hover { background: var(--text); }
-      body.rcw-hidden .rcw-radar-sweep, body.rcw-hidden .rcw-w-pulse { animation-play-state: paused !important; }
+        cursor: pointer; transition: background .15s ease; }
+      .rcw-blip:hover { background: var(--text); box-shadow: 0 0 8px 1px rgba(230,59,46,.6); }
+      /* Contact glow: dim, then a sharp flash exactly when the sweep edge crosses the blip's
+         angle (phase set per-blip via animation-delay), then fades — like a real radar return. */
+      @keyframes rcw-blip-glow { 0% { opacity: .9; width: 22px; height: 22px; box-shadow: 0 0 12px 3px rgba(230,59,46,.55); }
+        14% { opacity: .35; } 45%, 100% { opacity: 0; width: 8px; height: 8px; box-shadow: 0 0 0 rgba(230,59,46,0); } }
+      .rcw-blip-glow { position: absolute; left: 0; top: 0; border-radius: 50%; background: rgba(230,59,46,.22);
+        transform: translate(-50%, -50%); pointer-events: none; opacity: 0;
+        animation: rcw-blip-glow 4.2s linear infinite; }
+      body.rcw-hidden .rcw-radar-sweep, body.rcw-hidden .rcw-blip-glow, body.rcw-hidden .rcw-w-pulse { animation-play-state: paused !important; }
     `}</style>
   );
 }

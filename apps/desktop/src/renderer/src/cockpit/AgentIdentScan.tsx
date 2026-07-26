@@ -28,13 +28,18 @@ const BIOMETRICS = ["FACIAL GEOMETRY", "IRIS PATTERN", "GAIT SIGNATURE", "CLEARA
 export default function AgentIdentScan({
   subject,
   candidates,
+  captured,
   onDone,
 }: {
   subject: ScanSubject;
   /** Other agents' photos, used as the rolling "database" frames. */
   candidates: Array<{ photo: string | null; username: string }>;
+  /** Login use: the just-captured live face (data URL). When set, the plate runs a
+   *  side-by-side "compare capture vs on-file" beat instead of the DB-search roll. */
+  captured?: string | null;
   onDone: () => void;
 }) {
+  const compareMode = !!captured;
   const [phase, setPhase] = useState<Phase>("search");
   const [frame, setFrame] = useState(0);
   const [progress, setProgress] = useState(0);
@@ -47,15 +52,23 @@ export default function AgentIdentScan({
   const reduced = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   // Master timeline: search (rolling faces) → match (lock + biometrics) → hand off.
+  // Compare mode (login) skips the DB roll and lingers on match so the capture-vs-file
+  // comparison sweep is legible before it locks.
   useEffect(() => {
     if (reduced) { doneRef.current(); return; }
-    const timers = [
-      setTimeout(() => setPhase("match"), 1250),
-      setTimeout(() => setPhase("lock"), 2050),
-      setTimeout(() => doneRef.current(), 2750),
-    ];
+    const timers = compareMode
+      ? [
+          setTimeout(() => setPhase("match"), 260),
+          setTimeout(() => setPhase("lock"), 1650),
+          setTimeout(() => doneRef.current(), 2500),
+        ]
+      : [
+          setTimeout(() => setPhase("match"), 1250),
+          setTimeout(() => setPhase("lock"), 2050),
+          setTimeout(() => doneRef.current(), 2750),
+        ];
     return () => timers.forEach(clearTimeout);
-  }, [reduced]);
+  }, [reduced, compareMode]);
 
   // Rolling candidate faces — decelerating, like a slot landing on the subject.
   useEffect(() => {
@@ -87,7 +100,9 @@ export default function AgentIdentScan({
     return () => clearInterval(id);
   }, [phase]);
 
-  const shown = phase === "search" && pool.length > 0 ? pool[frame % pool.length].photo : subject.photo;
+  const shown = compareMode
+    ? captured
+    : phase === "search" && pool.length > 0 ? pool[frame % pool.length].photo : subject.photo;
   const locked = phase !== "search";
 
   return (
@@ -98,14 +113,26 @@ export default function AgentIdentScan({
         <div className="ais-hd">
           <span className="ais-dot" />
           <span className="ais-title">
-            {phase === "search" ? "SEARCHING PERSONNEL DATABASE" : phase === "match" ? "FACIAL MATCH FOUND" : "IDENTITY CONFIRMED"}
+            {compareMode
+              ? (phase === "lock" ? "IDENTITY CONFIRMED" : "COMPARING BIOMETRIC CAPTURE")
+              : (phase === "search" ? "SEARCHING PERSONNEL DATABASE" : phase === "match" ? "FACIAL MATCH FOUND" : "IDENTITY CONFIRMED")}
           </span>
           <span className="ais-idx">{String(Math.min(99, Math.round(progress))).padStart(2, "0")}%</span>
         </div>
 
         {/* the face plate */}
-        <div className={`ais-plate ${locked ? "lock" : ""}`}>
+        <div className={`ais-plate ${locked ? "lock" : ""} ${compareMode ? "cmp" : ""}`}>
           {shown ? <img src={shown} alt="" className="ais-face" /> : <div className="ais-face ph" />}
+          {/* Compare mode: the on-file photo sweeps across the live capture (a moving
+              alignment band) until they lock — the "matching two faces" movie beat. */}
+          {compareMode && !locked && (
+            <span className="ais-cmp">
+              {subject.photo ? <img src={subject.photo} alt="" className="ais-face" /> : <span className="ais-face ph" />}
+              <span className="ais-cmp-edge" />
+            </span>
+          )}
+          {compareMode && <span className={`ais-tag lv ${locked ? "hide" : ""}`}>LIVE CAPTURE</span>}
+          {compareMode && !locked && <span className="ais-tag fl">ON FILE</span>}
           <span className="ais-scanline" />
           <span className="ais-grid" />
           {/* targeting reticle */}
@@ -203,4 +230,18 @@ const CSS = `
 .ais-logline b { color:var(--text-soft); font-weight:400; }
 .ais-prog { margin-top:9px; height:2px; background:var(--border); position:relative; }
 .ais-prog i { position:absolute; inset:0; right:auto; background:#e63b2e; transition:width .05s linear; }
+/* ── compare mode (login): live capture | on-file, split by a scanning divider ── */
+.ais-plate.cmp { width:210px; height:158px; }
+.ais-cmp { position:absolute; inset:0; clip-path: inset(0 0 0 50%); animation: ais-cmp-in .3s ease both; }
+@keyframes ais-cmp-in { from { clip-path: inset(0 0 0 100%); } }
+.ais-cmp .ais-face { filter: grayscale(1) contrast(1.1) brightness(.9); }
+.ais-cmp-edge { position:absolute; left:50%; top:0; bottom:0; width:2px; transform:translateX(-50%);
+  background: linear-gradient(to bottom, transparent, rgba(230,59,46,.95) 50%, transparent) 0 0/100% 46px repeat-y,
+              rgba(230,59,46,.35);
+  box-shadow: 0 0 10px rgba(230,59,46,.7); animation: ais-cmp-scan 1.05s linear infinite; }
+@keyframes ais-cmp-scan { from { background-position:0 -46px, 0 0; } to { background-position:0 158px, 0 0; } }
+.ais-tag { position:absolute; bottom:6px; font-size:7px; letter-spacing:.14em; color:#e63b2e;
+  background: rgb(10 10 10 / .62); padding:1px 5px; border:1px solid rgb(230 59 46 / .5); }
+.ais-tag.lv { left:6px; } .ais-tag.fl { right:6px; }
+.ais-tag.hide { opacity:0; transition:opacity .3s; }
 `;

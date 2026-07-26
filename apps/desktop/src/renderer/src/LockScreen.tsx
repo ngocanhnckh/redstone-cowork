@@ -1,5 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { describeFace, loadFaceModels } from "./faceEngine";
+import { describeFaceWithBox, loadFaceModels, type FaceBox } from "./faceEngine";
+import AgentIdentScan from "./cockpit/AgentIdentScan";
+
+/** Crop a square face snapshot (data URL) from the current video frame, centred on the
+ *  detected box with a little headroom — shown as the "live capture" in the ident sequence. */
+function snapFace(video: HTMLVideoElement, box: FaceBox): string {
+  const vw = video.videoWidth || 480, vh = video.videoHeight || 480;
+  const cx = box.x + box.width / 2, cy = box.y + box.height / 2;
+  const side = Math.min(vw, vh, Math.max(box.width, box.height) * 1.85);
+  let sx = cx - side / 2, sy = cy - side / 2 - box.height * 0.08; // bias up for headroom
+  sx = Math.max(0, Math.min(vw - side, sx));
+  sy = Math.max(0, Math.min(vh - side, sy));
+  const c = document.createElement("canvas"); c.width = 300; c.height = 300;
+  const ctx = c.getContext("2d"); if (!ctx) return "";
+  ctx.drawImage(video, sx, sy, side, side, 0, 0, 300, 300);
+  return c.toDataURL("image/jpeg", 0.86);
+}
 
 // Quick-unlock lock screen shown on app launch / after the away-timeout when an
 // agent session is stored. The session token stays put — this just re-verifies the
@@ -25,6 +41,9 @@ export default function LockScreen({ onUnlock, onSignOut }: Props) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("IDENTIFY YOURSELF");
   const [err, setErr] = useState("");
+  // The just-captured live face (data URL). When set, the movie-style identification
+  // sequence (capture ⇄ on-file compare → MATCH) plays over the card, then unlocks.
+  const [scan, setScan] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
@@ -83,20 +102,21 @@ export default function LockScreen({ onUnlock, onSignOut }: Props) {
         await sleep(1200); // let the camera warm up / autoexpose
         let attempts = 0;
         while (alive) {
-          const d = videoRef.current ? await describeFace(videoRef.current) : null;
+          const det = videoRef.current ? await describeFaceWithBox(videoRef.current) : null;
           if (!alive) break;
-          if (!d) { setMsg("NO FACE DETECTED — HOLD STILL…"); await sleep(650); continue; }
+          if (!det) { setMsg("NO FACE DETECTED — HOLD STILL…"); await sleep(650); continue; }
           setMsg("MATCHING BIOMETRIC SIGNATURE…");
-          const r = await window.cowork.faceLogin(d);
+          const r = await window.cowork.faceLogin(det.descriptor);
           if (!alive) break;
           if (r.ok) {
-            // Boom — identified. Reveal the agent, then unlock after a short flourish.
+            // Boom — identified. Freeze a face snapshot from THIS frame, then hand off to the
+            // movie-style identification sequence which unlocks when it finishes.
             if (r.account) setAgent((prev) => prev ?? { displayName: r.account!.displayName, username: r.account!.username, photo: null, hasPin: false });
+            const snap = videoRef.current ? snapFace(videoRef.current, det.box) : "";
             setPhase("identified"); setMsg("◈ AGENT IDENTIFIED");
             stopCam();
-            // NB: no `alive` guard here — setPhase re-runs this effect and its cleanup
-            // sets alive=false, which would otherwise cancel the unlock. We matched; go.
-            setTimeout(() => onUnlock(), 1100);
+            // NB: no `alive` guard — the identification overlay owns the unlock via onDone.
+            setScan(snap || "pending");
             return;
           }
           attempts++;
@@ -162,6 +182,15 @@ export default function LockScreen({ onUnlock, onSignOut }: Props) {
           <div className={`lk-cam${identified ? " ok" : ""}`}>
             <video ref={videoRef} muted playsInline />
             {scanning && <span className="lk-sweep" />}
+            {scanning && (
+              <>
+                {/* targeting reticle + face guide — the "align your face" movie frame */}
+                <span className="lk-ret tl" /><span className="lk-ret tr" />
+                <span className="lk-ret bl" /><span className="lk-ret br" />
+                <span className="lk-guide" />
+                <span className="lk-grid2" />
+              </>
+            )}
             {identified && <span className="lk-check">◈</span>}
           </div>
         )}
@@ -194,6 +223,17 @@ export default function LockScreen({ onUnlock, onSignOut }: Props) {
         )}
         <button className="lk-alt" onClick={() => { stopCam(); onSignOut(); }}>SIGN OUT (FULL LOGIN)</button>
       </div>
+
+      {/* Movie-style identification sequence: live capture compared against the on-file
+          photo, biometrics tick to 100%, MATCH locks, then it unlocks. */}
+      {scan && (
+        <AgentIdentScan
+          captured={scan === "pending" ? null : scan}
+          subject={{ photo: agent?.photo ?? null, name: agent?.displayName ?? "AGENT", username: agent?.username ?? "" }}
+          candidates={[]}
+          onDone={onUnlock}
+        />
+      )}
     </div>
   );
 }
@@ -215,11 +255,26 @@ const CSS = `
 .lk-kick { font-size:9px; letter-spacing:.34em; color: var(--text-soft); margin-top:12px; font-weight:700; }
 .lk-name { font-size:17px; font-weight:700; letter-spacing:.05em; color:var(--text); margin-top:3px; }
 .lk-user { font-size:10px; color: var(--text-faint); letter-spacing:.14em; }
-.lk-cam { position:relative; width:120px; height:120px; margin:14px 0 4px; border-radius:12px; overflow:hidden; border:1px solid rgba(232,230,225,.45); background:#0a0a0a; }
+.lk-cam { position:relative; width:212px; height:212px; margin:16px 0 4px; border-radius:14px; overflow:hidden; border:1px solid rgba(232,230,225,.45); background:#0a0a0a;
+  box-shadow: inset 0 0 40px rgb(0 0 0 / .6), 0 8px 30px rgb(0 0 0 / .5); }
 .lk-cam.ok { border-color: rgba(232,230,225,.8); }
 .lk-cam video { width:100%; height:100%; object-fit:cover; transform: scaleX(-1); }
-.lk-sweep { position:absolute; left:6%; right:6%; height:2px; background: rgba(232,230,225,.95); animation: lk-sweep 1.2s ease-in-out infinite alternate; }
-@keyframes lk-sweep { 0% { top:8%; } 100% { top:88%; } }
+.lk-sweep { position:absolute; left:5%; right:5%; height:2px; background: linear-gradient(90deg, transparent, rgba(232,230,225,.95) 20%, rgba(230,59,46,.95) 50%, rgba(232,230,225,.95) 80%, transparent);
+  box-shadow: 0 0 12px rgba(230,59,46,.5); animation: lk-sweep 1.5s ease-in-out infinite alternate; }
+@keyframes lk-sweep { 0% { top:7%; } 100% { top:89%; } }
+/* targeting reticle corners */
+.lk-ret { position:absolute; width:22px; height:22px; border-color: rgba(230,59,46,.85); pointer-events:none; }
+.lk-ret.tl { top:9px; left:9px; border-top:2px solid; border-left:2px solid; }
+.lk-ret.tr { top:9px; right:9px; border-top:2px solid; border-right:2px solid; }
+.lk-ret.bl { bottom:9px; left:9px; border-bottom:2px solid; border-left:2px solid; }
+.lk-ret.br { bottom:9px; right:9px; border-bottom:2px solid; border-right:2px solid; }
+/* dashed oval face-alignment guide, gently breathing */
+.lk-guide { position:absolute; left:50%; top:48%; width:58%; height:74%; transform:translate(-50%,-50%); border-radius:50%;
+  border:1.5px dashed rgba(232,230,225,.42); animation: lk-guide 2.6s ease-in-out infinite; pointer-events:none; }
+@keyframes lk-guide { 0%,100% { opacity:.42; } 50% { opacity:.85; } }
+.lk-grid2 { position:absolute; inset:0; pointer-events:none; opacity:.5;
+  background-image: linear-gradient(rgba(230,59,46,.08) 1px, transparent 1px), linear-gradient(90deg, rgba(230,59,46,.08) 1px, transparent 1px);
+  background-size: 22px 22px; }
 .lk-check { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:44px; color: var(--text); animation: lk-reveal .45s ease both; }
 .lk-msg { font-size:9.5px; letter-spacing:.2em; color: var(--text-soft); min-height:14px; margin:12px 0 10px; }
 .lk-pin { width:100%; box-sizing:border-box; margin-bottom:9px; padding:11px 14px; border-radius:9px; text-align:center; letter-spacing:.4em; font-size:18px; font-family:inherit;

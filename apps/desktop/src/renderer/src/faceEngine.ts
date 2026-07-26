@@ -51,6 +51,21 @@ export async function describeFace(
   return det ? Array.from(det.descriptor) : null;
 }
 
+export type FaceBox = { x: number; y: number; width: number; height: number };
+
+/** Like describeFace, but also returns the detection's bounding box (in SOURCE pixel
+ *  coordinates) so the caller can crop a face snapshot from the same frame — used by the
+ *  lock screen to show the just-captured face in the identification sequence. */
+export async function describeFaceWithBox(
+  source: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement,
+): Promise<{ descriptor: number[]; box: FaceBox } | null> {
+  await loadFaceModels();
+  const det = await faceapi.detectSingleFace(source, OPTS).withFaceLandmarks().withFaceDescriptor();
+  if (!det) return null;
+  const b = det.detection.box;
+  return { descriptor: Array.from(det.descriptor), box: { x: b.x, y: b.y, width: b.width, height: b.height } };
+}
+
 /** Descriptor from a data-URL / URL image (used for admin roster-photo enrollment). */
 export async function describeFaceFromImageUrl(url: string): Promise<number[] | null> {
   const img = await faceapi.fetchImage(url);
