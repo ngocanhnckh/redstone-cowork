@@ -50,6 +50,7 @@ declare global {
       folderSessions(a: { machine: string; folder: string }): Promise<Array<{ id: string; mtime: number; title: string; messages: number }>>;
       hostConversations(a: { machine: string }): Promise<Array<{ id: string; cwd: string; mtime: number; title: string }>>;
       ipInfo(ip: string): Promise<import("../../shared/ip").IpInfo>;
+      diskUsage(machine: string): Promise<import("../../shared/disk").DiskUsage>;
       serverInstallCommand(): Promise<{ serverUrl: string; command: string; commandRelay: string }>;
       sshSetCustom(a: { address: string; host: string; opts: string[] }): Promise<{ ok: boolean }>;
       onServerInstallData(cb: (chunk: string) => void): () => void;

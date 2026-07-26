@@ -66,4 +66,8 @@ echo "redstone installed. If 'redstone' is not found, add to your shell: export 
 echo "The background agent is running (telemetry + remote control). Manage it with: redstone service uninstall"
 echo "Next: cd <your project> && redstone hook && claude --resume"
 echo "Later: run 'redstone update' anytime to pull the latest agent."
+# Final marker the installer client watches for: the background agent inherits this SSH
+# channel's fds and can keep it open past this point, so the app resolves on this line
+# rather than waiting for the connection to close (which may never happen).
+echo "RCW_INSTALL_DONE"
 `;

@@ -38,6 +38,7 @@ import { sshInstall, buildLaunchCommand } from "./ssh-install";
 import { captureClaudePane, sendClaudeKeys } from "./claude-login";
 import { listFolderSessions, listHostConversations } from "./host-sessions";
 import { ipInfo } from "./ip-info";
+import { diskUsage } from "./disk";
 import { saveSshPassword, getSshPassword } from "./ssh-creds";
 import { listDir, readFileAt, writeFileAt, writeFileBase64, deletePath, makeDir, createFile, uploadLocalFile, searchFiles, searchFilesStream, downloadFileTo } from "./files";
 import { gitInfo } from "./git";
@@ -383,11 +384,11 @@ ipcMain.handle(IPC.serverInstall, async (e, a: { host: string; sshUser: string; 
   // Cloudflare-Access / jump-host / custom-key hosts carry extra ssh opts (ProxyCommand).
   const extraOpts = getSshCustom(a.host)?.opts ?? [];
   // First attempt: exactly what the caller asked (key-only when no password typed).
-  let res = await sshInstall({ host: a.host, sshUser: a.sshUser, sshPort: a.sshPort, command: a.command, password: a.password, extraOpts }, send);
+  let res = await sshInstall({ host: a.host, sshUser: a.sshUser, sshPort: a.sshPort, command: a.command, password: a.password, extraOpts, successMarker: "RCW_INSTALL_DONE" }, send);
   // If key auth was refused and we have a remembered password for this user@host, retry with it.
   if (!res.ok && res.authFailed && !a.password) {
     const saved = getSshPassword(a.sshUser, a.host);
-    if (saved) { send("\r\n[auth] key not accepted — trying saved password…\r\n"); res = await sshInstall({ host: a.host, sshUser: a.sshUser, sshPort: a.sshPort, command: a.command, password: saved, extraOpts }, send); }
+    if (saved) { send("\r\n[auth] key not accepted — trying saved password…\r\n"); res = await sshInstall({ host: a.host, sshUser: a.sshUser, sshPort: a.sshPort, command: a.command, password: saved, extraOpts, successMarker: "RCW_INSTALL_DONE" }, send); }
   }
   if (res.ok && a.password && a.savePassword) saveSshPassword(a.sshUser, a.host, a.password);
   return res;
@@ -398,14 +399,15 @@ ipcMain.handle(IPC.serverInstall, async (e, a: { host: string; sshUser: string; 
 ipcMain.handle(IPC.folderSessions, (_e, a: { machine: string; folder: string }) => listFolderSessions(a.machine, a.folder));
 ipcMain.handle(IPC.hostConversations, (_e, a: { machine: string }) => listHostConversations(a.machine));
 ipcMain.handle(IPC.ipInfo, (_e, a: { ip: string }) => ipInfo(a.ip));
+ipcMain.handle(IPC.diskUsage, (_e, a: { machine: string }) => diskUsage(a.machine));
 ipcMain.handle(IPC.sessionLaunch, async (e, a: { host: string; sshUser: string; sshPort: number; folder: string; danger: boolean; resumeId?: string; password?: string; savePassword?: boolean }) => {
   const send = (chunk: string) => { try { e.sender.send(IPC.serverInstallData, chunk); } catch { /* ignore */ } };
   const command = buildLaunchCommand({ folder: a.folder, danger: a.danger, resumeId: a.resumeId });
   const extraOpts = getSshCustom(a.host)?.opts ?? [];
-  let res = await sshInstall({ host: a.host, sshUser: a.sshUser, sshPort: a.sshPort, command, password: a.password, extraOpts }, send);
+  let res = await sshInstall({ host: a.host, sshUser: a.sshUser, sshPort: a.sshPort, command, password: a.password, extraOpts, successMarker: "RCW_STARTED" }, send);
   if (!res.ok && res.authFailed && !a.password) {
     const saved = getSshPassword(a.sshUser, a.host);
-    if (saved) { send("\r\n[auth] key not accepted — trying saved password…\r\n"); res = await sshInstall({ host: a.host, sshUser: a.sshUser, sshPort: a.sshPort, command, password: saved, extraOpts }, send); }
+    if (saved) { send("\r\n[auth] key not accepted — trying saved password…\r\n"); res = await sshInstall({ host: a.host, sshUser: a.sshUser, sshPort: a.sshPort, command, password: saved, extraOpts, successMarker: "RCW_STARTED" }, send); }
   }
   if (res.ok && a.password && a.savePassword) saveSshPassword(a.sshUser, a.host, a.password);
   const m = res.output.match(/RCW_STARTED\s+(rcw-([0-9a-f]+))/);

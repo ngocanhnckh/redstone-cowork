@@ -1,5 +1,5 @@
 import type { IPty } from "node-pty";
-import { execFile } from "node:child_process";
+import { spawn } from "node:child_process";
 
 // Auto-install redstone onto a server over SSH from the user's machine. Tries key auth
 // first (fail-fast so we can prompt); with a password, drives ssh through a PTY and feeds
@@ -12,7 +12,7 @@ function loadPty(): typeof import("node-pty") {
   return ptyModule;
 }
 
-export type InstallArgs = { host: string; sshUser: string; sshPort: number; command: string; password?: string; extraOpts?: string[] };
+export type InstallArgs = { host: string; sshUser: string; sshPort: number; command: string; password?: string; extraOpts?: string[]; successMarker?: string };
 export type InstallResult = { ok: boolean; authFailed?: boolean; output: string; error?: string };
 
 const shSingle = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
@@ -55,24 +55,39 @@ const baseOpts = (port: number) => ["-o", "StrictHostKeyChecking=accept-new", "-
 /** Run the install command on `sshUser@host`. Without a password → key-only (fast fail on
  *  auth → authFailed=true). With a password → PTY + auto-answer the password prompt. */
 export function sshInstall(args: InstallArgs, onData: (s: string) => void): Promise<InstallResult> {
-  const { host, sshUser, sshPort, command, password, extraOpts = [] } = args;
+  const { host, sshUser, sshPort, command, password, extraOpts = [], successMarker } = args;
   const target = `${sshUser}@${host}`;
 
   if (!password) {
+    // Stream (not execFile/buffer) so we can resolve the instant the remote command prints
+    // its success marker. Installs start a background agent that inherits the SSH channel's
+    // fds and keeps it open — without marker detection ssh would hang until the timeout even
+    // though the install already finished.
     return new Promise((resolve) => {
-      execFile(
-        "ssh",
-        ["-o", "BatchMode=yes", ...extraOpts, ...baseOpts(sshPort), target, command],
-        { maxBuffer: 8 * 1024 * 1024, timeout: 240000 },
-        (err, stdout, stderr) => {
-          const output = (stdout || "") + (stderr || "");
-          if (output) onData(output);
-          if (!err) return resolve({ ok: true, output });
-          const authFailed = /permission denied|no more authentication methods|publickey|password/i.test(stderr || "")
-            || (err as NodeJS.ErrnoException & { code?: number }).code === 255;
-          resolve({ ok: false, authFailed, output, error: err.message });
-        },
-      );
+      let child: ReturnType<typeof spawn>;
+      try {
+        child = spawn("ssh", ["-o", "BatchMode=yes", ...extraOpts, ...baseOpts(sshPort), target, command]);
+      } catch (e) {
+        return resolve({ ok: false, output: "", error: e instanceof Error ? e.message : String(e) });
+      }
+      let output = "", stderr = "", done = false;
+      const finish = (r: InstallResult) => { if (done) return; done = true; try { child.kill(); } catch { /* ignore */ } resolve(r); };
+      const onChunk = (buf: Buffer) => {
+        const s = buf.toString();
+        output += s;
+        onData(s);
+        if (successMarker && output.includes(successMarker)) finish({ ok: true, output });
+      };
+      child.stdout?.on("data", onChunk);
+      child.stderr?.on("data", (b: Buffer) => { stderr += b.toString(); onChunk(b); });
+      child.on("error", (e) => finish({ ok: false, output, error: e.message }));
+      child.on("close", (code) => {
+        if (code === 0) return finish({ ok: true, output });
+        const authFailed = /permission denied|no more authentication methods|publickey|password/i.test(stderr)
+          || code === 255;
+        finish({ ok: false, authFailed, output, error: `ssh exited with status ${code}` });
+      });
+      setTimeout(() => finish({ ok: false, output, error: "install timed out (240s)" }), 240000);
     });
   }
 
@@ -94,6 +109,9 @@ export function sshInstall(args: InstallArgs, onData: (s: string) => void): Prom
       // Answer up to 2 password prompts (in case the first newline lands early).
       const prompts = (output.match(/assword:/gi) || []).length;
       if (prompts > pwSent) { pwSent = prompts; term.write(password + "\r"); }
+      // Resolve the instant the remote command reports success — a started background agent
+      // can hold the PTY open past command completion, which would otherwise hang to timeout.
+      if (successMarker && output.includes(successMarker)) finish({ ok: true, output });
     });
     term.onExit(({ exitCode }) => {
       const authFailed = exitCode !== 0 && /permission denied|authentication failed/i.test(output);

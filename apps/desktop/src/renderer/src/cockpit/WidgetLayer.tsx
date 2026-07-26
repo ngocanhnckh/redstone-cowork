@@ -2,12 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "../store";
 import NetMap from "./NetMap";
 import Weather from "./Weather";
+import type { DiskUsage } from "../../../shared/disk";
 
 // A free-floating widget canvas over the HUD desktop (behind the app windows). Widgets
 // are draggable/resizable, glanceable, and persist their placement globally. Every
 // widget here is NEW — none duplicate the fixed telemetry deck or the left column.
 
-export type WidgetKind = "attention" | "burn" | "ticker" | "timer" | "scratch" | "throughput" | "radar" | "reactor" | "agenda" | "netmap" | "weather";
+export type WidgetKind = "attention" | "burn" | "ticker" | "timer" | "scratch" | "throughput" | "radar" | "reactor" | "agenda" | "netmap" | "weather" | "storage";
 export type WidgetInst = { id: string; kind: WidgetKind; x: number; y: number; w: number; h: number; text?: string };
 
 const KEY = "rcw.widgets";
@@ -25,8 +26,9 @@ const CATALOG: Record<WidgetKind, Meta> = {
   agenda:     { label: "Agenda",          icon: "▦", w: 286, h: 214, minW: 220, minH: 150 },
   netmap:     { label: "Network Map",     icon: "⌖", w: 440, h: 340, minW: 320, minH: 250 },
   weather:    { label: "Weather",         icon: "☀", w: 230, h: 180, minW: 190, minH: 150 },
+  storage:    { label: "Storage",         icon: "▤", w: 300, h: 214, minW: 240, minH: 168 },
 };
-const ORDER: WidgetKind[] = ["attention", "netmap", "weather", "agenda", "reactor", "radar", "burn", "throughput", "ticker", "timer", "scratch"];
+const ORDER: WidgetKind[] = ["attention", "netmap", "storage", "weather", "agenda", "reactor", "radar", "burn", "throughput", "ticker", "timer", "scratch"];
 
 function sanitize(p: unknown): WidgetInst[] {
   return Array.isArray(p) ? p.filter((w) => w && typeof w.id === "string" && CATALOG[w.kind as WidgetKind]) : [];
@@ -201,6 +203,7 @@ function WidgetBody({ inst, onChange }: { inst: WidgetInst; onChange: (p: Partia
     case "reactor": return <Reactor />;
     case "agenda": return <Agenda />;
     case "netmap": return <NetMap />;
+    case "storage": return <StorageWidget />;
     case "weather": return <Weather />;
     default: return null;
   }
@@ -356,6 +359,97 @@ function AttentionRadar() {
             );
           })}
         </div>
+      )}
+    </div>
+  );
+}
+
+// ── Widget: Storage ───────────────────────────────────────────────────────────
+function fmtSize(kb: number): string {
+  const b = kb * 1024;
+  if (b >= 1e12) return `${(b / 1e12).toFixed(1)} TB`;
+  if (b >= 1e9) return `${(b / 1e9).toFixed(b >= 1e10 ? 0 : 1)} GB`;
+  if (b >= 1e6) return `${(b / 1e6).toFixed(0)} MB`;
+  return `${Math.max(0, Math.round(b / 1e3))} KB`;
+}
+function usageColor(pct: number): string {
+  if (pct >= 90) return "#e63b2e";
+  if (pct >= 75) return "#e0a24a";
+  return "var(--text)";
+}
+function StorageWidget() {
+  const focusId = useStore((s) => s.focusId);
+  const sessions = useStore((s) => s.sessions);
+  const queue = useStore((s) => s.queue);
+  const machine = useMemo(() => [...sessions, ...queue].find((x) => x.id === focusId)?.machine ?? null, [focusId, sessions, queue]);
+  const [du, setDu] = useState<DiskUsage | null>(null);
+  useEffect(() => {
+    if (!machine) { setDu(null); return; }
+    let alive = true;
+    const load = () => {
+      if (!alive || document.hidden) return;
+      window.cowork.diskUsage(machine).then((r) => { if (alive) setDu(r); }).catch(() => {});
+    };
+    load();
+    const t = setInterval(load, 30_000);
+    document.addEventListener("visibilitychange", load);
+    return () => { alive = false; clearInterval(t); document.removeEventListener("visibilitychange", load); };
+  }, [machine]);
+
+  const mounts = du?.mounts ?? [];
+  const main = mounts.find((m) => m.mount === "/") ?? mounts[0] ?? null;
+  const R = 30, C = 2 * Math.PI * R;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 8 }}>
+        <span style={{ fontSize: 12 }}>▤</span>
+        <span className="mono" style={{ fontSize: 10, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--text-soft)" }}>Storage</span>
+        <span className="mono faint" style={{ fontSize: 9, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{machine ?? "no host"}</span>
+      </div>
+
+      {!machine ? (
+        <span className="mono faint" style={{ fontSize: 10.5, margin: "auto" }}>focus a session</span>
+      ) : !du ? (
+        <span className="mono faint" style={{ fontSize: 10.5, margin: "auto" }}>reading disks…</span>
+      ) : !du.ok || !main ? (
+        <span className="mono faint" style={{ fontSize: 10.5, margin: "auto" }}>{du.error ? "couldn't read df" : "no filesystems"}</span>
+      ) : (
+        <>
+          {/* main filesystem donut */}
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            <svg width="72" height="72" viewBox="0 0 72 72" style={{ flexShrink: 0, transform: "rotate(-90deg)" }}>
+              <circle cx="36" cy="36" r={R} fill="none" stroke="var(--border)" strokeWidth="7" />
+              <circle cx="36" cy="36" r={R} fill="none" stroke={usageColor(main.pct)} strokeWidth="7" strokeLinecap="round"
+                strokeDasharray={`${(main.pct / 100) * C} ${C}`} style={{ transition: "stroke-dasharray .5s ease" }} />
+              <text x="36" y="34" transform="rotate(90 36 36)" textAnchor="middle" fontSize="15" fontWeight="700" fill={usageColor(main.pct)} fontFamily="var(--font-display, var(--font-mono))">{main.pct}%</text>
+              <text x="36" y="46" transform="rotate(90 36 36)" textAnchor="middle" fontSize="7" fill="var(--text-faint)" fontFamily="var(--font-mono)">USED</text>
+            </svg>
+            <div style={{ minWidth: 0 }}>
+              <div className="mono" style={{ fontSize: 12, color: "var(--text)" }}>{main.mount}</div>
+              <div className="mono faint" style={{ fontSize: 10.5, marginTop: 3 }}>{fmtSize(main.usedKb)} / {fmtSize(main.sizeKb)}</div>
+              <div className="mono" style={{ fontSize: 10.5, marginTop: 2, color: usageColor(main.pct) }}>{fmtSize(main.availKb)} free</div>
+              {main.pct >= 90 && <div className="mono" style={{ fontSize: 9.5, marginTop: 4, color: "#e63b2e", letterSpacing: ".04em" }}>⚠ NEARLY FULL</div>}
+            </div>
+          </div>
+
+          {/* per-filesystem distribution bars */}
+          {mounts.length > 0 && (
+            <div className="no-scrollbar" style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 7, overflowY: "auto", minHeight: 0 }}>
+              {mounts.slice(0, 6).map((m) => (
+                <div key={m.mount}>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginBottom: 2 }}>
+                    <span className="mono" style={{ fontSize: 9.5, color: "var(--text-soft)", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.mount}</span>
+                    <span className="mono faint" style={{ fontSize: 9, flexShrink: 0 }}>{fmtSize(m.usedKb)} / {fmtSize(m.sizeKb)}</span>
+                  </div>
+                  <div style={{ height: 5, borderRadius: 3, background: "var(--border)", overflow: "hidden" }}>
+                    <div style={{ width: `${m.pct}%`, height: "100%", borderRadius: 3, background: usageColor(m.pct), transition: "width .5s ease" }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   );

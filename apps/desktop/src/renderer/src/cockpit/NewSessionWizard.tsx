@@ -15,6 +15,18 @@ type Mode = "normal" | "danger";
 type Discovered = { id: string; folder: string; cwd: string; title: string | null; machine: string };
 type HostRow = { id: string; machine: string; address: string | null };
 
+// Match a chosen server to a reporting inventory host — by address or machine name against
+// the server's host/name (case-insensitive). Shared by the live `redstoneInstalled` signal
+// and the post-install poll loop so both judge "is it reporting?" identically.
+function matchReportingHost(hosts: HostRow[], server: { host?: string; name?: string } | null): HostRow | null {
+  if (!server) return null;
+  const sh = (server.host || "").toLowerCase(), sn = (server.name || "").toLowerCase();
+  return hosts.find((h) => {
+    const a = (h.address || "").toLowerCase(), m = (h.machine || "").toLowerCase();
+    return (a && (a === sh || a === sn)) || (m && (m === sn || m === sh));
+  }) ?? null;
+}
+
 const CSS = `
 .rcw-nw-scrim { position:fixed; inset:0; z-index:80; display:flex; align-items:center; justify-content:center; background: rgb(0 0 0 / .55);
   backdrop-filter: blur(4px); animation: yia-in .15s ease both; }
@@ -176,6 +188,7 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
   const [sshPw, setSshPw] = useState("");
   const [savePw, setSavePw] = useState(true);
   const [installErr, setInstallErr] = useState("");
+  const [installNote, setInstallNote] = useState("");
   const [showManual, setShowManual] = useState(false);
   // Launch-over-SSH state (the app starts the session for the user — no copy-paste).
   const [launching, setLaunching] = useState(false);
@@ -231,15 +244,30 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
 
   async function runInstall(password?: string) {
     if (!server || !provision) return;
-    setInstalling(true); setInstallErr(""); setInstallLog("");
+    setInstalling(true); setInstallErr(""); setInstallNote(""); setInstallLog("");
     const off = window.cowork.onServerInstallData((c) => setInstallLog((l) => (l + c).slice(-8000)));
     try {
       const command = closed ? provision.installCommandRelay : provision.installCommand;
       const r = await window.cowork.serverInstall({ host: server.host, sshUser: server.sshUser, sshPort: server.sshPort, command, password, savePassword: password ? savePw : false });
       if (r.ok) {
         setInstallNeedsPw(false);
-        // The agent installs then reports back — poll the inventory until it appears.
-        for (let i = 0; i < 12; i++) { await new Promise((res) => setTimeout(res, 2500)); refreshInv(); }
+        // The install finished on the box; now the background agent has to phone home before
+        // the cockpit shows the host as reporting. Poll the inventory until it appears, then
+        // stop early. A NAT'd/relay host can take a bit longer to establish its tunnel.
+        let appeared = false;
+        for (let i = 0; i < 16; i++) {
+          await new Promise((res) => setTimeout(res, 2500));
+          const fresh = await window.cowork.getInventory().catch(() => null) as { hosts: HostRow[]; sessions: Discovered[] } | null;
+          if (fresh) {
+            setInv(fresh);
+            if (matchReportingHost(fresh.hosts, server)) { appeared = true; break; }
+          }
+        }
+        if (!appeared) {
+          setInstallNote(closed
+            ? "Installed on the server, but its relay agent hasn't reported in yet — a NAT'd host can take a minute to open its tunnel. Use ↻ CHECK AGAIN."
+            : "Installed on the server, but the agent hasn't reported in yet. Use ↻ CHECK AGAIN in a moment.");
+        }
       } else if (r.authFailed) {
         setInstallNeedsPw(true);
         setInstallErr(password ? "That password was rejected — try again." : "SSH needs a password for this server.");
@@ -262,14 +290,7 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
 
   // Match the chosen server to a reporting host (for discovered sessions). Robust match:
   // by user@host, machine name, or address — case-insensitive.
-  const host = useMemo(() => {
-    if (!server) return null;
-    const sh = (server.host || "").toLowerCase(), sn = (server.name || "").toLowerCase();
-    return inv.hosts.find((h) => {
-      const a = (h.address || "").toLowerCase(), m = (h.machine || "").toLowerCase();
-      return (a && (a === sh || a === sn)) || (m && (m === sn || m === sh));
-    }) ?? null;
-  }, [server, inv]);
+  const host = useMemo(() => matchReportingHost(inv.hosts, server), [server, inv]);
   // Only offer sessions the cockpit is actually holding LIVE (in the store's session/queue
   // list) — inventory alone can include dead sessions (e.g. an OOM-killed poller whose
   // transcript still exists), and resuming one lands on a `tmux` that no longer exists.
@@ -482,6 +503,7 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
                   )}
 
                   {installErr && <div style={{ color: "#e63b2e", fontSize: 11.5, marginTop: 8 }}>⚠ {installErr}</div>}
+                  {installNote && !installErr && <div style={{ color: "var(--accent, #d9a441)", fontSize: 11.5, marginTop: 8 }}>◈ {installNote}</div>}
                   {installLog && (
                     <pre className="no-scrollbar" style={{ marginTop: 10, maxHeight: 160, overflowY: "auto", fontSize: 10.5, lineHeight: 1.5, color: "var(--text-soft)",
                       background: "rgb(0 0 0 / .35)", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{installLog}</pre>
