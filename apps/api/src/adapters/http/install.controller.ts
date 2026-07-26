@@ -34,10 +34,16 @@ while [ $# -gt 0 ]; do case "$1" in
   --relay) RELAY="1"; shift;;
   *) echo "unknown arg: $1" >&2; exit 1;; esac; done
 [ -n "$SERVER" ] && [ -n "$TOKEN" ] || { echo "usage: install.sh --server <url> --token <token> [--relay]" >&2; exit 1; }
-command -v node >/dev/null 2>&1 || { echo "Node.js is required (>= 20). Install it then re-run." >&2; exit 1; }
+command -v node >/dev/null 2>&1 || { echo "RCW_ERR Node.js >= 20 is required on this server. Install it (e.g. apt install nodejs / brew install node) and retry." >&2; exit 3; }
 NODE_MAJOR="$(node -p 'process.versions.node.split(".")[0]')"
-[ "$NODE_MAJOR" -ge 20 ] || { echo "Node >= 20 required (found $(node -v))." >&2; exit 1; }
-mkdir -p "$HOME/.redstone" "$HOME/.local/bin"
+[ "$NODE_MAJOR" -ge 20 ] || { echo "RCW_ERR Node >= 20 required on this server (found $(node -v)). Upgrade Node and retry." >&2; exit 3; }
+# Preflight: refuse on a full disk — otherwise curl fails cryptically ("Failure writing
+# output"), leaving a 0-byte redstone.js.
+AVAIL_KB="$(df -Pk "$HOME" 2>/dev/null | awk 'NR==2{print $4+0}')"
+if [ -n "$AVAIL_KB" ] && [ "$AVAIL_KB" -lt 51200 ]; then
+  echo "RCW_ERR the server's disk is full (only $((AVAIL_KB/1024)) MB free on $HOME). Free up space and retry." >&2; exit 3
+fi
+mkdir -p "$HOME/.redstone" "$HOME/.local/bin" || { echo "RCW_ERR couldn't create ~/.redstone on the server (disk full or permissions)." >&2; exit 3; }
 # Reverse SSH relay is OPT-IN (only for NAT'd hosts with no inbound SSH). The
 # marker gates the agent's tunnel loop; without it the agent never touches the
 # relay, so directly-reachable hosts can't trip fail2ban with rcwtun auth.

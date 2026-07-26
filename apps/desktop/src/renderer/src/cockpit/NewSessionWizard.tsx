@@ -49,6 +49,18 @@ const CSS = `
 const STEPS: Step[] = ["server", "provision", "session", "folder", "mode", "launch"];
 const shq = (v: string) => `'${v.replace(/'/g, `'\\''`)}'`;
 
+/** Turn a raw SSH/install failure into a clear, actionable message. */
+function friendlyInstallError(output: string, fallback: string): string {
+  const o = output || "";
+  const m = o.match(/RCW_ERR\s+(.+)/);
+  if (m) return m[1].trim().replace(/\s+/g, " ");
+  if (/No space left on device|disk is full|\(23\)\s*Failure writing|Failure writing output/i.test(o)) return "The server's disk is full — free up space on it, then retry.";
+  if (/Node\.js.*required|node: command not found|Node >= 20|NODE_MAJOR/i.test(o)) return "Node.js ≥ 20 isn't installed on the server — install it (apt install nodejs / brew install node) and retry.";
+  if (/Permission denied|Operation not permitted/i.test(o)) return "Permission denied on the server — check the SSH user, or a password/sudo may be needed.";
+  if (/Could not resolve hostname|Connection refused|Connection timed out|No route to host|Network is unreachable/i.test(o)) return "Couldn't reach the server over SSH — check the host, port, and that it's online.";
+  return fallback;
+}
+
 const PARENT = (p: string) => { const t = p.replace(/\/+$/, ""); const i = t.lastIndexOf("/"); return i <= 0 ? "/" : t.slice(0, i); };
 const QUICK = ["/home", "/root", "/opt", "/srv", "/var/www", "/"];
 
@@ -205,11 +217,12 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
         setLaunchErr(password ? "That password was rejected — try again." : "SSH needs a password for this server.");
         log("SSH needs a password for this server.", "err");
       } else {
-        const msg = r.error || "Couldn't start the session — see the log below.";
+        const msg = friendlyInstallError(r.output, r.error || "Couldn't start the session — see the log below.");
         setLaunchErr(msg); log(msg, "err");
       }
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
+      const raw = e instanceof Error ? e.message : String(e);
+      const msg = friendlyInstallError(raw, raw);
       setLaunchErr(msg); log(`Launch failed: ${msg}`, "err");
     } finally {
       off(); setLaunching(false);
@@ -231,10 +244,11 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
         setInstallNeedsPw(true);
         setInstallErr(password ? "That password was rejected — try again." : "SSH needs a password for this server.");
       } else {
-        setInstallErr(r.error || "Install failed — see the log, or use the manual command below.");
+        setInstallErr(friendlyInstallError(r.output, r.error || "Install failed — see the log, or use the manual command below."));
       }
     } catch (e) {
-      setInstallErr(e instanceof Error ? e.message : String(e));
+      const msg = e instanceof Error ? e.message : String(e);
+      setInstallErr(friendlyInstallError(msg, msg));
     } finally {
       off(); setInstalling(false);
     }
