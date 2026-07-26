@@ -131,6 +131,9 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
   const [servers, setServers] = useState<ServerView[]>([]);
   const [server, setServer] = useState<ServerView | null>(null);
   const [connecting, setConnecting] = useState(false);
+  // Edit an existing server's connection (fix a wrong user/host/port after adding it).
+  const [editing, setEditing] = useState(false);
+  const [editSrv, setEditSrv] = useState({ name: "", host: "", sshUser: "root", sshPort: 22 });
   const [newSrv, setNewSrv] = useState({ name: "", host: "", sshUser: "root", sshPort: 22, password: "" });
   const [closed, setClosed] = useState(false);
 
@@ -329,6 +332,25 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
     catch (e) { setErr(`Could not build install command (${e instanceof Error ? e.message : e})`); }
     finally { setBusy(false); }
   }
+  function startEdit() {
+    if (!server) return;
+    setEditSrv({ name: server.name, host: server.host, sshUser: server.sshUser, sshPort: server.sshPort ?? 22 });
+    setEditing(true);
+  }
+  async function saveEdit() {
+    if (!server) return;
+    setBusy(true); setErr("");
+    try {
+      const patch = { name: editSrv.name.trim(), host: editSrv.host.trim(), sshUser: editSrv.sshUser.trim() || "root", sshPort: Number(editSrv.sshPort) || 22 };
+      const updated = await window.cowork.serverUpdate(server.id, patch);
+      setServer(updated as ServerView);
+      setServers((prev) => prev.map((s) => (s.id === server.id ? (updated as ServerView) : s)));
+      setEditing(false); setProvision(null); setInstallNeedsPw(false); setInstallErr(""); setInstallLog("");
+      log(`Connection updated → ${patch.sshUser}@${patch.host}:${patch.sshPort}`, "ok");
+      await loadProvision(); // re-mint the host token for the corrected connection
+    } catch (e) { const m = e instanceof Error ? e.message : String(e); setErr(`Couldn't update the server: ${m}`); log(m, "err"); }
+    finally { setBusy(false); }
+  }
   useEffect(() => { if (step === "provision" && server && !provision) void loadProvision(); }, [step, server]); // eslint-disable-line
   // Once we know the install command AND the server isn't already reporting, kick off the
   // auto-install (key first; the entered password is used if key fails / for sudo).
@@ -404,10 +426,28 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
                 <div style={{ color: "var(--text-soft)", fontSize: 12, padding: "6px 2px" }}>◈ Redstone agent is reporting from this server — ready.</div>
               ) : (
                 <>
-                  <div style={{ fontSize: 12, color: "var(--text-soft)", lineHeight: 1.6, marginBottom: 8 }}>
-                    Not installed yet. I can install redstone over SSH from your machine to <b>{server.sshUser}@{server.host}</b> — it sets up the background agent and reports back.
-                  </div>
+                  {editing ? (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 10, padding: "10px 12px", border: "1px solid rgb(84 230 255 / .3)", borderRadius: 10, background: "rgb(84 230 255 / .05)" }}>
+                      <div className="rcw-nw-label" style={{ marginTop: 0 }}>EDIT CONNECTION</div>
+                      <input className="rcw-nw-input" value={editSrv.name} onChange={(e) => setEditSrv({ ...editSrv, name: e.target.value })} placeholder="Display name" />
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <div style={{ flex: 2 }}><div className="rcw-nw-label">HOST / IP</div><input className="rcw-nw-input" value={editSrv.host} onChange={(e) => setEditSrv({ ...editSrv, host: e.target.value })} spellCheck={false} /></div>
+                        <div style={{ flex: 1 }}><div className="rcw-nw-label">SSH USER</div><input className="rcw-nw-input" value={editSrv.sshUser} onChange={(e) => setEditSrv({ ...editSrv, sshUser: e.target.value })} placeholder="yitec" spellCheck={false} /></div>
+                        <div style={{ width: 66 }}><div className="rcw-nw-label">PORT</div><input className="rcw-nw-input" value={editSrv.sshPort} onChange={(e) => setEditSrv({ ...editSrv, sshPort: Number(e.target.value) || 22 })} /></div>
+                      </div>
+                      <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+                        <button className="rcw-nw-btn" disabled={busy || !editSrv.host.trim()} onClick={saveEdit}>{busy ? "…" : "✓ SAVE & RE-CHECK"}</button>
+                        <button className="rcw-nw-btn ghost" onClick={() => setEditing(false)}>CANCEL</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 12, color: "var(--text-soft)", lineHeight: 1.6, marginBottom: 8 }}>
+                      Not installed yet. I can install redstone over SSH from your machine to <b>{server.sshUser}@{server.host}</b> — it sets up the background agent and reports back.
+                      <button className="rcw-nw-btn ghost" style={{ marginLeft: 8, padding: "3px 10px", fontSize: 10 }} onClick={startEdit}>✎ WRONG USER / HOST?</button>
+                    </div>
+                  )}
 
+                  {!editing && (<>
                   {!installNeedsPw ? (
                     <button className="rcw-nw-btn" disabled={installing || !provision} onClick={() => runInstall()}>
                       {installing ? "◈ INSTALLING…" : "◈ INSTALL VIA SSH"}
@@ -443,6 +483,7 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
                     <button className="rcw-nw-btn ghost" style={{ padding: "6px 12px", fontSize: 10 }} onClick={() => setShowManual((v) => !v)}>{showManual ? "HIDE" : "MANUAL COMMAND"}</button>
                   </div>
                   {showManual && provision && <div style={{ marginTop: 10 }}><Cmd cmd={closed ? provision.installCommandRelay : provision.installCommand} label={closed ? "RUN ON SERVER (REVERSE RELAY)" : "RUN ON SERVER"} /></div>}
+                  </>)}
                 </>
               )}
             </>
