@@ -52,23 +52,16 @@ export default function AgentIdentScan({
   const reduced = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   // Master timeline: search (rolling faces) → match (lock + biometrics) → hand off.
-  // Compare mode (login) skips the DB roll and lingers on match so the capture-vs-file
-  // comparison sweep is legible before it locks.
+  // Compare mode (login) keeps the DB roll on the right pane, landing on the matched agent.
   useEffect(() => {
     if (reduced) { doneRef.current(); return; }
-    const timers = compareMode
-      ? [
-          setTimeout(() => setPhase("match"), 260),
-          setTimeout(() => setPhase("lock"), 1650),
-          setTimeout(() => doneRef.current(), 2500),
-        ]
-      : [
-          setTimeout(() => setPhase("match"), 1250),
-          setTimeout(() => setPhase("lock"), 2050),
-          setTimeout(() => doneRef.current(), 2750),
-        ];
+    const timers = [
+      setTimeout(() => setPhase("match"), 1450),
+      setTimeout(() => setPhase("lock"), 2200),
+      setTimeout(() => doneRef.current(), 3000),
+    ];
     return () => timers.forEach(clearTimeout);
-  }, [reduced, compareMode]);
+  }, [reduced]);
 
   // Rolling candidate faces — decelerating, like a slot landing on the subject.
   useEffect(() => {
@@ -100,9 +93,8 @@ export default function AgentIdentScan({
     return () => clearInterval(id);
   }, [phase]);
 
-  const shown = compareMode
-    ? captured
-    : phase === "search" && pool.length > 0 ? pool[frame % pool.length].photo : subject.photo;
+  // The rolling "database" face: cycles candidates while searching, lands on the subject.
+  const shown = phase === "search" && pool.length > 0 ? pool[frame % pool.length].photo : subject.photo;
   const locked = phase !== "search";
 
   return (
@@ -113,34 +105,47 @@ export default function AgentIdentScan({
         <div className="ais-hd">
           <span className="ais-dot" />
           <span className="ais-title">
-            {compareMode
-              ? (phase === "lock" ? "IDENTITY CONFIRMED" : "COMPARING BIOMETRIC CAPTURE")
-              : (phase === "search" ? "SEARCHING PERSONNEL DATABASE" : phase === "match" ? "FACIAL MATCH FOUND" : "IDENTITY CONFIRMED")}
+            {phase === "search" ? "SEARCHING PERSONNEL DATABASE" : phase === "match" ? "FACIAL MATCH FOUND" : "IDENTITY CONFIRMED"}
           </span>
           <span className="ais-idx">{String(Math.min(99, Math.round(progress))).padStart(2, "0")}%</span>
         </div>
 
-        {/* the face plate */}
-        <div className={`ais-plate ${locked ? "lock" : ""} ${compareMode ? "cmp" : ""}`}>
-          {shown ? <img src={shown} alt="" className="ais-face" /> : <div className="ais-face ph" />}
-          {/* Compare mode: the on-file photo sweeps across the live capture (a moving
-              alignment band) until they lock — the "matching two faces" movie beat. */}
-          {compareMode && !locked && (
-            <span className="ais-cmp">
-              {subject.photo ? <img src={subject.photo} alt="" className="ais-face" /> : <span className="ais-face ph" />}
-              <span className="ais-cmp-edge" />
-            </span>
-          )}
-          {compareMode && <span className={`ais-tag lv ${locked ? "hide" : ""}`}>LIVE CAPTURE</span>}
-          {compareMode && !locked && <span className="ais-tag fl">ON FILE</span>}
-          <span className="ais-scanline" />
-          <span className="ais-grid" />
-          {/* targeting reticle */}
-          <span className="ais-ret tl" /><span className="ais-ret tr" />
-          <span className="ais-ret bl" /><span className="ais-ret br" />
-          {locked && <span className="ais-stamp">MATCH</span>}
-          <span className="ais-cross" />
-        </div>
+        {/* the face plate.
+            Compare mode (login): LEFT = frozen live capture, RIGHT = the database roll
+            spinning through agents and decelerating onto the matched record.
+            Arena mode: a single plate that rolls candidates then locks. */}
+        {compareMode ? (
+          <div className={`ais-cmp2 ${locked ? "lock" : ""}`}>
+            <div className="ais-plate cmpp">
+              {captured ? <img src={captured} alt="" className="ais-face" /> : <div className="ais-face ph" />}
+              <span className="ais-grid" />
+              <span className="ais-ret tl" /><span className="ais-ret tr" />
+              <span className="ais-ret bl" /><span className="ais-ret br" />
+              <span className="ais-tag lv">LIVE CAPTURE</span>
+            </div>
+            <span className={`ais-link ${locked ? "on" : ""}`} />
+            <div className={`ais-plate cmpp ${locked ? "lock" : ""}`}>
+              {shown ? <img src={shown} alt="" className={`ais-face ${locked ? "" : "roll"}`} /> : <div className="ais-face ph" />}
+              {!locked && <span className="ais-scanline" />}
+              <span className="ais-grid" />
+              <span className="ais-ret tl" /><span className="ais-ret tr" />
+              <span className="ais-ret bl" /><span className="ais-ret br" />
+              {locked && <span className="ais-stamp sm">MATCH</span>}
+              <span className={`ais-tag fl ${locked ? "ok" : ""}`}>{locked ? "MATCHED" : "SEARCHING"}</span>
+            </div>
+          </div>
+        ) : (
+          <div className={`ais-plate ${locked ? "lock" : ""}`}>
+            {shown ? <img src={shown} alt="" className="ais-face" /> : <div className="ais-face ph" />}
+            <span className="ais-scanline" />
+            <span className="ais-grid" />
+            {/* targeting reticle */}
+            <span className="ais-ret tl" /><span className="ais-ret tr" />
+            <span className="ais-ret bl" /><span className="ais-ret br" />
+            {locked && <span className="ais-stamp">MATCH</span>}
+            <span className="ais-cross" />
+          </div>
+        )}
 
         {/* readout */}
         <div className="ais-read">
@@ -230,18 +235,25 @@ const CSS = `
 .ais-logline b { color:var(--text-soft); font-weight:400; }
 .ais-prog { margin-top:9px; height:2px; background:var(--border); position:relative; }
 .ais-prog i { position:absolute; inset:0; right:auto; background:#e63b2e; transition:width .05s linear; }
-/* ── compare mode (login): live capture | on-file, split by a scanning divider ── */
-.ais-plate.cmp { width:210px; height:158px; }
-.ais-cmp { position:absolute; inset:0; clip-path: inset(0 0 0 50%); animation: ais-cmp-in .3s ease both; }
-@keyframes ais-cmp-in { from { clip-path: inset(0 0 0 100%); } }
-.ais-cmp .ais-face { filter: grayscale(1) contrast(1.1) brightness(.9); }
-.ais-cmp-edge { position:absolute; left:50%; top:0; bottom:0; width:2px; transform:translateX(-50%);
-  background: linear-gradient(to bottom, transparent, rgba(230,59,46,.95) 50%, transparent) 0 0/100% 46px repeat-y,
-              rgba(230,59,46,.35);
-  box-shadow: 0 0 10px rgba(230,59,46,.7); animation: ais-cmp-scan 1.05s linear infinite; }
-@keyframes ais-cmp-scan { from { background-position:0 -46px, 0 0; } to { background-position:0 158px, 0 0; } }
-.ais-tag { position:absolute; bottom:6px; font-size:7px; letter-spacing:.14em; color:#e63b2e;
+/* ── compare mode (login): LIVE CAPTURE | database roll → MATCH ── */
+.ais-cmp2 { display:flex; align-items:center; justify-content:center; gap:0; margin:0 auto 12px; }
+.ais-plate.cmpp { width:130px; height:150px; margin:0; }
+/* left = the frozen live capture (kept in colour so it reads as "you") */
+.ais-cmp2 .ais-plate.cmpp:first-child .ais-face { filter: contrast(1.06) brightness(.98); }
+/* connector between the two plates — energises when the match locks */
+.ais-link { width:26px; height:1px; flex:none; position:relative; background: rgb(230 59 46 / .35); }
+.ais-link::before { content:""; position:absolute; left:0; top:50%; width:6px; height:6px; transform:translateY(-50%) rotate(45deg);
+  border-top:1px solid rgb(230 59 46 / .6); border-right:1px solid rgb(230 59 46 / .6);
+  animation: ais-link-run 1s linear infinite; }
+@keyframes ais-link-run { from { left:0; opacity:0; } 20% { opacity:1; } to { left:22px; opacity:0; } }
+.ais-link.on { background:#e63b2e; box-shadow:0 0 8px rgba(230,59,46,.8); }
+.ais-link.on::before { animation:none; opacity:0; }
+/* the rolling database face — snaps between candidates while searching */
+.ais-face.roll { animation: ais-roll .06s steps(1) infinite; }
+@keyframes ais-roll { 0% { opacity:.72; transform:scale(1.015); } 100% { opacity:1; transform:none; } }
+.ais-tag { position:absolute; bottom:6px; left:6px; font-size:7px; letter-spacing:.12em; color:#e63b2e;
   background: rgb(10 10 10 / .62); padding:1px 5px; border:1px solid rgb(230 59 46 / .5); }
-.ais-tag.lv { left:6px; } .ais-tag.fl { right:6px; }
-.ais-tag.hide { opacity:0; transition:opacity .3s; }
+.ais-tag.fl { left:auto; right:6px; }
+.ais-tag.ok { color:var(--text); border-color:var(--border-strong); }
+.ais-stamp.sm { font-size:14px; padding:2px 7px; letter-spacing:.24em; }
 `;

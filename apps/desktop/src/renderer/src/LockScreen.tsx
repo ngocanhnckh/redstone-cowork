@@ -42,8 +42,13 @@ export default function LockScreen({ onUnlock, onSignOut }: Props) {
   const [msg, setMsg] = useState("IDENTIFY YOURSELF");
   const [err, setErr] = useState("");
   // The just-captured live face (data URL). When set, the movie-style identification
-  // sequence (capture ⇄ on-file compare → MATCH) plays over the card, then unlocks.
+  // sequence (capture on the left, database roll on the right → MATCH) plays, then unlocks.
   const [scan, setScan] = useState<string | null>(null);
+  // Roster faces the identification roll spins through. Seeded from a local cache so it
+  // still animates even when the session token has idle-expired (accountsList would 401).
+  const [roster, setRoster] = useState<Array<{ photo: string | null; username: string }>>(() => {
+    try { return JSON.parse(localStorage.getItem("rcw.roster") || "[]"); } catch { return []; }
+  });
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
@@ -78,6 +83,12 @@ export default function LockScreen({ onUnlock, onSignOut }: Props) {
           ? { displayName: trust.displayName || trust.username, username: trust.username, photo: trust.photo, hasPin: true }
           : { displayName: "AGENT", username: "", photo: null, hasPin: true };
       setAgent(ag);
+
+      // Roster faces for the identification roll (best-effort; cached for expired-token runs).
+      window.cowork.accountsList().then((rows) => {
+        const list = (rows || []).map((r) => ({ photo: r.photo ?? null, username: r.username }));
+        if (list.length) { setRoster(list); try { localStorage.setItem("rcw.roster", JSON.stringify(list.filter((x) => x.photo).slice(0, 40))); } catch { /* ignore */ } }
+      }).catch(() => { /* not admin / token expired — the cached roster still rolls */ });
 
       setFaceReady(!!trust);
       if (trust) { setPhase("scanning"); setMsg("LOOK AT THE CAMERA"); }
@@ -229,8 +240,12 @@ export default function LockScreen({ onUnlock, onSignOut }: Props) {
       {scan && (
         <AgentIdentScan
           captured={scan === "pending" ? null : scan}
-          subject={{ photo: agent?.photo ?? null, name: agent?.displayName ?? "AGENT", username: agent?.username ?? "" }}
-          candidates={[]}
+          subject={{
+            photo: agent?.photo ?? roster.find((r) => r.username === agent?.username)?.photo ?? null,
+            name: agent?.displayName ?? "AGENT",
+            username: agent?.username ?? "",
+          }}
+          candidates={roster}
           onDone={onUnlock}
         />
       )}
