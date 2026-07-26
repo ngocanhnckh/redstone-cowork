@@ -1,7 +1,7 @@
 import type { Server } from "@rcw/shared";
 import type { ServerStore, NewServerRecord } from "../../domain/servers/server-store.port";
 
-type Row = NewServerRecord & { keyInstalled: boolean };
+type Row = NewServerRecord & { keyInstalled: boolean; agentHostId: string | null };
 
 export class InMemoryServerStore implements ServerStore {
   private rows = new Map<string, Row>();
@@ -11,14 +11,14 @@ export class InMemoryServerStore implements ServerStore {
   constructor(private readonly resolveUsername?: (accountId: string) => Promise<string | null>) {}
 
   private toServer(r: Row): Server {
-    return { ...r, keyInstalled: r.keyInstalled };
+    return { ...r, keyInstalled: r.keyInstalled, agentHostId: r.agentHostId ?? null };
   }
   private key(serverId: string, accountId: string): string {
     return `${serverId}\0${accountId}`;
   }
 
   async create(rec: NewServerRecord): Promise<Server> {
-    const row: Row = { ...rec, keyInstalled: false };
+    const row: Row = { ...rec, keyInstalled: false, agentHostId: null };
     this.rows.set(rec.id, row);
     return this.toServer(row);
   }

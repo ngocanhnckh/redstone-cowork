@@ -40,11 +40,17 @@ export class ServersController {
     // the authoritative "redstone is installed here" signal (inventory is ground truth).
     const reportingKeys = new Set<string>();
     const reportingMachines = new Set<string>();
+    const reportingIds = new Set<string>();
     for (const h of hosts) {
       reportingKeys.add(`${(h.user || "").toLowerCase()}@${(h.address || h.machine).toLowerCase()}`);
       if (h.machine) reportingMachines.add(h.machine.toLowerCase());
+      if (h.id) reportingIds.add(h.id);
     }
-    const isReporting = (sshUser: string, host: string, name: string): boolean => {
+    // Prefer the stable host-id link (NAT-proof): a closed host reports its public ip +
+    // real hostname, so the user@host and name keys won't match — but its captured
+    // agentHostId will. Fall back to the address/name heuristics for legacy rows.
+    const isReporting = (sshUser: string, host: string, name: string, agentHostId?: string | null): boolean => {
+      if (agentHostId && reportingIds.has(agentHostId)) return true;
       const key = `${(sshUser || "").toLowerCase()}@${(host || "").toLowerCase()}`;
       return reportingKeys.has(key) || reportingMachines.has((name || "").toLowerCase()) || reportingMachines.has((host || "").toLowerCase());
     };
@@ -75,7 +81,7 @@ export class ServersController {
         ownerAccountId: null, keyInstalled: true, createdBy: null, createdAt: now, discovered: true, reporting: true,
       }));
     // Tag each registry server with whether a redstone agent is actually reporting from it.
-    const registryTagged = registry.map((s) => ({ ...s, reporting: isReporting(s.sshUser, s.host, s.name) }));
+    const registryTagged = registry.map((s) => ({ ...s, reporting: isReporting(s.sshUser, s.host, s.name, s.agentHostId) }));
     return [...registryTagged, ...discovered];
   }
 
@@ -181,6 +187,9 @@ export class ServersController {
       sshPort: body.sshPort as number | undefined,
       description: body.description as string | undefined,
       keyInstalled: body.keyInstalled as boolean | undefined,
+      // NAT-proof reporting link: the desktop reads ~/.redstone/host-id over SSH after an
+      // install (or when adopting an already-installed closed host) and stores it here.
+      agentHostId: body.agentHostId as string | undefined,
     });
     if (!updated) throw new NotFoundException();
     return updated;

@@ -48,6 +48,11 @@ WantedBy=default.target
   if (!en.ok) {
     return `Wrote the systemd unit, but couldn't start it automatically:\n${en.out}\nStart it with:  systemctl --user enable --now ${LINUX_UNIT}`;
   }
+  // `enable --now` only STARTS a stopped unit — on a REinstall the agent is already running,
+  // so it would keep the old bundle AND miss a just-toggled `tunnel.enabled` (the tunnel loop
+  // only reads that flag at startup). Force a restart so a reinstall always picks up the fresh
+  // bundle and (de)activates the reverse relay immediately.
+  trySync("systemctl", ["--user", "restart", LINUX_UNIT]);
   return `redstone agent installed as a systemd user service and started.\n  status: systemctl --user status ${LINUX_UNIT}\n  logs:   journalctl --user -u ${LINUX_UNIT} -f`;
 }
 

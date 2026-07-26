@@ -4,6 +4,7 @@ import type { ServerStore, NewServerRecord } from "../../domain/servers/server-s
 
 const ROW = `id, name, host, ssh_user AS "sshUser", ssh_port AS "sshPort", description,
              owner_account_id AS "ownerAccountId", key_installed AS "keyInstalled",
+             agent_host_id AS "agentHostId",
              created_by AS "createdBy", created_at AS "createdAt"`;
 
 export class PostgresServerStore implements ServerStore {
@@ -37,7 +38,7 @@ export class PostgresServerStore implements ServerStore {
     return rows.map((r) => ServerSchema.parse(r));
   }
   async update(id: string, patch: Partial<Server>): Promise<Server | null> {
-    const cols: Record<string, string> = { name: "name", host: "host", sshUser: "ssh_user", sshPort: "ssh_port", description: "description", keyInstalled: "key_installed" };
+    const cols: Record<string, string> = { name: "name", host: "host", sshUser: "ssh_user", sshPort: "ssh_port", description: "description", keyInstalled: "key_installed", agentHostId: "agent_host_id" };
     const sets: string[] = []; const vals: unknown[] = [id];
     for (const [k, col] of Object.entries(cols)) {
       const v = (patch as Record<string, unknown>)[k];

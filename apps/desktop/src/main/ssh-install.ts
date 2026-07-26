@@ -52,6 +52,40 @@ export function buildLaunchCommand(opts: { folder: string; danger: boolean; resu
 
 const baseOpts = (port: number) => ["-o", "StrictHostKeyChecking=accept-new", "-o", "ConnectTimeout=15", "-p", String(port || 22)];
 
+/** Read the reporting agent's stable host-id (~/.redstone/host-id) over a DIRECT ssh to
+ *  sshUser@host — the same reachable path install uses. Returns the trimmed UUID, or null
+ *  if the host can't be reached this way or isn't installed. Used to NAT-proof-link a
+ *  curated server to its inventory host (a closed host's public ip/hostname won't match). */
+export function sshReadHostId(args: { host: string; sshUser: string; sshPort: number; password?: string; extraOpts?: string[] }): Promise<string | null> {
+  const { host, sshUser, sshPort, password, extraOpts = [] } = args;
+  return new Promise((resolve) => {
+    let out = "";
+    const okId = () => { const m = out.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i); return m ? m[0] : null; };
+    if (!password) {
+      let child: ReturnType<typeof spawn>;
+      try {
+        child = spawn("ssh", ["-o", "BatchMode=yes", ...extraOpts, ...baseOpts(sshPort), `${sshUser}@${host}`, "cat ~/.redstone/host-id 2>/dev/null"]);
+      } catch { return resolve(null); }
+      child.stdout?.on("data", (b: Buffer) => { out += b.toString(); });
+      child.on("error", () => resolve(null));
+      child.on("close", () => resolve(okId()));
+      setTimeout(() => { try { child.kill(); } catch { /* ignore */ } resolve(okId()); }, 20000);
+      return;
+    }
+    let term: IPty;
+    try {
+      term = loadPty().spawn("ssh", ["-tt", "-o", "NumberOfPasswordPrompts=2", ...extraOpts, ...baseOpts(sshPort), `${sshUser}@${host}`, "cat ~/.redstone/host-id 2>/dev/null"], {
+        name: "xterm-256color", cols: 80, rows: 24, cwd: process.env.HOME, env: process.env as Record<string, string>,
+      });
+    } catch { return resolve(null); }
+    let pwSent = 0, done = false;
+    const finish = () => { if (done) return; done = true; try { term.kill(); } catch { /* ignore */ } resolve(okId()); };
+    term.onData((d) => { out += d; const p = (out.match(/assword:/gi) || []).length; if (p > pwSent) { pwSent = p; term.write(password + "\r"); } if (okId()) finish(); });
+    term.onExit(() => finish());
+    setTimeout(finish, 20000);
+  });
+}
+
 /** Run the install command on `sshUser@host`. Without a password → key-only (fast fail on
  *  auth → authFailed=true). With a password → PTY + auto-answer the password prompt. */
 export function sshInstall(args: InstallArgs, onData: (s: string) => void): Promise<InstallResult> {

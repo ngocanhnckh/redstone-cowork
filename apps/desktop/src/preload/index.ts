@@ -38,6 +38,7 @@ contextBridge.exposeInMainWorld("cowork", {
   hostConversations: (a: { machine: string }): Promise<Array<{ id: string; cwd: string; mtime: number; title: string }>> => ipcRenderer.invoke(IPC.hostConversations, a),
   ipInfo: (ip: string): Promise<import("../shared/ip").IpInfo> => ipcRenderer.invoke(IPC.ipInfo, { ip }),
   diskUsage: (machine: string): Promise<import("../shared/disk").DiskUsage> => ipcRenderer.invoke(IPC.diskUsage, { machine }),
+  hostAgentId: (a: { host: string; sshUser: string; sshPort: number; password?: string }): Promise<string | null> => ipcRenderer.invoke(IPC.hostAgentId, a),
   serverInstallCommand: (): Promise<{ serverUrl: string; command: string; commandRelay: string }> => ipcRenderer.invoke(IPC.serverInstallCommand),
   sshSetCustom: (a: { address: string; host: string; opts: string[] }): Promise<{ ok: boolean }> => ipcRenderer.invoke(IPC.sshSetCustom, a),
   onServerInstallData: (cb: (chunk: string) => void): (() => void) => {

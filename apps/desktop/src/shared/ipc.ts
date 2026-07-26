@@ -30,6 +30,7 @@ export const IPC = {
   hostConversations: "api:session:host-conversations",
   ipInfo: "api:net:ip-info",
   diskUsage: "api:host:disk-usage",
+  hostAgentId: "api:host:agent-id",
   serverInstallCommand: "api:servers:install-command",
   sshSetCustom: "api:ssh:set-custom",
   accountsAnalytics: "api:accounts:analytics",

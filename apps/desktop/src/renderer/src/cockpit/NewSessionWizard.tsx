@@ -18,8 +18,10 @@ type HostRow = { id: string; machine: string; address: string | null };
 // Match a chosen server to a reporting inventory host — by address or machine name against
 // the server's host/name (case-insensitive). Shared by the live `redstoneInstalled` signal
 // and the post-install poll loop so both judge "is it reporting?" identically.
-function matchReportingHost(hosts: HostRow[], server: { host?: string; name?: string } | null): HostRow | null {
+function matchReportingHost(hosts: HostRow[], server: { host?: string; name?: string; agentHostId?: string | null } | null): HostRow | null {
   if (!server) return null;
+  // Stable host-id link wins (NAT-proof) — a closed host's public ip/hostname won't match.
+  if (server.agentHostId) { const byId = hosts.find((h) => h.id === server.agentHostId); if (byId) return byId; }
   const sh = (server.host || "").toLowerCase(), sn = (server.name || "").toLowerCase();
   return hosts.find((h) => {
     const a = (h.address || "").toLowerCase(), m = (h.machine || "").toLowerCase();
@@ -251,6 +253,14 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
       const r = await window.cowork.serverInstall({ host: server.host, sshUser: server.sshUser, sshPort: server.sshPort, command, password, savePassword: password ? savePw : false });
       if (r.ok) {
         setInstallNeedsPw(false);
+        // NAT-proof link: capture the agent's stable host-id over the same SSH path and store
+        // it on the server row, so a closed host (whose public ip/hostname won't match the
+        // registry) still resolves as reporting.
+        let linked: { host?: string; name?: string; agentHostId?: string | null } = server;
+        try {
+          const hid = await window.cowork.hostAgentId({ host: server.host, sshUser: server.sshUser, sshPort: server.sshPort, password });
+          if (hid) { linked = { ...server, agentHostId: hid }; await window.cowork.serverUpdate(server.id, { agentHostId: hid }); window.cowork.serversList().then(setServers).catch(() => {}); }
+        } catch { /* best effort */ }
         // The install finished on the box; now the background agent has to phone home before
         // the cockpit shows the host as reporting. Poll the inventory until it appears, then
         // stop early. A NAT'd/relay host can take a bit longer to establish its tunnel.
@@ -260,7 +270,7 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
           const fresh = await window.cowork.getInventory().catch(() => null) as { hosts: HostRow[]; sessions: Discovered[] } | null;
           if (fresh) {
             setInv(fresh);
-            if (matchReportingHost(fresh.hosts, server)) { appeared = true; break; }
+            if (matchReportingHost(fresh.hosts, linked)) { appeared = true; break; }
           }
         }
         if (!appeared) {

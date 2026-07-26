@@ -11,6 +11,11 @@ export const ServerSchema = z.object({
   description: z.string().default(""),
   ownerAccountId: z.string().nullable().default(null),
   keyInstalled: z.boolean().default(false),
+  /** The reporting redstone agent's stable host-id (~/.redstone/host-id), captured over
+   *  SSH at install/link time. This is the NAT-proof way to know a curated server is
+   *  reporting: a closed host reports its PUBLIC ip + real hostname, so matching by
+   *  the user-typed LAN address or display name fails — but its host-id never changes. */
+  agentHostId: z.string().nullable().default(null),
   createdBy: z.string().nullable().default(null),
   createdAt: z.coerce.date(),
   /** Populated for admin list views: usernames granted access (company servers). */

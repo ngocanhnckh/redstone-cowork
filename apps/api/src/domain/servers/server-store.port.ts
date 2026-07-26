@@ -18,7 +18,7 @@ export interface ServerStore {
   listAll(): Promise<Server[]>;
   /** Company servers this account may use (via ACL) plus servers it owns. */
   listForAccount(accountId: string): Promise<Server[]>;
-  update(id: string, patch: Partial<Pick<Server, "name" | "host" | "sshUser" | "sshPort" | "description" | "keyInstalled">>): Promise<Server | null>;
+  update(id: string, patch: Partial<Pick<Server, "name" | "host" | "sshUser" | "sshPort" | "description" | "keyInstalled" | "agentHostId">>): Promise<Server | null>;
   remove(id: string): Promise<boolean>;
 
   grant(serverId: string, accountId: string): Promise<void>;

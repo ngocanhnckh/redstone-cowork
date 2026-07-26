@@ -187,25 +187,30 @@ export async function runAgent(opts: { api: ApiClient; sleep?: (ms: number) => P
     // `rcwtun` user yet) turns every reconnect into a failed-auth burst that
     // fail2ban reads as a brute-force attack and bans the source. Enable per host
     // with env REDSTONE_TUNNEL=1 or by touching `<configDir>/tunnel.enabled`.
-    const enabled =
-      process.env.REDSTONE_TUNNEL === "1" || existsSync(join(configDir(), "tunnel.enabled"));
-    if (!enabled) return;
-
-    let key: Awaited<ReturnType<typeof ensureTunnelKey>> = null;
-    try {
-      key = await ensureTunnelKey(configDir());
-    } catch { /* ensureTunnelKey is already fail-safe, but double-guard */ }
-    if (!key) {
-      // No usable keypair (e.g. ssh-keygen unavailable) — disable the tunnel quietly.
-      console.error("[tunnel] no tunnel keypair available; reverse tunnel disabled");
-      return;
-    }
     const knownHosts = relayKnownHostsPath(configDir());
+    let key: Awaited<ReturnType<typeof ensureTunnelKey>> = null;
     let coords: TunnelCoordinates | null = null;
     let provisionFails = 0;
     let backoff = 10_000;
 
     for (;;) {
+      // Re-evaluate enablement EVERY iteration (not once at startup) so touching or removing
+      // `<configDir>/tunnel.enabled` on a live agent takes effect without a restart — a
+      // reinstall that flips a host to relay mode no longer requires the process to bounce.
+      const enabled =
+        process.env.REDSTONE_TUNNEL === "1" || existsSync(join(configDir(), "tunnel.enabled"));
+      if (!enabled) { coords = null; await sleep(30_000); continue; }
+
+      // Lazily create the keypair the first time the tunnel is actually wanted.
+      if (!key) {
+        try { key = await ensureTunnelKey(configDir()); } catch { /* fail-safe below */ }
+        if (!key) {
+          // No usable keypair (e.g. ssh-keygen unavailable) — wait and retry, don't give up.
+          console.error("[tunnel] no tunnel keypair available yet; retrying");
+          await sleep(60_000);
+          continue;
+        }
+      }
       try {
         // (Re)provision if we have no coordinates yet.
         if (!coords) {

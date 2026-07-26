@@ -15,4 +15,7 @@ export interface ServerView {
   discovered?: boolean;
   /** True when a redstone agent is actually reporting from this server (installed). */
   reporting?: boolean;
+  /** The reporting agent's stable host-id (~/.redstone/host-id) if linked — NAT-proof
+   *  match key for a closed host whose public ip/hostname won't match the registry row. */
+  agentHostId?: string | null;
 }

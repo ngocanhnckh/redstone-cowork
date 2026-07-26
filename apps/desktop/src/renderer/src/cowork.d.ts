@@ -51,6 +51,7 @@ declare global {
       hostConversations(a: { machine: string }): Promise<Array<{ id: string; cwd: string; mtime: number; title: string }>>;
       ipInfo(ip: string): Promise<import("../../shared/ip").IpInfo>;
       diskUsage(machine: string): Promise<import("../../shared/disk").DiskUsage>;
+      hostAgentId(a: { host: string; sshUser: string; sshPort: number; password?: string }): Promise<string | null>;
       serverInstallCommand(): Promise<{ serverUrl: string; command: string; commandRelay: string }>;
       sshSetCustom(a: { address: string; host: string; opts: string[] }): Promise<{ ok: boolean }>;
       onServerInstallData(cb: (chunk: string) => void): () => void;
