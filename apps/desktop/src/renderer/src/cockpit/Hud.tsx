@@ -410,11 +410,13 @@ function HostHistory({ t }: { t: HostTelemetryView }) {
       const g = el.getContext("2d");
       if (!g) return;
       const tg = target.current, sh = shown.current;
-      (["cpu", "ram"] as const).forEach((k) => {
+      (["cpu", "ram"] as const).forEach((k, ki) => {
         if (sh[k].length !== tg[k].length) sh[k] = [...tg[k]];
+        const ph = ki * 2.1; // the two series breathe out of phase
         for (let i = 0; i < tg[k].length; i++) {
-          const breath = reduce ? 0 : Math.sin(now / 850 + i * 0.6) * 0.4;
-          sh[k][i] += (tg[k][i] + breath - sh[k][i]) * 0.08;
+          const breath = reduce ? 0
+            : (Math.sin(now / 620 + i * 0.55 + ph) * 1.1 + Math.sin(now / 1130 + i * 0.21 + ph) * 0.6);
+          sh[k][i] += (tg[k][i] + breath - sh[k][i]) * 0.12;
         }
       });
       const frac = reduce ? 0 : Math.min(1, (now - stamp.current) / 3000);
@@ -595,13 +597,6 @@ function TelemetryColumn({ tele }: { tele: HostTelemetryView[] }) {
   const queue = useStore((s) => s.queue);
   const focusId = useStore((s) => s.focusId);
   const session = sessions.find((s) => s.id === focusId) ?? queue.find((s) => s.id === focusId);
-  const fleet = useMemo(() => {
-    const active = sessions.filter((s) => s.status === "active" || s.working).length;
-    const waiting = sessions.filter((s) => s.status === "waiting").length;
-    const total = sessions.length;
-    const spent = sessions.reduce((n, s) => n + (s.attachedAt ? Date.now() - new Date(s.attachedAt).getTime() : 0), 0);
-    return { active, waiting, total, spent };
-  }, [sessions]);
   // Only the host that runs the SELECTED session (matched by machine name).
   const hostTele = session ? tele.find((t) => t.machine === session.machine) ?? null : null;
   return (
@@ -627,19 +622,6 @@ function TelemetryColumn({ tele }: { tele: HostTelemetryView[] }) {
       {/* Operator dossier — sits under the uplink per the Signal Room layout */}
       <motion.div variants={RISE}><AgentIdentityCard /></motion.div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 14 }}>
-        <motion.div variants={RISE} className="hud-card" style={{ ...card, minWidth: 0 }}>
-          <span className="hud-corner" />
-          {kicker("Transmission")}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(64px, 1fr))", gap: 12, marginBottom: 10 }}>
-            {metric("Active", String(fleet.active))}
-            {metric("Waiting", String(fleet.waiting))}
-            {metric("Sessions", String(fleet.total))}
-            {metric("Uptime", fmtDur(fleet.spent))}
-          </div>
-          <WaveLine height={30} color="var(--text-soft)" />
-        </motion.div>
-      </div>
 
       {/* Token spend for the selected session */}
       <motion.div variants={RISE}><TokenSpendWidget /></motion.div>
