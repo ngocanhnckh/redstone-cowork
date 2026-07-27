@@ -3,7 +3,7 @@ import type { JiraBinding, JiraIssue, JiraIssueDetail, JiraProfileSummary } from
 import { JIRA_PROFILE_STORE, type JiraProfileStore } from "../domain/jira/jira-profile.port";
 import { SESSION_STORE, type SessionStore } from "../domain/sessions/session-store.port";
 import { CredentialCipher } from "../infrastructure/credential-cipher";
-import { JiraClient } from "../adapters/jira/jira-client";
+import { JiraClient, type ScannedIssue } from "../adapters/jira/jira-client";
 
 /** Marker for PATs stored in the clear when CRED_ENCRYPTION_KEY is unset (dev). */
 const PLAINTEXT_PREFIX = "plain:";
@@ -131,6 +131,47 @@ export class JiraService {
         return { accountId: u.accountId, done: await client.countJql(jql) };
       } catch { return { accountId: u.accountId, done: 0 }; }
     }));
+  }
+
+  /**
+   * Scan a project's issues for the scoring engine, under the default profile. `sinceMinutes`
+   * uses Jira's TIMEZONE-PROOF relative-date JQL (`updated >= "-Nm"`) so we never have to guess
+   * the Jira server timezone; null → a full scan (first run / backfill). Paginates on `total`.
+   */
+  async scanProject(projectKey: string, sinceMinutes: number | null): Promise<ScannedIssue[]> {
+    const profile = await this.defaultProfile();
+    if (!profile || !projectKey) return [];
+    const client = await this.clientFor(profile);
+    if (!client) return [];
+    const p = projectKey.replace(/"/g, "");
+    const jql = sinceMinutes == null
+      ? `project = "${p}" ORDER BY updated ASC`
+      : `project = "${p}" AND updated >= "-${Math.max(1, Math.ceil(sinceMinutes))}m" ORDER BY updated ASC`;
+    const out: ScannedIssue[] = [];
+    for (let startAt = 0; ; ) {
+      const page = await client.scanIssues(jql, { startAt, maxResults: 100 });
+      out.push(...page.issues);
+      startAt += page.issues.length;
+      if (page.issues.length === 0 || startAt >= page.total) break;
+    }
+    return out;
+  }
+
+  /** Current status of specific issue keys (critical-task done-ness), under the default profile. */
+  async issueStatuses(keys: string[]): Promise<Array<{ key: string; summary: string; status: string; statusCategoryKey: string }>> {
+    if (keys.length === 0) return [];
+    const profile = await this.defaultProfile();
+    const client = profile ? await this.clientFor(profile) : null;
+    if (!client) return [];
+    return client.issueStatuses(keys);
+  }
+
+  /** The project's open-sprint issues (any assignee) — the critical-task picker source. */
+  async projectSprintIssues(projectKey: string): Promise<Array<{ key: string; summary: string; status: string; statusCategoryKey: string; assignee: string | null }>> {
+    const profile = await this.defaultProfile();
+    const client = profile ? await this.clientFor(profile) : null;
+    if (!client) return [];
+    return client.projectSprintIssues(projectKey);
   }
 
   /** An agent's assigned Jira issues (newest first) under the default profile. */

@@ -36,6 +36,47 @@ type RawComment = {
   body?: string;
 };
 
+// ---- scanIssues raw + normalised shapes (scoring engine) -------------------
+type RawScanIssue = {
+  key: string;
+  fields?: {
+    summary?: string;
+    timeoriginalestimate?: number | null;
+    assignee?: { name?: string; displayName?: string } | null;
+    status?: { name?: string; statusCategory?: { key?: string } };
+    resolutiondate?: string | null;
+    created?: string;
+    project?: { key?: string };
+    issuelinks?: Array<{
+      type?: { name?: string; inward?: string; outward?: string };
+      inwardIssue?: { key?: string; fields?: { created?: string } };
+      outwardIssue?: { key?: string; fields?: { created?: string } };
+    }>;
+  };
+  changelog?: {
+    histories?: Array<{
+      id?: string | number;
+      created?: string;
+      author?: { name?: string } | null;
+      items?: Array<{ field?: string; fromString?: string | null; toString?: string | null }>;
+    }>;
+  };
+};
+
+/** Framework-free view of an issue for the scoring detectors + scanner. */
+export type ScannedIssue = {
+  key: string;
+  projectKey: string;
+  estimateSeconds: number | null;
+  assignee: { name: string; displayName: string } | null;
+  status: string;
+  statusCategoryKey: string;
+  resolutionDate: string | null;
+  created: string;
+  issuelinks: Array<{ typeName: string; key: string; created: string | null }>;
+  histories: Array<{ id: string; created: string; author: string | null; items: Array<{ field: string; fromString: string | null; toString: string | null }> }>;
+};
+
 /**
  * Thin Jira REST v2 client for the per-session integration. Bearer PAT auth
  * against self-hosted Data Center (also works on Cloud). Every method throws with
@@ -341,6 +382,91 @@ export class JiraClient {
       body: JSON.stringify({ transition: { id: transitionId } }),
     });
     if (!res.ok) throw new Error(`Jira transition ${key} responded ${res.status}: ${await res.text().catch(() => "")}`);
+  }
+
+  /**
+   * Scan issues for the scoring engine: estimate + assignee + status + links + full changelog.
+   * Returns a normalised, framework-free shape (see ScannedIssue) so the detection helpers and
+   * scanner stay decoupled from the REST payload. One page; the service paginates on `total`.
+   */
+  async scanIssues(jql: string, opts?: { startAt?: number; maxResults?: number }): Promise<{ total: number; startAt: number; issues: ScannedIssue[] }> {
+    const startAt = opts?.startAt ?? 0;
+    const maxResults = opts?.maxResults ?? 100;
+    const fields = "timeoriginalestimate,assignee,status,issuelinks,resolutiondate,project,issuetype,created";
+    const url = `${this.base}/rest/api/2/search?jql=${encodeURIComponent(jql)}&expand=changelog&fields=${encodeURIComponent(fields)}&startAt=${startAt}&maxResults=${maxResults}`;
+    const res = await this.fetchImpl(url, { headers: this.headers() });
+    if (!res.ok) throw new Error(`Jira scan responded ${res.status}`);
+    const data = (await res.json()) as { total?: number; startAt?: number; issues?: RawScanIssue[] };
+    return {
+      total: data.total ?? 0,
+      startAt: data.startAt ?? startAt,
+      issues: (data.issues ?? []).map((i) => this.toScanned(i)),
+    };
+  }
+
+  /** Current status of specific issues (for the critical-task checklist). Empty in → empty out. */
+  async issueStatuses(keys: string[]): Promise<Array<{ key: string; summary: string; status: string; statusCategoryKey: string }>> {
+    if (keys.length === 0) return [];
+    const list = keys.map((k) => `"${escapeJqlValue(k)}"`).join(",");
+    const jql = `key in (${list})`;
+    const url = `${this.base}/rest/api/2/search?jql=${encodeURIComponent(jql)}&fields=${encodeURIComponent("summary,status")}&maxResults=${keys.length}`;
+    const res = await this.fetchImpl(url, { headers: this.headers() });
+    if (!res.ok) throw new Error(`Jira issueStatuses responded ${res.status}`);
+    const data = (await res.json()) as { issues?: RawIssue[] };
+    return (data.issues ?? []).map((i) => ({
+      key: i.key,
+      summary: i.fields?.summary ?? "",
+      status: i.fields?.status?.name ?? "",
+      statusCategoryKey: i.fields?.status?.statusCategory?.key ?? "",
+    }));
+  }
+
+  /** All issues in the PROJECT's open sprint(s) (any assignee) — the critical-task picker source.
+   *  Falls back to "not done" if the project has no sprint field. */
+  async projectSprintIssues(projectKey: string): Promise<Array<{ key: string; summary: string; status: string; statusCategoryKey: string; assignee: string | null }>> {
+    const project = escapeJqlValue(projectKey);
+    const fields = "summary,status,assignee";
+    const sprintJql = `project = "${project}" AND sprint in openSprints() ORDER BY status`;
+    const fallbackJql = `project = "${project}" AND statusCategory != Done ORDER BY updated DESC`;
+    const run = (jql: string) =>
+      this.fetchImpl(`${this.base}/rest/api/2/search?jql=${encodeURIComponent(jql)}&fields=${encodeURIComponent(fields)}&maxResults=100`, { headers: this.headers() });
+    let res = await run(sprintJql);
+    if (res.status === 400) res = await run(fallbackJql);
+    if (!res.ok) throw new Error(`Jira projectSprintIssues responded ${res.status}`);
+    const data = (await res.json()) as { issues?: RawIssue[] };
+    return (data.issues ?? []).map((i) => ({
+      key: i.key,
+      summary: i.fields?.summary ?? "",
+      status: i.fields?.status?.name ?? "",
+      statusCategoryKey: i.fields?.status?.statusCategory?.key ?? "",
+      assignee: i.fields?.assignee?.displayName ?? null,
+    }));
+  }
+
+  private toScanned(i: RawScanIssue): ScannedIssue {
+    const f = i.fields ?? {};
+    const links = (f.issuelinks ?? []).map((l) => {
+      const other = l.outwardIssue ?? l.inwardIssue;
+      return { typeName: l.type?.name ?? "", key: other?.key ?? "", created: other?.fields?.created ?? null };
+    }).filter((l) => l.key);
+    const histories = (i.changelog?.histories ?? []).map((h) => ({
+      id: String(h.id),
+      created: h.created ?? "",
+      author: h.author?.name ?? null,
+      items: (h.items ?? []).map((it) => ({ field: it.field ?? "", fromString: it.fromString ?? null, toString: it.toString ?? null })),
+    }));
+    return {
+      key: i.key,
+      projectKey: f.project?.key ?? "",
+      estimateSeconds: f.timeoriginalestimate ?? null,
+      assignee: f.assignee ? { name: f.assignee.name ?? "", displayName: f.assignee.displayName ?? "" } : null,
+      status: f.status?.name ?? "",
+      statusCategoryKey: f.status?.statusCategory?.key ?? "",
+      resolutionDate: f.resolutiondate ?? null,
+      created: f.created ?? "",
+      issuelinks: links,
+      histories,
+    };
   }
 
   private toIssue(i: RawIssue): JiraIssue {
