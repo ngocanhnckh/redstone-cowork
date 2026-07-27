@@ -29,6 +29,10 @@ export function buildLaunchCommand(opts: { folder: string; danger: boolean; resu
   const flags = `${resume}${opts.danger ? "--dangerously-skip-permissions" : ""}`.trim();
   const script = [
     `set -e`,
+    // Put the host's private Node/tmux/Claude (provisioned under ~/.redstone by install.sh,
+    // no sudo) on PATH before anything runs — otherwise `node`/`tmux`/`claude` may be absent
+    // on a box that never had them system-wide.
+    `[ -f "$HOME/.redstone/env" ] && . "$HOME/.redstone/env"`,
     `FOLDER=${shSingle(opts.folder)}`,
     `mkdir -p "$FOLDER"`,
     // Pre-accept the folder-trust prompt (same effect as choosing "Yes, I trust this folder").
