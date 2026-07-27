@@ -631,9 +631,10 @@ function ReconRadar() {
     const x = 50 + Math.cos(a) * r * 46, y = 50 + Math.sin(a) * r * 46;
     // Angle of this blip in the sweep's conic frame (0deg = north, clockwise), so the glow
     // pulse can be phase-delayed to fire exactly when the rotating sweep edge crosses it —
-    // a real radar contact lighting up as the cone passes. Sweep spins 360deg / 4.2s.
+    // a real radar contact lighting up as the cone passes. Sweep spins -360deg / 4.2s
+    // (counter-clockwise, so the bright leading edge leads the fade tail).
     const phi = (Math.atan2(x - 50, -(y - 50)) * 180 / Math.PI + 360) % 360;
-    const glowDelay = ((phi / 360 - 1) * 4.2).toFixed(2);
+    const glowDelay = (-(phi / 360) * 4.2).toFixed(2);
     return { p, x, y, glowDelay };
   }), [peers]);
 
@@ -931,7 +932,7 @@ function WidgetStyles() {
       .rcw-ticker-item { animation: rcw-ticker-in .24s ease both; }
       @keyframes rcw-w-pulse { 0%,100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.5); opacity: 0.5; } }
       .rcw-w-pulse { animation: rcw-w-pulse 1.3s ease-in-out infinite; }
-      @keyframes rcw-radar-spin { to { transform: rotate(360deg); } }
+      @keyframes rcw-radar-spin { to { transform: rotate(-360deg); } }
       .rcw-radar-sweep { position: absolute; inset: 0; clip-path: circle(50%); animation: rcw-radar-spin 4.2s linear infinite;
         background: conic-gradient(from 0deg, rgba(230,59,46,0.28), rgba(230,59,46,0.04) 52deg, transparent 60deg); }
       .rcw-blip { border-radius: 50% !important; background: rgb(var(--primary-soft)); transform: translate(-50%, -50%);
