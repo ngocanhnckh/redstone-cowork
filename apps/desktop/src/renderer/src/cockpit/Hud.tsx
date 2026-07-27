@@ -373,7 +373,6 @@ function HostHistory({ t }: { t: HostTelemetryView }) {
   const wrap = useRef<HTMLDivElement>(null);
   const target = useRef<{ cpu: number[]; ram: number[] }>({ cpu: [], ram: [] });
   const shown = useRef<{ cpu: number[]; ram: number[] }>({ cpu: [], ram: [] });
-  const stamp = useRef(performance.now());
 
   const ramPct = t.latest.ramTotal > 0 ? (t.latest.ramUsed / t.latest.ramTotal) * 100 : 0;
   const ramFallback = useRef<number[]>([]);
@@ -391,7 +390,6 @@ function HostHistory({ t }: { t: HostTelemetryView }) {
     }
     target.current = { cpu: [...cpu], ram: [...ram] };
     if (!shown.current.cpu.length) shown.current = { cpu: [...cpu], ram: [...ram] };
-    stamp.current = performance.now();
   }, [t.latest, t.cpuHistory, t.ramHistory, ramPct]);
 
   useEffect(() => {
@@ -415,11 +413,10 @@ function HostHistory({ t }: { t: HostTelemetryView }) {
         const ph = ki * 2.1; // the two series breathe out of phase
         for (let i = 0; i < tg[k].length; i++) {
           const breath = reduce ? 0
-            : (Math.sin(now / 620 + i * 0.55 + ph) * 1.1 + Math.sin(now / 1130 + i * 0.21 + ph) * 0.6);
-          sh[k][i] += (tg[k][i] + breath - sh[k][i]) * 0.12;
+            : (Math.sin(now / 2100 + i * 0.28 + ph) * 1.0 + Math.sin(now / 3400 + i * 0.11 + ph) * 0.6);
+          sh[k][i] += (tg[k][i] + breath - sh[k][i]) * 0.05;
         }
       });
-      const frac = reduce ? 0 : Math.min(1, (now - stamp.current) / 3000);
       const PL = 44, PR = 8, PT = 8, PB = 30, PW = W - PL - PR, PH = H - PT - PB;
       g.clearRect(0, 0, W, H);
       g.font = '11px "IBM Plex Mono", monospace';
@@ -443,7 +440,7 @@ function HostHistory({ t }: { t: HostTelemetryView }) {
         g.beginPath();
         const n = arr.length;
         for (let i = 0; i < n; i++) {
-          const x = PL + ((i - frac) / Math.max(1, n - 1)) * PW;
+          const x = PL + (i / Math.max(1, n - 1)) * PW;
           const y = PT + (1 - Math.max(0, Math.min(100, arr[i])) / 100) * PH;
           i ? g.lineTo(x, y) : g.moveTo(x, y);
         }
