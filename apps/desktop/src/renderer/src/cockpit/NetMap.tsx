@@ -124,8 +124,6 @@ export default function NetMap() {
             return (
               <g key={p.ip} style={{ cursor: "pointer" }}
                 onClick={() => openIp({ ip: p.ip, domain: p.domain, service: p.service, port: p.port, proc: p.proc })}>
-                {/* glow lights up as the radar sweep passes this longitude */}
-                <circle cx={x} cy={y} r={3.6} fill="#e8e6e1" className="rcw-net-glow" style={{ animationDelay: `${(-(x / W) * 5).toFixed(2)}s` }} />
                 <rect x={x - 1.5} y={y - 1.5} width={3} height={3} fill={col} />
                 <title>{peerLabel(p)} · {locLabel(p)} — click to inspect</title>
               </g>
@@ -140,7 +138,6 @@ export default function NetMap() {
             </g>
           )}
         </svg>
-        {mapped.length > 0 && <div className="rcw-net-sweepline" />}
         {map && !map.geo && (
           <div className="mono faint" style={{ position: "absolute", bottom: 4, left: 6, right: 6, fontSize: 8.5, textAlign: "center" }}>geo DB missing — run “pnpm --filter @rcw/desktop geoip”</div>
         )}
@@ -181,14 +178,6 @@ function NetStyles() {
       @keyframes rcw-net-fade { from { opacity:0; } to { opacity:1; } }
       .rcw-net-ping { animation: rcw-net-ping 2.2s ease-out infinite; transform-box: fill-box; }
       body.rcw-hidden .rcw-net-ping { animation-play-state: paused !important; }
-      /* radar sweep line + per-blip flash (delay is set inline so each lights as the line passes) */
-      @keyframes rcw-net-sweepx { from { left:0%; } to { left:100%; } }
-      .rcw-net-sweepline { position:absolute; top:0; bottom:0; width:2px; z-index:3; pointer-events:none;
-        background: linear-gradient(180deg, transparent, rgba(232,230,225,.85), transparent); opacity:.5;
-        box-shadow: 0 0 16px 3px rgba(232,230,225,.18); animation: rcw-net-sweepx 5s linear infinite; }
-      @keyframes rcw-net-flash { 0% { opacity:.95; } 12% { opacity:0; } 100% { opacity:0; } }
-      .rcw-net-glow { animation: rcw-net-flash 5s linear infinite; transform-box: fill-box; }
-      body.rcw-hidden .rcw-net-sweepline, body.rcw-hidden .rcw-net-glow { animation-play-state: paused !important; }
       .rcw-net-detail { position:absolute; inset:0; z-index:8; display:flex; align-items:center; justify-content:center; padding:12px;
         background: rgba(4,8,12,0.55); backdrop-filter: blur(2px); border-radius:12px; animation: rcw-net-fade .18s ease both; }
       .rcw-net-detail-card { width:100%; max-width:240px; border:1px solid var(--border-strong); border-radius:11px; padding:11px 13px;
