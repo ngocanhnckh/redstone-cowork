@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useStore } from "../store";
 import { SessionView } from "../types";
+import ReportProblem from "./ReportProblem";
 import NewSessionWizard from "./NewSessionWizard";
 
 function initials(cwd: string): string {
@@ -244,6 +245,7 @@ export default function QueueRail() {
           </div>
         );
       })}
+      <ReportProblem />
     </div>
   );
 }

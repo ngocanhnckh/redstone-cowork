@@ -35,6 +35,8 @@ export const IPC = {
   hostAgentId: "api:host:agent-id",
   serverInstallCommand: "api:servers:install-command",
   sshConfigHosts: "api:ssh:config-hosts",
+  reportBug: "app:report-bug",
+  logError: "app:log-error",
   recentsList: "app:recents:list",
   recentsAdd: "app:recents:add",
   recentsRemove: "app:recents:remove",

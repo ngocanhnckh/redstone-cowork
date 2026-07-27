@@ -56,6 +56,8 @@ declare global {
       sshSetCustom(a: { address: string; host: string; opts: string[] }): Promise<{ ok: boolean }>;
       sshConfigHosts(): Promise<Array<{ alias: string; hostName: string | null; user: string | null; port: number | null }>>;
       recentsList(): Promise<import("../../main/recents").Recent[]>;
+      reportBug(message?: string): Promise<{ ok: boolean; to?: string; error?: string }>;
+      logError(message: string): void;
       recentsAdd(e: Omit<import("../../main/recents").Recent, "at">): Promise<import("../../main/recents").Recent[]>;
       recentsRemove(machine: string, folder: string): Promise<import("../../main/recents").Recent[]>;
       onServerInstallData(cb: (chunk: string) => void): () => void;

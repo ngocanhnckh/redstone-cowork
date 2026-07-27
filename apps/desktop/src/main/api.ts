@@ -595,6 +595,9 @@ export async function scoringVoidPenalty(id: string): Promise<unknown> {
 export async function scoringScan(project: string): Promise<unknown> {
   return (await req(`/scoring/admin/scan/${encodeURIComponent(project)}`, { method: "POST" })).json();
 }
+export async function reportBug(body: { message?: string; log: string; context: Record<string, unknown> }): Promise<{ ok: boolean; to?: string }> {
+  return (await req("/report-bug", { method: "POST", body: JSON.stringify(body) })).json();
+}
 export async function jiraGetBinding(sessionId: string): Promise<unknown> {
   const t = await (await req(`/sessions/${sid(sessionId)}/jira`)).text();
   return t && t.trim() ? JSON.parse(t) : null;

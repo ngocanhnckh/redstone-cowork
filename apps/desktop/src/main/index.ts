@@ -3,7 +3,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join, basename, extname, normalize, sep } from "node:path";
 import { readFile } from "node:fs/promises";
 import { existsSync, writeFileSync, renameSync } from "node:fs";
-import { hostname } from "node:os";
+import { hostname, release } from "node:os";
 import { saveConfig, loadConfig, clearConfig, saveDeviceTrust, loadDeviceTrust, getDeviceSecret, clearDeviceTrust } from "./config";
 import * as api from "./api";
 import { getWorkspaceConfig, saveWorkspaceConfig, getSshHost, setSshHost, isLocalMachine, setServerHosts, warmSshMaster, setSshCustom, getSshCustom } from "./workspace";
@@ -54,6 +54,9 @@ import { sshSetup, type SshSetupArgs } from "./ssh-setup";
 import { sshInstall, sshReadHostId, buildLaunchCommand } from "./ssh-install";
 import { listSshConfigHosts } from "./ssh-config";
 import { listRecents, addRecent, removeRecent } from "./recents";
+import { initLogbook, recentLog, logEntry } from "./logbook";
+
+initLogbook();
 import { captureClaudePane, sendClaudeKeys } from "./claude-login";
 import { listFolderSessions, listHostConversations } from "./host-sessions";
 import { ipInfo } from "./ip-info";
@@ -449,6 +452,21 @@ ipcMain.handle(IPC.sshSetCustom, (_e, a: { address: string; host: string; opts: 
   return { ok: true };
 });
 ipcMain.handle(IPC.sshConfigHosts, () => listSshConfigHosts());
+ipcMain.on(IPC.logError, (_e, a: { message: string }) => logEntry("renderer", a?.message ?? ""));
+ipcMain.handle(IPC.reportBug, async (_e, a: { message?: string }) => {
+  try {
+    const cfg = loadConfig();
+    const context: Record<string, unknown> = {
+      appVersion: app.getVersion(), platform: `${process.platform} ${process.arch}`, osRelease: release(),
+      serverUrl: cfg?.serverUrl ?? "(none)", electron: process.versions.electron,
+    };
+    const r = await api.reportBug({ message: a?.message, log: recentLog(), context });
+    return { ok: !!(r as { ok?: boolean }).ok, to: (r as { to?: string }).to };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { ok: false, error: /50\d/.test(msg) ? "Email isn't configured on the server yet." : msg };
+  }
+});
 ipcMain.handle(IPC.recentsList, () => listRecents());
 ipcMain.handle(IPC.recentsAdd, (_e, entry: Omit<import("./recents").Recent, "at">) => addRecent(entry));
 ipcMain.handle(IPC.recentsRemove, (_e, a: { machine: string; folder: string }) => removeRecent(a.machine, a.folder));

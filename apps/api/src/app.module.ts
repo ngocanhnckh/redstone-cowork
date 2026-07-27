@@ -115,6 +115,8 @@ import { InMemoryAccountStore } from "./adapters/persistence/in-memory-account-s
 import { PostgresAccountStore } from "./adapters/persistence/postgres-account-store";
 import { ExternalApiGuard } from "./adapters/http/external-api.guard";
 import { SettingsService, SETTINGS_STORE } from "./application/settings.service";
+import { ReportController } from "./adapters/http/report.controller";
+import { MailService } from "./application/mail.service";
 import { ScoringController } from "./adapters/http/scoring.controller";
 import { ScoringService } from "./application/scoring.service";
 import { JiraScannerService } from "./application/scoring/jira-scanner.service";
@@ -138,7 +140,7 @@ import { PromptLoader } from "./infrastructure/prompts/prompt-loader";
 import type { Pool } from "pg";
 
 @Module({
-  controllers: [HealthController, EventsController, SessionsController, DecisionsController, StreamController, PushController, ConnectionsController, OAuthController, MicrosoftOAuthController, DevicesController, InstallController, LlmController, AuthController, HostsController, InventoryController, AccessKeysController, TelemetryController, SkillsController, TunnelController, ClaudeConfigsController, JiraController, AccountsController, JiraHooksController, JiraOAuthController, FaceLoginController, FaceEnrollController, ServersController, AgencyController, ScoringController],
+  controllers: [HealthController, EventsController, SessionsController, DecisionsController, StreamController, PushController, ConnectionsController, OAuthController, MicrosoftOAuthController, DevicesController, InstallController, LlmController, AuthController, HostsController, InventoryController, AccessKeysController, TelemetryController, SkillsController, TunnelController, ClaudeConfigsController, JiraController, AccountsController, JiraHooksController, JiraOAuthController, FaceLoginController, FaceEnrollController, ServersController, AgencyController, ScoringController, ReportController],
   providers: [
     RecordEventUseCase,
     SessionsService,
@@ -272,6 +274,7 @@ import type { Pool } from "pg";
     },
     ScoringService,
     JiraScannerService,
+    MailService,
     {
       provide: SERVER_STORE,
       inject: [PG_POOL, ACCOUNT_STORE],

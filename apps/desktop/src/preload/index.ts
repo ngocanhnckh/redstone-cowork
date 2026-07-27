@@ -43,6 +43,8 @@ contextBridge.exposeInMainWorld("cowork", {
   sshSetCustom: (a: { address: string; host: string; opts: string[] }): Promise<{ ok: boolean }> => ipcRenderer.invoke(IPC.sshSetCustom, a),
   sshConfigHosts: (): Promise<Array<{ alias: string; hostName: string | null; user: string | null; port: number | null }>> => ipcRenderer.invoke(IPC.sshConfigHosts),
   recentsList: (): Promise<import("../main/recents").Recent[]> => ipcRenderer.invoke(IPC.recentsList),
+  reportBug: (message?: string): Promise<{ ok: boolean; to?: string; error?: string }> => ipcRenderer.invoke(IPC.reportBug, { message }),
+  logError: (message: string): void => { ipcRenderer.send(IPC.logError, { message }); },
   recentsAdd: (e: Omit<import("../main/recents").Recent, "at">): Promise<import("../main/recents").Recent[]> => ipcRenderer.invoke(IPC.recentsAdd, e),
   recentsRemove: (machine: string, folder: string): Promise<import("../main/recents").Recent[]> => ipcRenderer.invoke(IPC.recentsRemove, { machine, folder }),
   onServerInstallData: (cb: (chunk: string) => void): (() => void) => {
