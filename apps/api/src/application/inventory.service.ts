@@ -42,28 +42,25 @@ export class InventoryService {
     // tmux poller is a ghost. Soft-close it so it leaves the cockpit. Never throws
     // into the ingest path.
     try {
-      await this.reapMissing(machine, new Set(sessions.map((s) => s.id)), attached, new Date());
+      await this.reapMissing(machine, attached, new Date());
     } catch {
       /* reaping is best-effort — never break inventory ingest */
     }
   }
 
-  /** Close attached sessions on `machine` that vanished from the latest scan snapshot. */
-  private async reapMissing(machine: string, scannedIds: Set<string>, attached: AgentSession[], now: Date): Promise<void> {
-    // Empty scan = likely a scan error; never mass-close on it.
-    if (scannedIds.size === 0) return;
+  /** Close attached sessions on `machine` whose tmux/poller is dead. LIVENESS = the poller
+   *  heartbeat (lastSeenAt, touched every ~25s by its delivery long-poll), NOT the transcript:
+   *  a session whose tmux exited (Claude quit / crashed / `tmux kill-session`) still leaves its
+   *  transcript on disk, so keying reaping on transcript-absence (the old behavior) left dead
+   *  sessions lingering in the cockpit as "working…" forever. So reap any attached session gone
+   *  quiet past the grace, regardless of whether the scan still lists its transcript. A live
+   *  session heartbeats far more often than REAP_GRACE_MS, so this never closes a real one. */
+  private async reapMissing(machine: string, attached: AgentSession[], now: Date): Promise<void> {
     for (const s of attached) {
       if (s.machine !== machine) continue;
       if (s.closedAt) continue; // already retired
-      if (scannedIds.has(s.id)) continue; // still has a transcript
-      // Only reap sessions that have ALSO gone quiet. A LIVE session heartbeats
-      // every ~25s (its tmux poller loops, and delivery long-polls count too), so a
-      // recent lastSeenAt means it's alive even if this scan can't see its transcript
-      // — e.g. a huge first line pushes the `cwd` past the scanner's head window and
-      // the session gets dropped from the snapshot. Closing an actively-chatting
-      // session on that basis is exactly the "disappears after ~1 min" bug. Use
-      // lastSeenAt (freshest signal, ≥ attachedAt) so only genuinely dead sessions
-      // (poller gone) are reaped.
+      // Alive if it heartbeat within the grace — the tmux poller loops every ~25s (delivery
+      // long-poll touches lastSeenAt). Only a genuinely dead poller goes silent this long.
       if (now.getTime() - s.lastSeenAt.getTime() < REAP_GRACE_MS) continue;
       await this.sessions.close(s.id, now);
       this.bus.emit({ type: "session.updated", payload: { id: s.id } });

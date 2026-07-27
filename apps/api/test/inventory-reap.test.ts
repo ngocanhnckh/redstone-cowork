@@ -27,49 +27,39 @@ const make = () => {
   return { sessions, svc };
 };
 
-describe("inventory auto-reap reconciliation", () => {
-  it("closes an attached session absent from the scan; keeps reported ones", async () => {
+describe("inventory auto-reap reconciliation (heartbeat-based)", () => {
+  it("reaps a dead-poller session even while its transcript is STILL scanned — the exited-session-still-showing bug", async () => {
     const { sessions, svc } = make();
-    await sessions.upsert(session("A", "mac"));
-    await sessions.upsert(session("B", "mac"));
-    await sessions.upsert(session("C", "mac")); // will be missing from scan → reaped
+    // Its tmux exited (Claude quit/crashed) so the poller is gone (lastSeenAt=OLD), but the
+    // transcript survives on disk and is still reported by the scan. Must be reaped anyway.
+    await sessions.upsert(session("dead", "mac")); // OLD lastSeenAt, present in scan
+    await svc.reportInventory("h1", { machine: "mac", sessions: [scan("dead"), scan("alive")] });
+    expect((await sessions.get("dead"))?.closedAt).toBeTruthy();
+    expect((await sessions.list()).map((s) => s.id)).not.toContain("dead");
+  });
 
-    await svc.reportInventory("h1", { machine: "mac", sessions: [scan("A"), scan("B")] });
+  it("keeps a LIVE (recently-heartbeat) session whether or not the scan lists its transcript", async () => {
+    const { sessions, svc } = make();
+    await sessions.upsert(session("live_scanned", "mac", new Date(Date.now() - 20_000)));   // fresh + in scan
+    await sessions.upsert(session("live_unscanned", "mac", new Date(Date.now() - 20_000))); // fresh + NOT in scan
+    await svc.reportInventory("h1", { machine: "mac", sessions: [scan("live_scanned")] });
+    expect((await sessions.get("live_scanned"))?.closedAt).toBeNull();
+    expect((await sessions.get("live_unscanned"))?.closedAt).toBeNull(); // heartbeat protects it
+  });
 
-    expect((await sessions.get("C"))?.closedAt).toBeTruthy();
-    expect((await sessions.get("A"))?.closedAt).toBeNull();
-    const listed = (await sessions.list()).map((s) => s.id).sort();
-    expect(listed).toEqual(["A", "B"]);
+  it("reaps a stale session even on an empty scan (heartbeat, not transcript, is the liveness signal)", async () => {
+    const { sessions, svc } = make();
+    await sessions.upsert(session("dead", "mac"));                        // OLD → reaped
+    await sessions.upsert(session("live", "mac", new Date()));            // fresh → kept
+    await svc.reportInventory("h1", { machine: "mac", sessions: [] });
+    expect((await sessions.get("dead"))?.closedAt).toBeTruthy();
+    expect((await sessions.get("live"))?.closedAt).toBeNull();
   });
 
   it("never touches sessions on a different machine", async () => {
     const { sessions, svc } = make();
-    await sessions.upsert(session("D", "other"));
+    await sessions.upsert(session("D", "other")); // OLD, but on another machine
     await svc.reportInventory("h1", { machine: "mac", sessions: [scan("A")] });
     expect((await sessions.get("D"))?.closedAt).toBeNull();
-  });
-
-  it("an empty scan closes nothing (guards against scan errors)", async () => {
-    const { sessions, svc } = make();
-    await sessions.upsert(session("C", "mac"));
-    await svc.reportInventory("h1", { machine: "mac", sessions: [] });
-    expect((await sessions.get("C"))?.closedAt).toBeNull();
-  });
-
-  it("does not reap a session seen within the grace window (just attached / heartbeating)", async () => {
-    const { sessions, svc } = make();
-    await sessions.upsert(session("young", "mac", new Date())); // seen just now
-    await svc.reportInventory("h1", { machine: "mac", sessions: [scan("A")] });
-    expect((await sessions.get("young"))?.closedAt).toBeNull();
-  });
-
-  it("keeps a LIVE session that's missing from the scan (recent heartbeat) — the disappears-after-1-min bug", async () => {
-    const { sessions, svc } = make();
-    // Attached long ago, but its poller still heartbeats (fresh lastSeenAt), and the
-    // scan can't see its transcript (e.g. cwd hidden past the head window).
-    await sessions.upsert(session("live", "mac", new Date(Date.now() - 20_000)));
-    await svc.reportInventory("h1", { machine: "mac", sessions: [scan("A")] });
-    expect((await sessions.get("live"))?.closedAt).toBeNull();
-    expect((await sessions.list()).map((s) => s.id)).toContain("live");
   });
 });
