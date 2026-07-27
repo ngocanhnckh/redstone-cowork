@@ -40,6 +40,41 @@ describe("pollOnce", () => {
     expect(pasteSettleMs("x".repeat(10_000))).toBe(1500);
   });
 
+  it("delivers text as ONE bracketed paste (not send-keys -l) then Enter — the never-unsent path", async () => {
+    const order: string[] = [];
+    const big = "x".repeat(5000); // long: the case that used to type-but-not-send
+    const deps = {
+      deliveries: vi.fn().mockResolvedValue([
+        { id: "p1", kind: "instruction", options: [], resolution: { choice: null, answers: null, custom: big } },
+      ]),
+      markDelivered: vi.fn(),
+      sendKeys: async (keys: string[]) => { order.push(keys[0] === "-l" ? "sendkeys-literal" : keys[0]); },
+      pasteText: async (text: string) => { order.push(`paste:${text.length}`); },
+      sleep: vi.fn().mockImplementation(async () => { order.push("sleep"); }),
+    };
+    await pollOnce(deps);
+    // exactly one atomic paste of the whole text, a settle, then Enter — NO chunked send-keys -l
+    expect(order).toEqual([`paste:${big.length}`, "sleep", "Enter"]);
+    expect(order).not.toContain("sendkeys-literal");
+  });
+
+  it("falls back to chunked send-keys when the paste path fails", async () => {
+    const literals: string[] = [];
+    const big = "y".repeat(1000);
+    const deps = {
+      deliveries: vi.fn().mockResolvedValue([
+        { id: "p2", kind: "instruction", options: [], resolution: { choice: null, answers: null, custom: big } },
+      ]),
+      markDelivered: vi.fn(),
+      sendKeys: async (keys: string[]) => { if (keys[0] === "-l") literals.push(keys[1]); },
+      pasteText: async () => { throw new Error("no paste-buffer -p"); },
+      sleep: vi.fn(),
+    };
+    await pollOnce(deps);
+    expect(literals.join("")).toBe(big); // reassembled via the send-keys fallback
+    expect(deps.markDelivered).toHaveBeenCalledWith("p2");
+  });
+
   it("chunks a long literal paste into multiple send-keys (tmux command-length limit)", async () => {
     const literals: string[] = [];
     const big = "x".repeat(1700); // > LITERAL_CHUNK (480)

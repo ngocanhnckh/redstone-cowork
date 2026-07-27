@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { mkdir, readFile, writeFile, chmod } from "node:fs/promises";
-import { homedir, userInfo } from "node:os";
+import { mkdir, readFile, writeFile, chmod, rm } from "node:fs/promises";
+import { homedir, userInfo, tmpdir } from "node:os";
 import { join } from "node:path";
 import { deliveryToKeys } from "./keymap";
 import { findTranscriptPath, newestTranscript } from "./scanner";
@@ -117,6 +117,11 @@ export type PollOnceDeps = {
   markDelivered(id: string): Promise<void>;
   /** Execute a single send-keys argument list against the tmux target. */
   sendKeys(keys: string[]): Promise<void>;
+  /** Deliver literal text as a single BRACKETED PASTE (tmux load-buffer + paste-buffer -p).
+   *  Optional: when absent, the poller falls back to chunked `send-keys -l`. This is the
+   *  reliable path — bracketed paste is atomic and explicitly delimited, so a following Enter
+   *  always submits instead of being absorbed into the paste (the "typed but not sent" bug). */
+  pasteText?(text: string): Promise<void>;
   /** Report an ssh-authorize outcome back to the server. Optional; only needed when ssh deliveries arrive. */
   postSshResult?(sessionId: string, result: SshResult): Promise<void>;
   /** Pause (ms). Optional so tests run instantly; runPoller injects a real sleep. */
@@ -169,6 +174,16 @@ export function afterKeyDelay(keys: string[]): number {
 export const LITERAL_CHUNK = 480;
 
 /**
+ * Settle after a BRACKETED PASTE before the submitting Enter. Unlike the old length-scaled
+ * `pasteSettleMs` guess, bracketed paste is atomic + delimited, so the Enter can't be absorbed
+ * — we only need the TUI a frame or two to render the pasted block (Claude collapses a big paste
+ * into a "[Pasted text]" placeholder) before submitting. Small + gently scaled, capped low.
+ */
+export function bracketedSettleMs(text: string): number {
+  return Math.min(450, 120 + Math.floor(text.length / 40));
+}
+
+/**
  * Fetch one batch of deliveries, send keystrokes for mapped items,
  * and acknowledge every item (mapped or not).
  *
@@ -205,21 +220,35 @@ export async function pollOnce(deps: PollOnceDeps): Promise<void> {
       if (keySequences) {
         for (let i = 0; i < keySequences.length; i++) {
           const keys = keySequences[i];
-          // Chunk a long literal paste so it stays under tmux's command-length limit.
-          if (keys[0] === "-l" && (keys[1]?.length ?? 0) > LITERAL_CHUNK) {
+          let settle = afterKeyDelay(keys);
+          if (keys[0] === "-l") {
             const text = keys[1] ?? "";
-            for (let off = 0; off < text.length; off += LITERAL_CHUNK) {
-              await deps.sendKeys(["-l", text.slice(off, off + LITERAL_CHUNK)]);
+            // PREFERRED: one atomic bracketed paste. Delimited, so the following Enter always
+            // submits — this is the fix for "message typed into tmux but never sent", which the
+            // old fast `send-keys -l` chunking + timing guess hit on long (and sometimes short)
+            // messages. Fall back to chunked send-keys only if the paste path is unavailable/fails.
+            let pasted = false;
+            if (deps.pasteText) {
+              try { await deps.pasteText(text); pasted = true; settle = bracketedSettleMs(text); }
+              catch { /* fall through to chunked send-keys */ }
+            }
+            if (!pasted) {
+              if (text.length > LITERAL_CHUNK) {
+                for (let off = 0; off < text.length; off += LITERAL_CHUNK) {
+                  await deps.sendKeys(["-l", text.slice(off, off + LITERAL_CHUNK)]);
+                }
+              } else {
+                await deps.sendKeys(keys);
+              }
             }
           } else {
             await deps.sendKeys(keys);
           }
-          // Let the keystroke register before the next one. After a literal paste
-          // Claude's paste buffer needs to settle or the following Enter is absorbed
-          // as a newline; after an Escape the turn needs time to abort; between
+          // Let the keystroke register before the next one. After a paste the TUI needs a couple
+          // of frames to render the block; after an Escape the turn needs time to abort; between
           // ordinary keys a short gap lets the selection register.
           if (i < keySequences.length - 1) {
-            await sleep(afterKeyDelay(keys));
+            await sleep(settle);
           }
         }
       }
@@ -369,6 +398,21 @@ export async function runPoller(opts: {
   const sendKeys = async (keys: string[]): Promise<void> => {
     await execFileP("tmux", ["send-keys", "-t", tmuxTarget, ...keys]);
   };
+  // Deliver text as ONE bracketed paste: load the exact bytes into a tmux buffer (via a temp
+  // file — no arg/stdin length limit) then paste-buffer -p (bracketed) into the pane. Atomic and
+  // delimited, so the submitting Enter that follows can't be swallowed into the paste. -d frees
+  // the buffer. Throws if tmux lacks paste-buffer -p (older than 3.2) → caller falls back.
+  const pasteText = async (text: string): Promise<void> => {
+    const buf = `rcw${process.pid}_${Date.now()}`;
+    const tmp = join(tmpdir(), `${buf}.txt`);
+    await writeFile(tmp, text, "utf8");
+    try {
+      await execFileP("tmux", ["load-buffer", "-b", buf, tmp]);
+      await execFileP("tmux", ["paste-buffer", "-p", "-d", "-b", buf, "-t", tmuxTarget]);
+    } finally {
+      await rm(tmp).catch(() => {});
+    }
+  };
   const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
   // Wait for the session to be registered by the hook handler
@@ -397,6 +441,7 @@ export async function runPoller(opts: {
           deliveries: () => api.deliveries(wrapperId, 25_000) as Promise<Delivery[]>,
           markDelivered: (id) => api.markDelivered(id),
           sendKeys,
+          pasteText,
           postSshResult: (sid, result) => api.postSshResult(sid, result),
           sleep,
         });
