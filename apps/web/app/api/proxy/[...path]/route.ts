@@ -21,6 +21,9 @@ const ALLOWED = [
   /^accounts\/[\w./:-]+$/,
   /^servers$/,
   /^servers\/[\w./:-]+$/,
+  // Scoring: effort board, my score/history, projects, agent-week, admin config/targets/critical/penalties.
+  /^scoring$/,
+  /^scoring\/[\w./:-]+$/,
 ];
 
 async function forward(req: Request, params: Promise<{ path: string[] }>, method: string) {

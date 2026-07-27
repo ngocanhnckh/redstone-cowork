@@ -557,6 +557,42 @@ export async function agencyWeek(): Promise<unknown> { return (await req("/agenc
 export async function agencyWeekConfig(cfg: { prize: string; startsAt: string | null; endsAt: string | null }): Promise<unknown> {
   return (await req("/agency/week/config", { method: "POST", body: JSON.stringify(cfg) })).json();
 }
+
+// ---- Scoring (Jira-effort board) -------------------------------------------
+const q = (o: Record<string, string | undefined>) =>
+  Object.entries(o).filter(([, v]) => v != null && v !== "").map(([k, v]) => `${k}=${encodeURIComponent(v as string)}`).join("&");
+export async function scoringBoard(project: string, week?: string): Promise<unknown> {
+  return (await req(`/scoring/board?${q({ project, week })}`)).json();
+}
+export async function scoringMy(project?: string): Promise<unknown> {
+  const t = await (await req(`/scoring/my?${q({ project })}`)).text();
+  return t && t.trim() ? JSON.parse(t) : null;
+}
+export async function scoringHistory(project?: string): Promise<unknown> { return (await req(`/scoring/history?${q({ project })}`)).json(); }
+export async function scoringProjects(): Promise<unknown[]> { return (await req("/scoring/projects")).json(); }
+export async function scoringAgentWeek(): Promise<unknown> { return (await req("/scoring/agent-week")).json(); }
+export async function scoringConfigGet(project: string): Promise<unknown> { return (await req(`/scoring/admin/config/${encodeURIComponent(project)}`)).json(); }
+export async function scoringConfigSet(project: string, patch: unknown): Promise<unknown> {
+  return (await req(`/scoring/admin/config/${encodeURIComponent(project)}`, { method: "POST", body: JSON.stringify(patch) })).json();
+}
+export async function scoringConfigs(): Promise<unknown[]> { return (await req("/scoring/admin/configs")).json(); }
+export async function scoringTargets(body: { projectKey: string; weekKey: string; teamTarget: number; individualTarget: number }): Promise<unknown> {
+  return (await req("/scoring/admin/targets", { method: "POST", body: JSON.stringify(body) })).json();
+}
+export async function scoringSprintIssues(project: string): Promise<unknown[]> { return (await req(`/scoring/admin/sprint-issues?${q({ project })}`)).json(); }
+export async function scoringCriticalGet(project: string, week: string): Promise<unknown> { return (await req(`/scoring/admin/critical?${q({ project, week })}`)).json(); }
+export async function scoringCriticalSet(body: { projectKey: string; weekKey: string; issueKeys: string[] }): Promise<unknown> {
+  return (await req("/scoring/admin/critical", { method: "POST", body: JSON.stringify(body) })).json();
+}
+export async function scoringPenalties(project: string, includeVoided: boolean): Promise<unknown[]> {
+  return (await req(`/scoring/admin/penalties?${q({ project, includeVoided: includeVoided ? "1" : "" })}`)).json();
+}
+export async function scoringVoidPenalty(id: string): Promise<unknown> {
+  return (await req(`/scoring/admin/penalties/${encodeURIComponent(id)}/void`, { method: "POST" })).json();
+}
+export async function scoringScan(project: string): Promise<unknown> {
+  return (await req(`/scoring/admin/scan/${encodeURIComponent(project)}`, { method: "POST" })).json();
+}
 export async function jiraGetBinding(sessionId: string): Promise<unknown> {
   const t = await (await req(`/sessions/${sid(sessionId)}/jira`)).text();
   return t && t.trim() ? JSON.parse(t) : null;
