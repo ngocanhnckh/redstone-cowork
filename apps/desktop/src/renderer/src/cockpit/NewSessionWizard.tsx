@@ -162,6 +162,7 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
   const [editSrv, setEditSrv] = useState({ name: "", host: "", sshUser: "root", sshPort: 22 });
   const [newSrv, setNewSrv] = useState({ name: "", host: "", sshUser: "root", sshPort: 22, password: "" });
   const [cfgHosts, setCfgHosts] = useState<Array<{ alias: string; hostName: string | null; user: string | null; port: number | null }>>([]);
+  const [recents, setRecents] = useState<Array<{ name: string; host: string; sshUser: string; sshPort: number; machine: string; folder: string; at: number }>>([]);
   const [closed, setClosed] = useState(false);
 
   // Resumable PAST conversations in the chosen folder (no live tmux — `claude --resume`).
@@ -216,6 +217,11 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
       });
       if (r.ok) {
         setLaunched(r.session); setLaunchNeedsPw(false);
+        // Remember this project for the "Recent" quick-reopen list.
+        window.cowork.recentsAdd({
+          name: server.name, host: server.host, sshUser: host?.user || server.sshUser, sshPort: server.sshPort,
+          machine: host?.machine ?? server.host, folder,
+        }).then(setRecents).catch(() => {});
         const wid = (r.session ?? "").replace(/^rcw-/, "");
         setSessConnecting(true);
         log(`${resumeId ? "Resuming" : "Session started"} (${r.session}) — connecting to your cockpit…`, "ok");
@@ -298,6 +304,19 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
 
   useEffect(() => { window.cowork.serversList().then(setServers).catch(() => {}); }, []);
   useEffect(() => { window.cowork.sshConfigHosts().then(setCfgHosts).catch(() => setCfgHosts([])); }, []);
+  useEffect(() => { window.cowork.recentsList().then(setRecents).catch(() => setRecents([])); }, []);
+
+  // Reopen a recent project: reuse its registered server if we still have one, else drive the
+  // launch straight from the recent's saved host/user/port. Skips the server-pick + folder-browse.
+  const pickRecent = (r: { name: string; host: string; sshUser: string; sshPort: number; machine: string; folder: string }) => {
+    const known = servers.find((s) => s.host === r.host && (s.sshUser || "") === (r.sshUser || ""))
+      ?? servers.find((s) => s.host === r.host);
+    setServer(known ?? ({ id: `recent:${r.host}`, name: r.name, host: r.host, sshUser: r.sshUser, sshPort: r.sshPort } as ServerView));
+    setFolder(r.folder);
+    setResume(null); setResumeId(null); setCreateNew(true);
+    log(`Reopening “${r.folder}” on ${r.name}`);
+    go("mode");
+  };
   const refreshInv = useCallback(() => {
     window.cowork.getInventory().then((r) => setInv(r as { hosts: HostRow[]; sessions: Discovered[] })).catch(() => {});
   }, []);
@@ -443,6 +462,22 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
 
           {step === "server" && (
             <>
+              {recents.length > 0 && (
+                <div style={{ marginBottom: 14 }}>
+                  <div className="rcw-nw-label" style={{ marginTop: 0 }}>RECENT</div>
+                  {recents.slice(0, 6).map((r) => (
+                    <div key={`${r.machine} ${r.folder}`} className="rcw-nw-opt" style={{ display: "flex", alignItems: "center", gap: 10 }}
+                      onClick={() => pickRecent(r)} title={`${r.sshUser ? r.sshUser + "@" : ""}${r.host} · ${r.folder}`}>
+                      <span style={{ flex: 1, minWidth: 0 }}>
+                        <b style={{ color: "var(--text)" }}>{r.folder.split("/").filter(Boolean).pop() || r.folder}</b>
+                        <span className="faint" style={{ marginLeft: 8, fontSize: 11 }}>{r.name} · {r.folder}</span>
+                      </span>
+                      <button className="faint" title="Remove from recents" style={{ background: "none", border: 0, cursor: "pointer", fontSize: 13, opacity: 0.6, flexShrink: 0 }}
+                        onClick={(e) => { e.stopPropagation(); window.cowork.recentsRemove(r.machine, r.folder).then(setRecents).catch(() => {}); }}>✕</button>
+                    </div>
+                  ))}
+                </div>
+              )}
               <div className="rcw-nw-label">SELECT SERVER</div>
               {servers.map((s) => (
                 <div key={s.id} className="rcw-nw-opt" onClick={() => chooseServer(s)}>

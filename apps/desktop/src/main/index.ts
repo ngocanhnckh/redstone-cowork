@@ -53,6 +53,7 @@ import {
 import { sshSetup, type SshSetupArgs } from "./ssh-setup";
 import { sshInstall, sshReadHostId, buildLaunchCommand } from "./ssh-install";
 import { listSshConfigHosts } from "./ssh-config";
+import { listRecents, addRecent, removeRecent } from "./recents";
 import { captureClaudePane, sendClaudeKeys } from "./claude-login";
 import { listFolderSessions, listHostConversations } from "./host-sessions";
 import { ipInfo } from "./ip-info";
@@ -448,6 +449,9 @@ ipcMain.handle(IPC.sshSetCustom, (_e, a: { address: string; host: string; opts: 
   return { ok: true };
 });
 ipcMain.handle(IPC.sshConfigHosts, () => listSshConfigHosts());
+ipcMain.handle(IPC.recentsList, () => listRecents());
+ipcMain.handle(IPC.recentsAdd, (_e, entry: Omit<import("./recents").Recent, "at">) => addRecent(entry));
+ipcMain.handle(IPC.recentsRemove, (_e, a: { machine: string; folder: string }) => removeRecent(a.machine, a.folder));
 ipcMain.handle(IPC.accountsAnalytics, () => api.accountsAnalytics());
 ipcMain.handle(IPC.jiraNotifications, () => api.jiraNotifications());
 ipcMain.handle(IPC.jiraNotificationsSeen, () => api.jiraNotificationsSeen());

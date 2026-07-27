@@ -40,10 +40,12 @@ function loadOrder(): string[] {
 }
 
 type Kind = "waiting" | "working" | "active" | "idle" | "lost";
+// Distinct, readable status colors: red = needs you, amber = busy (breathing glow), green =
+// online/ready, muted = idle/offline. The old scheme used near-text greys that were hard to tell apart.
 const META: Record<Kind, { label: string; color: string; pulse: boolean }> = {
   waiting: { label: "waiting for you", color: "#e63b2e", pulse: false },
-  working: { label: "working…", color: "var(--text)", pulse: false },
-  active: { label: "online", color: "var(--text-soft)", pulse: false },
+  working: { label: "working…", color: "#f2a83c", pulse: true },
+  active: { label: "online", color: "#3fb984", pulse: false },
   idle: { label: "idle", color: "var(--text-faint)", pulse: false },
   lost: { label: "offline", color: "var(--text-faint)", pulse: false },
 };
@@ -160,7 +162,7 @@ export default function QueueRail() {
         return (
           <div
             key={session.id}
-            className={focused ? "glass-inset" : "glass-inset glass-inset-hover"}
+            className={`${focused ? "glass-inset" : "glass-inset glass-inset-hover"}${kind === "working" ? " rcw-session-working" : ""}`}
             draggable
             onClick={() => setFocus(session.id)}
             onMouseEnter={() => setHoverId(session.id)}
@@ -207,7 +209,7 @@ export default function QueueRail() {
               <div style={{ fontSize: 11, fontWeight: 600, lineHeight: 1.25, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {projectName(session.cwd)}
               </div>
-              <div className="mono faint" style={{ fontSize: 9, color: kind === "waiting" ? "#e63b2e" : undefined }}>
+              <div className="mono" style={{ fontSize: 9, color: meta.color, fontWeight: kind === "working" || kind === "waiting" ? 600 : 400 }}>
                 {detail}
               </div>
             </div>

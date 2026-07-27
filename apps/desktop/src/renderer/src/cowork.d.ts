@@ -55,6 +55,9 @@ declare global {
       serverInstallCommand(): Promise<{ serverUrl: string; command: string; commandRelay: string }>;
       sshSetCustom(a: { address: string; host: string; opts: string[] }): Promise<{ ok: boolean }>;
       sshConfigHosts(): Promise<Array<{ alias: string; hostName: string | null; user: string | null; port: number | null }>>;
+      recentsList(): Promise<import("../../main/recents").Recent[]>;
+      recentsAdd(e: Omit<import("../../main/recents").Recent, "at">): Promise<import("../../main/recents").Recent[]>;
+      recentsRemove(machine: string, folder: string): Promise<import("../../main/recents").Recent[]>;
       onServerInstallData(cb: (chunk: string) => void): () => void;
       onSessionExpired(cb: () => void): () => void;
       accountsAnalytics(): Promise<Array<{ accountId: string; username: string; displayName: string; role: string; photo: string | null; level: string; division: string; sessions: number; activeSessions: number; tokensInput: number; tokensOutput: number; estCostUsd: number; timeSpentMs: number; lastActiveAt: string | null }>>;

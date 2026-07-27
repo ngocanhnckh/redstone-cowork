@@ -42,6 +42,9 @@ contextBridge.exposeInMainWorld("cowork", {
   serverInstallCommand: (): Promise<{ serverUrl: string; command: string; commandRelay: string }> => ipcRenderer.invoke(IPC.serverInstallCommand),
   sshSetCustom: (a: { address: string; host: string; opts: string[] }): Promise<{ ok: boolean }> => ipcRenderer.invoke(IPC.sshSetCustom, a),
   sshConfigHosts: (): Promise<Array<{ alias: string; hostName: string | null; user: string | null; port: number | null }>> => ipcRenderer.invoke(IPC.sshConfigHosts),
+  recentsList: (): Promise<import("../main/recents").Recent[]> => ipcRenderer.invoke(IPC.recentsList),
+  recentsAdd: (e: Omit<import("../main/recents").Recent, "at">): Promise<import("../main/recents").Recent[]> => ipcRenderer.invoke(IPC.recentsAdd, e),
+  recentsRemove: (machine: string, folder: string): Promise<import("../main/recents").Recent[]> => ipcRenderer.invoke(IPC.recentsRemove, { machine, folder }),
   onServerInstallData: (cb: (chunk: string) => void): (() => void) => {
     const h = (_e: unknown, chunk: string) => cb(chunk);
     ipcRenderer.on(IPC.serverInstallData, h);
