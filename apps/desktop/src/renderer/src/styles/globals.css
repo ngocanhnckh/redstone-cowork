@@ -567,6 +567,79 @@ body {
     max-width: 100%;
 }
 
+
+/* =====================================================================
+   CODE SYNTAX — highlight.js tokens, Signal Room register.
+   Code is functional output (like the terminal's ANSI colours), so it earns
+   real hues — but they stay low-saturation so a code block never competes
+   with the UI, and signal red is NOT used for ordinary tokens (it would
+   read as "needs you"). Reds appear only where they mean deletion/error.
+   ===================================================================== */
+.md pre code.hljs {
+    display: block;
+    color: var(--text-soft);
+}
+.hljs-comment,
+.hljs-quote {
+    color: #5f5c56;
+    font-style: italic;
+}
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-doctag,
+.hljs-name {
+    color: #e8e6e1;
+    font-weight: 600;
+}
+.hljs-string,
+.hljs-regexp,
+.hljs-addition {
+    color: #9fb3a4; /* desaturated sage — strings read as "data" */
+}
+.hljs-number,
+.hljs-symbol,
+.hljs-bullet {
+    color: #c9b891; /* muted sand — numeric literals */
+}
+.hljs-title,
+.hljs-title.function_,
+.hljs-section {
+    color: #d6d3cd;
+    font-weight: 600;
+}
+.hljs-attr,
+.hljs-attribute,
+.hljs-variable,
+.hljs-template-variable,
+.hljs-property {
+    color: #a9a6c2; /* muted lavender — keys / attributes */
+}
+.hljs-type,
+.hljs-built_in,
+.hljs-class .hljs-title,
+.hljs-params {
+    color: #b8b5ae;
+}
+.hljs-meta,
+.hljs-meta .hljs-keyword {
+    color: #7f7c76;
+}
+.hljs-deletion {
+    color: #e63b2e; /* the one red: something removed */
+}
+.hljs-emphasis {
+    font-style: italic;
+}
+.hljs-strong {
+    font-weight: 700;
+    color: var(--text);
+}
+.hljs-link {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
 /* =====================================================================
    WORKING INDICATOR — the sci-fi spinner is retired. The same markup
    (3 <i> + <b>) now renders as a 4-bar chalk equalizer: data movement,
