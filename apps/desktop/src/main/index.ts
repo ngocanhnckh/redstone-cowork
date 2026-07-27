@@ -2,7 +2,7 @@ import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, Notification, she
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join, basename, extname, normalize, sep } from "node:path";
 import { readFile } from "node:fs/promises";
-import { existsSync, writeFileSync } from "node:fs";
+import { existsSync, writeFileSync, renameSync } from "node:fs";
 import { hostname } from "node:os";
 import { saveConfig, loadConfig, clearConfig, saveDeviceTrust, loadDeviceTrust, getDeviceSecret, clearDeviceTrust } from "./config";
 import * as api from "./api";
@@ -10,6 +10,23 @@ import { getWorkspaceConfig, saveWorkspaceConfig, getSshHost, setSshHost, isLoca
 import { getHostIps, getHostConnections, getHostProcesses } from "./host-info";
 import { getCalendarEvents } from "./calendar";
 import { requestCalendarPermission } from "./calendar-permission";
+
+/* ---------------------------------------------------------------------------
+ * userData isolation — MUST run before app-ready / any window.
+ *
+ * package.json has no productName, so app.getName() resolves to "@rcw/desktop"
+ * in BOTH the dev run and the packaged app: they shared one userData directory,
+ * hence one Chromium Local Storage LevelDB. LevelDB is single-writer, so
+ * whichever instance started second could not open it and came up with an empty
+ * localStorage — every setting, layout and custom app looked wiped, and whatever
+ * that instance then wrote was discarded. Nothing was ever actually deleted.
+ *
+ * Giving the dev run its own directory removes the contention permanently: the
+ * installed app keeps the existing profile and can always take the lock.
+ * ------------------------------------------------------------------------- */
+if (!app.isPackaged) {
+  app.setPath("userData", `${app.getPath("userData")}-dev`);
+}
 import { getNetworkMap } from "./network";
 import { getWeather } from "./weather";
 import {
@@ -35,6 +52,7 @@ import {
 } from "./forwarding";
 import { sshSetup, type SshSetupArgs } from "./ssh-setup";
 import { sshInstall, sshReadHostId, buildLaunchCommand } from "./ssh-install";
+import { listSshConfigHosts } from "./ssh-config";
 import { captureClaudePane, sendClaudeKeys } from "./claude-login";
 import { listFolderSessions, listHostConversations } from "./host-sessions";
 import { ipInfo } from "./ip-info";
@@ -429,6 +447,7 @@ ipcMain.handle(IPC.sshSetCustom, (_e, a: { address: string; host: string; opts: 
   setSshCustom(a.address, a.host ? { host: a.host, opts: a.opts ?? [] } : null);
   return { ok: true };
 });
+ipcMain.handle(IPC.sshConfigHosts, () => listSshConfigHosts());
 ipcMain.handle(IPC.accountsAnalytics, () => api.accountsAnalytics());
 ipcMain.handle(IPC.jiraNotifications, () => api.jiraNotifications());
 ipcMain.handle(IPC.jiraNotificationsSeen, () => api.jiraNotificationsSeen());
@@ -645,6 +664,31 @@ ipcMain.handle(IPC.scoringConfigSet, (_e, a: { project: string; patch: unknown }
 ipcMain.handle(IPC.scoringConfigs, () => api.scoringConfigs());
 ipcMain.handle(IPC.scoringTargets, (_e, a: { projectKey: string; weekKey: string; teamTarget: number; individualTarget: number }) => api.scoringTargets(a));
 ipcMain.handle(IPC.scoringJiraProjects, () => api.scoringJiraProjects());
+/* Settings snapshot — a plain JSON mirror of the renderer's rcw.* localStorage,
+ * kept in userData. localStorage is scoped to the page ORIGIN, so it does not
+ * survive the app being served from a different origin (dev localhost vs the
+ * packaged app:// bundle), and it silently reads empty if Chromium cannot open
+ * its LevelDB. This file is origin-independent and always readable, so the
+ * renderer can restore itself instead of appearing wiped. */
+const SNAPSHOT_FILE = () => join(app.getPath("userData"), "settings-snapshot.json");
+ipcMain.handle(IPC.settingsSnapshotRead, async (): Promise<Record<string, string> | null> => {
+  try {
+    const raw = await readFile(SNAPSHOT_FILE(), "utf8");
+    const parsed = JSON.parse(raw) as { keys?: Record<string, string> };
+    return parsed?.keys ?? null;
+  } catch { return null; } // absent or unreadable is normal on a fresh profile
+});
+ipcMain.handle(IPC.settingsSnapshotWrite, (_e, a: { keys: Record<string, string> }) => {
+  try {
+    // Write through a temp file so a crash mid-write can't truncate the snapshot.
+    const target = SNAPSHOT_FILE();
+    const tmp = `${target}.tmp`;
+    writeFileSync(tmp, JSON.stringify({ at: new Date().toISOString(), keys: a.keys }), "utf8");
+    renameSync(tmp, target);
+    return { ok: true };
+  } catch { return { ok: false }; }
+});
+
 ipcMain.handle(IPC.scoringJiraStatuses, (_e, a: { project: string }) => api.scoringJiraStatuses(a.project));
 ipcMain.handle(IPC.scoringSprintIssues, (_e, a: { project: string }) => api.scoringSprintIssues(a.project));
 ipcMain.handle(IPC.scoringCriticalGet, (_e, a: { project: string; week: string }) => api.scoringCriticalGet(a.project, a.week));

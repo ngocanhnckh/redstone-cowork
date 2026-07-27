@@ -1,4 +1,6 @@
 export const IPC = {
+  settingsSnapshotRead: "settings:snapshot:read",
+  settingsSnapshotWrite: "settings:snapshot:write",
   configGet: "config:get",
   configSave: "config:save",
   configClear: "config:clear",
@@ -32,6 +34,7 @@ export const IPC = {
   diskUsage: "api:host:disk-usage",
   hostAgentId: "api:host:agent-id",
   serverInstallCommand: "api:servers:install-command",
+  sshConfigHosts: "api:ssh:config-hosts",
   sshSetCustom: "api:ssh:set-custom",
   accountsAnalytics: "api:accounts:analytics",
   jiraNotifications: "api:jira:notifications",

@@ -161,6 +161,7 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
   const [editing, setEditing] = useState(false);
   const [editSrv, setEditSrv] = useState({ name: "", host: "", sshUser: "root", sshPort: 22 });
   const [newSrv, setNewSrv] = useState({ name: "", host: "", sshUser: "root", sshPort: 22, password: "" });
+  const [cfgHosts, setCfgHosts] = useState<Array<{ alias: string; hostName: string | null; user: string | null; port: number | null }>>([]);
   const [closed, setClosed] = useState(false);
 
   // Resumable PAST conversations in the chosen folder (no live tmux — `claude --resume`).
@@ -296,6 +297,7 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
   }
 
   useEffect(() => { window.cowork.serversList().then(setServers).catch(() => {}); }, []);
+  useEffect(() => { window.cowork.sshConfigHosts().then(setCfgHosts).catch(() => setCfgHosts([])); }, []);
   const refreshInv = useCallback(() => {
     window.cowork.getInventory().then((r) => setInv(r as { hosts: HostRow[]; sessions: Discovered[] })).catch(() => {});
   }, []);
@@ -452,6 +454,22 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
                 <button className="rcw-nw-btn" style={{ marginTop: 6 }} onClick={() => setConnecting(true)}>＋ CONNECT NEW SERVER</button>
               ) : (
                 <div className="rcw-nw-opt" style={{ cursor: "default" }}>
+                  {cfgHosts.length > 0 && (
+                    <>
+                      <div className="rcw-nw-label" style={{ marginTop: 0 }}>FROM YOUR SSH CONFIG</div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 4 }}>
+                        {cfgHosts.map((h) => (
+                          <button key={h.alias} type="button"
+                            title={`${h.user ? h.user + "@" : ""}${h.hostName || h.alias}${h.port ? ":" + h.port : ""}`}
+                            onClick={() => setNewSrv({ name: h.alias, host: h.alias, sshUser: h.user ?? "", sshPort: h.port ?? 22, password: "" })}
+                            style={{ background: newSrv.host === h.alias ? "rgb(232 230 225 / .22)" : "transparent", border: "1px solid var(--border)", color: "var(--text-soft)", borderRadius: 7, padding: "4px 10px", fontSize: 11, cursor: "pointer", fontFamily: "var(--font-mono)" }}>
+                            {h.alias}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="faint" style={{ fontSize: 9.5, marginBottom: 6 }}>Pick one to prefill — it dials via your ~/.ssh/config. Leave SSH USER blank to use the config's User.</div>
+                    </>
+                  )}
                   <div className="rcw-nw-label" style={{ marginTop: 0 }}>NAME</div>
                   <input className="rcw-nw-input" value={newSrv.name} onChange={(e) => setNewSrv({ ...newSrv, name: e.target.value })} placeholder="VPS Alpha" />
                   <div style={{ display: "flex", gap: 8 }}>

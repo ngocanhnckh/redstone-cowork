@@ -54,6 +54,7 @@ declare global {
       hostAgentId(a: { host: string; sshUser: string; sshPort: number; password?: string }): Promise<string | null>;
       serverInstallCommand(): Promise<{ serverUrl: string; command: string; commandRelay: string }>;
       sshSetCustom(a: { address: string; host: string; opts: string[] }): Promise<{ ok: boolean }>;
+      sshConfigHosts(): Promise<Array<{ alias: string; hostName: string | null; user: string | null; port: number | null }>>;
       onServerInstallData(cb: (chunk: string) => void): () => void;
       onSessionExpired(cb: () => void): () => void;
       accountsAnalytics(): Promise<Array<{ accountId: string; username: string; displayName: string; role: string; photo: string | null; level: string; division: string; sessions: number; activeSessions: number; tokensInput: number; tokensOutput: number; estCostUsd: number; timeSpentMs: number; lastActiveAt: string | null }>>;
@@ -158,6 +159,8 @@ declare global {
       scoringConfigs(): Promise<import("../../shared/scoring").ScoringProjectConfig[]>;
       scoringTargets(body: { projectKey: string; weekKey: string; teamTarget: number; individualTarget: number }): Promise<import("../../shared/scoring").ScoringBoard>;
       scoringJiraProjects(): Promise<Array<{ key: string; name: string }>>;
+      settingsSnapshotRead(): Promise<Record<string, string> | null>;
+      settingsSnapshotWrite(keys: Record<string, string>): Promise<{ ok: boolean }>;
       scoringJiraStatuses(project: string): Promise<Array<{ name: string; category: string }>>;
       scoringSprintIssues(project: string): Promise<import("../../shared/scoring").SprintIssue[]>;
       scoringCriticalGet(project: string, week: string): Promise<import("../../shared/scoring").CriticalProgress>;

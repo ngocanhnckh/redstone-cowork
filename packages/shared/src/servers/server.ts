@@ -29,7 +29,9 @@ export type Server = z.infer<typeof ServerSchema>;
 export const NewServerSchema = z.object({
   name: z.string().min(1).max(120),
   host: z.string().min(1).max(255),
-  sshUser: z.string().min(1).max(64).default("root"),
+  // Empty = dial the bare host so the operator's ~/.ssh/config supplies the User (and
+  // HostName/Port). Omitted entirely → "root". So min(0), not min(1).
+  sshUser: z.string().max(64).default("root"),
   sshPort: z.number().int().positive().max(65535).default(22),
   description: z.string().max(500).optional(),
 });

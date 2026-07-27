@@ -41,6 +41,7 @@ contextBridge.exposeInMainWorld("cowork", {
   hostAgentId: (a: { host: string; sshUser: string; sshPort: number; password?: string }): Promise<string | null> => ipcRenderer.invoke(IPC.hostAgentId, a),
   serverInstallCommand: (): Promise<{ serverUrl: string; command: string; commandRelay: string }> => ipcRenderer.invoke(IPC.serverInstallCommand),
   sshSetCustom: (a: { address: string; host: string; opts: string[] }): Promise<{ ok: boolean }> => ipcRenderer.invoke(IPC.sshSetCustom, a),
+  sshConfigHosts: (): Promise<Array<{ alias: string; hostName: string | null; user: string | null; port: number | null }>> => ipcRenderer.invoke(IPC.sshConfigHosts),
   onServerInstallData: (cb: (chunk: string) => void): (() => void) => {
     const h = (_e: unknown, chunk: string) => cb(chunk);
     ipcRenderer.on(IPC.serverInstallData, h);
@@ -191,6 +192,8 @@ contextBridge.exposeInMainWorld("cowork", {
   scoringConfigs: (): Promise<import("../shared/scoring").ScoringProjectConfig[]> => ipcRenderer.invoke(IPC.scoringConfigs),
   scoringTargets: (body: { projectKey: string; weekKey: string; teamTarget: number; individualTarget: number }): Promise<import("../shared/scoring").ScoringBoard> => ipcRenderer.invoke(IPC.scoringTargets, body),
   scoringJiraProjects: (): Promise<Array<{ key: string; name: string }>> => ipcRenderer.invoke(IPC.scoringJiraProjects),
+  settingsSnapshotRead: (): Promise<Record<string, string> | null> => ipcRenderer.invoke(IPC.settingsSnapshotRead),
+  settingsSnapshotWrite: (keys: Record<string, string>): Promise<{ ok: boolean }> => ipcRenderer.invoke(IPC.settingsSnapshotWrite, { keys }),
   scoringJiraStatuses: (project: string): Promise<Array<{ name: string; category: string }>> => ipcRenderer.invoke(IPC.scoringJiraStatuses, { project }),
   scoringSprintIssues: (project: string): Promise<import("../shared/scoring").SprintIssue[]> => ipcRenderer.invoke(IPC.scoringSprintIssues, { project }),
   scoringCriticalGet: (project: string, week: string): Promise<import("../shared/scoring").CriticalProgress> => ipcRenderer.invoke(IPC.scoringCriticalGet, { project, week }),
