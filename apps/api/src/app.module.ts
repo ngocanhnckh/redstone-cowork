@@ -115,6 +115,12 @@ import { InMemoryAccountStore } from "./adapters/persistence/in-memory-account-s
 import { PostgresAccountStore } from "./adapters/persistence/postgres-account-store";
 import { ExternalApiGuard } from "./adapters/http/external-api.guard";
 import { SettingsService, SETTINGS_STORE } from "./application/settings.service";
+import { ScoringController } from "./adapters/http/scoring.controller";
+import { ScoringService } from "./application/scoring.service";
+import { JiraScannerService } from "./application/scoring/jira-scanner.service";
+import { SCORING_STORE } from "./domain/scoring/scoring-store.port";
+import { InMemoryScoringStore } from "./adapters/persistence/in-memory-scoring-store";
+import { PostgresScoringStore } from "./adapters/persistence/postgres-scoring-store";
 import { InMemorySettingsStore } from "./adapters/persistence/in-memory-settings-store";
 import { PostgresSettingsStore } from "./adapters/persistence/postgres-settings-store";
 import { LlmService } from "./application/llm.service";
@@ -132,7 +138,7 @@ import { PromptLoader } from "./infrastructure/prompts/prompt-loader";
 import type { Pool } from "pg";
 
 @Module({
-  controllers: [HealthController, EventsController, SessionsController, DecisionsController, StreamController, PushController, ConnectionsController, OAuthController, MicrosoftOAuthController, DevicesController, InstallController, LlmController, AuthController, HostsController, InventoryController, AccessKeysController, TelemetryController, SkillsController, TunnelController, ClaudeConfigsController, JiraController, AccountsController, JiraHooksController, JiraOAuthController, FaceLoginController, FaceEnrollController, ServersController, AgencyController],
+  controllers: [HealthController, EventsController, SessionsController, DecisionsController, StreamController, PushController, ConnectionsController, OAuthController, MicrosoftOAuthController, DevicesController, InstallController, LlmController, AuthController, HostsController, InventoryController, AccessKeysController, TelemetryController, SkillsController, TunnelController, ClaudeConfigsController, JiraController, AccountsController, JiraHooksController, JiraOAuthController, FaceLoginController, FaceEnrollController, ServersController, AgencyController, ScoringController],
   providers: [
     RecordEventUseCase,
     SessionsService,
@@ -258,6 +264,14 @@ import type { Pool } from "pg";
         pool ? new PostgresAgencyMessageStore(pool) : new InMemoryAgencyMessageStore(),
     },
     AgencyService,
+    {
+      provide: SCORING_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresScoringStore(pool) : new InMemoryScoringStore(),
+    },
+    ScoringService,
+    JiraScannerService,
     {
       provide: SERVER_STORE,
       inject: [PG_POOL, ACCOUNT_STORE],
