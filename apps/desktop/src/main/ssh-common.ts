@@ -39,6 +39,11 @@ ensureSshDir();
  * placed BEFORE the host argument. Never throws.
  */
 export function sshMuxOpts(): string[] {
+  // Windows OpenSSH does NOT support connection multiplexing — ControlMaster/ControlPath rely on
+  // a Unix-domain socket, which Windows lacks. Passing them makes EVERY ssh the app runs fail with
+  // "getsockname failed: Not a socket", so folder-browse and session-launch die even though install
+  // worked. Return no mux options on Windows (each ssh is a fresh connection — slower, but correct).
+  if (process.platform === "win32") return [];
   ensureSshDir();
   return [
     "-o",
