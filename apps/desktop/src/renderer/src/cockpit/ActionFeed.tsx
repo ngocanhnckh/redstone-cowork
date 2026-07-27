@@ -89,9 +89,9 @@ export default function ActionFeed({ active = true }: { sessionId?: string; acti
   // Suppress replay while the agent is actively working OR the user is scrolling.
   const [scrolling, setScrolling] = useState(false);
   const scrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // The automatic idle replay loop is disabled (Signal Room register) — the hook
-  // only steps through a manually-seeded queue now.
-  const relay = useRelay(relayItems, active && !!session, working || scrolling);
+  // Auto-replay the recent transmission once the session goes idle (agent not working and
+  // the user isn't scrolling); new activity or interaction cancels it.
+  const relay = useRelay(relayItems, active && !!session, working || scrolling, { autoIdle: true });
 
   const bodyRef = useRef<HTMLDivElement>(null);
   const stick = useRef(true);

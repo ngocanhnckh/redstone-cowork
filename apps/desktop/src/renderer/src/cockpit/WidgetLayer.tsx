@@ -781,9 +781,16 @@ function ReactorDonut({ rows, metric }: { rows: Proc[]; metric: "cpu" | "mem" })
         const da = (d / 60) * Math.PI * 2 + st.rot;
         g.fillRect(cx + Math.cos(da) * R * 0.72 - 1, cy + Math.sin(da) * R * 0.72 - 1, 2, 2);
       }
-      g.strokeStyle = "rgba(232,230,225,.18)"; g.lineWidth = 1;
-      g.beginPath(); g.moveTo(cx - 12, cy); g.lineTo(cx + 12, cy); g.stroke();
-      g.beginPath(); g.moveTo(cx, cy - 12); g.lineTo(cx, cy + 12); g.stroke();
+      // Centre readout = the unit the numbers are in. ps reports %CPU (can exceed 100 across
+      // cores) and %MEM (share of total RAM), so both tabs are percentages.
+      g.textAlign = "center"; g.textBaseline = "middle";
+      g.fillStyle = "#c4c1bb";
+      g.font = '700 26px "SFU Futura", "IBM Plex Mono", monospace';
+      g.fillText("%", cx, cy - 3);
+      g.fillStyle = "#8a8781";
+      g.font = '600 9.5px "IBM Plex Mono", monospace';
+      g.fillText(met.current === "cpu" ? "CPU" : "RAM", cx, cy + 15);
+      g.textBaseline = "alphabetic";
       let a = -Math.PI / 2;
       const sides: { l: { i: number; mid: number }[]; r: { i: number; mid: number }[] } = { l: [], r: [] };
       st.items.forEach((item, i) => {
@@ -812,7 +819,7 @@ function ReactorDonut({ rows, metric }: { rows: Proc[]; metric: "cpu" | "mem" })
           g.fillText(item.name.slice(0, 14), lx + dir * 6, ly - 4);
           g.fillStyle = pegged ? "#e63b2e" : (RAMP[e.i] ?? "#4a4844");
           g.font = '700 20px "SFU Futura", "IBM Plex Mono", monospace';
-          g.fillText(String(Math.round(item.v)), lx + dir * 6, ly + 16);
+          g.fillText(Math.round(item.v) + "%", lx + dir * 6, ly + 16);
         });
       });
     };
@@ -938,10 +945,13 @@ function WidgetStyles() {
       .rcw-blip { border-radius: 50% !important; background: rgb(var(--primary-soft)); transform: translate(-50%, -50%);
         cursor: pointer; transition: background .15s ease; }
       .rcw-blip:hover { background: var(--text); box-shadow: 0 0 8px 1px rgba(230,59,46,.6); }
-      /* Contact glow: dim, then a sharp flash exactly when the sweep edge crosses the blip's
-         angle (phase set per-blip via animation-delay), then fades — like a real radar return. */
-      @keyframes rcw-blip-glow { 0% { opacity: .9; width: 22px; height: 22px; box-shadow: 0 0 12px 3px rgba(230,59,46,.55); }
-        14% { opacity: .35; } 45%, 100% { opacity: 0; width: 8px; height: 8px; box-shadow: 0 0 0 rgba(230,59,46,0); } }
+      /* Contact glow: a brief flash timed to when the sweep edge crosses the blip's angle
+         (phase set per-blip via animation-delay). The lit window (~17% of the 4.2s cycle ≈
+         0.7s) matches the 60deg cone's dwell, so a blip only glows while the cone is on it
+         and goes dark right after — never lit far from the sweep. */
+      @keyframes rcw-blip-glow { 0% { opacity: .95; width: 22px; height: 22px; box-shadow: 0 0 13px 3px rgba(230,59,46,.6); }
+        17% { opacity: 0; width: 8px; height: 8px; box-shadow: 0 0 0 rgba(230,59,46,0); }
+        100% { opacity: 0; width: 8px; height: 8px; box-shadow: 0 0 0 rgba(230,59,46,0); } }
       .rcw-blip-glow { position: absolute; left: 0; top: 0; border-radius: 50%; background: rgba(230,59,46,.22);
         transform: translate(-50%, -50%); pointer-events: none; opacity: 0;
         animation: rcw-blip-glow 4.2s linear infinite; }

@@ -61,16 +61,33 @@ export function DecodeLine({ text }: { text: string }) {
  * still plays through and can be dismissed; becoming `suppressed` cancels an
  * in-progress replay immediately.
  */
-export function useRelay(items: RelayItem[], active: boolean, suppressed: boolean, opts?: { loop?: boolean }) {
-  void active; void opts; // auto-replay disabled; kept for API compatibility
+export function useRelay(items: RelayItem[], active: boolean, suppressed: boolean, opts?: { loop?: boolean; autoIdle?: boolean }) {
+  const autoIdle = !!opts?.autoIdle;
   const [queue, setQueue] = useState<RelayItem[]>([]);
   const [idx, setIdx] = useState(0);
   const [secs] = useState(RELAY_MS / 1000);
+  const playing = queue.length > 0 && !!queue[idx];
   const playingRef = useRef(false);
-  playingRef.current = queue.length > 0 && !!queue[idx];
+  playingRef.current = playing;
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
 
   // New activity or user interaction cancels any running replay immediately.
   useEffect(() => { if (suppressed && playingRef.current) setQueue([]); }, [suppressed]);
+
+  // Idle auto-replay (opt-in via autoIdle): once the panel has been idle — visible, agent
+  // not working, user not scrolling, nothing already playing — for RELAY_MS, teletype the
+  // recent activity. When it finishes it re-arms, so an idle session keeps re-running the
+  // last transmission (screensaver-style) until new activity or interaction suppresses it.
+  useEffect(() => {
+    if (!autoIdle || !active || suppressed || playing) return;
+    if (!itemsRef.current.length) return;
+    const t = setTimeout(() => {
+      const last = itemsRef.current.slice(-RELAY_COUNT);
+      if (last.length) { setIdx(0); setQueue(last); }
+    }, RELAY_MS);
+    return () => clearTimeout(t);
+  }, [autoIdle, active, suppressed, playing, items.length]);
 
   // Step through the queue; each line lingers briefly after typing out, then the
   // replay ends (no looping re-run).
