@@ -16,6 +16,16 @@ Items found in milestone-close reviews, to be addressed in the noted milestone. 
 | P3 | Move hardcoded dev-server address out of `deploy/remote.sh` (use env/SSH config default) | M1+ |
 | P3 | Qdrant healthcheck → `curl -sf localhost:6333/readyz` instead of bash `/dev/tcp` | M2 |
 
+## Logged at Jira-Effort Scoring (2026-07-27)
+
+| Priority | Item | Target |
+|---|---|---|
+| P2 | Agent-of-the-Week effort is summed over a single ICT reference week (`AOW_TZ`) across all projects — if projects use different `weekTimezone`, week keys can misalign; unify or document | next |
+| P2 | Scanner `setInterval` runs per API process — a horizontally-scaled deploy would double-scan (idempotent inserts keep data correct, but wasteful); add an advisory lock / single-scanner flag before scaling | next |
+| P3 | Follow-up penalty is broad (any link type / any issue type created after completion) — may over-penalize; add an admin per-project link-type allowlist (ledger is voidable as the safety valve) | next |
+| P3 | Assignee-at-completion is snapshotted from the issue's current `assignee` at first detection (not replayed from the changelog) — a reassignment between completion and the next 5-min scan could misattribute credit; replay assignee changes if it matters | next |
+| P3 | `ScoringService.agentWeekAward` iterates roster × projects with per-pair store calls — fine for the current roster, but batch if projects/roster grow large | next |
+
 ## Logged at M2 Slice 2 (2026-06-13)
 
 | Priority | Item | Target |
