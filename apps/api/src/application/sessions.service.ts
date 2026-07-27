@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Inject, Injectable } from "@nestjs/common";
 import { NewAgentSessionSchema, SessionStatePatchSchema, type AgentSession, type SessionStatePatch, type SessionStatus, type UserTodo } from "@rcw/shared";
 import { SESSION_STORE, type SessionStore } from "../domain/sessions/session-store.port";
+import { DECISION_STORE, type DecisionStore } from "../domain/decisions/decision-store.port";
 import { EventsBus } from "./events-bus";
 
 export type SessionView = AgentSession & { status: SessionStatus; pendingDecisions: number; waitingSince: Date | null };
@@ -25,6 +26,7 @@ export const sessionStatus = (s: AgentSession, pending: number, now: Date): Sess
 export class SessionsService {
   constructor(
     @Inject(SESSION_STORE) private readonly store: SessionStore,
+    @Inject(DECISION_STORE) private readonly decisions: DecisionStore,
     private readonly bus: EventsBus,
   ) {}
 
@@ -112,6 +114,18 @@ export class SessionsService {
       }
     }
     const updated = await this.store.patchState(id, patch);
+    // Claude resumed generating → it has PROCEEDED past any permission prompt. If a
+    // permission/notification card is still pending (e.g. the user hit shift-tab to bypass, or
+    // answered in the terminal, so the app never got an answer), it's now a GHOST — supersede it
+    // so the cockpit stops showing "Claude needs your permission" for a turn already in progress.
+    // "question" (AskUserQuestion) is intentionally NOT superseded: it genuinely blocks Claude and
+    // its PreToolUse can set working:true in the same beat it's created.
+    if (patch.working === true) {
+      try {
+        const n = await this.decisions.supersedePending(id, ["permission", "notification"], new Date());
+        if (n > 0) this.bus.emit({ type: "session.updated", payload: { id } });
+      } catch { /* best-effort — never block a state update */ }
+    }
     if (updated) this.bus.emit({ type: "session.updated", payload: { id } });
     return updated;
   }

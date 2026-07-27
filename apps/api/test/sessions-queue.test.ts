@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { SessionsService, sessionStatus } from "../src/application/sessions.service";
 import { InMemorySessionStore } from "../src/adapters/persistence/in-memory-session-store";
+import { InMemoryDecisionStore } from "../src/adapters/persistence/in-memory-decision-store";
 import type { AgentSession } from "@rcw/shared";
 import type { EventsBus } from "../src/application/events-bus";
 
@@ -35,7 +36,7 @@ describe("SessionsService queue + state", () => {
   it("patchState stores fields and emits session.updated", async () => {
     const store = new InMemorySessionStore();
     const b = bus();
-    const svc = new SessionsService(store, b);
+    const svc = new SessionsService(store, new InMemoryDecisionStore(), b);
     await seed(store, svc);
     const s = await svc.patchState("s1", { latestAnswer: "hi", summary: "doing x", todos: [{ text: "t", status: "pending" }] });
     expect(s?.latestAnswer).toBe("hi");
@@ -44,7 +45,7 @@ describe("SessionsService queue + state", () => {
 
   it("queue lists only waiting sessions, pinned first then longest-waiting first", async () => {
     const store = new InMemorySessionStore();
-    const svc = new SessionsService(store, bus());
+    const svc = new SessionsService(store, new InMemoryDecisionStore(), bus());
     await seed(store, svc);
     const now = new Date("2026-06-26T12:00:00Z");
     const pending = { s1: 1, s2: 1, s3: 1 };
@@ -61,7 +62,7 @@ describe("SessionsService queue + state", () => {
 
   it("user todos: add appends, toggle flips done and floats undone to the top", async () => {
     const store = new InMemorySessionStore();
-    const svc = new SessionsService(store, bus());
+    const svc = new SessionsService(store, new InMemoryDecisionStore(), bus());
     await seed(store, svc);
     await svc.addUserTodo("s1", "first");
     await svc.addUserTodo("s1", "second");
@@ -81,7 +82,7 @@ describe("SessionsService queue + state", () => {
 
   it("pins cwd to first attach so a resume in a subfolder doesn't rename the session", async () => {
     const store = new InMemorySessionStore();
-    const svc = new SessionsService(store, bus());
+    const svc = new SessionsService(store, new InMemoryDecisionStore(), bus());
     await svc.attach({ id: "p1", machine: "m", cwd: "/work/redstone-agent", gitBranch: "main", wrapperId: "w", permissionMode: "default", autoModeEnabled: false });
     // Re-attach (e.g. `claude --continue` launched inside a subdir).
     await svc.attach({ id: "p1", machine: "m", cwd: "/work/redstone-agent/backend", gitBranch: "main", wrapperId: "w2", permissionMode: "default", autoModeEnabled: false });
@@ -90,7 +91,7 @@ describe("SessionsService queue + state", () => {
 
   it("tags: add dedupes case-insensitively, remove drops them", async () => {
     const store = new InMemorySessionStore();
-    const svc = new SessionsService(store, bus());
+    const svc = new SessionsService(store, new InMemoryDecisionStore(), bus());
     await seed(store, svc);
     await svc.addTag("s1", "Urgent");
     await svc.addTag("s1", "urgent"); // dupe (case-insensitive) — ignored
@@ -102,14 +103,14 @@ describe("SessionsService queue + state", () => {
 
   it("user-todo ops on an unknown session return null", async () => {
     const store = new InMemorySessionStore();
-    const svc = new SessionsService(store, bus());
+    const svc = new SessionsService(store, new InMemoryDecisionStore(), bus());
     expect(await svc.addUserTodo("nope", "x")).toBeNull();
     expect(await svc.toggleUserTodo("nope", "y")).toBeNull();
   });
 
   it("queue excludes a session snoozed past now but keeps it in listViews", async () => {
     const store = new InMemorySessionStore();
-    const svc = new SessionsService(store, bus());
+    const svc = new SessionsService(store, new InMemoryDecisionStore(), bus());
     await seed(store, svc);
     const now = new Date("2026-06-26T12:00:00Z");
     const pending = { s1: 1 };
@@ -119,5 +120,45 @@ describe("SessionsService queue + state", () => {
     expect(q.find((v) => v.id === "s1")).toBeUndefined();
     const views = await svc.listViews(pending, oldest);
     expect(views.find((v) => v.id === "s1")?.waitingSince?.getTime()).toBe(oldest.s1.getTime());
+  });
+});
+
+describe("patchState supersedes ghost permission cards when Claude resumes working", () => {
+  const bus = () => ({ emit: vi.fn() }) as unknown as EventsBus;
+  const mkSession = (id: string): AgentSession => ({
+    id, machine: "m", cwd: "/r", gitBranch: "main", attachedAt: new Date(), lastSeenAt: new Date(),
+    wrapperId: `w-${id}`, permissionMode: "default", autoModeEnabled: false, latestAnswer: null, summary: null,
+    todos: [], userTodos: [], tags: [], transcript: [], working: false, contextTokens: null, model: null,
+    tokensInput: 0, tokensOutput: 0, tokenSeries: [], pinned: false, snoozedUntil: null, closedAt: null,
+  });
+  const pending = (id: string, sessionId: string, kind: string) => ({
+    id, sessionId, kind, title: "t", body: {}, options: [], status: "pending" as const,
+    createdAt: new Date(), resolvedAt: null, resolution: { choice: null, answers: null, custom: null }, deliveredAt: null,
+  });
+
+  it("supersedes a pending permission (and notification) but keeps a question when working:true", async () => {
+    const store = new InMemorySessionStore();
+    const decisions = new InMemoryDecisionStore();
+    await store.upsert(mkSession("s1"));
+    await decisions.create(pending("p1", "s1", "permission") as never);
+    await decisions.create(pending("n1", "s1", "notification") as never);
+    await decisions.create(pending("q1", "s1", "question") as never);
+    const svc = new SessionsService(store, decisions, bus());
+
+    await svc.patchState("s1", { working: true });
+
+    expect((await decisions.get("p1"))?.status).toBe("resolved");
+    expect((await decisions.get("n1"))?.status).toBe("resolved");
+    expect((await decisions.get("q1"))?.status).toBe("pending"); // question kept
+  });
+
+  it("does nothing to decisions when working is not set true", async () => {
+    const store = new InMemorySessionStore();
+    const decisions = new InMemoryDecisionStore();
+    await store.upsert(mkSession("s2"));
+    await decisions.create(pending("p2", "s2", "permission") as never);
+    const svc = new SessionsService(store, decisions, bus());
+    await svc.patchState("s2", { working: false });
+    expect((await decisions.get("p2"))?.status).toBe("pending");
   });
 });
