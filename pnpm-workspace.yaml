@@ -3,8 +3,12 @@ packages:
   - "packages/*"
 
 # Dependencies allowed to run install/build scripts (pnpm 10 reads this from the
-# workspace file). node-mac-permissions compiles a native addon here (no prebuild);
-# the rest ship prebuilds or postinstall steps that must run.
+# workspace file). node-mac-permissions is deliberately NOT here: it compiles a
+# macOS-only native addon (no prebuild) and node-gyp'ing it during `pnpm install`
+# HARD-FAILS on Windows (no Visual Studio) and is pointless on Linux. Instead the
+# release workflow builds it on the macOS runners only, via an explicit
+# `pnpm rebuild node-mac-permissions` step (rebuild bypasses this allowlist). On
+# Windows/Linux the addon is simply absent and its require() no-ops (calendar-permission.ts).
 onlyBuiltDependencies:
   - "@nestjs/core"
   - "@swc/core"
@@ -12,4 +16,3 @@ onlyBuiltDependencies:
   - esbuild
   - "@tailwindcss/oxide"
   - node-pty
-  - node-mac-permissions
