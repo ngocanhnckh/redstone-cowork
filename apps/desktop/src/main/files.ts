@@ -598,11 +598,17 @@ export async function uploadLocalFile(args: Loc & { srcPath: string; destDir: st
   if (!isWithin(cwd, target)) return { ok: false, error: "refusing to write outside the project" };
   try {
     if (isLocalMachine(machine)) {
+      // Create the upload dir first — .rcw-uploads doesn't exist on a fresh project, and
+      // copyFile can't create it, so the upload would silently fail.
+      await fsp.mkdir(destDir, { recursive: true });
       await fsp.copyFile(srcPath, target);
       return { ok: true, name };
     }
     const buf = await fsp.readFile(srcPath);
-    await sshWrite(await getSshTarget(machine), `cat > ${shellQuote(target)}`, buf);
+    // mkdir -p the dest dir in the SAME command as the write: `cat >` cannot create the
+    // parent directory, so without this the upload fails on any host that doesn't already
+    // have .rcw-uploads — leaving a dangling path in the message with no file behind it.
+    await sshWrite(await getSshTarget(machine), `mkdir -p ${shellQuote(destDir)} && cat > ${shellQuote(target)}`, buf);
     return { ok: true, name };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
