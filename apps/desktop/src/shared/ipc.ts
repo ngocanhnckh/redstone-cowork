@@ -111,6 +111,7 @@ export const IPC = {
   scoringConfigs: "api:scoring:admin:configs",
   scoringTargets: "api:scoring:admin:targets",
   scoringJiraProjects: "api:scoring:admin:jira-projects",
+  scoringJiraStatuses: "api:scoring:admin:jira-statuses",
   scoringSprintIssues: "api:scoring:admin:sprint-issues",
   scoringCriticalGet: "api:scoring:admin:critical:get",
   scoringCriticalSet: "api:scoring:admin:critical:set",

@@ -82,6 +82,13 @@ export class JiraService {
     return client.listProjects();
   }
 
+  /** A project's configured statuses, for the scoring admin's picker. */
+  async projectStatuses(profileName: string, projectKey: string): Promise<Array<{ name: string; category: string }>> {
+    const client = await this.clientFor(profileName);
+    if (!client) throw new BadRequestException(`Unknown Jira profile: ${profileName}`);
+    return client.projectStatuses(projectKey);
+  }
+
   /** Search Jira users under a stored profile — powers the admin agent→Jira picker. */
   async searchUsers(profileName: string, query: string): Promise<Array<{ name: string; key?: string; displayName: string; email?: string; avatarUrl?: string }>> {
     const client = await this.clientFor(profileName);

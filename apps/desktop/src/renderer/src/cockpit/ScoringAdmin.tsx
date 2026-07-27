@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ScoringProjectConfig, ScoringBoard, SprintIssue, ScoringPenaltyView } from "../../../shared/scoring";
 
 // Admin scoring console: enable + configure a Jira project (which statuses count as complete,
@@ -23,6 +23,18 @@ const CSS = `
 .sca-row .k { font-family:var(--font-mono); color:var(--text-soft); flex-shrink:0; width:78px; }
 .sca-row .s { flex:1; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .sca-chk { width:15px; height:15px; accent-color:var(--accent, #e63b2e); }
+/* --- complete-statuses picker --- */
+.sca-chip { display:inline-flex; align-items:center; background:rgba(232,230,225,.08); border:1px solid var(--border);
+  color:var(--text); font-family:var(--font-mono); font-size:11px; padding:3px 8px; cursor:pointer; }
+.sca-chip:hover { border-color:#e63b2e; }
+.sca-menu { position:absolute; z-index:40; left:0; right:0; top:calc(100% + 4px); max-height:230px; overflow-y:auto;
+  border:1px solid var(--border-strong); background:color-mix(in srgb, var(--app-panel) 96%, transparent);
+  box-shadow:0 18px 50px rgba(0,0,0,.6); }
+.sca-mrow { display:flex; align-items:center; gap:9px; width:100%; text-align:left; background:none; border:0;
+  color:var(--text); font-family:var(--font-mono); font-size:12px; padding:6px 9px; cursor:pointer; }
+.sca-mrow:hover { background:rgba(232,230,225,.06); }
+.sca-chk-box { width:11px; height:11px; border:1px solid var(--text-soft); flex-shrink:0; position:relative; }
+.sca-chk-box[data-on="1"] { background:var(--text); border-color:var(--text); }
 .sca-tbl { width:100%; border-collapse:collapse; font-size:11.5px; }
 .sca-tbl th { text-align:left; color:var(--text-faint); font-size:9px; letter-spacing:.12em; padding:4px 6px; }
 .sca-tbl td { padding:6px 6px; border-top:1px solid var(--border); }
@@ -31,6 +43,101 @@ const CSS = `
 `;
 
 const asNum = (v: string, d = 0) => { const n = Number(v); return Number.isFinite(n) ? n : d; };
+
+/**
+ * Complete-statuses picker: search the project's REAL workflow statuses (pulled
+ * from Jira) and toggle them, instead of typing names into a comma list where a
+ * typo silently stops an issue from ever counting as done.
+ *
+ * Statuses that no longer exist in the workflow are still shown as selected chips
+ * so an old config is never silently dropped, and a name can still be added by
+ * hand when Jira is unreachable.
+ */
+function StatusPicker({ project, selected, onChange }:
+  { project: string; selected: string[]; onChange: (next: string[]) => void }) {
+  const [all, setAll] = useState<Array<{ name: string; category: string }>>([]);
+  const [q, setQ] = useState("");
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!project) { setAll([]); return; }
+    let alive = true;
+    setLoading(true);
+    window.cowork.scoringJiraStatuses(project)
+      .then((r) => { if (alive) setAll(r ?? []); })
+      .catch(() => { if (alive) setAll([]); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [project]);
+
+  // Click-away closes the list.
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => { if (box.current && !box.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+
+  const toggle = (name: string) =>
+    onChange(selected.includes(name) ? selected.filter((s) => s !== name) : [...selected, name]);
+
+  const needle = q.trim().toLowerCase();
+  const matches = all.filter((s) => !needle || s.name.toLowerCase().includes(needle));
+  // A typed name that matches nothing can still be added — Jira may be unreachable.
+  const canAddRaw = !!needle && !all.some((s) => s.name.toLowerCase() === needle) && !selected.some((s) => s.toLowerCase() === needle);
+
+  return (
+    <div ref={box} style={{ position: "relative" }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 6 }}>
+        {selected.length === 0 && <span className="sca-mut" style={{ fontSize: 11 }}>None — any Done-category status counts.</span>}
+        {selected.map((name) => {
+          const known = all.some((s) => s.name === name);
+          return (
+            <button key={name} type="button" onClick={() => toggle(name)}
+              title={known ? "Remove" : "Not in this project's workflow — remove"}
+              className="sca-chip">
+              {name}{known ? "" : " ?"}<span style={{ marginLeft: 6, opacity: 0.6 }}>✕</span>
+            </button>
+          );
+        })}
+      </div>
+      <input
+        value={q}
+        onFocus={() => setOpen(true)}
+        onChange={(e) => { setQ(e.target.value); setOpen(true); }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && canAddRaw) { e.preventDefault(); toggle(q.trim()); setQ(""); }
+          if (e.key === "Escape") setOpen(false);
+        }}
+        placeholder={loading ? "Loading statuses…" : all.length ? "Search statuses…" : "Type a status name…"}
+      />
+      {open && (
+        <div className="sca-menu">
+          {matches.length === 0 && !canAddRaw && (
+            <div className="sca-mut" style={{ padding: "6px 9px", fontSize: 11 }}>
+              {all.length ? "No match." : "No statuses from Jira — type a name and press Enter."}
+            </div>
+          )}
+          {matches.map((s) => (
+            <button key={s.name} type="button" className="sca-mrow" onClick={() => toggle(s.name)}>
+              <span className="sca-chk-box" data-on={selected.includes(s.name) ? "1" : "0"} />
+              <span style={{ flex: 1, minWidth: 0 }}>{s.name}</span>
+              <span className="sca-mut" style={{ fontSize: 9.5, letterSpacing: ".1em", textTransform: "uppercase" }}>{s.category}</span>
+            </button>
+          ))}
+          {canAddRaw && (
+            <button type="button" className="sca-mrow" onClick={() => { toggle(q.trim()); setQ(""); }}>
+              <span className="sca-chk-box" data-on="0" />
+              <span style={{ flex: 1 }}>Add “{q.trim()}”</span>
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function ScoringAdmin() {
   const [projects, setProjects] = useState<string[]>([]);
@@ -195,8 +302,12 @@ export default function ScoringAdmin() {
               <div className="sca-sub">Project config</div>
               <div className="sca-grid">
                 <div className="sca-f sca-full">
-                  <label>Complete statuses (comma-separated · blank = any Done-category)</label>
-                  <input value={cfg.completeStatuses.join(", ")} onChange={(e) => patchCfg({ completeStatuses: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })} placeholder="Done, Closed, Approved" />
+                  <label>Complete statuses (blank = any Done-category)</label>
+                  <StatusPicker
+                    project={project}
+                    selected={cfg.completeStatuses}
+                    onChange={(next) => patchCfg({ completeStatuses: next })}
+                  />
                 </div>
                 <div className="sca-f"><label>Reopen penalty %</label><input type="number" min={0} max={100} value={cfg.reopenPenaltyPct} onChange={(e) => patchCfg({ reopenPenaltyPct: asNum(e.target.value) })} /></div>
                 <div className="sca-f"><label>Follow-up penalty %</label><input type="number" min={0} max={100} value={cfg.followupPenaltyPct} onChange={(e) => patchCfg({ followupPenaltyPct: asNum(e.target.value) })} /></div>

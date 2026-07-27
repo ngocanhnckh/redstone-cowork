@@ -163,6 +163,23 @@ export class JiraClient {
       .sort((a, b) => a.key.localeCompare(b.key));
   }
 
+  /** Every status configured on a project's workflows, de-duplicated across issue
+   *  types. Powers the scoring admin's "complete statuses" picker so the operator
+   *  chooses from the project's real workflow instead of typing names by hand. */
+  async projectStatuses(projectKey: string): Promise<Array<{ name: string; category: string }>> {
+    const res = await this.fetchImpl(`${this.base}/rest/api/2/project/${encodeURIComponent(projectKey)}/statuses`, { headers: this.headers() });
+    if (!res.ok) throw new Error(`Jira /project/${projectKey}/statuses responded ${res.status}`);
+    const types = (await res.json()) as Array<{ statuses?: Array<{ name?: string; statusCategory?: { key?: string } }> }>;
+    const seen = new Map<string, { name: string; category: string }>();
+    for (const t of types) {
+      for (const st of t.statuses ?? []) {
+        if (!st.name || seen.has(st.name)) continue;
+        seen.set(st.name, { name: st.name, category: st.statusCategory?.key ?? "undefined" });
+      }
+    }
+    return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }
+
   /** Search users (Jira DC: /user/search?username=). Returns the writable `name`
    *  (used for assignee), plus display name / email / avatar for the picker. */
   async searchUsers(query: string): Promise<Array<{ name: string; key?: string; displayName: string; email?: string; avatarUrl?: string }>> {

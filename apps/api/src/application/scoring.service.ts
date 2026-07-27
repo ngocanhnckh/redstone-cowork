@@ -212,6 +212,13 @@ export class ScoringService {
     try { return await this.jira.listProjects(profile); } catch { return []; }
   }
 
+  /** Statuses configured on a project's workflows (empty when Jira isn't set up). */
+  async jiraStatuses(projectKey: string): Promise<Array<{ name: string; category: string }>> {
+    const profile = await this.jira.defaultProfile();
+    if (!profile || !projectKey) return [];
+    try { return await this.jira.projectStatuses(profile, projectKey); } catch { return []; }
+  }
+
   // ---- Agent of the Week (effort blended with token spend) -------------
   async agentWeekAward(now = new Date()): Promise<AgentWeekAward> {
     const weekKey = weekKeyOf(now, AOW_TZ);

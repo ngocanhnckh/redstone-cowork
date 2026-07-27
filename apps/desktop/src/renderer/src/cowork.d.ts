@@ -158,6 +158,7 @@ declare global {
       scoringConfigs(): Promise<import("../../shared/scoring").ScoringProjectConfig[]>;
       scoringTargets(body: { projectKey: string; weekKey: string; teamTarget: number; individualTarget: number }): Promise<import("../../shared/scoring").ScoringBoard>;
       scoringJiraProjects(): Promise<Array<{ key: string; name: string }>>;
+      scoringJiraStatuses(project: string): Promise<Array<{ name: string; category: string }>>;
       scoringSprintIssues(project: string): Promise<import("../../shared/scoring").SprintIssue[]>;
       scoringCriticalGet(project: string, week: string): Promise<import("../../shared/scoring").CriticalProgress>;
       scoringCriticalSet(body: { projectKey: string; weekKey: string; issueKeys: string[] }): Promise<import("../../shared/scoring").CriticalProgress>;

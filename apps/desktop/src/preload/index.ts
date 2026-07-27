@@ -191,6 +191,7 @@ contextBridge.exposeInMainWorld("cowork", {
   scoringConfigs: (): Promise<import("../shared/scoring").ScoringProjectConfig[]> => ipcRenderer.invoke(IPC.scoringConfigs),
   scoringTargets: (body: { projectKey: string; weekKey: string; teamTarget: number; individualTarget: number }): Promise<import("../shared/scoring").ScoringBoard> => ipcRenderer.invoke(IPC.scoringTargets, body),
   scoringJiraProjects: (): Promise<Array<{ key: string; name: string }>> => ipcRenderer.invoke(IPC.scoringJiraProjects),
+  scoringJiraStatuses: (project: string): Promise<Array<{ name: string; category: string }>> => ipcRenderer.invoke(IPC.scoringJiraStatuses, { project }),
   scoringSprintIssues: (project: string): Promise<import("../shared/scoring").SprintIssue[]> => ipcRenderer.invoke(IPC.scoringSprintIssues, { project }),
   scoringCriticalGet: (project: string, week: string): Promise<import("../shared/scoring").CriticalProgress> => ipcRenderer.invoke(IPC.scoringCriticalGet, { project, week }),
   scoringCriticalSet: (body: { projectKey: string; weekKey: string; issueKeys: string[] }): Promise<import("../shared/scoring").CriticalProgress> => ipcRenderer.invoke(IPC.scoringCriticalSet, body),
