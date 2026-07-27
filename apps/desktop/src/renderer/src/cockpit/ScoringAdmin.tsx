@@ -35,6 +35,7 @@ const asNum = (v: string, d = 0) => { const n = Number(v); return Number.isFinit
 export default function ScoringAdmin() {
   const [projects, setProjects] = useState<string[]>([]);
   const [project, setProject] = useState("");
+  const [jiraProjects, setJiraProjects] = useState<Array<{ key: string; name: string }>>([]);
   const [newKey, setNewKey] = useState("");
   const [cfg, setCfg] = useState<ScoringProjectConfig | null>(null);
   const [board, setBoard] = useState<ScoringBoard | null>(null);
@@ -57,6 +58,7 @@ export default function ScoringAdmin() {
       setProject((cur) => cur || keys[0] || "");
     }).catch(fail);
     window.cowork.accountsList().then(setAgents).catch(() => {});
+    window.cowork.scoringJiraProjects().then(setJiraProjects).catch(() => setJiraProjects([]));
   }, []);
 
   const loadProject = useCallback(() => {
@@ -76,8 +78,8 @@ export default function ScoringAdmin() {
       .catch(() => setCritical(new Set()));
   }, [project, board?.weekKey]); // eslint-disable-line
 
-  const addProject = async () => {
-    const k = newKey.trim().toUpperCase();
+  const addProject = async (key?: string) => {
+    const k = (key ?? newKey).trim().toUpperCase();
     if (!k) return;
     setBusy(true);
     try {
@@ -167,8 +169,20 @@ export default function ScoringAdmin() {
         {projects.map((k) => (
           <button key={k} className={k === project ? "on" : ""} onClick={() => setProject(k)}>{k}</button>
         ))}
-        <input value={newKey} onChange={(e) => setNewKey(e.target.value)} placeholder="ADD KEY" onKeyDown={(e) => e.key === "Enter" && addProject()} />
-        <button className="sca-btn ghost" disabled={busy} onClick={addProject}>＋ ADD PROJECT</button>
+        {jiraProjects.length > 0 ? (
+          <select value="" disabled={busy} onChange={(e) => { if (e.target.value) addProject(e.target.value); }}
+            style={{ background: "rgb(0 0 0 / .3)", border: "1px solid var(--border)", borderRadius: 8, color: "var(--text)", padding: "5px 9px", fontSize: 11 }}>
+            <option value="">＋ ADD PROJECT…</option>
+            {jiraProjects.filter((p) => !projects.includes(p.key)).map((p) => (
+              <option key={p.key} value={p.key}>{p.key} — {p.name}</option>
+            ))}
+          </select>
+        ) : (
+          <>
+            <input value={newKey} onChange={(e) => setNewKey(e.target.value)} placeholder="ADD KEY" onKeyDown={(e) => e.key === "Enter" && addProject()} />
+            <button className="sca-btn ghost" disabled={busy} onClick={() => addProject()}>＋ ADD PROJECT</button>
+          </>
+        )}
       </div>
 
       {!project ? (

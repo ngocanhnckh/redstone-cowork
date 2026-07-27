@@ -88,6 +88,12 @@ export class ScoringController {
     });
   }
 
+  @Get("admin/jira-projects")
+  jiraProjects(@Req() req: GuardedRequest) {
+    this.requireAdmin(req);
+    return this.scoring.jiraProjects();
+  }
+
   @Get("admin/sprint-issues")
   sprintIssues(@Req() req: GuardedRequest, @Query("project") project: string) {
     this.requireAdmin(req);

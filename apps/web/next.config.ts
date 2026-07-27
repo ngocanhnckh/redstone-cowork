@@ -57,6 +57,8 @@ const nextConfig: NextConfig = {
       { source: "/jira", destination: `${API_URL}/jira` },
       { source: "/jira/:path*", destination: `${API_URL}/jira/:path*` },
       { source: "/agency/:path*", destination: `${API_URL}/agency/:path*` },
+      { source: "/scoring", destination: `${API_URL}/scoring` },
+      { source: "/scoring/:path*", destination: `${API_URL}/scoring/:path*` },
     ];
   },
 };

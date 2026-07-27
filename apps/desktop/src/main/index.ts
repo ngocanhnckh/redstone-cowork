@@ -644,6 +644,7 @@ ipcMain.handle(IPC.scoringConfigGet, (_e, a: { project: string }) => api.scoring
 ipcMain.handle(IPC.scoringConfigSet, (_e, a: { project: string; patch: unknown }) => api.scoringConfigSet(a.project, a.patch));
 ipcMain.handle(IPC.scoringConfigs, () => api.scoringConfigs());
 ipcMain.handle(IPC.scoringTargets, (_e, a: { projectKey: string; weekKey: string; teamTarget: number; individualTarget: number }) => api.scoringTargets(a));
+ipcMain.handle(IPC.scoringJiraProjects, () => api.scoringJiraProjects());
 ipcMain.handle(IPC.scoringSprintIssues, (_e, a: { project: string }) => api.scoringSprintIssues(a.project));
 ipcMain.handle(IPC.scoringCriticalGet, (_e, a: { project: string; week: string }) => api.scoringCriticalGet(a.project, a.week));
 ipcMain.handle(IPC.scoringCriticalSet, (_e, a: { projectKey: string; weekKey: string; issueKeys: string[] }) => api.scoringCriticalSet(a));

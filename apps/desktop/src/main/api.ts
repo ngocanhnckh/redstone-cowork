@@ -579,6 +579,7 @@ export async function scoringConfigs(): Promise<unknown[]> { return (await req("
 export async function scoringTargets(body: { projectKey: string; weekKey: string; teamTarget: number; individualTarget: number }): Promise<unknown> {
   return (await req("/scoring/admin/targets", { method: "POST", body: JSON.stringify(body) })).json();
 }
+export async function scoringJiraProjects(): Promise<unknown[]> { return (await req("/scoring/admin/jira-projects")).json(); }
 export async function scoringSprintIssues(project: string): Promise<unknown[]> { return (await req(`/scoring/admin/sprint-issues?${q({ project })}`)).json(); }
 export async function scoringCriticalGet(project: string, week: string): Promise<unknown> { return (await req(`/scoring/admin/critical?${q({ project, week })}`)).json(); }
 export async function scoringCriticalSet(body: { projectKey: string; weekKey: string; issueKeys: string[] }): Promise<unknown> {

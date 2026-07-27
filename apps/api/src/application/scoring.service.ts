@@ -205,6 +205,12 @@ export class ScoringService {
   async sprintIssues(projectKey: string) {
     return this.jira.projectSprintIssues(projectKey);
   }
+  /** All Jira projects visible under the default profile — the admin's "add project" picker. */
+  async jiraProjects(): Promise<Array<{ key: string; name: string }>> {
+    const profile = await this.jira.defaultProfile();
+    if (!profile) return [];
+    try { return await this.jira.listProjects(profile); } catch { return []; }
+  }
 
   // ---- Agent of the Week (effort blended with token spend) -------------
   async agentWeekAward(now = new Date()): Promise<AgentWeekAward> {
