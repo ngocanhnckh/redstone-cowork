@@ -118,6 +118,110 @@ function MissionDetail({ mission, onClose, onChanged }: { mission: AgencyMission
 
 const catColor: Record<string, string> = { todo: "var(--text-faint)", inprogress: "rgb(var(--accent))", done: "var(--text-soft)" };
 
+/**
+ * Per-project targets and the score ledger.
+ *
+ * Scores are per project, so a single "target" number is meaningless on its own —
+ * this lists every scored project the agent participates in, what their target is,
+ * where they stand, and how the score was arrived at week by week (hours earned
+ * from completions, minus penalty hours).
+ */
+function MyProjects() {
+  type Row = {
+    projectKey: string;
+    my: import("../../../shared/scoring").MyScore;
+    points: import("../../../shared/scoring").ScoreHistoryPoint[];
+  };
+  const [rows, setRows] = useState<Row[] | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const cfgs = await window.cowork.scoringConfigs();
+        const keys = (cfgs ?? []).filter((c) => c.enabled).map((c) => c.projectKey);
+        const out: Row[] = [];
+        for (const k of keys) {
+          // Only projects where this agent actually has a score/target apply.
+          const [my, hist] = await Promise.all([
+            window.cowork.scoringMy(k).catch(() => null),
+            window.cowork.scoringHistory(k).catch(() => null),
+          ]);
+          if (my) out.push({ projectKey: k, my, points: hist?.points ?? [] });
+        }
+        if (alive) setRows(out);
+      } catch { if (alive) setRows([]); }
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  if (rows === null) return null;
+
+  return (
+    <>
+      <div className="agp-missions-hd">
+        <span className="mono" style={{ fontSize: 10, letterSpacing: "0.24em", color: "rgb(var(--primary-soft))" }}>TARGETS &amp; SCORE LEDGER</span>
+        <span className="soft" style={{ fontSize: 10.5 }}>{rows.length} scored project{rows.length === 1 ? "" : "s"}</span>
+      </div>
+      {rows.length === 0 ? (
+        <div className="soft" style={{ fontSize: 12, padding: "10px 2px" }}>
+          You're not on a scored project yet — an admin enables scoring per Jira project.
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {rows.map(({ projectKey, my, points }) => {
+            if (!my) return null;
+            const pct = my.individualTarget > 0 ? Math.min(100, (my.myScore / my.individualTarget) * 100) : 0;
+            const recent = points.slice(-8);
+            return (
+              <div key={projectKey} className="agp-panel">
+                <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+                  <span className="mono" style={{ fontSize: 12, letterSpacing: "0.16em", color: "var(--text)" }}>{projectKey}</span>
+                  <span className="soft" style={{ fontSize: 10.5 }}>week {my.weekKey}</span>
+                  <span style={{ flex: 1 }} />
+                  <span className="mono" style={{ fontSize: 15, color: "var(--text)", fontVariantNumeric: "tabular-nums" }}>
+                    {(Math.round(my.myScore * 10) / 10).toLocaleString()}
+                  </span>
+                  <span className="soft mono" style={{ fontSize: 10.5 }}>/ {my.individualTarget} hrs target</span>
+                  {my.rank > 0 && <span className="soft mono" style={{ fontSize: 10.5 }}>· rank #{my.rank}</span>}
+                </div>
+                <div style={{ height: 5, border: "1px solid var(--border)", marginTop: 8, position: "relative" }}>
+                  <div style={{ position: "absolute", inset: 0, right: "auto", width: `${pct}%`, background: pct >= 100 ? "var(--text)" : "var(--text-soft)" }} />
+                </div>
+                <div className="mono" style={{ fontSize: 9.5, color: "var(--text-faint)", marginTop: 6, letterSpacing: "0.06em" }}>
+                  team {(Math.round(my.teamScore * 10) / 10).toLocaleString()} / {my.teamTarget} hrs · {my.teamMembers} member{my.teamMembers === 1 ? "" : "s"}
+                  {my.critical && my.critical.total > 0 ? ` · critical ${my.critical.done}/${my.critical.total}` : ""}
+                </div>
+
+                {/* The ledger: what added to the score and what took away, per week. */}
+                {recent.length > 0 && (
+                  <div style={{ marginTop: 10 }}>
+                    <div className="mono" style={{ fontSize: 8.5, letterSpacing: "0.2em", color: "var(--text-faint)", marginBottom: 5 }}>SCORE HISTORY</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                      {recent.slice().reverse().map((pt) => (
+                        <div key={pt.weekKey} style={{ display: "grid", gridTemplateColumns: "78px 1fr auto", gap: 10, alignItems: "center", fontFamily: "var(--font-mono)", fontSize: 10.5 }}>
+                          <span style={{ color: "var(--text-faint)" }}>{pt.weekKey}</span>
+                          <span style={{ display: "flex", gap: 10, minWidth: 0 }}>
+                            <span style={{ color: "var(--text-soft)" }}>+{(Math.round(pt.completedHours * 10) / 10).toLocaleString()}h done</span>
+                            {pt.penaltyHours > 0 && (
+                              <span style={{ color: "#e63b2e" }}>−{(Math.round(pt.penaltyHours * 10) / 10).toLocaleString()}h penalty</span>
+                            )}
+                          </span>
+                          <span style={{ color: "var(--text)", fontVariantNumeric: "tabular-nums" }}>{(Math.round(pt.score * 10) / 10).toLocaleString()}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </>
+  );
+}
+
 export default function AgencyProfile() {
   const [me, setMe] = useState<Me | null>(null);
   const [series, setSeries] = useState<Array<{ t: number; v: number }>>([]);
@@ -252,6 +356,9 @@ export default function AgencyProfile() {
           ) : <div className="soft" style={{ fontSize: 11.5 }}>{me.github ? "No public GitHub activity found (or rate-limited)." : "Add a GitHub username (ask an admin) to pull activity."}</div>}
         </div>
       </div>
+
+      {/* Targets & score ledger — one row per scored project the agent is in */}
+      <MyProjects />
 
       {/* Missions */}
       <div className="agp-missions-hd">

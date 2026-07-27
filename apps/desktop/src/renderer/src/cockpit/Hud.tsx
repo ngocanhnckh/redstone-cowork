@@ -673,6 +673,13 @@ function MiniBar({ value, target }: { value: number; target: number }) {
 function WeekWidget() {
   const [mine, setMine] = useState<import("../../../shared/scoring").MyScore>(null);
   const [loaded, setLoaded] = useState(false);
+  const focusId = useStore((s) => s.focusId);
+  const [binding, setBinding] = useState<{ profile: string; projectKey: string } | null>(null);
+  const [bindable, setBindable] = useState<Array<{ key: string; name: string }>>([]);
+  const [profile, setProfile] = useState<string | null>(null);
+  const [binding_busy, setBindingBusy] = useState(false);
+  const [bindErr, setBindErr] = useState("");
+
   useEffect(() => {
     let alive = true;
     const load = async () => {
@@ -686,12 +693,83 @@ function WeekWidget() {
     return () => { alive = false; clearInterval(t); };
   }, []);
 
+  // Which Jira project is THIS session bound to? Scores are per project, so a
+  // target means nothing until the operator knows which project it belongs to.
+  useEffect(() => {
+    let alive = true;
+    if (!focusId) { setBinding(null); return; }
+    window.cowork.jiraGetBinding(focusId)
+      .then((b) => { if (alive) setBinding(b ? { profile: b.profile, projectKey: b.projectKey } : null); })
+      .catch(() => { if (alive) setBinding(null); });
+    return () => { alive = false; };
+  }, [focusId]);
+
+  // Only fetch the pick-list when we actually need to offer a binding.
+  useEffect(() => {
+    let alive = true;
+    if (!focusId || binding) return;
+    (async () => {
+      try {
+        const profiles = await window.cowork.jiraProfilesList();
+        const p = profiles?.[0]?.name ?? null;
+        if (!alive) return;
+        setProfile(p);
+        if (!p) { setBindable([]); return; }
+        const projects = await window.cowork.jiraProfileProjects(p);
+        if (alive) setBindable(projects ?? []);
+      } catch { if (alive) setBindable([]); }
+    })();
+    return () => { alive = false; };
+  }, [focusId, binding]);
+
+  const bindTo = async (key: string) => {
+    if (!focusId || !profile || !key) return;
+    setBindingBusy(true); setBindErr("");
+    try {
+      await window.cowork.jiraSetBinding(focusId, { profile, projectKey: key });
+      setBinding({ profile, projectKey: key });
+      const m = await window.cowork.scoringMy();
+      setMine(m);
+    } catch (e) {
+      setBindErr(e instanceof Error ? e.message : String(e));
+    } finally { setBindingBusy(false); }
+  };
+
+  // No binding on the focused session: say so plainly and let them fix it here.
+  if (loaded && !mine && focusId && !binding) {
+    return (
+      <div className="hud-card" style={card}>
+        <span className="hud-corner" />
+        {kicker("This Week")}
+        <div className="mono" style={{ fontSize: 10, marginTop: 8, lineHeight: 1.5, color: "rgb(var(--primary))" }}>
+          This session isn't bound to a Jira project — no target applies.
+        </div>
+        {bindable.length > 0 ? (
+          <select
+            disabled={binding_busy}
+            defaultValue=""
+            onChange={(e) => bindTo(e.target.value)}
+            style={{ marginTop: 8, width: "100%", background: "rgba(6,6,6,.55)", color: "var(--text)", border: "1px solid var(--border)", fontFamily: "var(--font-mono)", fontSize: 11, padding: "6px 8px" }}
+          >
+            <option value="" disabled>{binding_busy ? "Binding…" : "Bind to a project…"}</option>
+            {bindable.map((p) => <option key={p.key} value={p.key}>{p.key} · {p.name}</option>)}
+          </select>
+        ) : (
+          <div className="mono faint" style={{ fontSize: 9.5, marginTop: 8 }}>No Jira profile configured.</div>
+        )}
+        {bindErr && <div className="mono" style={{ fontSize: 9.5, marginTop: 6, color: "#e63b2e" }}>✕ {bindErr}</div>}
+      </div>
+    );
+  }
+
   if (loaded && !mine) {
     return (
       <div className="hud-card" style={card}>
         <span className="hud-corner" />
         {kicker("This Week")}
-        <div className="mono faint" style={{ fontSize: 10, marginTop: 8, lineHeight: 1.5 }}>No scored project yet. Ask an admin to enable scoring for your Jira project.</div>
+        <div className="mono faint" style={{ fontSize: 10, marginTop: 8, lineHeight: 1.5 }}>
+          {binding ? `${binding.projectKey} isn't scored yet — ask an admin to enable scoring for it.` : "No scored project yet. Ask an admin to enable scoring for your Jira project."}
+        </div>
       </div>
     );
   }
@@ -703,6 +781,9 @@ function WeekWidget() {
       <span className="hud-corner" />
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         {kicker("This Week")}
+        {mine?.projectKey && (
+          <span className="mono" style={{ fontSize: 9, letterSpacing: "0.14em", color: "var(--text-soft)" }}>· {mine.projectKey}</span>
+        )}
         <span style={{ flex: 1 }} />
         {mine && mine.rank > 0 && (
           <span className="mono" style={{ fontSize: 11, color: "var(--text-soft)", display: "inline-flex", alignItems: "center", gap: 4 }}>
@@ -714,7 +795,7 @@ function WeekWidget() {
       {/* My score vs individual target */}
       <div style={{ marginTop: 8, display: "flex", alignItems: "baseline", gap: 6 }}>
         <span className="display" style={{ fontSize: 24, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{num(mine?.myScore ?? 0)}</span>
-        <span className="mono faint" style={{ fontSize: 10 }}>/ {num(mine?.individualTarget ?? 0)} hrs target</span>
+        <span className="mono faint" style={{ fontSize: 10 }}>/ {num(mine?.individualTarget ?? 0)} hrs target{mine?.projectKey ? ` · ${mine.projectKey}` : ""}</span>
       </div>
       <MiniBar value={mine?.myScore ?? 0} target={mine?.individualTarget ?? 0} />
 
