@@ -629,14 +629,44 @@ function ReconRadar() {
     const a = hash01(p.ip) * Math.PI * 2;
     const r = 0.34 + hash01(p.ip + "r") * 0.6; // 0.34..0.94 of radius
     const x = 50 + Math.cos(a) * r * 46, y = 50 + Math.sin(a) * r * 46;
-    // Angle of this blip in the sweep's conic frame (0deg = north). The original wedge shape
-    // is unchanged (bright edge at 0deg, fading to 60deg); we only reverse the spin to -360deg
-    // / 4.2s. The bright edge is at screen angle = rot, so it crosses this blip when rot = phi;
-    // phase the contact glow to that moment for the reversed direction.
+    // Screen angle of this blip (0deg = north, clockwise). The sweep's bright edge sits at
+    // screen angle = the sweep's current rotation, so a blip is "under the sweep" when the
+    // rotation is near phi — the shared-clock loop below lights it exactly then.
     const phi = (Math.atan2(x - 50, -(y - 50)) * 180 / Math.PI + 360) % 360;
-    const glowDelay = (-(phi / 360) * 4.2).toFixed(2);
-    return { p, x, y, glowDelay };
+    return { p, x, y, phi };
   }), [peers]);
+
+  // ONE clock drives both the cone rotation AND every blip's glow, so they can never drift
+  // apart (the previous two-independent-CSS-animations approach kept mis-phasing). Each frame
+  // we rotate the sweep and light each blip by how close the bright edge is to its angle.
+  const sweepRef = useRef<HTMLSpanElement>(null);
+  const glowRefs = useRef<Map<string, HTMLSpanElement>>(new Map());
+  const blipsRef = useRef(blips);
+  blipsRef.current = blips;
+  useEffect(() => {
+    let raf = 0, start = 0;
+    const DUR = 4200, WEDGE = 42; // ms per revolution; deg half-window the glow spans
+    const tick = (ts: number) => {
+      raf = requestAnimationFrame(tick);
+      if (document.hidden || document.body.classList.contains("rcw-hidden")) return;
+      if (!start) start = ts;
+      const angle = -(((ts - start) / DUR) * 360) % 360; // reversed (counter-clockwise) sweep
+      if (sweepRef.current) sweepRef.current.style.transform = `rotate(${angle}deg)`;
+      for (const b of blipsRef.current) {
+        const el = glowRefs.current.get(b.p.ip);
+        if (!el) continue;
+        const diff = (((angle - b.phi) % 360) + 540) % 360 - 180; // signed shortest [-180,180]
+        const inten = Math.max(0, 1 - Math.abs(diff) / WEDGE);
+        if (inten <= 0.02) { if (el.style.opacity !== "0") el.style.opacity = "0"; continue; }
+        const sz = 8 + inten * 16;
+        el.style.opacity = inten.toFixed(3);
+        el.style.width = el.style.height = sz.toFixed(1) + "px";
+        el.style.boxShadow = `0 0 ${(4 + inten * 10).toFixed(0)}px ${(inten * 3).toFixed(1)}px rgba(230,59,46,${(inten * 0.6).toFixed(2)})`;
+      }
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, []);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
@@ -654,17 +684,19 @@ function ReconRadar() {
           ))}
           <span style={{ position: "absolute", left: "50%", top: 0, bottom: 0, width: 1, background: "rgb(var(--primary-soft) / 0.12)" }} />
           <span style={{ position: "absolute", top: "50%", left: 0, right: 0, height: 1, background: "rgb(var(--primary-soft) / 0.12)" }} />
-          {/* sweep */}
-          <span className="rcw-radar-sweep" />
+          {/* sweep (rotation driven by the shared clock above) */}
+          <span ref={sweepRef} className="rcw-radar-sweep" />
           {/* center */}
           <span className="rcw-round" style={{ position: "absolute", left: "calc(50% - 3px)", top: "calc(50% - 3px)", width: 6, height: 6, background: "var(--text)" }} />
-          {/* blips: each has a sweep-synced glow that flashes as the cone crosses it, and
-              opens the IP inspector on click (same modal as the network map) */}
+          {/* blips: the shared-clock loop lights each glow as the sweep's bright edge crosses
+              its angle; click opens the IP inspector (same modal as the network map) */}
           {blips.map((b) => {
             const d = Math.min(11, 5 + b.p.count);
             return (
               <span key={b.p.ip} style={{ position: "absolute", left: `${b.x}%`, top: `${b.y}%` }}>
-                <span className="rcw-blip-glow" style={{ animationDelay: `${b.glowDelay}s` }} />
+                <span
+                  ref={(el) => { if (el) glowRefs.current.set(b.p.ip, el); else glowRefs.current.delete(b.p.ip); }}
+                  className="rcw-blip-glow" />
                 <span
                   onClick={() => openIp({ ip: b.p.ip, port: b.p.port })}
                   onMouseEnter={() => setHover(b.p)} onMouseLeave={() => setHover((h) => (h?.ip === b.p.ip ? null : h))}

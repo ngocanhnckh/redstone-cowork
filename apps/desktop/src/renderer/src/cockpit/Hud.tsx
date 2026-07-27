@@ -135,10 +135,21 @@ function WaveLine({ color = "rgb(var(--primary-soft))", height = 40, phase = 0 }
   );
 }
 
-function Bar({ pct, color = "rgb(var(--primary-soft))" }: { pct: number; color?: string }) {
+function Bar({ pct, color = "rgb(var(--primary-soft))", breathe = false, phase = 0 }:
+  { pct: number; color?: string; breathe?: boolean; phase?: number }) {
   return (
     <div style={{ height: 6, borderRadius: 999, background: "var(--border)", overflow: "hidden" }}>
-      <div style={{ height: "100%", width: `${Math.max(0, Math.min(100, pct))}%`, background: color, borderRadius: 999, transition: "width 0.7s cubic-bezier(.4,0,.2,1)" }} />
+      <div
+        className={breathe ? "rcw-breathe" : undefined}
+        style={{
+          height: "100%",
+          width: `${Math.max(0, Math.min(100, pct))}%`,
+          background: color,
+          borderRadius: 999,
+          transition: "width 0.7s cubic-bezier(.4,0,.2,1)",
+          animationDelay: breathe ? `${phase}s` : undefined,
+        }}
+      />
     </div>
   );
 }
@@ -352,9 +363,9 @@ function HostCard({ t }: { t: HostTelemetryView }) {
         <span style={{ flex: 1 }} />
         <span className="mono faint" style={{ fontSize: 10 }}>up {fmtUptime(t.latest.uptimeSec)}</span>
       </div>
-      {row("CPU", <Bar pct={t.latest.cpuPct} color="var(--text)" />, `${Math.round(t.latest.cpuPct)}%`)}
-      {row("RAM", <Bar pct={ramPct} color="var(--text-soft)" />, `${gb(t.latest.ramUsed)}/${gb(t.latest.ramTotal)}G`)}
-      {row("NET", <Bar pct={netPct} color="var(--text-soft)" />, `↓${kbs(t.latest.netRxBps)} ↑${kbs(t.latest.netTxBps)}`)}
+      {row("CPU", <Bar pct={t.latest.cpuPct} color="var(--text)" breathe phase={0} />, `${Math.round(t.latest.cpuPct)}%`)}
+      {row("RAM", <Bar pct={ramPct} color="var(--text-soft)" breathe phase={-1.1} />, `${gb(t.latest.ramUsed)}/${gb(t.latest.ramTotal)}G`)}
+      {row("NET", <Bar pct={netPct} color="var(--text-soft)" breathe phase={-2.2} />, `↓${kbs(t.latest.netRxBps)} ↑${kbs(t.latest.netTxBps)}`)}
       <HostHistory t={t} />
     </div>
   );

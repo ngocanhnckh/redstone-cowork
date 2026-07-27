@@ -278,6 +278,32 @@ body {
     }
 }
 
+/* Meter fills breathe so a live host never looks frozen between polls. Pure
+   transform (compositor-only, no layout) and it never alters the printed value —
+   the number beside the bar is always the exact reading. The cycle starts AT the
+   true width and swings evenly above and below it, so the bar wiggles around the
+   real value rather than drifting off it. */
+@keyframes rcw-breathe {
+    0%,
+    100% {
+        transform: scaleX(1);
+    }
+    25% {
+        transform: scaleX(1.03);
+    }
+    75% {
+        transform: scaleX(0.97);
+    }
+}
+.rcw-breathe {
+    transform-origin: left center;
+    animation: rcw-breathe 3.2s ease-in-out infinite;
+    will-change: transform;
+}
+.rcw-no-anim .rcw-breathe {
+    animation: none;
+}
+
 /* audio-visualizer equalizer bars — chalk, the one "working" motion. */
 .eq {
     display: inline-flex;
