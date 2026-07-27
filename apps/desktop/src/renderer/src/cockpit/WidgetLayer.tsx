@@ -658,10 +658,12 @@ function ReconRadar() {
         const diff = (((angle - b.phi) % 360) + 540) % 360 - 180; // signed shortest [-180,180]
         const inten = Math.max(0, 1 - Math.abs(diff) / WEDGE);
         if (inten <= 0.02) { if (el.style.opacity !== "0") el.style.opacity = "0"; continue; }
-        const sz = 8 + inten * 16;
-        el.style.opacity = inten.toFixed(3);
+        // Preview's contact pulse: a small ring that blooms to ~9px and fades —
+        // the dot lights up as the sweep crosses it, it never becomes a blob.
+        const sz = 5 + inten * 5;
+        el.style.opacity = (inten * 0.85).toFixed(3);
         el.style.width = el.style.height = sz.toFixed(1) + "px";
-        el.style.boxShadow = `0 0 ${(4 + inten * 10).toFixed(0)}px ${(inten * 3).toFixed(1)}px rgba(230,59,46,${(inten * 0.6).toFixed(2)})`;
+        el.style.boxShadow = `0 0 0 ${(inten * 4).toFixed(1)}px rgba(230,59,46,${(inten * 0.28).toFixed(2)})`;
       }
     };
     raf = requestAnimationFrame(tick);
@@ -680,18 +682,19 @@ function ReconRadar() {
         <div className="rcw-radar" style={{ position: "relative", width: "100%", maxWidth: 180, aspectRatio: "1 / 1" }}>
           {/* rings */}
           {[1, 0.66, 0.33].map((f, i) => (
-            <span key={i} className="rcw-round" style={{ position: "absolute", inset: `${(1 - f) * 50}%`, border: "1px solid rgb(var(--primary-soft) / 0.16)" }} />
+            <span key={i} className="rcw-round" style={{ position: "absolute", inset: `${(1 - f) * 50}%`, border: "1px solid rgba(232,230,225,0.13)" }} />
           ))}
-          <span style={{ position: "absolute", left: "50%", top: 0, bottom: 0, width: 1, background: "rgb(var(--primary-soft) / 0.12)" }} />
-          <span style={{ position: "absolute", top: "50%", left: 0, right: 0, height: 1, background: "rgb(var(--primary-soft) / 0.12)" }} />
+          <span style={{ position: "absolute", left: "50%", top: 0, bottom: 0, width: 1, background: "rgba(232,230,225,0.08)" }} />
+          <span style={{ position: "absolute", top: "50%", left: 0, right: 0, height: 1, background: "rgba(232,230,225,0.08)" }} />
           {/* sweep (rotation driven by the shared clock above) */}
           <span ref={sweepRef} className="rcw-radar-sweep" />
-          {/* center */}
-          <span className="rcw-round" style={{ position: "absolute", left: "calc(50% - 3px)", top: "calc(50% - 3px)", width: 6, height: 6, background: "var(--text)" }} />
           {/* blips: the shared-clock loop lights each glow as the sweep's bright edge crosses
               its angle; click opens the IP inspector (same modal as the network map) */}
           {blips.map((b) => {
-            const d = Math.min(11, 5 + b.p.count);
+            // Preview spec: a contact is a 5px dot — never sized by traffic.
+            // Red marks a repeat connection; a one-off sits quiet in dim chalk.
+            const d = 5;
+            const live = b.p.count > 1;
             return (
               <span key={b.p.ip} style={{ position: "absolute", left: `${b.x}%`, top: `${b.y}%` }}>
                 <span
@@ -701,7 +704,7 @@ function ReconRadar() {
                   onClick={() => openIp({ ip: b.p.ip, port: b.p.port })}
                   onMouseEnter={() => setHover(b.p)} onMouseLeave={() => setHover((h) => (h?.ip === b.p.ip ? null : h))}
                   title={`${b.p.ip}${b.p.port ? " :" + b.p.port : ""} · ×${b.p.count} — click to inspect`}
-                  className="rcw-blip"
+                  className={`rcw-blip${live ? "" : " ok"}`}
                   style={{ position: "absolute", left: 0, top: 0, width: d, height: d }} />
               </span>
             );
@@ -981,14 +984,16 @@ function WidgetStyles() {
          so the blip glows stay perfectly in phase with it. */
       .rcw-radar-sweep { position: absolute; inset: 0; clip-path: circle(50%);
         background: conic-gradient(from 0deg, rgba(230,59,46,0.28), rgba(230,59,46,0.04) 52deg, transparent 60deg); }
-      /* square contacts (tactical-radar marker) */
-      .rcw-blip { border-radius: 0 !important; background: rgb(var(--primary-soft)); transform: translate(-50%, -50%);
+      /* Contacts: round dots at a fixed 5px (redesign-hud-preview.html). Red = a
+         repeat connection, dim chalk = a single-hit peer. */
+      .rcw-blip { border-radius: 50% !important; background: #e63b2e; transform: translate(-50%, -50%);
         cursor: pointer; transition: background .15s ease; }
-      .rcw-blip:hover { background: var(--text); box-shadow: 0 0 8px 1px rgba(230,59,46,.6); }
+      .rcw-blip.ok { background: var(--text-soft); }
+      .rcw-blip:hover { background: var(--text); }
       /* Contact glow: opacity/size/shadow are set each frame by the shared clock so a blip is
          brightest exactly when the sweep's bright edge is on it, fading either side. */
-      .rcw-blip-glow { position: absolute; left: 0; top: 0; width: 8px; height: 8px; border-radius: 0;
-        background: rgba(230,59,46,.5); transform: translate(-50%, -50%); pointer-events: none; opacity: 0; }
+      .rcw-blip-glow { position: absolute; left: 0; top: 0; width: 5px; height: 5px; border-radius: 50%;
+        background: rgba(230,59,46,.45); transform: translate(-50%, -50%); pointer-events: none; opacity: 0; }
       body.rcw-hidden .rcw-w-pulse { animation-play-state: paused !important; }
     `}</style>
   );
