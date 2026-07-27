@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { describeFaceFromImageUrl } from "../faceEngine";
 import { RANK_NAMES } from "./ranks";
+import ScoringAdmin from "./ScoringAdmin";
 
 // ——— AGENT ROSTER — YITEC INTELLIGENCE AGENCY personnel dashboard ———
 // Admin-only management of employee accounts: recruit agents, edit profiles
@@ -136,7 +137,7 @@ export default function AgentsPanel() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
-  const [view, setView] = useState<"roster" | "console" | "servers">("roster");
+  const [view, setView] = useState<"roster" | "console" | "servers" | "scoring">("roster");
   const [analytics, setAnalytics] = useState<Analytics[]>([]);
   const [svServers, setSvServers] = useState<import("../../../shared/servers").ServerView[]>([]);
   const [svGrantFor, setSvGrantFor] = useState<string | null>(null);
@@ -388,9 +389,9 @@ export default function AgentsPanel() {
         {msg && <span style={{ fontSize: 10, color: "var(--text-soft)", letterSpacing: ".14em" }}>{msg}</span>}
         {isAdmin && (
           <div style={{ display: "flex", gap: 4 }}>
-            {(["roster", "console", "servers"] as const).map((v) => (
+            {(["roster", "console", "servers", "scoring"] as const).map((v) => (
               <button key={v} className="rcw-ag-btn" style={{ opacity: view === v ? 1 : 0.55, background: view === v ? "rgb(232 230 225 / .24)" : undefined }}
-                onClick={() => setView(v)}>{v === "roster" ? "ROSTER" : v === "console" ? "CONSOLE" : "⬡ ACCESS"}</button>
+                onClick={() => setView(v)}>{v === "roster" ? "ROSTER" : v === "console" ? "CONSOLE" : v === "servers" ? "⬡ ACCESS" : "▤ SCORING"}</button>
             ))}
           </div>
         )}
@@ -403,7 +404,9 @@ export default function AgentsPanel() {
 
       {err && <div style={{ padding: "10px 14px", color: "#e63b2e", fontSize: 11.5 }}>⚠ {err}</div>}
 
-      {view === "console" && isAdmin ? (
+      {view === "scoring" && isAdmin ? (
+        <ScoringAdmin />
+      ) : view === "console" && isAdmin ? (
         <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: 14 }}>
           <div style={{ fontSize: 11, letterSpacing: ".2em", color: "rgb(232 230 225 / .8)", marginBottom: 10 }}>TOKEN SPEND & ACTIVITY · PER AGENT</div>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11.5 }}>

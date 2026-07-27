@@ -1,0 +1,280 @@
+import { useCallback, useEffect, useState } from "react";
+import type { ScoringProjectConfig, ScoringBoard, SprintIssue, ScoringPenaltyView } from "../../../shared/scoring";
+
+// Admin scoring console: enable + configure a Jira project (which statuses count as complete,
+// penalty %, week timezone, targets), pick the week's critical tasks from the sprint, review +
+// void the penalty ledger, grant/revoke admin, and trigger a manual scan.
+
+const CSS = `
+.sca-root { flex:1; min-height:0; overflow-y:auto; padding:14px; }
+.sca-h { font-size:11px; letter-spacing:.2em; color:rgb(232 230 225 / .8); margin:0 0 10px; }
+.sca-sub { font-size:9.5px; letter-spacing:.14em; color:var(--text-faint); text-transform:uppercase; margin:18px 0 8px; }
+.sca-proj { display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-bottom:14px; }
+.sca-proj button { background:transparent; border:1px solid var(--border); color:var(--text-soft); border-radius:8px; padding:5px 12px; font-size:11px; font-weight:600; cursor:pointer; }
+.sca-proj button.on { background:rgb(232 230 225 / .22); color:var(--text); }
+.sca-proj input { width:110px; background:rgb(0 0 0 / .3); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:5px 9px; font-size:11px; }
+.sca-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.sca-f label { font-size:9.5px; letter-spacing:.1em; color:var(--text-faint); display:block; margin-bottom:4px; text-transform:uppercase; }
+.sca-f input, .sca-f select { width:100%; box-sizing:border-box; background:rgb(0 0 0 / .3); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:8px 10px; font-size:12.5px; }
+.sca-full { grid-column:1 / -1; }
+.sca-btn { background:var(--text); color:#111013; border:0; border-radius:9px; padding:8px 15px; font-size:11px; font-weight:700; letter-spacing:.08em; cursor:pointer; }
+.sca-btn.ghost { background:transparent; border:1px solid var(--border); color:var(--text-soft); font-weight:600; }
+.sca-row { display:flex; align-items:center; gap:10px; padding:7px 0; border-top:1px solid rgb(255 255 255 / .05); font-size:12px; }
+.sca-row .k { font-family:var(--font-mono); color:var(--text-soft); flex-shrink:0; width:78px; }
+.sca-row .s { flex:1; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.sca-chk { width:15px; height:15px; accent-color:var(--accent, #e63b2e); }
+.sca-tbl { width:100%; border-collapse:collapse; font-size:11.5px; }
+.sca-tbl th { text-align:left; color:var(--text-faint); font-size:9px; letter-spacing:.12em; padding:4px 6px; }
+.sca-tbl td { padding:6px 6px; border-top:1px solid var(--border); }
+.sca-tbl tr.void td { opacity:.4; text-decoration:line-through; }
+.sca-mut { color:var(--text-faint); font-size:11px; }
+`;
+
+const asNum = (v: string, d = 0) => { const n = Number(v); return Number.isFinite(n) ? n : d; };
+
+export default function ScoringAdmin() {
+  const [projects, setProjects] = useState<string[]>([]);
+  const [project, setProject] = useState("");
+  const [newKey, setNewKey] = useState("");
+  const [cfg, setCfg] = useState<ScoringProjectConfig | null>(null);
+  const [board, setBoard] = useState<ScoringBoard | null>(null);
+  const [sprint, setSprint] = useState<SprintIssue[]>([]);
+  const [critical, setCritical] = useState<Set<string>>(new Set());
+  const [penalties, setPenalties] = useState<ScoringPenaltyView[]>([]);
+  const [showVoided, setShowVoided] = useState(false);
+  const [agents, setAgents] = useState<AgentAccount[]>([]);
+  const [msg, setMsg] = useState("");
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const flash = (m: string) => { setMsg(m); setTimeout(() => setMsg(""), 2500); };
+  const fail = (e: unknown) => setErr(e instanceof Error ? e.message : String(e));
+
+  useEffect(() => {
+    window.cowork.scoringConfigs().then((cs) => {
+      const keys = cs.map((c) => c.projectKey);
+      setProjects(keys);
+      setProject((cur) => cur || keys[0] || "");
+    }).catch(fail);
+    window.cowork.accountsList().then(setAgents).catch(() => {});
+  }, []);
+
+  const loadProject = useCallback(() => {
+    if (!project) return;
+    window.cowork.scoringConfigGet(project).then(setCfg).catch(fail);
+    window.cowork.scoringBoard(project).then(setBoard).catch(() => setBoard(null));
+    window.cowork.scoringSprintIssues(project).then(setSprint).catch(() => setSprint([]));
+    window.cowork.scoringPenalties(project, showVoided).then(setPenalties).catch(() => setPenalties([]));
+  }, [project, showVoided]);
+  useEffect(() => { loadProject(); }, [loadProject]);
+
+  // Load the currently-marked critical set once we know the week.
+  useEffect(() => {
+    if (!project || !board) return;
+    window.cowork.scoringCriticalGet(project, board.weekKey)
+      .then((c) => setCritical(new Set(c.items.map((i) => i.issueKey))))
+      .catch(() => setCritical(new Set()));
+  }, [project, board?.weekKey]); // eslint-disable-line
+
+  const addProject = async () => {
+    const k = newKey.trim().toUpperCase();
+    if (!k) return;
+    setBusy(true);
+    try {
+      await window.cowork.scoringConfigSet(k, { enabled: true });
+      setNewKey("");
+      const cs = await window.cowork.scoringConfigs();
+      setProjects(cs.map((c) => c.projectKey));
+      setProject(k);
+      flash(`Added ${k}`);
+    } catch (e) { fail(e); } finally { setBusy(false); }
+  };
+
+  const saveConfig = async () => {
+    if (!cfg) return;
+    setBusy(true);
+    try {
+      const saved = await window.cowork.scoringConfigSet(project, {
+        completeStatuses: cfg.completeStatuses, reopenPenaltyPct: cfg.reopenPenaltyPct,
+        followupPenaltyPct: cfg.followupPenaltyPct, weekTimezone: cfg.weekTimezone,
+        defaultTeamTarget: cfg.defaultTeamTarget, defaultIndividualTarget: cfg.defaultIndividualTarget,
+        enabled: cfg.enabled,
+      });
+      setCfg(saved);
+      flash("Config saved");
+    } catch (e) { fail(e); } finally { setBusy(false); }
+  };
+
+  const saveTargets = async () => {
+    if (!board) return;
+    setBusy(true);
+    try {
+      const b = await window.cowork.scoringTargets({
+        projectKey: project, weekKey: board.weekKey,
+        teamTarget: board.teamTarget, individualTarget: board.individualTarget,
+      });
+      setBoard(b);
+      flash("Targets saved");
+    } catch (e) { fail(e); } finally { setBusy(false); }
+  };
+
+  const toggleCritical = (key: string) => {
+    setCritical((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
+  };
+  const saveCritical = async () => {
+    if (!board) return;
+    setBusy(true);
+    try {
+      await window.cowork.scoringCriticalSet({ projectKey: project, weekKey: board.weekKey, issueKeys: [...critical] });
+      flash("Critical tasks saved");
+    } catch (e) { fail(e); } finally { setBusy(false); }
+  };
+
+  const voidPenalty = async (id: string) => {
+    setBusy(true);
+    try { await window.cowork.scoringVoidPenalty(id); loadProject(); flash("Penalty voided"); }
+    catch (e) { fail(e); } finally { setBusy(false); }
+  };
+
+  const scan = async () => {
+    setBusy(true);
+    try { const r = await window.cowork.scoringScan(project); flash(`Scanned: ${r.completions} completions, ${r.penalties} penalties`); loadProject(); }
+    catch (e) { fail(e); } finally { setBusy(false); }
+  };
+
+  const setRole = async (id: string, role: "admin" | "member") => {
+    setBusy(true);
+    try {
+      await window.cowork.accountUpdateProfile(id, { role });
+      setAgents((prev) => prev.map((a) => (a.id === id ? { ...a, role } : a)));
+      flash("Role updated");
+    } catch (e) { fail(e); } finally { setBusy(false); }
+  };
+
+  const patchCfg = (p: Partial<ScoringProjectConfig>) => setCfg((c) => (c ? { ...c, ...p } : c));
+
+  return (
+    <div className="sca-root">
+      <style>{CSS}</style>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <h3 className="sca-h" style={{ margin: 0 }}>SCORING · JIRA-EFFORT PERFORMANCE</h3>
+        <span style={{ flex: 1 }} />
+        {msg && <span style={{ fontSize: 10, color: "var(--text-soft)", letterSpacing: ".14em" }}>{msg}</span>}
+      </div>
+      {err && <div style={{ color: "#e63b2e", fontSize: 11.5, margin: "6px 0" }}>⚠ {err}</div>}
+
+      <div className="sca-proj">
+        {projects.map((k) => (
+          <button key={k} className={k === project ? "on" : ""} onClick={() => setProject(k)}>{k}</button>
+        ))}
+        <input value={newKey} onChange={(e) => setNewKey(e.target.value)} placeholder="ADD KEY" onKeyDown={(e) => e.key === "Enter" && addProject()} />
+        <button className="sca-btn ghost" disabled={busy} onClick={addProject}>＋ ADD PROJECT</button>
+      </div>
+
+      {!project ? (
+        <div className="sca-mut">Add a Jira project key (e.g. JP) to start scoring its team.</div>
+      ) : (
+        <>
+          {/* Config */}
+          {cfg && (
+            <>
+              <div className="sca-sub">Project config</div>
+              <div className="sca-grid">
+                <div className="sca-f sca-full">
+                  <label>Complete statuses (comma-separated · blank = any Done-category)</label>
+                  <input value={cfg.completeStatuses.join(", ")} onChange={(e) => patchCfg({ completeStatuses: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })} placeholder="Done, Closed, Approved" />
+                </div>
+                <div className="sca-f"><label>Reopen penalty %</label><input type="number" min={0} max={100} value={cfg.reopenPenaltyPct} onChange={(e) => patchCfg({ reopenPenaltyPct: asNum(e.target.value) })} /></div>
+                <div className="sca-f"><label>Follow-up penalty %</label><input type="number" min={0} max={100} value={cfg.followupPenaltyPct} onChange={(e) => patchCfg({ followupPenaltyPct: asNum(e.target.value) })} /></div>
+                <div className="sca-f"><label>Week timezone</label><input value={cfg.weekTimezone} onChange={(e) => patchCfg({ weekTimezone: e.target.value })} placeholder="Asia/Ho_Chi_Minh" /></div>
+                <div className="sca-f"><label>Enabled (scanned)</label><select value={cfg.enabled ? "1" : "0"} onChange={(e) => patchCfg({ enabled: e.target.value === "1" })}><option value="1">Yes</option><option value="0">No</option></select></div>
+                <div className="sca-f"><label>Default team target (hrs)</label><input type="number" min={0} value={cfg.defaultTeamTarget} onChange={(e) => patchCfg({ defaultTeamTarget: asNum(e.target.value) })} /></div>
+                <div className="sca-f"><label>Default individual target (hrs)</label><input type="number" min={0} value={cfg.defaultIndividualTarget} onChange={(e) => patchCfg({ defaultIndividualTarget: asNum(e.target.value) })} /></div>
+                <div className="sca-full" style={{ display: "flex", gap: 10 }}>
+                  <button className="sca-btn" disabled={busy} onClick={saveConfig}>SAVE CONFIG</button>
+                  <button className="sca-btn ghost" disabled={busy} onClick={scan}>↻ SCAN NOW</button>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* This week's targets */}
+          {board && (
+            <>
+              <div className="sca-sub">This week's targets · {board.weekKey}</div>
+              <div className="sca-grid">
+                <div className="sca-f"><label>Team target (hrs)</label><input type="number" min={0} value={board.teamTarget} onChange={(e) => setBoard({ ...board, teamTarget: asNum(e.target.value) })} /></div>
+                <div className="sca-f"><label>Individual target (hrs)</label><input type="number" min={0} value={board.individualTarget} onChange={(e) => setBoard({ ...board, individualTarget: asNum(e.target.value) })} /></div>
+                <div className="sca-full"><button className="sca-btn" disabled={busy} onClick={saveTargets}>SAVE TARGETS</button></div>
+              </div>
+            </>
+          )}
+
+          {/* Critical tasks (from current sprint) */}
+          <div className="sca-sub">Critical tasks · pick from current sprint ({critical.size} selected)</div>
+          {sprint.length === 0 ? (
+            <div className="sca-mut">No open-sprint issues found for {project}.</div>
+          ) : (
+            <div>
+              {sprint.map((i) => (
+                <label key={i.key} className="sca-row" style={{ cursor: "pointer" }}>
+                  <input type="checkbox" className="sca-chk" checked={critical.has(i.key)} onChange={() => toggleCritical(i.key)} />
+                  <span className="k">{i.key}</span>
+                  <span className="s">{i.summary}</span>
+                  <span className="sca-mut" style={{ flexShrink: 0 }}>{i.status}</span>
+                </label>
+              ))}
+              <div style={{ marginTop: 10 }}><button className="sca-btn" disabled={busy} onClick={saveCritical}>SAVE CRITICAL LIST</button></div>
+            </div>
+          )}
+
+          {/* Penalty ledger */}
+          <div className="sca-sub" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            Penalty ledger
+            <label style={{ fontSize: 9.5, letterSpacing: ".08em", display: "inline-flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
+              <input type="checkbox" className="sca-chk" checked={showVoided} onChange={(e) => setShowVoided(e.target.checked)} /> show voided
+            </label>
+          </div>
+          {penalties.length === 0 ? (
+            <div className="sca-mut">No penalties recorded for {project}.</div>
+          ) : (
+            <table className="sca-tbl">
+              <thead><tr><th>WHEN</th><th>ISSUE</th><th>AGENT</th><th>TYPE</th><th>POINTS</th><th>DETAIL</th><th></th></tr></thead>
+              <tbody>
+                {penalties.map((p) => (
+                  <tr key={p.id} className={p.voided ? "void" : ""}>
+                    <td className="sca-mut">{new Date(p.occurredAt).toLocaleDateString()}</td>
+                    <td style={{ fontFamily: "var(--font-mono)" }}>{p.issueKey}</td>
+                    <td>{p.displayName}</td>
+                    <td>{p.type}</td>
+                    <td style={{ color: "var(--warn, #e0a44a)", fontVariantNumeric: "tabular-nums" }}>{p.points}</td>
+                    <td className="sca-mut">{p.detail}</td>
+                    <td>{!p.voided && <button className="sca-btn ghost" style={{ padding: "3px 9px", fontSize: 10 }} disabled={busy} onClick={() => voidPenalty(p.id)}>VOID</button>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+
+          {/* Admin roles */}
+          <div className="sca-sub">Admin access · grant or revoke</div>
+          <table className="sca-tbl">
+            <tbody>
+              {agents.map((a) => (
+                <tr key={a.id}>
+                  <td><b style={{ color: "var(--text)" }}>{a.displayName || a.username}</b> <span className="sca-mut">@{a.username}</span></td>
+                  <td style={{ color: a.role === "admin" ? "var(--text)" : "var(--text-faint)" }}>{a.role === "admin" ? "DIRECTOR (admin)" : "member"}</td>
+                  <td style={{ textAlign: "right" }}>
+                    {a.role === "admin"
+                      ? <button className="sca-btn ghost" style={{ padding: "3px 9px", fontSize: 10 }} disabled={busy} onClick={() => setRole(a.id, "member")}>REVOKE ADMIN</button>
+                      : <button className="sca-btn ghost" style={{ padding: "3px 9px", fontSize: 10 }} disabled={busy} onClick={() => setRole(a.id, "admin")}>MAKE ADMIN</button>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
+    </div>
+  );
+}

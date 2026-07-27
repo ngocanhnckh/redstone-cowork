@@ -1,16 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { AgentOfWeek, WeekEntry } from "../../../shared/agency";
+import type { AgentWeekAward, AgentWeekEntry } from "../../../shared/scoring";
 import { IconTrophy, IconGift, IconCrown } from "./Icons";
 
-// Agent of the Week — a weighted weekly competition. Each agent's commits, resolved Jira
-// tickets and tokens burned inside the contest window are scored against the roster's best
-// and combined (Jira 45% · Commits 35% · Tokens 20%) into one fair, comparable rating.
+// Agent of the Week — a roster-wide weekly award. Each agent's EFFORT score (Σ Jira
+// Original-Estimate hours of completed work − penalties, across their projects this week) is
+// blended with a portion of their token spend, each scored against the roster's best, into
+// one fair, comparable rating. Effort dominates so a big spender who ships nothing can't win.
 
 const CSS = `
 .aow-root { padding: 4px 20px 30px; }
 .aow-head { display:flex; align-items:flex-end; gap:14px; flex-wrap:wrap; margin:6px 0 14px; }
-.aow-head h2 { font-family:var(--font-display); font-size:24px; font-weight:800; letter-spacing:.02em; margin:0;
-  color:var(--text); }
+.aow-head h2 { font-family:var(--font-display); font-size:24px; font-weight:800; letter-spacing:.02em; margin:0; color:var(--text); }
 .aow-clock { margin-left:auto; text-align:right; }
 .aow-clock .lbl { font-size:9px; letter-spacing:.22em; color:var(--text-faint); }
 .aow-clock .val { font-family:var(--font-display); font-size:26px; font-weight:700; color:var(--text-soft); line-height:1.05; font-variant-numeric:tabular-nums; }
@@ -24,8 +24,7 @@ const CSS = `
 .aow-weights b { color:var(--text-soft); font-weight:600; }
 
 .aow-spot { display:flex; gap:18px; align-items:center; padding:18px 20px; border-radius:18px; margin-bottom:16px;
-  background:rgb(232 230 225 / .05); border:1.5px solid rgb(232 230 225 / .35);
-  box-shadow:0 0 40px -14px rgb(232 230 225 / .35); }
+  background:rgb(232 230 225 / .05); border:1.5px solid rgb(232 230 225 / .35); box-shadow:0 0 40px -14px rgb(232 230 225 / .35); }
 .aow-spot .crown { position:absolute; font-size:20px; margin-top:-46px; margin-left:-4px; }
 .aow-photo { width:104px; height:104px; border-radius:16px; object-fit:cover; border:2px solid rgb(232 230 225 / .7); box-shadow:0 0 26px -6px rgb(232 230 225 / .6); background:#05090d; flex-shrink:0; }
 .aow-photo.ph { display:flex; align-items:center; justify-content:center; font-size:44px; color:rgb(255 255 255 / .35); }
@@ -33,7 +32,6 @@ const CSS = `
 .aow-spot-name { font-family:var(--font-display); font-size:22px; font-weight:800; color:#fff; }
 .aow-spot-sub { font-size:11px; letter-spacing:.1em; color:var(--text-faint); text-transform:uppercase; margin-top:1px; }
 .aow-spot-metrics { display:flex; gap:22px; margin-top:12px; }
-.aow-m { }
 .aow-m .n { font-family:var(--font-display); font-size:20px; font-weight:700; color:var(--text-soft); font-variant-numeric:tabular-nums; }
 .aow-m .k { font-size:9px; letter-spacing:.14em; color:var(--text-faint); text-transform:uppercase; }
 .aow-spot-score { text-align:center; flex-shrink:0; padding-left:6px; }
@@ -57,19 +55,16 @@ const CSS = `
 
 .aow-admin { margin-top:22px; border-top:1px dashed var(--border); padding-top:14px; }
 .aow-admin summary { cursor:pointer; font-size:11px; letter-spacing:.14em; color:var(--text-faint); }
-.aow-admin .grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px; }
+.aow-admin .grid { display:grid; grid-template-columns:1fr; gap:12px; margin-top:12px; }
 .aow-admin label { font-size:10px; letter-spacing:.1em; color:var(--text-faint); display:block; margin-bottom:4px; }
-.aow-admin input { width:100%; box-sizing:border-box; background:rgb(0 0 0 / .3); border:1px solid var(--border); border-radius:8px;
-  color:var(--text); padding:8px 10px; font-size:12.5px; }
-.aow-admin .full { grid-column:1 / -1; }
-.aow-btn { background:var(--text); color:#111013; border:0; border-radius:9px; padding:8px 16px; font-size:11px;
-  font-weight:700; letter-spacing:.1em; cursor:pointer; }
-.aow-btn.ghost { background:transparent; border:1px solid var(--border); color:var(--text-soft); font-weight:600; }
+.aow-admin input { width:100%; box-sizing:border-box; background:rgb(0 0 0 / .3); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:8px 10px; font-size:12.5px; }
+.aow-btn { background:var(--text); color:#111013; border:0; border-radius:9px; padding:8px 16px; font-size:11px; font-weight:700; letter-spacing:.1em; cursor:pointer; }
 .aow-empty { padding:26px; color:var(--text-faint); font-size:13px; }
 `;
 
 // Tokens are always shown in millions (M).
 const kfmt = (n: number) => `${(n / 1e6).toFixed(n >= 1e8 ? 0 : n >= 1e7 ? 1 : 2)}M`;
+const hfmt = (n: number) => `${Math.round(n * 10) / 10}`;
 
 /** Live countdown to the window end (or ENDED). */
 function useCountdown(endIso: string): { text: string; ended: boolean } {
@@ -89,34 +84,19 @@ function useCountdown(endIso: string): { text: string; ended: boolean } {
 const Photo = ({ src, cls }: { src: string | null; cls: string }) =>
   src ? <img className={cls} src={src} alt="" /> : <div className={`${cls} ph`}>◍</div>;
 
-function toLocalInput(iso: string | null): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return "";
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
-}
-
 export default function AgentWeek({ isAdmin }: { isAdmin: boolean }) {
-  const [data, setData] = useState<AgentOfWeek | null>(null);
+  const [data, setData] = useState<AgentWeekAward | null>(null);
   const [err, setErr] = useState("");
   const [saving, setSaving] = useState(false);
   const [prize, setPrize] = useState("");
-  const [startsAt, setStartsAt] = useState("");
-  const [endsAt, setEndsAt] = useState("");
 
   const load = useCallback(() => {
-    window.cowork.agencyWeek()
+    window.cowork.scoringAgentWeek()
       .then((d) => { setData(d); setErr(""); })
       .catch((e) => setErr(e instanceof Error ? e.message : String(e)));
   }, []);
   useEffect(() => { load(); const t = setInterval(load, 60000); return () => clearInterval(t); }, [load]);
-  useEffect(() => {
-    if (!data) return;
-    setPrize(data.config.prize);
-    setStartsAt(toLocalInput(data.config.startsAt));
-    setEndsAt(toLocalInput(data.config.endsAt));
-  }, [data?.config.prize, data?.config.startsAt, data?.config.endsAt]); // eslint-disable-line
+  useEffect(() => { if (data) setPrize(data.prize); }, [data?.prize]); // eslint-disable-line
 
   const cd = useCountdown(data?.window.end ?? new Date().toISOString());
   const entries = data?.entries ?? [];
@@ -126,20 +106,15 @@ export default function AgentWeek({ isAdmin }: { isAdmin: boolean }) {
   const save = async () => {
     setSaving(true);
     try {
-      await window.cowork.agencyWeekConfig({
-        prize,
-        startsAt: startsAt ? new Date(startsAt).toISOString() : null,
-        endsAt: endsAt ? new Date(endsAt).toISOString() : null,
-      });
+      await window.cowork.agencyWeekConfig({ prize, startsAt: null, endsAt: null });
       load();
     } catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
     finally { setSaving(false); }
   };
 
-  const metricRow = (e: WeekEntry) => (
+  const metricRow = (e: AgentWeekEntry) => (
     <div className="aow-rmetrics">
-      <span><b>{e.jiraDone}</b> jira</span>
-      <span><b>{e.commits}</b> commits</span>
+      <span><b>{hfmt(e.effortScore)}</b> hrs</span>
       <span><b>{kfmt(e.tokens)}</b> tokens</span>
     </div>
   );
@@ -150,26 +125,26 @@ export default function AgentWeek({ isAdmin }: { isAdmin: boolean }) {
       <div className="aow-head">
         <h2><IconTrophy size={20} style={{ display: "inline-block", verticalAlign: "-3px", marginRight: 8 }} /> Agent of the Week</h2>
         <div className="aow-clock">
-          <div className="lbl">{cd.ended ? "COMPETITION" : "ENDS IN"}</div>
+          <div className="lbl">{cd.ended ? "WEEK" : "ENDS IN"}</div>
           <div className={`val${cd.ended ? " ended" : ""}`}>{cd.text}</div>
         </div>
       </div>
 
-      {data?.config.prize && (
+      {data?.prize && (
         <div className="aow-prize">
           <span className="tp"><IconGift size={22} /></span>
-          <div><div className="pl">THIS WEEK'S PRIZE</div><div className="pt">{data.config.prize}</div></div>
+          <div><div className="pl">THIS WEEK'S PRIZE</div><div className="pt">{data.prize}</div></div>
         </div>
       )}
 
       <div className="aow-weights">
-        Fair-weighted score — <b>Jira {Math.round((data?.weights.jira ?? .6) * 100)}%</b> · <b>Commits {Math.round((data?.weights.commits ?? .25) * 100)}%</b> · <b>Tokens {Math.round((data?.weights.tokens ?? .15) * 100)}%</b>, each scored against the roster's best.
+        Fair-weighted — <b>Effort {Math.round((data?.weights.effort ?? .75) * 100)}%</b> (Jira estimate-hours completed − penalties) · <b>Tokens {Math.round((data?.weights.tokens ?? .25) * 100)}%</b>, each scored against the roster's best.
       </div>
 
       {err && <div style={{ color: "#e63b2e", fontSize: 12, marginBottom: 10 }}>⚠ {err}</div>}
 
       {!data ? (
-        <div className="aow-empty">Loading competition…</div>
+        <div className="aow-empty">Loading…</div>
       ) : entries.length === 0 ? (
         <div className="aow-empty">No agents on the board yet.</div>
       ) : (
@@ -180,10 +155,9 @@ export default function AgentWeek({ isAdmin }: { isAdmin: boolean }) {
               <Photo src={winner.photo} cls="aow-photo" />
               <div className="aow-spot-main">
                 <div className="aow-spot-name">{winner.displayName}</div>
-                <div className="aow-spot-sub">{winner.division || "—"}{winner.level ? ` · ${winner.level}` : ""}{winner.username ? ` · @${winner.username}` : ""}</div>
+                <div className="aow-spot-sub">{winner.division || "—"}{winner.username ? ` · @${winner.username}` : ""}</div>
                 <div className="aow-spot-metrics">
-                  <div className="aow-m"><div className="n">{winner.jiraDone}</div><div className="k">Jira done</div></div>
-                  <div className="aow-m"><div className="n">{winner.commits}</div><div className="k">Commits</div></div>
+                  <div className="aow-m"><div className="n">{hfmt(winner.effortScore)}</div><div className="k">Effort hrs</div></div>
                   <div className="aow-m"><div className="n">{kfmt(winner.tokens)}</div><div className="k">Tokens</div></div>
                 </div>
               </div>
@@ -212,23 +186,14 @@ export default function AgentWeek({ isAdmin }: { isAdmin: boolean }) {
 
       {isAdmin && (
         <details className="aow-admin">
-          <summary>⚙ ADMIN — set prize &amp; competition window</summary>
+          <summary>ADMIN — set this week's prize</summary>
           <div className="grid">
-            <div className="full">
+            <div>
               <label>PRIZE (shown to all agents)</label>
               <input value={prize} onChange={(e) => setPrize(e.target.value)} placeholder="e.g. $200 bonus + a day off" />
             </div>
             <div>
-              <label>STARTS AT (blank = current week)</label>
-              <input type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} />
-            </div>
-            <div>
-              <label>ENDS AT (blank = current week)</label>
-              <input type="datetime-local" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} />
-            </div>
-            <div className="full" style={{ display: "flex", gap: 10, alignItems: "center" }}>
-              <button className="aow-btn" disabled={saving} onClick={save}>{saving ? "SAVING…" : "SAVE COMPETITION"}</button>
-              <button className="aow-btn ghost" disabled={saving} onClick={() => { setStartsAt(""); setEndsAt(""); }}>↺ USE CURRENT WEEK</button>
+              <button className="aow-btn" disabled={saving} onClick={save}>{saving ? "SAVING…" : "SAVE PRIZE"}</button>
             </div>
           </div>
         </details>

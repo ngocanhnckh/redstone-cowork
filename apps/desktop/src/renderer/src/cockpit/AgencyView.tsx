@@ -4,6 +4,7 @@ import type { AgencyMessage, AgencyGithubDay } from "../../../shared/agency";
 import AgencyProfile from "./AgencyProfile";
 import AgentIdentScan from "./AgentIdentScan";
 import AgentWeek from "./AgentWeek";
+import ScoreBoard from "./ScoreBoard";
 import { Tiles, Bars, GithubHeatmap } from "./agencyCharts";
 import { IconComment, IconExternal, IconCrown, IconGlobe, IconKey, IconCheckCircle, IconContainer, IconMonitor } from "./Icons";
 import RankInsignia from "./RankInsignia";
@@ -597,8 +598,9 @@ function OrgChat({ meUsername }: { meUsername: string | null }) {
 }
 
 export default function AgencyView() {
-  const [tab, setTab] = useState<"profile" | "arena" | "week" | "chat" | "dms">("profile");
+  const [tab, setTab] = useState<"profile" | "arena" | "week" | "board" | "chat" | "dms">("profile");
   const [meRole, setMeRole] = useState<string | null>(null);
+  const [meId, setMeId] = useState<string | null>(null);
   const [rows, setRows] = useState<Analytics[] | null>(null);
   const [err, setErr] = useState("");
   const [meUsername, setMeUsername] = useState<string | null>(null);
@@ -620,6 +622,7 @@ export default function AgencyView() {
     window.cowork.accountsMe().then((m) => {
       setMeUsername(m && "username" in m ? (m.username as string | null) : null);
       setMeRole(m && "role" in m ? (m.role as string | null) : null);
+      setMeId(m && "id" in m ? (m.id as string | null) : null);
     }).catch(() => {});
   }, []);
 
@@ -662,6 +665,7 @@ export default function AgencyView() {
         <button className={`agc-tab${tab === "profile" ? " on" : ""}`} onClick={() => setTab("profile")}>◆ DOSSIER</button>
         <button className={`agc-tab${tab === "arena" ? " on" : ""}`} onClick={() => setTab("arena")}>⬡ ARENA</button>
         <button className={`agc-tab${tab === "week" ? " on" : ""}`} onClick={() => setTab("week")}><IconTrophy size={11} style={{ display: "inline-block", verticalAlign: "-1px", marginRight: 5 }} /> AGENT OF THE WEEK</button>
+        <button className={`agc-tab${tab === "board" ? " on" : ""}`} onClick={() => setTab("board")}>▤ SCOREBOARD</button>
         <button className={`agc-tab${tab === "chat" ? " on" : ""}`} onClick={() => setTab("chat")}>◈ IRC CHAT</button>
         <button className="agc-tab soon" title="Coming soon">✉ DMs</button>
       </div>
@@ -703,6 +707,7 @@ export default function AgencyView() {
         </>
       )}
       {tab === "week" && <AgentWeek isAdmin={meRole === "admin"} />}
+      {tab === "board" && <ScoreBoard meId={meId} />}
       {tab === "chat" && (
         <>
           <div className="agc-hd">

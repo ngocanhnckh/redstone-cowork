@@ -655,34 +655,49 @@ function TelemetryDeck() {
   return <TelemetryColumn tele={tele} />;
 }
 
-// Tokens are always shown in millions (M).
-const kfmt = (n: number) => `${(n / 1e6).toFixed(n >= 1e8 ? 0 : n >= 1e7 ? 1 : 2)}M`;
+/** A thin progress bar (value toward a target). Fill capped at 100%; a faint tick marks the
+ *  target when the value overshoots. No animation beyond the width transition. */
+function MiniBar({ value, target }: { value: number; target: number }) {
+  const pct = target > 0 ? Math.min(100, Math.round((value / target) * 100)) : (value > 0 ? 100 : 0);
+  const met = target > 0 && value >= target;
+  return (
+    <div style={{ height: 4, borderRadius: 2, background: "rgba(255,255,255,0.08)", overflow: "hidden", marginTop: 5 }}>
+      <div style={{ width: `${pct}%`, height: "100%", background: met ? "var(--ok, #3fb984)" : "var(--accent, #e63b2e)", transition: "width .5s ease" }} />
+    </div>
+  );
+}
 
-/** "This week" scoreboard for the signed-in agent — commits, Jira resolved and tokens
- *  burned inside the current competition window, plus their rank. Sits under the agent
- *  card so an agent always sees where they stand for Agent of the Week. */
+/** "This week" effort scoreboard for the signed-in agent — their score against the individual
+ *  target, the team's total against the team target, rank, and the critical-task checklist.
+ *  Sits under the agent card so an agent always sees where they stand. Reads /scoring/my. */
 function WeekWidget() {
-  const [mine, setMine] = useState<{ commits: number; jiraDone: number; tokens: number; rank: number; score: number } | null>(null);
+  const [mine, setMine] = useState<import("../../../shared/scoring").MyScore>(null);
+  const [loaded, setLoaded] = useState(false);
   useEffect(() => {
     let alive = true;
     const load = async () => {
       try {
-        const [me, wk] = await Promise.all([window.cowork.accountsMe(), window.cowork.agencyWeek()]);
-        const uname = me && "username" in me ? (me.username as string | null) : null;
-        const e = wk.entries.find((x) => x.username === uname) ?? null;
-        if (alive) setMine(e ? { commits: e.commits, jiraDone: e.jiraDone, tokens: e.tokens, rank: e.rank, score: e.score } : { commits: 0, jiraDone: 0, tokens: 0, rank: 0, score: 0 });
-      } catch { /* ignore */ }
+        const m = await window.cowork.scoringMy();
+        if (alive) { setMine(m); setLoaded(true); }
+      } catch { if (alive) setLoaded(true); }
     };
     load();
     const t = setInterval(load, 60000);
     return () => { alive = false; clearInterval(t); };
   }, []);
-  const tile = (n: string, k: string) => (
-    <div style={{ minWidth: 0 }}>
-      <div className="display" style={{ fontSize: 14, lineHeight: 1, letterSpacing: "0.01em", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{n}</div>
-      <div className="mono faint" style={{ fontSize: 8, letterSpacing: "0.1em", textTransform: "uppercase", marginTop: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{k}</div>
-    </div>
-  );
+
+  if (loaded && !mine) {
+    return (
+      <div className="hud-card" style={card}>
+        <span className="hud-corner" />
+        {kicker("This Week")}
+        <div className="mono faint" style={{ fontSize: 10, marginTop: 8, lineHeight: 1.5 }}>No scored project yet. Ask an admin to enable scoring for your Jira project.</div>
+      </div>
+    );
+  }
+
+  const num = (n: number) => (Math.round(n * 10) / 10).toLocaleString();
+  const crit = mine?.critical;
   return (
     <div className="hud-card" style={card}>
       <span className="hud-corner" />
@@ -695,11 +710,30 @@ function WeekWidget() {
           </span>
         )}
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginTop: 8 }}>
-        {tile(String(mine?.commits ?? "—"), "Commits")}
-        {tile(String(mine?.jiraDone ?? "—"), "Jira done")}
-        {tile(mine ? kfmt(mine.tokens) : "—", "Tokens")}
+
+      {/* My score vs individual target */}
+      <div style={{ marginTop: 8, display: "flex", alignItems: "baseline", gap: 6 }}>
+        <span className="display" style={{ fontSize: 24, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{num(mine?.myScore ?? 0)}</span>
+        <span className="mono faint" style={{ fontSize: 10 }}>/ {num(mine?.individualTarget ?? 0)} hrs target</span>
       </div>
+      <MiniBar value={mine?.myScore ?? 0} target={mine?.individualTarget ?? 0} />
+
+      {/* Team total vs team target */}
+      <div style={{ marginTop: 10, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <span className="mono faint" style={{ fontSize: 8, letterSpacing: "0.1em", textTransform: "uppercase" }}>Team</span>
+        <span className="mono" style={{ fontSize: 11, fontVariantNumeric: "tabular-nums" }}>{num(mine?.teamScore ?? 0)} / {num(mine?.teamTarget ?? 0)}</span>
+      </div>
+      <MiniBar value={mine?.teamScore ?? 0} target={mine?.teamTarget ?? 0} />
+
+      {/* Critical-task checklist progress */}
+      {crit && crit.total > 0 && (
+        <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 6 }}>
+          <span className="mono faint" style={{ fontSize: 8, letterSpacing: "0.1em", textTransform: "uppercase" }}>Critical</span>
+          <span className="mono" style={{ fontSize: 11, fontVariantNumeric: "tabular-nums", color: crit.done < crit.total ? "var(--warn, #e0a44a)" : "var(--ok, #3fb984)" }}>{crit.done}/{crit.total}</span>
+          <span style={{ flex: 1 }} />
+          {crit.done < crit.total && <span className="mono faint" style={{ fontSize: 8 }}>{crit.total - crit.done} left</span>}
+        </div>
+      )}
     </div>
   );
 }
