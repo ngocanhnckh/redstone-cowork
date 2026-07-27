@@ -33,6 +33,10 @@ export function buildLaunchCommand(opts: { folder: string; danger: boolean; resu
     // no sudo) on PATH before anything runs — otherwise `node`/`tmux`/`claude` may be absent
     // on a box that never had them system-wide.
     `[ -f "$HOME/.redstone/env" ] && . "$HOME/.redstone/env"`,
+    // Self-update the host's agent bundle BEFORE starting the poller, so every new session picks
+    // up the latest fixes automatically (e.g. the bracketed-paste message delivery) — no manual
+    // 'redstone update'. Best-effort: never let a failed/offline update block the launch.
+    `node "$HOME/.redstone/redstone.js" update >/dev/null 2>&1 || true`,
     `FOLDER=${shSingle(opts.folder)}`,
     `mkdir -p "$FOLDER"`,
     // Pre-accept the folder-trust prompt (same effect as choosing "Yes, I trust this folder").
