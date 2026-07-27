@@ -90,39 +90,33 @@ export type HostProcInfo = { procs: HostProc[]; cores: number; cpuPct: number; m
 // usage (per-process %CPU sums past 100% on multi-core; per-process %MEM is tiny — the
 // centre readout normalises CPU by cores and reports real memory used).
 const PROC_SCRIPT =
-  `{ ps -eo pid=,comm=,pcpu=,pmem= --sort=-pcpu 2>/dev/null | head -n 14 || ps aux 2>/dev/null | head -n 15; } ; ` +
+  `{ ps -eo pid=,pcpu=,pmem=,args= --sort=-pcpu 2>/dev/null | head -n 14 || ps aux 2>/dev/null | head -n 15; } ; ` +
   `printf 'RCWSUM cores=%s mem=%s\\n' ` +
   `"$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 1)" ` +
   `"$(free 2>/dev/null | awk '/Mem:/{print int(($3/$2)*100)}')"`;
 
-/** Parse a `ps` table into processes. Handles both `ps -eo pid,comm,pcpu,pmem`
- * (PID first, cpu/mem last two, name in the middle) and the `ps aux` fallback
- * (USER PID %CPU %MEM … COMMAND). Header rows and non-numeric lines are skipped.
- * Sorted by cpu descending, capped at 12. */
+/** Parse a `ps` table into processes. Handles `ps -eo pid=,pcpu=,pmem=,args=` (PID %CPU
+ * %MEM then the full command) and the `ps aux` fallback (USER PID %CPU %MEM … COMMAND).
+ * The name comes from the command line, not `comm`, so threaded apps don't all show up as
+ * "MainThread". Header/summary/non-numeric lines are skipped. Sorted by cpu desc, cap 12. */
 export function parseProcesses(raw: string): HostProc[] {
   const out: HostProc[] = [];
   for (const line of raw.split("\n")) {
-    const t = line.trim().split(/\s+/).filter(Boolean);
+    const s = line.trim();
+    if (!s || s.startsWith("RCWSUM")) continue;
+    const t = s.split(/\s+/).filter(Boolean);
     if (t.length < 4) continue;
-    let pid: number, name: string, cpu: number, mem: number;
-    if (isInt(t[0])) {
-      // `ps -eo pid=,comm=,pcpu=,pmem=` → PID COMM … %CPU %MEM
-      pid = Number(t[0]);
-      cpu = Number(t[t.length - 2]);
-      mem = Number(t[t.length - 1]);
-      name = baseName(t.slice(1, t.length - 2).join(" "));
+    let pid: number, cpu: number, mem: number, args: string;
+    if (isInt(t[0]) && isNum(t[1]) && isNum(t[2])) {
+      // `ps -eo pid=,pcpu=,pmem=,args=` → PID %CPU %MEM COMMAND…
+      pid = Number(t[0]); cpu = Number(t[1]); mem = Number(t[2]); args = t.slice(3).join(" ");
     } else if (isInt(t[1]) && isNum(t[2]) && isNum(t[3])) {
-      // `ps aux` → USER PID %CPU %MEM … COMMAND (skips the "USER PID …" header, whose
-      // %CPU column is the non-numeric word "%CPU").
-      pid = Number(t[1]);
-      cpu = Number(t[2]);
-      mem = Number(t[3]);
-      // `ps aux` has 10 fixed columns then COMMAND (index 10). Use the executable
-      // token, not the last arg. Falls back to the final token if the row is short.
-      name = baseName(t[10] ?? t[t.length - 1]);
+      // `ps aux` → USER PID %CPU %MEM VSZ RSS TTY STAT START TIME COMMAND…
+      pid = Number(t[1]); cpu = Number(t[2]); mem = Number(t[3]); args = t.slice(10).join(" ") || (t[10] ?? "");
     } else {
       continue;
     }
+    const name = friendlyName(args);
     if (!Number.isFinite(cpu) || !Number.isFinite(mem) || !name) continue;
     out.push({ pid, name, cpu, mem });
   }
@@ -131,6 +125,20 @@ export function parseProcesses(raw: string): HostProc[] {
 function isNum(s: string): boolean { return /^\d+(\.\d+)?$/.test(s); }
 function isInt(s: string): boolean { return /^\d+$/.test(s); }
 function baseName(s: string): string { const b = s.split(/[\/\s]/).filter(Boolean).pop() ?? s; return b.slice(0, 24); }
+const INTERP = /^(python[0-9.]*|node|nodejs|ruby|perl|java|sh|bash|zsh|php|dotnet|mono)$/i;
+/** A readable process name from a full command line: the executable's basename, but for an
+ *  interpreter (node/python/…) the script it's running, so we get "redstone.js" not "node"
+ *  and never the generic thread name `comm` would give. */
+function friendlyName(args: string): string {
+  const parts = args.split(/\s+/).filter(Boolean);
+  if (!parts.length) return "";
+  let exe = baseName(parts[0].replace(/:$/, "")); // strip a trailing ':' some kernels add
+  if (INTERP.test(exe)) {
+    const script = parts.slice(1).find((p) => !p.startsWith("-"));
+    if (script) exe = baseName(script);
+  }
+  return exe || "?";
+}
 
 /** Pull core count + total RAM-used% out of the trailing `RCWSUM cores=N mem=M` line. */
 export function parseSummary(raw: string): { cores: number; memPct: number } {
@@ -149,12 +157,14 @@ export async function getHostProcesses(machine: string): Promise<HostProcInfo> {
       const target = await getSshTarget(machine);
       raw = await run("ssh", [...sshMuxOpts(), ...target.opts, target.host, PROC_SCRIPT]);
     }
-    const procs = parseProcesses(raw);
     const { cores, memPct } = parseSummary(raw);
-    // Overall CPU% = combined %CPU of the top processes normalised by core count (they
-    // dominate real load), capped at 100. Overall RAM% comes straight from `free`; if that
-    // isn't available (e.g. macOS), fall back to the summed per-process %MEM.
-    const cpuPct = Math.min(100, Math.round(procs.reduce((a, p) => a + p.cpu, 0) / cores));
+    // `ps` %CPU is per-CORE (a process pegging all cores reads 100·cores%). Normalise each
+    // by core count so a value is a share of the WHOLE machine (0–100), never >100.
+    const procs = parseProcesses(raw).map((p) => ({ ...p, cpu: Math.round((p.cpu / cores) * 10) / 10 }));
+    // Overall CPU% = combined (already normalised) %CPU of the top processes — they dominate
+    // real load — capped at 100. Overall RAM% comes from `free`; if unavailable (e.g. macOS),
+    // fall back to the summed per-process %MEM.
+    const cpuPct = Math.min(100, Math.round(procs.reduce((a, p) => a + p.cpu, 0)));
     const mem = memPct > 0 ? memPct : Math.min(100, Math.round(procs.reduce((a, p) => a + p.mem, 0)));
     return { procs, cores, cpuPct, memPct: mem };
   } catch {
