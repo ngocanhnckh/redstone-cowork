@@ -220,7 +220,7 @@ contextBridge.exposeInMainWorld("cowork", {
     ipcRenderer.invoke(IPC.hostIps, { machine }),
   hostConnections: (machine: string): Promise<{ ip: string; port: number | null; count: number }[]> =>
     ipcRenderer.invoke(IPC.hostConnections, { machine }),
-  hostProcesses: (machine: string): Promise<{ pid: number; name: string; cpu: number; mem: number }[]> =>
+  hostProcesses: (machine: string): Promise<{ procs: { pid: number; name: string; cpu: number; mem: number }[]; cores: number; cpuPct: number; memPct: number }> =>
     ipcRenderer.invoke(IPC.hostProcesses, { machine }),
   calendarEvents: (): Promise<{ ok: boolean; denied: boolean; events: { title: string; start: string; end: string; allDay: boolean; calendar: string }[] }> =>
     ipcRenderer.invoke(IPC.calendarEvents),

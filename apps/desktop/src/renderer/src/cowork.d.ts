@@ -179,7 +179,7 @@ declare global {
       warmHost(machine: string): Promise<{ ok: boolean }>;
       hostIps(machine: string): Promise<{ local: string | null; public: string | null }>;
       hostConnections(machine: string): Promise<{ ip: string; port: number | null; count: number }[]>;
-      hostProcesses(machine: string): Promise<{ pid: number; name: string; cpu: number; mem: number }[]>;
+      hostProcesses(machine: string): Promise<{ procs: { pid: number; name: string; cpu: number; mem: number }[]; cores: number; cpuPct: number; memPct: number }>;
       calendarEvents(): Promise<{ ok: boolean; denied: boolean; events: { title: string; start: string; end: string; allDay: boolean; calendar: string }[] }>;
       networkMap(machine: string): Promise<import("./types").NetworkMap>;
       weather(): Promise<import("./types").Weather>;

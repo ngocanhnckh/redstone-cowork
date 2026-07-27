@@ -732,12 +732,17 @@ function Reactor() {
   const queue = useStore((s) => s.queue);
   const machine = useMemo(() => [...sessions, ...queue].find((x) => x.id === focusId)?.machine ?? null, [focusId, sessions, queue]);
   const [procs, setProcs] = useState<Proc[]>([]);
+  const [usage, setUsage] = useState<{ cpuPct: number; memPct: number }>({ cpuPct: 0, memPct: 0 });
   const [by, setBy] = useState<"cpu" | "mem">("cpu");
 
   useEffect(() => {
-    if (!machine) { setProcs([]); return; }
+    if (!machine) { setProcs([]); setUsage({ cpuPct: 0, memPct: 0 }); return; }
     let alive = true;
-    const load = () => { window.cowork.hostProcesses(machine).then((p) => { if (alive) setProcs(p); }).catch(() => { if (alive) setProcs([]); }); };
+    const load = () => {
+      window.cowork.hostProcesses(machine)
+        .then((r) => { if (alive) { setProcs(r.procs); setUsage({ cpuPct: r.cpuPct, memPct: r.memPct }); } })
+        .catch(() => { if (alive) { setProcs([]); setUsage({ cpuPct: 0, memPct: 0 }); } });
+    };
     load();
     const id = setInterval(load, 3500);
     return () => { alive = false; clearInterval(id); };
@@ -763,7 +768,7 @@ function Reactor() {
       {rows.length === 0 ? (
         <div className="mono faint" style={{ fontSize: 11, margin: "auto" }}>{machine ? "reading…" : "focus a session"}</div>
       ) : (
-        <ReactorDonut rows={rows.slice(0, 5)} metric={by} />
+        <ReactorDonut rows={rows.slice(0, 5)} metric={by} overall={by === "cpu" ? usage.cpuPct : usage.memPct} />
       )}
     </div>
   );
@@ -773,13 +778,14 @@ function Reactor() {
 /** Segmented donut of the top 5 processes (the approved Signal Room reactor):
  *  arcs morph and values count smoothly, leader-line callouts on both sides,
  *  a slowly rotating dotted inner ring + crosshair. Red only when pegged. */
-function ReactorDonut({ rows, metric }: { rows: Proc[]; metric: "cpu" | "mem" }) {
+function ReactorDonut({ rows, metric, overall }: { rows: Proc[]; metric: "cpu" | "mem"; overall: number }) {
   const wrap = useRef<HTMLDivElement>(null);
   const cv = useRef<HTMLCanvasElement>(null);
   const state = useRef<{ items: { name: string; v: number; s: number }[]; rot: number }>({ items: [], rot: 0 });
   const data = useRef(rows);
   const met = useRef(metric);
-  data.current = rows; met.current = metric;
+  const over = useRef(overall);
+  data.current = rows; met.current = metric; over.current = overall;
   useEffect(() => {
     const el = cv.current!;
     let raf = 0, last = 0;
@@ -813,15 +819,15 @@ function ReactorDonut({ rows, metric }: { rows: Proc[]; metric: "cpu" | "mem" })
         const da = (d / 60) * Math.PI * 2 + st.rot;
         g.fillRect(cx + Math.cos(da) * R * 0.72 - 1, cy + Math.sin(da) * R * 0.72 - 1, 2, 2);
       }
-      // Centre readout = the unit the numbers are in. ps reports %CPU (can exceed 100 across
-      // cores) and %MEM (share of total RAM), so both tabs are percentages.
+      // Centre readout = OVERALL host usage for the active tab (CPU normalised by cores,
+      // RAM = real memory used) — a meaningful whole-box number, unlike the per-process rows.
       g.textAlign = "center"; g.textBaseline = "middle";
-      g.fillStyle = "#c4c1bb";
-      g.font = '700 26px "SFU Futura", "IBM Plex Mono", monospace';
-      g.fillText("%", cx, cy - 3);
+      g.fillStyle = over.current >= 90 ? "#e63b2e" : "#e8e6e1";
+      g.font = '700 28px "SFU Futura", "IBM Plex Mono", monospace';
+      g.fillText(Math.round(over.current) + "%", cx, cy - 3);
       g.fillStyle = "#8a8781";
-      g.font = '600 9.5px "IBM Plex Mono", monospace';
-      g.fillText(met.current === "cpu" ? "CPU" : "RAM", cx, cy + 15);
+      g.font = '600 9px "IBM Plex Mono", monospace';
+      g.fillText(met.current === "cpu" ? "CPU LOAD" : "RAM USED", cx, cy + 16);
       g.textBaseline = "alphabetic";
       let a = -Math.PI / 2;
       const sides: { l: { i: number; mid: number }[]; r: { i: number; mid: number }[] } = { l: [], r: [] };
@@ -971,23 +977,19 @@ function WidgetStyles() {
       .rcw-ticker-item { animation: rcw-ticker-in .24s ease both; }
       @keyframes rcw-w-pulse { 0%,100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.5); opacity: 0.5; } }
       .rcw-w-pulse { animation: rcw-w-pulse 1.3s ease-in-out infinite; }
-      @keyframes rcw-radar-spin { to { transform: rotate(-360deg); } }
-      .rcw-radar-sweep { position: absolute; inset: 0; clip-path: circle(50%); animation: rcw-radar-spin 4.2s linear infinite;
+      /* The sweep's rotation is driven by the shared-clock loop (JS), not a CSS animation,
+         so the blip glows stay perfectly in phase with it. */
+      .rcw-radar-sweep { position: absolute; inset: 0; clip-path: circle(50%);
         background: conic-gradient(from 0deg, rgba(230,59,46,0.28), rgba(230,59,46,0.04) 52deg, transparent 60deg); }
-      .rcw-blip { border-radius: 50% !important; background: rgb(var(--primary-soft)); transform: translate(-50%, -50%);
+      /* square contacts (tactical-radar marker) */
+      .rcw-blip { border-radius: 0 !important; background: rgb(var(--primary-soft)); transform: translate(-50%, -50%);
         cursor: pointer; transition: background .15s ease; }
       .rcw-blip:hover { background: var(--text); box-shadow: 0 0 8px 1px rgba(230,59,46,.6); }
-      /* Contact glow: a brief flash timed to when the sweep edge crosses the blip's angle
-         (phase set per-blip via animation-delay). The lit window (~17% of the 4.2s cycle ≈
-         0.7s) matches the 60deg cone's dwell, so a blip only glows while the cone is on it
-         and goes dark right after — never lit far from the sweep. */
-      @keyframes rcw-blip-glow { 0% { opacity: .95; width: 22px; height: 22px; box-shadow: 0 0 13px 3px rgba(230,59,46,.6); }
-        17% { opacity: 0; width: 8px; height: 8px; box-shadow: 0 0 0 rgba(230,59,46,0); }
-        100% { opacity: 0; width: 8px; height: 8px; box-shadow: 0 0 0 rgba(230,59,46,0); } }
-      .rcw-blip-glow { position: absolute; left: 0; top: 0; border-radius: 50%; background: rgba(230,59,46,.22);
-        transform: translate(-50%, -50%); pointer-events: none; opacity: 0;
-        animation: rcw-blip-glow 4.2s linear infinite; }
-      body.rcw-hidden .rcw-radar-sweep, body.rcw-hidden .rcw-blip-glow, body.rcw-hidden .rcw-w-pulse { animation-play-state: paused !important; }
+      /* Contact glow: opacity/size/shadow are set each frame by the shared clock so a blip is
+         brightest exactly when the sweep's bright edge is on it, fading either side. */
+      .rcw-blip-glow { position: absolute; left: 0; top: 0; width: 8px; height: 8px; border-radius: 0;
+        background: rgba(230,59,46,.5); transform: translate(-50%, -50%); pointer-events: none; opacity: 0; }
+      body.rcw-hidden .rcw-w-pulse { animation-play-state: paused !important; }
     `}</style>
   );
 }

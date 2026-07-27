@@ -80,12 +80,20 @@ export function parsePeers(raw: string): HostPeer[] {
 }
 
 export type HostProc = { pid: number; name: string; cpu: number; mem: number };
+// procs = top consumers; cpuPct/memPct = OVERALL host usage (0–100) for the Reactor centre.
+export type HostProcInfo = { procs: HostProc[]; cores: number; cpuPct: number; memPct: number };
 
 // Top resource-consuming processes on the host — the "who's eating the box" feed
 // behind the Reactor widget. `-eo … --sort` is procps (full Linux); the `ps aux`
 // fallback covers busybox-ish hosts (parsed the same way: last two numeric columns).
+// A trailing RCWSUM line carries core count + total RAM-used% so we can show OVERALL
+// usage (per-process %CPU sums past 100% on multi-core; per-process %MEM is tiny — the
+// centre readout normalises CPU by cores and reports real memory used).
 const PROC_SCRIPT =
-  `ps -eo pid=,comm=,pcpu=,pmem= --sort=-pcpu 2>/dev/null | head -n 14 || ps aux 2>/dev/null | head -n 15`;
+  `{ ps -eo pid=,comm=,pcpu=,pmem= --sort=-pcpu 2>/dev/null | head -n 14 || ps aux 2>/dev/null | head -n 15; } ; ` +
+  `printf 'RCWSUM cores=%s mem=%s\\n' ` +
+  `"$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 1)" ` +
+  `"$(free 2>/dev/null | awk '/Mem:/{print int(($3/$2)*100)}')"`;
 
 /** Parse a `ps` table into processes. Handles both `ps -eo pid,comm,pcpu,pmem`
  * (PID first, cpu/mem last two, name in the middle) and the `ps aux` fallback
@@ -124,7 +132,15 @@ function isNum(s: string): boolean { return /^\d+(\.\d+)?$/.test(s); }
 function isInt(s: string): boolean { return /^\d+$/.test(s); }
 function baseName(s: string): string { const b = s.split(/[\/\s]/).filter(Boolean).pop() ?? s; return b.slice(0, 24); }
 
-export async function getHostProcesses(machine: string): Promise<HostProc[]> {
+/** Pull core count + total RAM-used% out of the trailing `RCWSUM cores=N mem=M` line. */
+export function parseSummary(raw: string): { cores: number; memPct: number } {
+  const line = raw.split("\n").find((l) => l.startsWith("RCWSUM")) ?? "";
+  const cm = line.match(/cores=(\d+)/);
+  const mm = line.match(/mem=(\d+)/);
+  return { cores: cm ? Math.max(1, Number(cm[1])) : 1, memPct: mm ? Number(mm[1]) : 0 };
+}
+
+export async function getHostProcesses(machine: string): Promise<HostProcInfo> {
   try {
     let raw = "";
     if (isLocalMachine(machine)) {
@@ -133,9 +149,16 @@ export async function getHostProcesses(machine: string): Promise<HostProc[]> {
       const target = await getSshTarget(machine);
       raw = await run("ssh", [...sshMuxOpts(), ...target.opts, target.host, PROC_SCRIPT]);
     }
-    return parseProcesses(raw);
+    const procs = parseProcesses(raw);
+    const { cores, memPct } = parseSummary(raw);
+    // Overall CPU% = combined %CPU of the top processes normalised by core count (they
+    // dominate real load), capped at 100. Overall RAM% comes straight from `free`; if that
+    // isn't available (e.g. macOS), fall back to the summed per-process %MEM.
+    const cpuPct = Math.min(100, Math.round(procs.reduce((a, p) => a + p.cpu, 0) / cores));
+    const mem = memPct > 0 ? memPct : Math.min(100, Math.round(procs.reduce((a, p) => a + p.mem, 0)));
+    return { procs, cores, cpuPct, memPct: mem };
   } catch {
-    return [];
+    return { procs: [], cores: 1, cpuPct: 0, memPct: 0 };
   }
 }
 
