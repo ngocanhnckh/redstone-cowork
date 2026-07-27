@@ -166,6 +166,14 @@ export class JiraService {
     return client.issueStatuses(keys);
   }
 
+  /** Done-category status NAMES in a project's workflow (default "complete" set). */
+  async projectDoneStatuses(projectKey: string): Promise<string[]> {
+    const profile = await this.defaultProfile();
+    const client = profile ? await this.clientFor(profile) : null;
+    if (!client) return [];
+    return client.projectDoneStatuses(projectKey);
+  }
+
   /** The project's open-sprint issues (any assignee) — the critical-task picker source. */
   async projectSprintIssues(projectKey: string): Promise<Array<{ key: string; summary: string; status: string; statusCategoryKey: string; assignee: string | null }>> {
     const profile = await this.defaultProfile();

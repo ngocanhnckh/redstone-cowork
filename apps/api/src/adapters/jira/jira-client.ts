@@ -443,6 +443,17 @@ export class JiraClient {
     }));
   }
 
+  /** Status NAMES in the project's workflow whose category is 'done' — the default "complete"
+   *  set used when an admin hasn't pinned one for the project. */
+  async projectDoneStatuses(projectKey: string): Promise<string[]> {
+    const res = await this.fetchImpl(`${this.base}/rest/api/2/project/${encodeURIComponent(projectKey)}/statuses`, { headers: this.headers() });
+    if (!res.ok) return [];
+    const data = (await res.json()) as Array<{ statuses?: Array<{ name?: string; statusCategory?: { key?: string } }> }>;
+    const set = new Set<string>();
+    for (const t of data) for (const s of t.statuses ?? []) if (s.statusCategory?.key === "done" && s.name) set.add(s.name);
+    return [...set];
+  }
+
   private toScanned(i: RawScanIssue): ScannedIssue {
     const f = i.fields ?? {};
     const links = (f.issuelinks ?? []).map((l) => {
