@@ -24,6 +24,11 @@ const CSS = `
 .sca-row .s { flex:1; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .sca-chk { width:15px; height:15px; accent-color:var(--accent, #e63b2e); }
 /* --- complete-statuses picker --- */
+.sca-fb { font-family:var(--font-mono); font-size:10.5px; letter-spacing:.1em; white-space:nowrap; overflow:hidden;
+  text-overflow:ellipsis; max-width:280px; animation:sca-fb-in .18s ease both; }
+.sca-fb.ok { color:var(--text-soft); }
+.sca-fb.err { color:#e63b2e; }
+@keyframes sca-fb-in { from { opacity:0; transform:translateX(-4px); } }
 .sca-chip { display:inline-flex; align-items:center; background:rgba(232,230,225,.08); border:1px solid var(--border);
   color:var(--text); font-family:var(--font-mono); font-size:11px; padding:3px 8px; cursor:pointer; }
 .sca-chip:hover { border-color:#e63b2e; }
@@ -43,6 +48,49 @@ const CSS = `
 `;
 
 const asNum = (v: string, d = 0) => { const n = Number(v); return Number.isFinite(n) ? n : d; };
+
+/**
+ * An action button that reports its own outcome, right where it was pressed.
+ *
+ * A save that silently succeeds is indistinguishable from one that silently
+ * failed, so every mutating control uses this: it disables + shows progress while
+ * running, then confirms or shows the error inline next to the button. Feedback
+ * in a far-away header does not count — the operator is looking at the button.
+ */
+function ActionButton({ label, run, busyLabel = "WORKING…", doneLabel = "SAVED", className = "sca-btn", disabled }:
+  { label: string; run: () => Promise<unknown>; busyLabel?: string; doneLabel?: string; className?: string; disabled?: boolean }) {
+  const [state, setState] = useState<"idle" | "run" | "ok" | "err">("idle");
+  const [why, setWhy] = useState("");
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+  const click = async () => {
+    if (state === "run") return;
+    if (timer.current) clearTimeout(timer.current);
+    setState("run"); setWhy("");
+    try {
+      await run();
+      setState("ok");
+      timer.current = setTimeout(() => setState("idle"), 2600);
+    } catch (e) {
+      setState("err");
+      setWhy(e instanceof Error ? e.message : String(e));
+      // Errors persist until the next attempt — they must not disappear unread.
+    }
+  };
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 9, minWidth: 0 }}>
+      <button className={className} disabled={disabled || state === "run"} onClick={click}>
+        {state === "run" ? busyLabel : label}
+      </button>
+      {state === "ok" && (
+        <span className="sca-fb ok" role="status">✓ {doneLabel}</span>
+      )}
+      {state === "err" && (
+        <span className="sca-fb err" role="alert" title={why}>✕ {why || "FAILED"}</span>
+      )}
+    </span>
+  );
+}
 
 /**
  * Complete-statuses picker: search the project's REAL workflow statuses (pulled
@@ -156,7 +204,13 @@ export default function ScoringAdmin() {
   const [busy, setBusy] = useState(false);
 
   const flash = (m: string) => { setMsg(m); setTimeout(() => setMsg(""), 2500); };
-  const fail = (e: unknown) => setErr(e instanceof Error ? e.message : String(e));
+  const fail = (e: unknown) => { setErr(e instanceof Error ? e.message : String(e)); };
+  /** Wrap a mutating action so ActionButton sees the failure (it renders the
+   *  message next to the button) while the panel-level banner still updates. */
+  const reported = async <T,>(fn: () => Promise<T>): Promise<T> => {
+    setErr("");
+    try { return await fn(); } catch (e) { fail(e); throw e; }
+  };
 
   useEffect(() => {
     window.cowork.scoringConfigs().then((cs) => {
@@ -211,7 +265,7 @@ export default function ScoringAdmin() {
       });
       setCfg(saved);
       flash("Config saved");
-    } catch (e) { fail(e); } finally { setBusy(false); }
+    } catch (e) { fail(e); throw e; } finally { setBusy(false); }
   };
 
   const saveTargets = async () => {
@@ -224,7 +278,7 @@ export default function ScoringAdmin() {
       });
       setBoard(b);
       flash("Targets saved");
-    } catch (e) { fail(e); } finally { setBusy(false); }
+    } catch (e) { fail(e); throw e; } finally { setBusy(false); }
   };
 
   const toggleCritical = (key: string) => {
@@ -236,7 +290,7 @@ export default function ScoringAdmin() {
     try {
       await window.cowork.scoringCriticalSet({ projectKey: project, weekKey: board.weekKey, issueKeys: [...critical] });
       flash("Critical tasks saved");
-    } catch (e) { fail(e); } finally { setBusy(false); }
+    } catch (e) { fail(e); throw e; } finally { setBusy(false); }
   };
 
   const voidPenalty = async (id: string) => {
@@ -248,7 +302,7 @@ export default function ScoringAdmin() {
   const scan = async () => {
     setBusy(true);
     try { const r = await window.cowork.scoringScan(project); flash(`Scanned: ${r.completions} completions, ${r.penalties} penalties`); loadProject(); }
-    catch (e) { fail(e); } finally { setBusy(false); }
+    catch (e) { fail(e); throw e; } finally { setBusy(false); }
   };
 
   const setRole = async (id: string, role: "admin" | "member") => {
@@ -315,9 +369,10 @@ export default function ScoringAdmin() {
                 <div className="sca-f"><label>Enabled (scanned)</label><select value={cfg.enabled ? "1" : "0"} onChange={(e) => patchCfg({ enabled: e.target.value === "1" })}><option value="1">Yes</option><option value="0">No</option></select></div>
                 <div className="sca-f"><label>Default team target (hrs)</label><input type="number" min={0} value={cfg.defaultTeamTarget} onChange={(e) => patchCfg({ defaultTeamTarget: asNum(e.target.value) })} /></div>
                 <div className="sca-f"><label>Default individual target (hrs)</label><input type="number" min={0} value={cfg.defaultIndividualTarget} onChange={(e) => patchCfg({ defaultIndividualTarget: asNum(e.target.value) })} /></div>
-                <div className="sca-full" style={{ display: "flex", gap: 10 }}>
-                  <button className="sca-btn" disabled={busy} onClick={saveConfig}>SAVE CONFIG</button>
-                  <button className="sca-btn ghost" disabled={busy} onClick={scan}>↻ SCAN NOW</button>
+                <div className="sca-full" style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "center" }}>
+                  <ActionButton label="SAVE CONFIG" doneLabel="CONFIG SAVED" run={() => reported(saveConfig)} disabled={busy} />
+                  <ActionButton label="↻ SCAN NOW" busyLabel="SCANNING…" doneLabel="SCAN COMPLETE"
+                    className="sca-btn ghost" run={() => reported(scan)} disabled={busy} />
                 </div>
               </div>
             </>
@@ -330,7 +385,7 @@ export default function ScoringAdmin() {
               <div className="sca-grid">
                 <div className="sca-f"><label>Team target (hrs)</label><input type="number" min={0} value={board.teamTarget} onChange={(e) => setBoard({ ...board, teamTarget: asNum(e.target.value) })} /></div>
                 <div className="sca-f"><label>Individual target (hrs)</label><input type="number" min={0} value={board.individualTarget} onChange={(e) => setBoard({ ...board, individualTarget: asNum(e.target.value) })} /></div>
-                <div className="sca-full"><button className="sca-btn" disabled={busy} onClick={saveTargets}>SAVE TARGETS</button></div>
+                <div className="sca-full"><ActionButton label="SAVE TARGETS" doneLabel="TARGETS SAVED" run={() => reported(saveTargets)} disabled={busy} /></div>
               </div>
             </>
           )}
@@ -349,7 +404,7 @@ export default function ScoringAdmin() {
                   <span className="sca-mut" style={{ flexShrink: 0 }}>{i.status}</span>
                 </label>
               ))}
-              <div style={{ marginTop: 10 }}><button className="sca-btn" disabled={busy} onClick={saveCritical}>SAVE CRITICAL LIST</button></div>
+              <div style={{ marginTop: 10 }}><ActionButton label="SAVE CRITICAL LIST" doneLabel="CRITICAL LIST SAVED" run={() => reported(saveCritical)} disabled={busy} /></div>
             </div>
           )}
 

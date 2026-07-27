@@ -28,6 +28,7 @@ Self-hosted AI cowork assistant: the user is the CEO of a simulated company; a v
 - Conventional commits (`feat(api): …`, `fix(deploy): …`); TDD for behavior-bearing code (failing test first).
 - Instance auth: single `INSTANCE_TOKEN` bearer; `/health` is the only public endpoint.
 - **UI iconography: NEVER use emoji or color glyphs anywhere in the desktop UI (including mockups/previews)** — use a real icon set: inline SVG sprites, Lucide-style 1.5–1.7px strokes with square caps.
+- **Every mutating control must report its outcome, where it was pressed.** A save/apply/delete that silently succeeds is indistinguishable from one that silently failed. Required: disabled + progress label while in flight, then an explicit confirmation or the error message *inline next to that control* (a message in a distant header does not count). Errors stay until the next attempt — never auto-dismiss an unread failure; successes may fade after ~2.5s. Handlers must propagate failures to the control (a `catch` that only sets a banner makes the button report success on a failed write).
 - **UI motion: blinking is reserved for cursors only.** Status dots, badges, and labels stay static; live-ness is shown by data movement (smoothly interpolated charts, sweeps), not opacity flicker.
 
 ## Process
