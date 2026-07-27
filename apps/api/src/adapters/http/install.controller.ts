@@ -119,8 +119,20 @@ fi
 # launchd on macOS) so this host reports sessions/telemetry and serves remote commands
 # across reboots. Best-effort.
 redstone service install || echo "(agent service not installed automatically — run 'redstone service install' to enable telemetry + remote control)"
+
+# Make the private toolchain available in the user's INTERACTIVE shells too (idempotent), so
+# 'redstone', 'claude' and 'node' just work when they SSH in — otherwise they live only under
+# ~/.redstone + ~/.local/bin and a fresh shell can't find them ("looks not installed"). This
+# only edits the user's own shell rc (no sudo, no system files).
+for rc in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.profile"; do
+  [ -f "$rc" ] || continue
+  grep -qs "redstone/env" "$rc" || printf '\\n# redstone toolchain (node/tmux/claude, no sudo)\\n[ -f "$HOME/.redstone/env" ] && . "$HOME/.redstone/env"\\n' >> "$rc"
+done
+grep -qs "redstone/env" "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.profile" 2>/dev/null || printf '\\n# redstone toolchain (node/tmux/claude, no sudo)\\n[ -f "$HOME/.redstone/env" ] && . "$HOME/.redstone/env"\\n' >> "$HOME/.profile"
+
 echo ""
 echo "redstone installed with a private Node/tmux/Claude under ~/.redstone — no system changes, no sudo."
+echo "Open a NEW shell (or run: . ~/.redstone/env) so 'redstone', 'claude' and 'node' are on your PATH."
 echo "The background agent is running (telemetry + remote control). Manage it with: redstone service uninstall"
 echo "Next: cd <your project> && redstone hook && claude --resume"
 # Final marker the installer client watches for: the background agent inherits this SSH
