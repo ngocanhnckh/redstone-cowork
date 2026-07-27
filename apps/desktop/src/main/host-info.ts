@@ -89,11 +89,16 @@ export type HostProcInfo = { procs: HostProc[]; cores: number; cpuPct: number; m
 // A trailing RCWSUM line carries core count + total RAM-used% so we can show OVERALL
 // usage (per-process %CPU sums past 100% on multi-core; per-process %MEM is tiny — the
 // centre readout normalises CPU by cores and reports real memory used).
-const PROC_SCRIPT =
-  `{ ps -eo pid=,pcpu=,pmem=,args= --sort=-pcpu 2>/dev/null | head -n 14 || ps aux 2>/dev/null | head -n 15; } ; ` +
-  `printf 'RCWSUM cores=%s mem=%s\\n' ` +
-  `"$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 1)" ` +
-  `"$(free 2>/dev/null | awk '/Mem:/{print int(($3/$2)*100)}')"`;
+const PROC_SCRIPT = [
+  // top consumers (ps %CPU is a lifetime average — fine for ranking, normalised/clamped below)
+  `{ ps -eo pid=,pcpu=,pmem=,args= --sort=-pcpu 2>/dev/null | head -n 16 || ps aux 2>/dev/null | head -n 16; }`,
+  `C=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 1)`,
+  `M=$(free 2>/dev/null | awk '/Mem:/{print int(($3/$2)*100)}')`,
+  // true instantaneous overall CPU% from two /proc/stat samples (busy jiffies / total)
+  `S1=$(head -1 /proc/stat 2>/dev/null); sleep 0.3 2>/dev/null; S2=$(head -1 /proc/stat 2>/dev/null)`,
+  `U=$(awk -v a="$S1" -v b="$S2" 'BEGIN{n=split(a,x);m=split(b,y);if(n<5||m<5)exit;for(i=2;i<=n;i++)t1+=x[i];for(i=2;i<=m;i++)t2+=y[i];dt=t2-t1;di=y[5]-x[5];if(dt>0)printf "%d",(100*(dt-di))/dt}')`,
+  `printf 'RCWSUM cores=%s mem=%s cpu=%s\\n' "$C" "$M" "$U"`,
+].join("; ");
 
 /** Parse a `ps` table into processes. Handles `ps -eo pid=,pcpu=,pmem=,args=` (PID %CPU
  * %MEM then the full command) and the `ps aux` fallback (USER PID %CPU %MEM … COMMAND).
@@ -140,13 +145,19 @@ function friendlyName(args: string): string {
   return exe || "?";
 }
 
-/** Pull core count + total RAM-used% out of the trailing `RCWSUM cores=N mem=M` line. */
-export function parseSummary(raw: string): { cores: number; memPct: number } {
+/** Pull core count, total RAM-used% and instantaneous overall CPU% out of the trailing
+ *  `RCWSUM cores=N mem=M cpu=U` line. cpu is -1 when the host couldn't sample /proc/stat. */
+export function parseSummary(raw: string): { cores: number; memPct: number; cpuPct: number } {
   const line = raw.split("\n").find((l) => l.startsWith("RCWSUM")) ?? "";
   const cm = line.match(/cores=(\d+)/);
   const mm = line.match(/mem=(\d+)/);
-  return { cores: cm ? Math.max(1, Number(cm[1])) : 1, memPct: mm ? Number(mm[1]) : 0 };
+  const cp = line.match(/cpu=(\d+)/);
+  return { cores: cm ? Math.max(1, Number(cm[1])) : 1, memPct: mm ? Number(mm[1]) : 0, cpuPct: cp ? Number(cp[1]) : -1 };
 }
+
+// Our own measurement pipeline — never show these as "top consumers" (a just-spawned `ps`
+// reports absurd lifetime-average %CPU, which is what produced the bogus "ps 800%").
+const SELF_PROCS = new Set(["ps", "awk", "head", "nproc", "free", "sleep", "sort", "printf"]);
 
 export async function getHostProcesses(machine: string): Promise<HostProcInfo> {
   try {
@@ -157,14 +168,18 @@ export async function getHostProcesses(machine: string): Promise<HostProcInfo> {
       const target = await getSshTarget(machine);
       raw = await run("ssh", [...sshMuxOpts(), ...target.opts, target.host, PROC_SCRIPT]);
     }
-    const { cores, memPct } = parseSummary(raw);
-    // `ps` %CPU is per-CORE (a process pegging all cores reads 100·cores%). Normalise each
-    // by core count so a value is a share of the WHOLE machine (0–100), never >100.
-    const procs = parseProcesses(raw).map((p) => ({ ...p, cpu: Math.round((p.cpu / cores) * 10) / 10 }));
-    // Overall CPU% = combined (already normalised) %CPU of the top processes — they dominate
-    // real load — capped at 100. Overall RAM% comes from `free`; if unavailable (e.g. macOS),
-    // fall back to the summed per-process %MEM.
-    const cpuPct = Math.min(100, Math.round(procs.reduce((a, p) => a + p.cpu, 0)));
+    const { cores, memPct, cpuPct: sysCpu } = parseSummary(raw);
+    // `ps` %CPU is per-CORE (a process pegging all cores reads 100·cores%). Normalise by core
+    // count so a value is a share of the WHOLE machine, and clamp to 100 so a lifetime-average
+    // spike can never render >100%. Drop our own measurement processes.
+    const procs = parseProcesses(raw)
+      .filter((p) => !SELF_PROCS.has(p.name.toLowerCase()))
+      .map((p) => ({ ...p, cpu: Math.min(100, Math.round((p.cpu / cores) * 10) / 10) }))
+      .slice(0, 12);
+    // Overall CPU LOAD is the true instantaneous system reading (/proc/stat); only if that
+    // isn't available do we fall back to the summed per-process share. RAM% from `free`,
+    // falling back to summed per-process %MEM (e.g. macOS without `free`).
+    const cpuPct = sysCpu >= 0 ? Math.min(100, sysCpu) : Math.min(100, Math.round(procs.reduce((a, p) => a + p.cpu, 0)));
     const mem = memPct > 0 ? memPct : Math.min(100, Math.round(procs.reduce((a, p) => a + p.mem, 0)));
     return { procs, cores, cpuPct, memPct: mem };
   } catch {
