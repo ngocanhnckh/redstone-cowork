@@ -86,6 +86,8 @@ export type HostTelemetryView = {
   at: string;
   latest: HostTelemetry;
   cpuHistory: number[];
+  /** Percent of RAM used, sampled at the same cadence as cpuHistory. */
+  ramHistory?: number[];
   netRxHistory: number[];
   netTxHistory: number[];
 };

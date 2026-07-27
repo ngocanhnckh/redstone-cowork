@@ -34,7 +34,7 @@ export type HostTelemetry = {
 };
 export type HostTelemetryView = {
   hostId: string; machine: string; at: string; latest: HostTelemetry;
-  cpuHistory: number[]; netRxHistory: number[]; netTxHistory: number[];
+  cpuHistory: number[]; ramHistory?: number[]; netRxHistory: number[]; netTxHistory: number[];
 };
 
 export type DockerContainer = {

@@ -629,13 +629,12 @@ function ReconRadar() {
     const a = hash01(p.ip) * Math.PI * 2;
     const r = 0.34 + hash01(p.ip + "r") * 0.6; // 0.34..0.94 of radius
     const x = 50 + Math.cos(a) * r * 46, y = 50 + Math.sin(a) * r * 46;
-    // Angle of this blip in the sweep's conic frame (0deg = north, clockwise). The bright
-    // LEADING edge of the wedge sits at +60deg (fade trails back to 0), and the element spins
-    // +360deg / 4.2s, so the leading edge reaches this blip when rot = phi-60 — phase the
-    // contact glow to that moment so it flares exactly as the sweep line crosses it.
+    // Angle of this blip in the sweep's conic frame (0deg = north). The original wedge shape
+    // is unchanged (bright edge at 0deg, fading to 60deg); we only reverse the spin to -360deg
+    // / 4.2s. The bright edge is at screen angle = rot, so it crosses this blip when rot = phi;
+    // phase the contact glow to that moment for the reversed direction.
     const phi = (Math.atan2(x - 50, -(y - 50)) * 180 / Math.PI + 360) % 360;
-    const lead = ((phi - 60) % 360 + 360) % 360;
-    const glowDelay = (lead / 360 * 4.2 - 4.2).toFixed(2);
+    const glowDelay = (-(phi / 360) * 4.2).toFixed(2);
     return { p, x, y, glowDelay };
   }), [peers]);
 
@@ -933,9 +932,9 @@ function WidgetStyles() {
       .rcw-ticker-item { animation: rcw-ticker-in .24s ease both; }
       @keyframes rcw-w-pulse { 0%,100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.5); opacity: 0.5; } }
       .rcw-w-pulse { animation: rcw-w-pulse 1.3s ease-in-out infinite; }
-      @keyframes rcw-radar-spin { to { transform: rotate(360deg); } }
+      @keyframes rcw-radar-spin { to { transform: rotate(-360deg); } }
       .rcw-radar-sweep { position: absolute; inset: 0; clip-path: circle(50%); animation: rcw-radar-spin 4.2s linear infinite;
-        background: conic-gradient(from 0deg, transparent 0deg, rgba(230,59,46,0.04) 8deg, rgba(230,59,46,0.28) 60deg); }
+        background: conic-gradient(from 0deg, rgba(230,59,46,0.28), rgba(230,59,46,0.04) 52deg, transparent 60deg); }
       .rcw-blip { border-radius: 50% !important; background: rgb(var(--primary-soft)); transform: translate(-50%, -50%);
         cursor: pointer; transition: background .15s ease; }
       .rcw-blip:hover { background: var(--text); box-shadow: 0 0 8px 1px rgba(230,59,46,.6); }

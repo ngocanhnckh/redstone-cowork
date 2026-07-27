@@ -224,26 +224,11 @@ function RotatingGlobe({ geo, size = 150 }: { geo: { lat: number; long: number; 
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
       <svg viewBox={`0 0 ${size} ${size}`} style={{ width: size, height: size, display: "block", overflow: "visible" }}>
         <defs>
-          {/* lit sphere: highlight up-left, deep limb bottom-right → reads as a 3D ball */}
-          <radialGradient id={`sph-${uid}`} cx="36%" cy="30%" r="78%">
-            <stop offset="0%" stopColor={PS} stopOpacity={0.28} />
-            <stop offset="46%" stopColor={P} stopOpacity={0.08} />
-            <stop offset="100%" stopColor="#000" stopOpacity={0.42} />
-          </radialGradient>
-          {/* thin atmosphere just outside the limb */}
-          <radialGradient id={`atmo-${uid}`} cx="50%" cy="50%" r="50%">
-            <stop offset="72%" stopColor="transparent" />
-            <stop offset="90%" stopColor={PS} stopOpacity={0.22} />
-            <stop offset="100%" stopColor="transparent" />
-          </radialGradient>
-          {/* soft clip so the day/night wash stays on the sphere */}
           <clipPath id={`clip-${uid}`}><circle cx={cx} cy={cy} r={R} /></clipPath>
         </defs>
 
-        {/* atmosphere halo */}
-        <circle cx={cx} cy={cy} r={R + 5} fill={`url(#atmo-${uid})`} />
-        {/* sphere body */}
-        <circle cx={cx} cy={cy} r={R} fill={`url(#sph-${uid})`} stroke={P} strokeOpacity={0.4} strokeWidth={1} />
+        {/* plain wireframe limb — no fill, no halo (redesign-hud-preview.html) */}
+        <circle cx={cx} cy={cy} r={R} fill="none" stroke="rgba(232,230,225,0.25)" strokeWidth={1} />
 
         <g clipPath={`url(#clip-${uid})`}>
           {/* latitude rings — dotted, subtle */}
@@ -251,35 +236,36 @@ function RotatingGlobe({ geo, size = 150 }: { geo: { lat: number; long: number; 
             const yy = cy - R * f;
             const rx = R * Math.sqrt(Math.max(0, 1 - f * f));
             const ry = Math.max(1.5, rx * 0.17);
-            return <ellipse key={`lat${i}`} cx={cx} cy={yy} rx={rx} ry={ry} fill="none" stroke={PS} strokeOpacity={0.26} strokeWidth={0.75} strokeDasharray="0.5 3.2" strokeLinecap="round" />;
+            return <ellipse key={`lat${i}`} cx={cx} cy={yy} rx={rx} ry={ry} fill="none" stroke="rgba(232,230,225,0.13)" strokeWidth={0.9} />;
           })}
           {/* meridians — dotted, rotating, front brighter than back */}
           {Array.from({ length: MERIDIANS }, (_, i) => {
             const phase = t + (i * Math.PI) / MERIDIANS;
             const rx = Math.abs(R * Math.cos(phase));
             const front = Math.sin(phase) > 0;
-            return <ellipse key={`mer${i}`} cx={cx} cy={cy} rx={Math.max(0.5, rx)} ry={R} fill="none" stroke={PS} strokeWidth={0.75} strokeDasharray="0.5 3.2" strokeLinecap="round" opacity={front ? 0.5 : 0.16} />;
+            return <ellipse key={`mer${i}`} cx={cx} cy={cy} rx={Math.max(0.5, rx)} ry={R} fill="none" stroke="rgba(232,230,225,0.13)" strokeWidth={0.9} opacity={front ? 1 : 0.45} />;
           })}
           {/* day/night: a soft dark wash creeping in from the shaded limb */}
-          <rect x={cx} y={cy - R} width={R + 1} height={R * 2} fill="#000" opacity={0.16} />
         </g>
 
         {/* location marker + leader-line callout (the approved Signal Room look) */}
-        <g opacity={near ? 1 : 0.35} style={{ transition: "opacity .4s" }}>
-          <rect x={mx - 2.4} y={my - 2.4} width={4.8} height={4.8} fill={A} />
+        <g>
+          <rect x={mx - 2.4} y={my - 2.4} width={4.8} height={4.8} fill={A} opacity={near ? 1 : 0.35} style={{ transition: "opacity .4s" }} />
           {(() => {
             const dir = mx >= cx ? -1 : 1;
             const ex = mx + dir * 16, ey = my - 15, tx = ex + dir * 9;
             return (
               <g>
-                <polyline points={`${mx},${my} ${ex},${ey} ${tx},${ey}`} fill="none" stroke={A} strokeOpacity={0.65} strokeWidth={0.8} />
+                <polyline points={`${mx},${my} ${ex},${ey} ${tx},${ey}`} fill="none" stroke={A} strokeOpacity={near ? 0.65 : 0.25} strokeWidth={0.8} />
                 <text x={tx + dir * 3} y={ey - 2} textAnchor={dir > 0 ? "start" : "end"}
-                  style={{ fontFamily: "var(--font-mono)", fontSize: 7.5, letterSpacing: "0.14em", fill: "var(--text)", textTransform: "uppercase" }}>
+                  style={{ fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.14em", fill: "#e8e6e1", paintOrder: "stroke" }}
+                  stroke="rgba(6,6,6,0.85)" strokeWidth={2.6}>
                   {(geo?.city ?? "ACQUIRING…").toUpperCase()}
                 </text>
                 {geo && (
-                  <text x={tx + dir * 3} y={ey + 7} textAnchor={dir > 0 ? "start" : "end"}
-                    style={{ fontFamily: "var(--font-mono)", fontSize: 6, letterSpacing: "0.08em", fill: "var(--text-soft)" }}>
+                  <text x={tx + dir * 3} y={ey + 8} textAnchor={dir > 0 ? "start" : "end"}
+                    style={{ fontFamily: "var(--font-mono)", fontSize: 7.5, letterSpacing: "0.08em", fill: "#98958f", paintOrder: "stroke" }}
+                    stroke="rgba(6,6,6,0.85)" strokeWidth={2.4}>
                     {geo.lat.toFixed(2)} / {geo.long.toFixed(2)}
                   </text>
                 )}
@@ -338,84 +324,149 @@ function Clock() {
   );
 }
 
+/** Compact units so the rail never truncates a real number. */
+const gb = (bytes: number) => (bytes / 1e9).toFixed(1);
+const kbs = (bps: number | null | undefined) => {
+  const v = bps ?? 0;
+  return v >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : `${Math.round(v / 1e3)}K`;
+};
+
 function HostCard({ t }: { t: HostTelemetryView }) {
   const ramPct = t.latest.ramTotal > 0 ? (t.latest.ramUsed / t.latest.ramTotal) * 100 : 0;
+  // Net bar is scaled against this host's observed peak so the bar stays meaningful.
+  const netPeak = Math.max(1, ...t.netRxHistory, ...t.netTxHistory);
+  const netPct = (((t.latest.netRxBps ?? 0) + (t.latest.netTxBps ?? 0)) / (netPeak * 2)) * 100;
+  const row = (k: string, bar: React.ReactNode, v: string) => (
+    <div style={{ display: "grid", gridTemplateColumns: "30px minmax(40px, 1fr) auto", gap: 8, alignItems: "center", marginTop: 8 }}>
+      <span className="mono faint" style={{ fontSize: 9, letterSpacing: "0.14em", textTransform: "uppercase" }}>{k}</span>
+      {bar}
+      <span className="mono" style={{ fontSize: 10, color: "var(--text-soft)", textAlign: "right", whiteSpace: "nowrap" }}>{v}</span>
+    </div>
+  );
   return (
     <div className="hud-card" style={card}>
       <span className="hud-corner" />
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
         <span className="ai-core" style={{ width: 8, height: 8 }} />
         <span className="display" style={{ fontSize: 15 }}>{t.machine}</span>
         <span style={{ flex: 1 }} />
         <span className="mono faint" style={{ fontSize: 10 }}>up {fmtUptime(t.latest.uptimeSec)}</span>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 14 }}>
-        <div style={{ minWidth: 0 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
-            <span className="mono faint" style={{ fontSize: 9.5, letterSpacing: "0.1em", textTransform: "uppercase" }}>CPU</span>
-            <span className="mono" style={{ fontSize: 12 }}>{Math.round(t.latest.cpuPct)}%</span>
-          </div>
-          <Sparkline data={t.cpuHistory} max={100} />
-        </div>
-        <div style={{ minWidth: 0 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 6, marginBottom: 2 }}>
-            <span className="mono faint" style={{ fontSize: 9.5, letterSpacing: "0.1em", textTransform: "uppercase", flexShrink: 0 }}>RAM</span>
-            <span className="mono" style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{fmtBytes(t.latest.ramUsed)} / {fmtBytes(t.latest.ramTotal)}</span>
-          </div>
-          <div style={{ marginTop: 14 }}><Bar pct={ramPct} /></div>
-        </div>
-        <div style={{ gridColumn: "1 / -1" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
-            <span className="mono faint" style={{ fontSize: 9.5, letterSpacing: "0.1em", textTransform: "uppercase" }}>Network</span>
-            <span className="mono faint" style={{ fontSize: 10.5 }}>↓ {fmtBps(t.latest.netRxBps)} · ↑ {fmtBps(t.latest.netTxBps)}</span>
-          </div>
-          <Sparkline data={t.netRxHistory} color="rgb(var(--accent))" height={28} />
-        </div>
-        <div style={{ gridColumn: "1 / -1", marginTop: 4 }}><HostHistory t={t} /></div>
-      </div>
+      {row("CPU", <Bar pct={t.latest.cpuPct} color="var(--text)" />, `${Math.round(t.latest.cpuPct)}%`)}
+      {row("RAM", <Bar pct={ramPct} color="var(--text-soft)" />, `${gb(t.latest.ramUsed)}/${gb(t.latest.ramTotal)}G`)}
+      {row("NET", <Bar pct={netPct} color="var(--text-soft)" />, `↓${kbs(t.latest.netRxBps)} ↑${kbs(t.latest.netTxBps)}`)}
+      <HostHistory t={t} />
     </div>
   );
 }
 
-/** CPU + RAM history as a proper axis chart: y gridlines/labels, cpu in signal
- *  red with a faint area fill, ram in chalk. RAM history accumulates client-side. */
+/** CPU + RAM history — the preview's axis chart: y gridlines 0/50/100, time labels,
+ *  CPU in signal red with an area fill, RAM as a chalk line.
+ *
+ *  Every number is real telemetry (cpuHistory / ramHistory from the API). Telemetry
+ *  lands every ~3s, so drawing it raw makes the trace jump: each frame the drawn
+ *  series eases toward the polled one and the plot scrolls by the fraction of a
+ *  sample elapsed. The only synthetic part is a sub-percent breath so a flat host
+ *  still reads as live — it never changes the reported values. */
 function HostHistory({ t }: { t: HostTelemetryView }) {
-  const ramHist = useRef<number[]>([]);
+  const cv = useRef<HTMLCanvasElement>(null);
+  const wrap = useRef<HTMLDivElement>(null);
+  const target = useRef<{ cpu: number[]; ram: number[] }>({ cpu: [], ram: [] });
+  const shown = useRef<{ cpu: number[]; ram: number[] }>({ cpu: [], ram: [] });
+  const stamp = useRef(performance.now());
+
   const ramPct = t.latest.ramTotal > 0 ? (t.latest.ramUsed / t.latest.ramTotal) * 100 : 0;
+  const ramFallback = useRef<number[]>([]);
   useEffect(() => {
-    ramHist.current = [...ramHist.current, ramPct].slice(-44);
-  }, [t.latest]);
-  const cpu = t.cpuHistory.slice(-44);
-  const ram = ramHist.current;
-  const W2 = 220, H2 = 62, PL = 22, PB = 12, PT = 3, PW = W2 - PL - 3, PH = H2 - PT - PB;
-  const pts = (arr: number[]) => arr.map((v, i) =>
-    `${(PL + (i / Math.max(1, arr.length - 1)) * PW).toFixed(1)},${(PT + (1 - Math.min(v, 100) / 100) * PH).toFixed(1)}`).join(" ");
+    const cpu = t.cpuHistory.length ? t.cpuHistory : [t.latest.cpuPct];
+    // Backend series once the API carrying ramHistory is deployed; until then keep
+    // the real samples this client has actually observed (never a synthetic curve).
+    let ram: number[];
+    if (t.ramHistory?.length) {
+      ram = t.ramHistory;
+    } else {
+      ramFallback.current = [...ramFallback.current, ramPct].slice(-cpu.length || -30);
+      while (ramFallback.current.length < cpu.length) ramFallback.current.unshift(ramFallback.current[0] ?? ramPct);
+      ram = ramFallback.current;
+    }
+    target.current = { cpu: [...cpu], ram: [...ram] };
+    if (!shown.current.cpu.length) shown.current = { cpu: [...cpu], ram: [...ram] };
+    stamp.current = performance.now();
+  }, [t.latest, t.cpuHistory, t.ramHistory, ramPct]);
+
+  useEffect(() => {
+    const el = cv.current;
+    if (!el) return;
+    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    let raf = 0, last = 0;
+    const draw = (now: number) => {
+      raf = requestAnimationFrame(draw);
+      if (document.hidden || now - last < 33) return;
+      last = now;
+      const box = wrap.current;
+      if (!box) return;
+      const W = Math.max(160, box.clientWidth) * 2, H = 128;
+      if (el.width !== W || el.height !== H) { el.width = W; el.height = H; }
+      const g = el.getContext("2d");
+      if (!g) return;
+      const tg = target.current, sh = shown.current;
+      (["cpu", "ram"] as const).forEach((k) => {
+        if (sh[k].length !== tg[k].length) sh[k] = [...tg[k]];
+        for (let i = 0; i < tg[k].length; i++) {
+          const breath = reduce ? 0 : Math.sin(now / 850 + i * 0.6) * 0.4;
+          sh[k][i] += (tg[k][i] + breath - sh[k][i]) * 0.08;
+        }
+      });
+      const frac = reduce ? 0 : Math.min(1, (now - stamp.current) / 3000);
+      const PL = 44, PR = 8, PT = 8, PB = 30, PW = W - PL - PR, PH = H - PT - PB;
+      g.clearRect(0, 0, W, H);
+      g.font = '11px "IBM Plex Mono", monospace';
+      [0, 50, 100].forEach((v) => {
+        const y = PT + (1 - v / 100) * PH;
+        g.strokeStyle = "rgba(232,230,225,0.09)"; g.lineWidth = 1;
+        g.beginPath(); g.moveTo(PL, y); g.lineTo(W - PR, y); g.stroke();
+        g.fillStyle = "#5c5953"; g.textAlign = "right";
+        g.fillText(String(v), PL - 7, y + 4);
+      });
+      g.strokeStyle = "rgba(232,230,225,0.06)";
+      [0.25, 0.5, 0.75].forEach((f) => {
+        const x = PL + f * PW;
+        g.beginPath(); g.moveTo(x, PT); g.lineTo(x, PT + PH); g.stroke();
+      });
+      g.fillStyle = "#5c5953"; g.textAlign = "center";
+      ([["-30S", 0.25], ["-20S", 0.5], ["-10S", 0.75]] as Array<[string, number]>)
+        .forEach(([lbl, f]) => g.fillText(lbl, PL + f * PW, H - 10));
+      g.textAlign = "right"; g.fillText("NOW", W - PR, H - 10);
+      const path = (arr: number[]) => {
+        g.beginPath();
+        const n = arr.length;
+        for (let i = 0; i < n; i++) {
+          const x = PL + ((i - frac) / Math.max(1, n - 1)) * PW;
+          const y = PT + (1 - Math.max(0, Math.min(100, arr[i])) / 100) * PH;
+          i ? g.lineTo(x, y) : g.moveTo(x, y);
+        }
+      };
+      g.save();
+      g.beginPath(); g.rect(PL, PT, PW, PH); g.clip();
+      if (sh.ram.length > 1) { path(sh.ram); g.strokeStyle = "#e8e6e1"; g.lineWidth = 1.6; g.stroke(); }
+      if (sh.cpu.length > 1) {
+        path(sh.cpu);
+        g.lineTo(PL + PW, PT + PH); g.lineTo(PL, PT + PH); g.closePath();
+        g.fillStyle = "rgba(230,59,46,0.12)"; g.fill();
+        path(sh.cpu); g.strokeStyle = "#e63b2e"; g.lineWidth = 1.8; g.stroke();
+      }
+      g.restore();
+    };
+    raf = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
   return (
-    <div>
-      <svg viewBox={`0 0 ${W2} ${H2}`} style={{ width: "100%", height: 62, display: "block" }} preserveAspectRatio="none">
-        {[0, 50, 100].map((v) => {
-          const y = PT + (1 - v / 100) * PH;
-          return (
-            <g key={v}>
-              <line x1={PL} y1={y} x2={W2 - 3} y2={y} stroke="rgba(232,230,225,0.09)" strokeWidth={0.5} />
-              <text x={PL - 4} y={y + 2.5} textAnchor="end" style={{ fontFamily: "var(--font-mono)", fontSize: 6, fill: "var(--text-faint)" }}>{v}</text>
-            </g>
-          );
-        })}
-        {[0.25, 0.5, 0.75].map((f) => (
-          <line key={f} x1={PL + f * PW} y1={PT} x2={PL + f * PW} y2={PT + PH} stroke="rgba(232,230,225,0.06)" strokeWidth={0.5} />
-        ))}
-        {ram.length > 1 && <polyline points={pts(ram)} fill="none" stroke="#e8e6e1" strokeWidth={1} strokeOpacity={0.75} />}
-        {cpu.length > 1 && (
-          <>
-            <polygon points={`${PL},${PT + PH} ${pts(cpu)} ${PL + PW},${PT + PH}`} fill="rgba(230,59,46,0.1)" />
-            <polyline points={pts(cpu)} fill="none" stroke="#e63b2e" strokeWidth={1.1} />
-          </>
-        )}
-      </svg>
-      <div style={{ display: "flex", gap: 14, marginTop: 3 }}>
-        <span className="mono faint" style={{ fontSize: 8, letterSpacing: "0.14em", display: "flex", alignItems: "center", gap: 5 }}><i style={{ width: 8, height: 2, background: "#e63b2e", display: "inline-block" }} />CPU</span>
-        <span className="mono faint" style={{ fontSize: 8, letterSpacing: "0.14em", display: "flex", alignItems: "center", gap: 5 }}><i style={{ width: 8, height: 2, background: "#e8e6e1", display: "inline-block" }} />RAM</span>
+    <div ref={wrap} style={{ marginTop: 12 }}>
+      <canvas ref={cv} style={{ width: "100%", height: 64, display: "block" }} />
+      <div style={{ display: "flex", gap: 16, marginTop: 5 }}>
+        <span className="mono faint" style={{ fontSize: 8.5, letterSpacing: "0.14em", display: "flex", alignItems: "center", gap: 6 }}><i style={{ width: 9, height: 2, background: "#e63b2e", display: "inline-block" }} />CPU</span>
+        <span className="mono faint" style={{ fontSize: 8.5, letterSpacing: "0.14em", display: "flex", alignItems: "center", gap: 6 }}><i style={{ width: 9, height: 2, background: "#e8e6e1", display: "inline-block" }} />RAM</span>
       </div>
     </div>
   );

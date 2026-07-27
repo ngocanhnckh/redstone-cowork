@@ -5,6 +5,7 @@ type Entry = {
   latest: HostTelemetry;
   at: Date;
   cpuHistory: number[];
+  ramHistory: number[]; // percent used, same cadence as cpuHistory
   netRxHistory: number[];
   netTxHistory: number[];
 };
@@ -34,6 +35,7 @@ export class TelemetryService {
       latest: t,
       at: now,
       cpuHistory: push(prev?.cpuHistory, t.cpuPct),
+      ramHistory: push(prev?.ramHistory, t.ramTotal > 0 ? (t.ramUsed / t.ramTotal) * 100 : 0),
       netRxHistory: push(prev?.netRxHistory, t.netRxBps ?? 0),
       netTxHistory: push(prev?.netTxHistory, t.netTxBps ?? 0),
     });

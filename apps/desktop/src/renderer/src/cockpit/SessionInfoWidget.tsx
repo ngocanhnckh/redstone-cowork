@@ -39,9 +39,9 @@ function fmtHMS(total: number): string {
 }
 
 const IpRow = ({ label, value }: { label: string; value: string | null | undefined }) => (
-  <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
-    <span className="mono faint" style={{ fontSize: 9.5, letterSpacing: "0.1em", textTransform: "uppercase" }}>{label}</span>
-    <span className="mono" style={{ fontSize: 12.5, color: value ? "var(--text)" : "var(--text-faint)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+  <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, padding: "2px 0" }}>
+    <span className="mono faint" style={{ fontSize: 9, letterSpacing: "0.1em", textTransform: "uppercase", whiteSpace: "nowrap", flexShrink: 0 }}>{label}</span>
+    <span className="mono" style={{ fontSize: 10.5, color: value ? "var(--text)" : "var(--text-faint)", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
       {value ?? "—"}
     </span>
   </div>
@@ -101,12 +101,12 @@ export default function SessionInfoWidget({ globe }: { globe?: ReactNode } = {})
           <div style={{ height: 1, background: "var(--border)", margin: "3px 0" }} />
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <div>
-              <div className="mono faint" style={{ fontSize: 9, letterSpacing: "0.1em", textTransform: "uppercase" }}>Time on session</div>
-              <div style={{ fontSize: 16, fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>{fmtHMS(seconds)}</div>
+              <div className="mono faint" style={{ fontSize: 8.5, letterSpacing: "0.1em", textTransform: "uppercase", whiteSpace: "nowrap" }}>On session</div>
+              <div style={{ fontSize: 13, fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{fmtHMS(seconds)}</div>
             </div>
             <div title="User prompts in this session's recent transcript">
-              <div className="mono faint" style={{ fontSize: 9, letterSpacing: "0.1em", textTransform: "uppercase" }}>Prompts</div>
-              <div style={{ fontSize: 16, fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>{prompts}</div>
+              <div className="mono faint" style={{ fontSize: 8.5, letterSpacing: "0.1em", textTransform: "uppercase", whiteSpace: "nowrap" }}>Prompts</div>
+              <div style={{ fontSize: 13, fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>{prompts}</div>
             </div>
           </div>
         </div>

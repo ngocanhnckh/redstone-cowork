@@ -28,6 +28,7 @@ export class TelemetryController {
         at: e.at.toISOString(),
         latest: e.latest,
         cpuHistory: e.cpuHistory,
+        ramHistory: e.ramHistory,
         netRxHistory: e.netRxHistory,
         netTxHistory: e.netTxHistory,
       });
