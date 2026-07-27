@@ -12,3 +12,4 @@ export * from "./claude-configs/claude-config.js";
 export * from "./jira/jira.js";
 export * from "./accounts/account.js";
 export * from "./servers/server.js";
+export * from "./scoring/scoring.js";
