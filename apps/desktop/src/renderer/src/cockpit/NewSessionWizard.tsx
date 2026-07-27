@@ -13,7 +13,7 @@ import ErrorBoundary from "./ErrorBoundary";
 type Step = "server" | "provision" | "session" | "folder" | "mode" | "launch";
 type Mode = "normal" | "danger";
 type Discovered = { id: string; folder: string; cwd: string; title: string | null; machine: string };
-type HostRow = { id: string; machine: string; address: string | null };
+type HostRow = { id: string; machine: string; address: string | null; user?: string | null };
 
 // Match a chosen server to a reporting inventory host — by address or machine name against
 // the server's host/name (case-insensitive). Shared by the live `redstoneInstalled` signal
@@ -207,7 +207,10 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
     const off = window.cowork.onServerInstallData((c) => setLaunchLog((l) => (l + c).slice(-8000)));
     try {
       const r = await window.cowork.sessionLaunch({
-        host: server.host, sshUser: server.sshUser, sshPort: server.sshPort,
+        // Prefer the reporting agent's real user (whoami) over the record's sshUser, so a
+        // session launches/resumes as the user that actually owns the transcripts — matching
+        // what the browse/resume steps read. Falls back to the record when not reporting.
+        host: server.host, sshUser: host?.user || server.sshUser, sshPort: server.sshPort,
         folder, danger: mode === "danger", resumeId: resumeId ?? undefined, password, savePassword: password ? savePw : false,
       });
       if (r.ok) {
@@ -313,11 +316,15 @@ export default function NewSessionWizard({ onClose }: { onClose: () => void }) {
   const redstoneInstalled = !!server?.reporting || !!host;
 
   // On the RESUME step, list ALL recent resumable conversations on the host.
-  // SSH target for browsing/listing on the selected server. Use the server's REAL
-  // sshUser@host (authoritative, what install used) rather than the agent-reported
-  // machine NAME (e.g. "csd3"), which usually doesn't resolve from the operator's Mac.
+  // SSH target for browsing/listing on the selected server. Dial the server's REAL host
+  // (authoritative, what install used, and resolvable from the operator's Mac) — but for the
+  // USER, PREFER the reporting agent's real user over the server record's sshUser: a server
+  // added with the default `root` (but where Claude actually runs as e.g. `anhnguyen`) would
+  // otherwise browse /root/.claude and list nothing / be denied. The agent reports whoami, so
+  // once a host is reporting we trust it. Falls back to the record's sshUser when unknown.
+  const sshUser = host?.user || server?.sshUser || "";
   const folderMachine = server
-    ? (server.sshUser ? `${server.sshUser}@${server.host}` : server.host)
+    ? (sshUser ? `${sshUser}@${server.host}` : server.host)
     : (host?.machine ?? "");
   useEffect(() => {
     if (step !== "session" || !folderMachine) return;
