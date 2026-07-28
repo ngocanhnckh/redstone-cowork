@@ -11,14 +11,15 @@
   "scripts": {
     "postinstall": "node scripts/fix-native-perms.cjs",
     "dev": "electron-vite dev",
-    "build": "electron-vite build",
+    "build": "node scripts/embed-probe.mjs && electron-vite build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "start": "electron-vite preview",
     "rebuild": "electron-rebuild -f -w node-pty",
-    "dist": "electron-vite build && electron-builder --config electron-builder.yml",
-    "dist:dir": "electron-vite build && electron-builder --config electron-builder.yml --dir",
-    "geoip": "node scripts/fetch-geoip.mjs"
+    "dist": "pnpm run build && electron-builder --config electron-builder.yml",
+    "dist:dir": "pnpm run build && electron-builder --config electron-builder.yml --dir",
+    "geoip": "node scripts/fetch-geoip.mjs",
+    "probe:embed": "node scripts/embed-probe.mjs"
   },
   "dependencies": {
     "@vladmandic/face-api": "^1.7.15",
