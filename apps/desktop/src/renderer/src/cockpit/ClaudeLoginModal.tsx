@@ -9,6 +9,11 @@ import { IconLock, IconCheckCircle, IconGlobe } from "./Icons";
 
 const DOMAIN_RE = /(?:claude\.(?:ai|com)|anthropic\.com)/i;
 const OK_RE = /login successful|logged in|successfully (?:logged|authenticated)|authentication successful/i;
+/** After a successful login the Claude CLI waits on an acknowledgement prompt
+ *  ("Press Enter to continue…"). Nobody was answering it, so the session sat on the
+ *  login screen until the user pressed Enter in the terminal themselves. We answer
+ *  it for them — once — so login finishes where it started, in this modal. */
+const CONTINUE_RE = /press\s+enter\s+to\s+continue|enter\s+to\s+continue/i;
 
 /** Pull the OAuth URL out of the captured pane.
  *
@@ -76,6 +81,7 @@ export default function ClaudeLoginModal({ session, onClose }: { session: Sessio
   const [phase, setPhase] = useState<"intro" | "waiting" | "link" | "done">("intro");
   const [url, setUrl] = useState("");
   const [code, setCode] = useState("");
+  const [enterSent, setEnterSent] = useState(false);
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -83,6 +89,7 @@ export default function ClaudeLoginModal({ session, onClose }: { session: Sessio
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const triesRef = useRef(0);
   const menuDone = useRef(false); // have we already pressed Enter on the login-method menu?
+  const contDone = useRef(false); // …and on the post-login "press Enter to continue" prompt?
 
   const stopPoll = useCallback(() => { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; } }, []);
   useEffect(() => stopPoll, [stopPoll]);
@@ -92,7 +99,21 @@ export default function ClaudeLoginModal({ session, onClose }: { session: Sessio
     triesRef.current += 1;
     try {
       const pane = await window.cowork.claudeCapturePane(session.machine, session.wrapperId);
-      if (OK_RE.test(pane)) { setPhase("done"); stopPoll(); return; }
+      if (OK_RE.test(pane)) {
+        // Dismiss the CLI's acknowledgement prompt so the session returns to the
+        // chat by itself; without this the user had to press Enter a second time.
+        if (!contDone.current && CONTINUE_RE.test(pane)) {
+          contDone.current = true;
+          try { await window.cowork.claudeSendKeys(session.machine, session.wrapperId, { enter: true }); } catch { /* non-fatal */ }
+        }
+        setPhase("done"); stopPoll(); return;
+      }
+      // The prompt can also appear a beat before the success line renders.
+      if (!contDone.current && CONTINUE_RE.test(pane)) {
+        contDone.current = true;
+        await window.cowork.claudeSendKeys(session.machine, session.wrapperId, { enter: true });
+        return;
+      }
       const found = extractLoginUrl(pane);
       if (found) { setUrl((u) => u || found); setPhase((p) => (p === "waiting" ? "link" : p)); return; }
       // No URL yet — if the "Select login method" menu is showing, accept option 1
@@ -107,7 +128,7 @@ export default function ClaudeLoginModal({ session, onClose }: { session: Sessio
 
   const start = async () => {
     if (!session.wrapperId) return;
-    setErr(""); setBusy(true); setPhase("waiting"); triesRef.current = 0; menuDone.current = false;
+    setErr(""); setBusy(true); setPhase("waiting"); triesRef.current = 0; menuDone.current = false; contDone.current = false;
     try {
       // Type `/login` + Enter straight into the Claude TUI. The menu-confirm Enter is
       // sent by the poller once it sees the "Select login method" screen.
@@ -115,6 +136,18 @@ export default function ClaudeLoginModal({ session, onClose }: { session: Sessio
       stopPoll();
       pollRef.current = setInterval(poll, 1800);
       setTimeout(() => void poll(), 900);
+    } catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
+    finally { setBusy(false); }
+  };
+
+  /** Send a bare Enter into the session — answers any lingering CLI prompt. */
+  const pressEnter = async () => {
+    if (!session.wrapperId) return;
+    setBusy(true);
+    try {
+      await window.cowork.claudeSendKeys(session.machine, session.wrapperId, { enter: true });
+      setEnterSent(true);
+      setTimeout(() => setEnterSent(false), 2200);
     } catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
     finally { setBusy(false); }
   };
@@ -157,7 +190,16 @@ export default function ClaudeLoginModal({ session, onClose }: { session: Sessio
               <IconCheckCircle size={34} style={{ margin: "0 auto", color: "var(--text-soft)" }} />
               <div className="clg-ok" style={{ marginTop: 8 }}>Claude is logged in on this session.</div>
               <div className="clg-note">Credentials are saved on the host — you won't need to do this again until it expires.</div>
-              <button className="clg-btn" style={{ marginTop: 14 }} onClick={onClose}>DONE</button>
+              <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 14 }}>
+                <button className="clg-btn" onClick={onClose}>DONE</button>
+                {/* Fallback: the CLI's acknowledgement prompt is answered automatically,
+                    but its exact wording can change between versions. If the session is
+                    still sitting on the login screen, this presses Enter for you rather
+                    than making you switch to the terminal. */}
+                <button className="clg-btn ghost" disabled={busy} onClick={pressEnter}>
+                  {enterSent ? "✓ ENTER SENT" : "STILL WAITING? PRESS ENTER"}
+                </button>
+              </div>
             </div>
           ) : (
             <>
