@@ -10,25 +10,37 @@ import { IconLock, IconCheckCircle, IconGlobe } from "./Icons";
 const DOMAIN_RE = /(?:claude\.(?:ai|com)|anthropic\.com)/i;
 const OK_RE = /login successful|logged in|successfully (?:logged|authenticated)|authentication successful/i;
 
-/** Pull the OAuth URL out of the captured pane. Claude hard-wraps the (long) URL across
- *  several 80-col lines with real newlines, so we find the line that starts the URL, then
- *  stitch on the following lines while they're entirely non-whitespace (URL continuation)
- *  — the next real line ("Paste code here…") is indented, which stops the join. */
-function extractLoginUrl(pane: string): string | null {
+/** Pull the OAuth URL out of the captured pane.
+ *
+ * Claude hard-wraps the (long) URL across several terminal lines with real newlines,
+ * so the continuation lines have to be stitched back on.
+ *
+ * The previous version broke a continuation line on ANY whitespace — but tmux
+ * `capture-pane` pads every line to the full pane width with trailing spaces, so the
+ * first continuation line always tripped that guard and the URL was cut mid-parameter
+ * (typically at `…&code_challeng`), producing an invalid link. We now trim each line
+ * first and decide from its CONTENT: a continuation is a non-empty trimmed line with
+ * no internal spaces that still looks like URL/query text. The real next line
+ * ("Paste code here…") contains internal spaces, so it still stops the join.
+ */
+export function extractLoginUrl(pane: string): string | null {
   const lines = pane.split(/\r?\n/);
   for (let i = 0; i < lines.length; i++) {
     const t = lines[i].trim();
     if (!/^https?:\/\//i.test(t) || !DOMAIN_RE.test(t)) continue;
     let url = t;
     for (let j = i + 1; j < lines.length; j++) {
-      const raw = lines[j];
-      if (raw.length === 0 || /\s/.test(raw)) break; // continuation lines contain no spaces
-      url += raw.trim();
+      const seg = lines[j].trim();
+      if (!seg) break;                      // blank line ends the URL
+      if (/\s/.test(seg)) break;            // prose (has internal spaces) ends it
+      if (!/^[\w\-.~:/?#[\]@!$&'()*+,;=%]+$/.test(seg)) break; // not URL-ish
+      url += seg;
     }
     return url;
   }
   return null;
 }
+
 // The "Select login method" menu that `/login` shows first — option 1 is "Claude account
 // with subscription". We press Enter to accept the default once we see it.
 const MENU_RE = /select login method|claude account with subscription|anthropic console account|log in with (?:your )?claude/i;
