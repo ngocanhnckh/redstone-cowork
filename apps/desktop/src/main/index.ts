@@ -427,7 +427,19 @@ ipcMain.handle(IPC.diskUsage, (_e, a: { machine: string }) => diskUsage(a.machin
 ipcMain.handle(IPC.hostAgentId, (_e, a: { host: string; sshUser: string; sshPort: number; password?: string }) =>
   sshReadHostId({ host: a.host, sshUser: a.sshUser, sshPort: a.sshPort, password: a.password, extraOpts: getSshCustom(a.host)?.opts ?? [] }));
 ipcMain.handle(IPC.sessionLaunch, async (e, a: { host: string; sshUser: string; sshPort: number; folder: string; danger: boolean; resumeId?: string; password?: string; savePassword?: boolean }) => {
-  const send = (chunk: string) => { try { e.sender.send(IPC.serverInstallData, chunk); } catch { /* ignore */ } };
+  // Mirror the wizard's live output into the logbook. Without this a stalled launch
+  // left NO trace in a bug report: the wizard showed the stream, the logbook only
+  // records errors, and a hang produces none — so reports of "stuck connecting"
+  // arrived with nothing about the launch in them at all.
+  const t0 = Date.now();
+  const tail: string[] = [];
+  const send = (chunk: string) => {
+    try { e.sender.send(IPC.serverInstallData, chunk); } catch { /* ignore */ }
+    tail.push(chunk);
+    if (tail.length > 80) tail.shift(); // keep the last ~80 chunks, not the whole stream
+  };
+  logEntry("info", `[launch] ${a.sshUser}@${a.host}:${a.sshPort || 22} folder=${a.folder} ` +
+    `${a.resumeId ? `resume=${a.resumeId}` : "new"} danger=${a.danger} password=${a.password ? "provided" : "none"}`);
   const command = buildLaunchCommand({ folder: a.folder, danger: a.danger, resumeId: a.resumeId });
   const extraOpts = getSshCustom(a.host)?.opts ?? [];
   let res = await sshInstall({ host: a.host, sshUser: a.sshUser, sshPort: a.sshPort, command, password: a.password, extraOpts, successMarker: "RCW_STARTED" }, send);
@@ -441,6 +453,13 @@ ipcMain.handle(IPC.sessionLaunch, async (e, a: { host: string; sshUser: string; 
   // Claim the wrapper for the signed-in agent so this session is owned by them once it
   // attaches (matters on servers several people share). Best-effort — never blocks launch.
   if (m?.[2]) { try { await api.sessionClaim(m[2]); } catch { /* ignore */ } }
+  // Record the outcome either way — a launch that fails or stalls is exactly the case
+  // a bug report needs to explain.
+  const secs = Math.round((Date.now() - t0) / 100) / 10;
+  const outcome = res.ok && m ? `ok session=${m[1]}` : rcwErr ? `remote error: ${rcwErr[1]}` :
+    res.authFailed ? "ssh auth failed" : res.error ? `failed: ${res.error}` : "failed: no RCW_STARTED marker";
+  logEntry(res.ok && m ? "info" : "error", `[launch] ${outcome} after ${secs}s`);
+  if (!(res.ok && m)) logEntry("info", `[launch] output tail:\n${tail.join("").slice(-4000)}`);
   return { ok: res.ok && !!m, authFailed: res.authFailed, session: m?.[1] ?? null, output: res.output, error: rcwErr?.[1] ?? res.error };
 });
 // A ready-to-paste install command (Mac or Linux) for a machine the user sets up
