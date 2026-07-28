@@ -1,0 +1,15 @@
+{
+  "name": "@rcw/claude-core",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "//deps": "ZERO runtime dependencies, deliberately. This package is bundled into the Electron main process (apps/desktop keeps @rcw/shared in devDependencies because electron-builder chokes on the workspace tree — see apps/desktop/package.json). Everything here is pure: string/array in, plain objects out. No node: imports, no zod. Keep it that way.",
+  "devDependencies": {
+    "vitest": "^3.1.0"
+  }
+}

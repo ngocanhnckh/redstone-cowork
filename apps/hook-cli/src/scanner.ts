@@ -1,6 +1,7 @@
 import { readdirSync, statSync, openSync, readSync, closeSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
+import { parseTranscriptHead, projectSlug } from "@rcw/claude-core";
 
 export type ScannedSession = {
   id: string;
@@ -47,7 +48,10 @@ export function findTranscriptPath(sessionId: string, root = projectsRoot()): st
  * the live conversation, not a stale file named after the originally-attached id.
  */
 export function newestTranscript(cwd: string, root = projectsRoot()): { path: string; mtimeMs: number } | null {
-  const dir = join(root, cwd.replace(/\//g, "-"));
+  // Claude slugifies the cwd by replacing BOTH "/" and "." with "-". This used to
+  // replace only "/", so any cwd containing a dot (a versioned dir, a dotfile dir,
+  // "foo.bar") resolved to a directory that never exists and silently returned null.
+  const dir = join(root, projectSlug(cwd));
   let best: { path: string; mtimeMs: number } | null = null;
   try {
     for (const f of readdirSync(dir)) {
@@ -82,39 +86,8 @@ function readHead(path: string, bytes: number): string {
   }
 }
 
-/**
- * Extract cwd + a title from the head of a transcript. The cwd is read from the
- * first line that carries a `cwd` field (the folder slug is lossy, so we don't
- * un-slug). The title is the first user message's text, truncated.
- */
-function parseHead(head: string): { cwd: string | null; title: string | null } {
-  let cwd: string | null = null;
-  let title: string | null = null;
-  for (const line of head.split("\n")) {
-    const t = line.trim();
-    if (!t) continue;
-    let obj: { cwd?: unknown; message?: { role?: string; content?: unknown }; type?: string };
-    try { obj = JSON.parse(t); } catch { continue; }
-    if (!cwd && typeof obj.cwd === "string") cwd = obj.cwd;
-    if (!title) {
-      const role = obj.message?.role ?? obj.type;
-      if (role === "user") {
-        const c = obj.message?.content;
-        let text = "";
-        if (typeof c === "string") text = c;
-        else if (Array.isArray(c)) {
-          const block = c.find((b: { type?: string; text?: string }) => b?.type === "text" && typeof b.text === "string");
-          text = block?.text ?? "";
-        }
-        text = text.trim();
-        // Skip tool-result / command noise; take the first real prompt.
-        if (text && !text.startsWith("<")) title = text.slice(0, 120);
-      }
-    }
-    if (cwd && title) break;
-  }
-  return { cwd, title };
-}
+/** Extract cwd + a title from the head of a transcript. @see parseTranscriptHead */
+const parseHead = parseTranscriptHead;
 
 /** Count newlines in a file cheaply by streaming fixed-size chunks. */
 function countLines(path: string): number {

@@ -1,0 +1,407 @@
+import type { ContentBlock, TodoItem, TranscriptLine, TranscriptMessage } from "../types.js";
+
+// ---------------------------------------------------------------------------
+// Pure Claude Code transcript (JSONL) parsers.
+//
+// These were lifted verbatim from apps/hook-cli/src/transcript.ts, with the only
+// change being that they take transcript TEXT rather than a file path. That split
+// is what lets the desktop parse a tail fetched over SSH with exactly the same
+// code the on-host agent uses — the alternative (reimplementing in Python on the
+// remote) would make the cockpit render differently depending on the backend.
+//
+// apps/hook-cli/src/transcript.ts keeps its original path-taking signatures as
+// thin wrappers over these, so the hosted agent's behaviour is unchanged.
+// ---------------------------------------------------------------------------
+
+/** Cap stored message length — enough to read on expand, small enough not to bloat the payload/DB. */
+export const MAX_SUMMARY_CHARS = 2000;
+
+/** Assistant turns may carry diff snippets, so they get a higher cap than plain user prose. */
+export const MAX_ASSISTANT_CHARS = 6000;
+
+/** Per-diff-block caps so a single huge edit can't bloat the payload. */
+const MAX_DIFF_LINES = 60;
+const MAX_DIFF_CHARS = 1500;
+
+/** Only scan the tail of the transcript; the last assistant prose is always near the
+ * end. Sized so the recent-messages window (see parseRecentMessages `limit`) can be
+ * filled even in tool-heavy sessions where many JSONL lines are non-prose. */
+export const TAIL_BYTES = 768 * 1024;
+
+/** Upper bound on transcript size we'll fully scan for todos / total usage. */
+export const MAX_TODO_SCAN_BYTES = 80 * 1024 * 1024;
+
+// Hard ceiling on the transcript payload. Even 150 capped messages can add up to
+// ~1 MB, which flooded the API with 413 PayloadTooLarge on big sessions. Keep the
+// NEWEST messages under this budget; always keep at least the most recent message.
+const MAX_TRANSCRIPT_BYTES = 400 * 1024;
+
+const EDIT_TOOLS = new Set(["Edit", "Write", "MultiEdit", "NotebookEdit"]);
+
+/** UTF-8 byte length without depending on node:buffer (this package must stay dependency-free). */
+const utf8Len = (s: string): number => new TextEncoder().encode(s).length;
+
+/** Strip one `<tag>…</tag>` wrapper and return its inner text, or null if absent. */
+function unwrapTag(s: string, tag: string): string | null {
+  const m = s.match(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`));
+  return m ? m[1].trim() : null;
+}
+
+/**
+ * Claude Code represents user "!" bash commands and slash commands as XML-ish
+ * tagged strings, and their output as `<local-command-stdout>` (or bash-stdout).
+ * Turn those into clean chat text ("$ <cmd>" / the output), or return the string
+ * unchanged when it carries no command tags. Empty output → null (skip the turn).
+ */
+export function renderCommandString(s: string): string | null {
+  if (s.indexOf("<") < 0) return s; // fast path — no tags at all
+  const bashIn = unwrapTag(s, "bash-input");
+  if (bashIn !== null) return `$ ${bashIn}`;
+  const cmdName = unwrapTag(s, "command-name");
+  if (cmdName !== null) {
+    const args = unwrapTag(s, "command-args");
+    return `$ ${cmdName}${args ? " " + args : ""}`;
+  }
+  const stdout = unwrapTag(s, "local-command-stdout") ?? unwrapTag(s, "bash-stdout");
+  if (stdout !== null) return stdout || null; // empty stdout → nothing to show
+  const stderr = unwrapTag(s, "bash-stderr");
+  if (stderr !== null) return stderr || null;
+  return s;
+}
+
+/** True if a tool_result's text is a notable status worth surfacing in the chat
+ *  (background-command start/finish notices) rather than ordinary tool output noise. */
+function isNotableToolResult(text: string): boolean {
+  return /running in background|background task .*(completed|finished|failed)|Command running in background/i.test(text);
+}
+
+/** Split a string into lines, defending against non-string input. */
+function toLines(s: unknown): string[] {
+  return typeof s === "string" ? s.split("\n") : [];
+}
+
+/** Build a fenced ```diff block from `-`/`+` prefixed lines, capped by lines & chars. */
+function diffBlock(lines: string[]): string {
+  let truncated = false;
+  let kept = lines;
+  if (kept.length > MAX_DIFF_LINES) {
+    kept = kept.slice(0, MAX_DIFF_LINES);
+    truncated = true;
+  }
+  let body = kept.join("\n");
+  if (body.length > MAX_DIFF_CHARS) {
+    body = body.slice(0, MAX_DIFF_CHARS);
+    truncated = true;
+  }
+  if (truncated) body += "\n… (truncated)";
+  return "```diff\n" + body + "\n```";
+}
+
+/** Format a single edit-family tool_use block into a compact markdown snippet, or null to skip. */
+export function formatEditTool(block: ContentBlock): string | null {
+  try {
+    const name = block.name;
+    const input = block.input as Record<string, unknown> | undefined;
+    if (!input || typeof input !== "object") return null;
+
+    if (name === "Edit") {
+      const fp = input.file_path;
+      if (typeof fp !== "string") return null;
+      const lines = [
+        ...toLines(input.old_string).map((l) => "- " + l),
+        ...toLines(input.new_string).map((l) => "+ " + l),
+      ];
+      return `**✎ ${fp}**\n` + diffBlock(lines);
+    }
+
+    if (name === "Write") {
+      const fp = input.file_path;
+      if (typeof fp !== "string") return null;
+      const lines = toLines(input.content).map((l) => "+ " + l);
+      return `**✎ ${fp} (new file)**\n` + diffBlock(lines);
+    }
+
+    if (name === "MultiEdit") {
+      const fp = input.file_path;
+      if (typeof fp !== "string" || !Array.isArray(input.edits)) return null;
+      const hunks: string[][] = [];
+      for (const e of input.edits as Array<Record<string, unknown>>) {
+        if (!e || typeof e !== "object") continue;
+        hunks.push([
+          ...toLines(e.old_string).map((l) => "- " + l),
+          ...toLines(e.new_string).map((l) => "+ " + l),
+        ]);
+      }
+      if (!hunks.length) return null;
+      // Separate each edit's hunk with a blank line.
+      const lines = hunks.flatMap((h, i) => (i === 0 ? h : ["", ...h]));
+      return `**✎ ${fp}**\n` + diffBlock(lines);
+    }
+
+    if (name === "NotebookEdit") {
+      const fp = input.notebook_path ?? input.file_path;
+      if (typeof fp !== "string") return null;
+      const lines = toLines(input.new_source).map((l) => "+ " + l);
+      return `**✎ ${fp} (cell)**\n` + diffBlock(lines);
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function capMessages(msgs: TranscriptMessage[]): TranscriptMessage[] {
+  let total = 0;
+  const kept: TranscriptMessage[] = [];
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    const size = utf8Len(msgs[i].text) + 16; // + small per-message overhead
+    if (kept.length && total + size > MAX_TRANSCRIPT_BYTES) break;
+    total += size;
+    kept.unshift(msgs[i]);
+  }
+  return kept;
+}
+
+/**
+ * Recent user prompts + assistant prose from transcript text, oldest→newest, capped
+ * at `limit` (the cockpit's scroll-back window — a rolling window of the tail, not
+ * the full on-disk history). Never throws.
+ */
+export function parseRecentMessages(text: string, limit = 150): TranscriptMessage[] {
+  try {
+    const out: TranscriptMessage[] = [];
+    for (const line of text.split("\n")) {
+      const t = line.trim();
+      if (!t) continue;
+      let obj: TranscriptLine;
+      try { obj = JSON.parse(t); } catch { continue; }
+
+      // Local command output (a "!" bash command or slash command) is a system
+      // message with the text in a top-level `content` string (`<local-command-
+      // stdout>…`). Surface it as an assistant-side output block so the cockpit
+      // mirrors what the user saw in the terminal, instead of dropping it.
+      if (obj.type === "system" && obj.subtype === "local_command" && typeof obj.content === "string") {
+        const outText = renderCommandString(obj.content);
+        if (outText) out.push({ role: "assistant", text: outText.slice(0, MAX_ASSISTANT_CHARS) });
+        continue;
+      }
+
+      const role = obj.message?.role ?? (obj.type === "assistant" ? "assistant" : obj.type === "user" ? "user" : undefined);
+      if (role !== "assistant" && role !== "user") continue;
+      const content = obj.message?.content;
+      let prose = "";
+      const edits: string[] = [];
+      if (typeof content === "string") {
+        // A "!" bash / slash command the user typed arrives as a tagged string —
+        // clean it to "$ <cmd>" so it renders instead of disappearing / showing raw XML.
+        prose = renderCommandString(content) ?? "";
+      } else if (Array.isArray(content)) {
+        prose = content.filter((b) => b?.type === "text" && typeof b.text === "string").map((b) => b.text!).join("\n").trim();
+        if (role === "assistant") {
+          for (const b of content) {
+            if (b?.type === "tool_use" && typeof b.name === "string" && EDIT_TOOLS.has(b.name)) {
+              const snip = formatEditTool(b);
+              if (snip) edits.push(snip);
+            }
+          }
+        } else {
+          // User turns also carry tool_result blocks. Most are ordinary tool output
+          // (noise), but the "Command running in background…" notice IS the status
+          // the user is waiting on — surface just those, not every tool_result.
+          for (const b of content) {
+            if (b?.type !== "tool_result") continue;
+            const rt = typeof b.content === "string" ? b.content
+              : Array.isArray(b.content) ? (b.content as ContentBlock[]).filter((x) => x?.type === "text" && typeof x.text === "string").map((x) => x.text!).join("\n")
+              : "";
+            if (rt && isNotableToolResult(rt)) prose = prose ? prose + "\n" + rt.trim() : rt.trim();
+          }
+        }
+      }
+      let msgText = prose;
+      if (edits.length) msgText = msgText ? msgText + "\n\n" + edits.join("\n\n") : edits.join("\n\n");
+      if (!msgText) continue; // skip turns with no prose and no edits (other tool calls / tool_result)
+      const cap = role === "assistant" ? MAX_ASSISTANT_CHARS : MAX_SUMMARY_CHARS;
+      out.push({ role: role as "user" | "assistant", text: msgText.slice(0, cap) });
+    }
+    return capMessages(out.slice(-limit));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * The most recent assistant *prose* the user saw. Tool-use-only turns are skipped —
+ * we want Claude's text, which reads like a summary of what it just did or is asking.
+ * Returns null when nothing usable is found. Never throws.
+ */
+export function parseLastAssistantText(text: string): string | null {
+  try {
+    const lines = text.split("\n");
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const line = lines[i].trim();
+      if (!line) continue;
+      let obj: TranscriptLine;
+      try {
+        obj = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      if (obj.type !== "assistant" && obj.message?.role !== "assistant") continue;
+      const content = obj.message?.content;
+      let prose = "";
+      if (typeof content === "string") {
+        prose = content;
+      } else if (Array.isArray(content)) {
+        prose = content
+          .filter((b) => b?.type === "text" && typeof b.text === "string")
+          .map((b) => b.text)
+          .join("\n")
+          .trim();
+      }
+      if (prose) return prose.slice(0, MAX_SUMMARY_CHARS);
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function normStatus(s: unknown): TodoItem["status"] | "cancelled" {
+  if (s === "completed") return "completed";
+  if (s === "in_progress") return "in_progress";
+  if (s === "cancelled" || s === "canceled" || s === "deleted") return "cancelled";
+  return "pending";
+}
+
+/** Latest standard `TodoWrite` list from transcript lines (newest wins). */
+export function latestTodoWrite(lines: string[]): TodoItem[] | null {
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const line = lines[i].trim();
+    if (!line || !line.includes("TodoWrite")) continue;
+    let obj: TranscriptLine;
+    try { obj = JSON.parse(line); } catch { continue; }
+    const content = obj.message?.content;
+    if (!Array.isArray(content)) continue;
+    for (const b of content) {
+      if (b?.type === "tool_use" && b.name === "TodoWrite") {
+        const raw = (b.input as { todos?: unknown })?.todos;
+        if (!Array.isArray(raw)) continue;
+        const todos: TodoItem[] = [];
+        for (const t of raw as Array<Record<string, unknown>>) {
+          const txt = typeof t?.content === "string" ? t.content : typeof t?.text === "string" ? t.text : "";
+          if (!txt) continue;
+          const st = normStatus(t?.status);
+          if (st === "cancelled") continue;
+          todos.push({ text: txt.slice(0, 300), status: st });
+        }
+        return todos;
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * The session's current to-do list, from Claude's own plan in the transcript.
+ * Supports two systems:
+ *  - Task plugin (TaskCreate/TaskUpdate, event-sourced): reconstruct the list by
+ *    folding creates (id = creation order) and status updates. Cancelled tasks
+ *    are dropped.
+ *  - Standard TodoWrite: the latest full list.
+ * Needs the WHOLE transcript (early TaskCreate events); callers that only have a
+ * tail should use `latestTodoWrite` directly. Never throws.
+ */
+export function parseLatestTodos(lines: string[]): TodoItem[] {
+  try {
+    // Reconstruct the Task-plugin list from creates + updates, in order.
+    const tasks: Array<{ text: string; status: TodoItem["status"] | "cancelled" }> = [];
+    let sawTask = false;
+    for (const line of lines) {
+      const t = line.trim();
+      if (!t || (!t.includes("TaskCreate") && !t.includes("TaskUpdate"))) continue;
+      let obj: TranscriptLine;
+      try { obj = JSON.parse(t); } catch { continue; }
+      const content = obj.message?.content;
+      if (!Array.isArray(content)) continue;
+      for (const b of content) {
+        if (b?.type !== "tool_use") continue;
+        if (b.name === "TaskCreate") {
+          sawTask = true;
+          const input = b.input as { subject?: unknown; content?: unknown; text?: unknown };
+          const subj =
+            typeof input?.subject === "string" ? input.subject :
+            typeof input?.content === "string" ? input.content :
+            typeof input?.text === "string" ? input.text : "";
+          tasks.push({ text: subj ? subj.slice(0, 300) : `Task ${tasks.length + 1}`, status: "pending" });
+        } else if (b.name === "TaskUpdate") {
+          sawTask = true;
+          const input = b.input as { taskId?: unknown; status?: unknown };
+          const idx = Number.parseInt(String(input?.taskId ?? ""), 10) - 1;
+          if (idx >= 0 && idx < tasks.length) tasks[idx].status = normStatus(input?.status);
+        }
+      }
+    }
+    if (sawTask) {
+      return tasks.filter((t) => t.status !== "cancelled").map((t) => ({ text: t.text, status: t.status as TodoItem["status"] }));
+    }
+    // No Task plugin — try standard TodoWrite.
+    return latestTodoWrite(lines) ?? [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * The current context-window size (tokens) + model from the latest assistant turn.
+ * Claude Code records per-turn `usage`; the context size is the total INPUT of the
+ * last request = input_tokens + cache_read + cache_creation (output isn't context).
+ * Never throws.
+ */
+export function parseLatestUsage(text: string): { contextTokens: number | null; model: string | null } {
+  const empty = { contextTokens: null, model: null };
+  try {
+    const lines = text.split("\n");
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const line = lines[i].trim();
+      if (!line || !line.includes("usage")) continue;
+      let obj: TranscriptLine;
+      try { obj = JSON.parse(line); } catch { continue; }
+      const u = obj.message?.usage;
+      if (obj.message?.role !== "assistant" || !u) continue;
+      const ctx = (u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0);
+      return { contextTokens: ctx > 0 ? ctx : null, model: obj.message?.model ?? null };
+    }
+    return empty;
+  } catch {
+    return empty;
+  }
+}
+
+/**
+ * Cumulative token spend across every assistant turn: `input` = input_tokens +
+ * cache_creation (fresh input we paid to process; cache reads are excluded as
+ * ~free), `output` = output_tokens. Never throws.
+ *
+ * This is the number the leaderboard is built on, and it is CUMULATIVE-ABSOLUTE —
+ * which is what makes the server-side ingest idempotent (re-sending is a no-op) and
+ * what stops the hosted agent and the direct desktop double-counting one session.
+ */
+export function sumUsage(lines: string[]): { tokensInput: number; tokensOutput: number } {
+  const empty = { tokensInput: 0, tokensOutput: 0 };
+  try {
+    let input = 0, output = 0;
+    for (const line of lines) {
+      if (!line.includes("usage")) continue;
+      let obj: TranscriptLine;
+      try { obj = JSON.parse(line); } catch { continue; }
+      const u = obj.message?.usage;
+      if (obj.message?.role !== "assistant" || !u) continue;
+      input += (u.input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0);
+      output += u.output_tokens ?? 0;
+    }
+    return { tokensInput: input, tokensOutput: output };
+  } catch {
+    return empty;
+  }
+}
