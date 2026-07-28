@@ -15,6 +15,25 @@ function cfg(): { serverUrl: string; token: string } {
   return { serverUrl: config.serverUrl, token };
 }
 
+/**
+ * Whether a cowork server is configured at all — i.e. whether calling anything else
+ * in this module can possibly succeed.
+ *
+ * The direct (agent-free) edition runs with no server, where every call here throws
+ * "not configured". Rather than making `cfg()` fail soft — which would turn a real
+ * misconfiguration into a silent no-op — callers ask this first and route to the
+ * direct provider instead. This is the only addition to this module for the offline
+ * edition; the hosted path is untouched.
+ */
+export function isConfigured(): boolean {
+  try {
+    cfg();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Org mode only: swap the stored refresh token for a fresh access token. Returns it, or null. */
 async function tryRefresh(serverUrl: string): Promise<string | null> {
   const refresh = getRefreshToken();

@@ -6,6 +6,7 @@ import { existsSync, writeFileSync, renameSync } from "node:fs";
 import { hostname, release } from "node:os";
 import { saveConfig, loadConfig, clearConfig, saveDeviceTrust, loadDeviceTrust, getDeviceSecret, clearDeviceTrust } from "./config";
 import * as api from "./api";
+import { getProvider } from "./providers";
 import { getWorkspaceConfig, saveWorkspaceConfig, getSshHost, setSshHost, isLocalMachine, setServerHosts, warmSshMaster, setSshCustom, getSshCustom } from "./workspace";
 import { getHostIps, getHostConnections, getHostProcesses } from "./host-info";
 import { getCalendarEvents } from "./calendar";
@@ -100,7 +101,7 @@ async function refreshTrayAndNotify(): Promise<void> {
   if (trayRefreshRunning) return;
   trayRefreshRunning = true;
   try {
-    const queue = (await api.getQueue()) as Array<{ id: string; cwd: string }>;
+    const queue = (await getProvider().getQueue()) as Array<{ id: string; cwd: string }>;
 
     // Update tray title / tooltip
     tray.setTitle(queue.length ? ` ${queue.length}` : "");
@@ -118,7 +119,7 @@ async function refreshTrayAndNotify(): Promise<void> {
       // Fetch pending decisions once for body enrichment
       let decisions: Array<{ sessionId: string; prompt?: { title?: string } }> = [];
       try {
-        decisions = (await api.getPendingDecisions()) as typeof decisions;
+        decisions = (await getProvider().getPendingDecisions()) as typeof decisions;
       } catch {
         // best-effort
       }
@@ -152,7 +153,7 @@ async function refreshTrayAndNotify(): Promise<void> {
     // catch another session finishing while you're looking at a different one. The
     // first poll seeds silently so there's no burst on launch.
     try {
-      const sessions = (await api.getSessions()) as Array<{
+      const sessions = (await getProvider().getSessions()) as Array<{
         id: string; cwd: string; latestAnswer: string | null;
       }>;
       const firstRun = !answersInit;
@@ -341,7 +342,7 @@ let hostTargetsTimer: NodeJS.Timeout | null = null;
  */
 async function refreshHostTargets(): Promise<void> {
   try {
-    const hosts = await api.getHosts();
+    const hosts = await getProvider().getHosts();
     // Feed the full records (incl. hostId + sshPort) so the SSH resolver can both
     // auto-discover direct addresses AND look up a relay tunnel for NAT'd hosts.
     setServerHosts(hosts);
@@ -353,7 +354,7 @@ async function refreshHostTargets(): Promise<void> {
 function startForwarding(): void {
   try {
     stopStream?.();
-    stopStream = api.startStream((e) => {
+    stopStream = getProvider().start((e) => {
       for (const w of BrowserWindow.getAllWindows()) {
         w.webContents.send(IPC.streamEvent, e);
       }
@@ -603,20 +604,20 @@ ipcMain.handle(IPC.accountLogin, async (_e, a: { serverUrl: string; username: st
 });
 
 // Data IPC handlers
-ipcMain.handle(IPC.sessions, () => api.getSessions());
-ipcMain.handle(IPC.queue, () => api.getQueue());
-ipcMain.handle(IPC.decisions, () => api.getPendingDecisions());
+ipcMain.handle(IPC.sessions, () => getProvider().getSessions());
+ipcMain.handle(IPC.queue, () => getProvider().getQueue());
+ipcMain.handle(IPC.decisions, () => getProvider().getPendingDecisions());
 ipcMain.handle(IPC.resolve, (_e, a: { id: string; resolution: Parameters<typeof api.resolveDecision>[1] }) =>
-  api.resolveDecision(a.id, a.resolution)
+  getProvider().resolveDecision(a.id, a.resolution)
 );
 ipcMain.handle(IPC.snooze, (_e, a: { id: string; minutes: number }) =>
-  api.snooze(a.id, a.minutes)
+  getProvider().snooze(a.id, a.minutes)
 );
 ipcMain.handle(IPC.pin, (_e, a: { id: string; pinned: boolean }) =>
-  api.pin(a.id, a.pinned)
+  getProvider().pin(a.id, a.pinned)
 );
 ipcMain.handle(IPC.dismiss, (_e, a: { id: string }) =>
-  api.dismissSession(a.id)
+  getProvider().dismissSession(a.id)
 );
 ipcMain.handle(IPC.claudeCapturePane, (_e, a: { machine: string; wrapperId: string }) =>
   captureClaudePane(a.machine, a.wrapperId),
@@ -633,34 +634,34 @@ api.onAuthExpired(() => {
   }
 });
 ipcMain.handle(IPC.instruct, (_e, a: { sessionId: string; text: string }) =>
-  api.instruct(a.sessionId, a.text)
+  getProvider().instruct(a.sessionId, a.text)
 );
 ipcMain.handle(IPC.interrupt, (_e, a: { sessionId: string; text?: string }) =>
-  api.interrupt(a.sessionId, a.text)
+  getProvider().interrupt(a.sessionId, a.text)
 );
 ipcMain.handle(IPC.mode, (_e, a: { sessionId: string; mode: string }) =>
-  api.switchMode(a.sessionId, a.mode)
+  getProvider().switchMode(a.sessionId, a.mode)
 );
 ipcMain.handle(IPC.userTodoAdd, (_e, a: { sessionId: string; text: string }) =>
-  api.addUserTodo(a.sessionId, a.text)
+  getProvider().addUserTodo(a.sessionId, a.text)
 );
 ipcMain.handle(IPC.userTodoToggle, (_e, a: { sessionId: string; todoId: string }) =>
-  api.toggleUserTodo(a.sessionId, a.todoId)
+  getProvider().toggleUserTodo(a.sessionId, a.todoId)
 );
 ipcMain.handle(IPC.userTodoDelete, (_e, a: { sessionId: string; todoId: string }) =>
-  api.deleteUserTodo(a.sessionId, a.todoId)
+  getProvider().deleteUserTodo(a.sessionId, a.todoId)
 );
 ipcMain.handle(IPC.tagAdd, (_e, a: { sessionId: string; tag: string }) =>
-  api.addTag(a.sessionId, a.tag)
+  getProvider().addTag(a.sessionId, a.tag)
 );
 ipcMain.handle(IPC.tagRemove, (_e, a: { sessionId: string; tag: string }) =>
-  api.removeTag(a.sessionId, a.tag)
+  getProvider().removeTag(a.sessionId, a.tag)
 );
-ipcMain.handle(IPC.inventoryList, () => api.getInventory());
-ipcMain.handle(IPC.dockerList, () => api.getDocker());
-ipcMain.handle(IPC.capsList, () => api.getCaps());
+ipcMain.handle(IPC.inventoryList, () => getProvider().getInventory());
+ipcMain.handle(IPC.dockerList, () => getProvider().getDocker());
+ipcMain.handle(IPC.capsList, () => getProvider().getCaps());
 ipcMain.handle(IPC.gitInfo, (_e, a: { cwd: string; machine: string }) => gitInfo(a.cwd, a.machine));
-ipcMain.handle(IPC.telemetryList, () => api.getTelemetry());
+ipcMain.handle(IPC.telemetryList, () => getProvider().getTelemetry());
 ipcMain.handle(IPC.inventoryHistory, (_e, a: { id: string }) => api.inventoryHistory(a.id));
 ipcMain.handle(IPC.inventoryRun, (_e, a: { id: string; message: string }) => api.inventoryRun(a.id, a.message));
 ipcMain.handle(IPC.inventoryTagAdd, (_e, a: { id: string; tag: string }) => api.inventoryAddTag(a.id, a.tag));
