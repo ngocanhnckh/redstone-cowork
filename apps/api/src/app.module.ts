@@ -102,6 +102,9 @@ import { FaceService } from "./application/face.service";
 import { ServersController } from "./adapters/http/servers.controller";
 import { AgencyController } from "./adapters/http/agency.controller";
 import { AgencyService } from "./application/agency.service";
+import { BUG_REPORT_STORE } from "./domain/reports/bug-report.port";
+import { InMemoryBugReportStore } from "./adapters/persistence/in-memory-bug-report-store";
+import { PostgresBugReportStore } from "./adapters/persistence/postgres-bug-report-store";
 import { AGENCY_MESSAGE_STORE } from "./domain/agency/agency-message.port";
 import { InMemoryAgencyMessageStore } from "./adapters/persistence/in-memory-agency-message-store";
 import { PostgresAgencyMessageStore } from "./adapters/persistence/postgres-agency-message-store";
@@ -259,6 +262,12 @@ import type { Pool } from "pg";
     AccountsService,
     JiraOAuthService,
     FaceService,
+    {
+      provide: BUG_REPORT_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresBugReportStore(pool) : new InMemoryBugReportStore(),
+    },
     {
       provide: AGENCY_MESSAGE_STORE,
       inject: [PG_POOL],

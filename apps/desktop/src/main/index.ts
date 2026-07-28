@@ -461,10 +461,10 @@ ipcMain.handle(IPC.reportBug, async (_e, a: { message?: string }) => {
       serverUrl: cfg?.serverUrl ?? "(none)", electron: process.versions.electron,
     };
     const r = await api.reportBug({ message: a?.message, log: recentLog(), context });
-    return { ok: !!(r as { ok?: boolean }).ok, to: (r as { to?: string }).to };
+    // The server stores the report; email (if configured) is a notification on top.
+    return { ok: !!(r as { ok?: boolean }).ok, to: (r as { emailed?: string | null }).emailed ?? undefined };
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    return { ok: false, error: /50\d/.test(msg) ? "Email isn't configured on the server yet." : msg };
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 });
 ipcMain.handle(IPC.recentsList, () => listRecents());

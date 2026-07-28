@@ -1,7 +1,8 @@
 import { useState } from "react";
 
 // Always-available "Report a problem" affordance: bundles the rolling debug log + app/OS context
-// and emails it to the dev (anh.nguyen@yitec.group) via the server. Optional one-line note.
+// and submits it to the cowork server, which stores it for triage (and emails the
+// dev too when SMTP is configured). Optional one-line note.
 
 export default function ReportProblem() {
   const [open, setOpen] = useState(false);
@@ -13,7 +14,7 @@ export default function ReportProblem() {
     setBusy(true); setResult(null);
     try {
       const r = await window.cowork.reportBug(note.trim() || undefined);
-      setResult(r.ok ? { ok: true, text: `Sent to ${r.to || "the dev"} — thank you.` } : { ok: false, text: r.error || "Couldn't send." });
+      setResult(r.ok ? { ok: true, text: r.to ? `Submitted — also emailed to ${r.to}. Thank you.` : "Submitted to the server — thank you." } : { ok: false, text: r.error || "Couldn't submit." });
       if (r.ok) { setNote(""); setTimeout(() => { setOpen(false); setResult(null); }, 2200); }
     } catch (e) {
       setResult({ ok: false, text: e instanceof Error ? e.message : "Couldn't send." });
@@ -22,7 +23,7 @@ export default function ReportProblem() {
 
   if (!open) {
     return (
-      <button onClick={() => setOpen(true)} title="Send a debug log to the dev"
+      <button onClick={() => setOpen(true)} title="Submit a debug log to the cowork server"
         style={{ width: "100%", marginTop: 8, padding: "8px 10px", borderRadius: 10, cursor: "pointer",
           border: "1px solid var(--border)", background: "transparent", color: "var(--text-faint)",
           fontFamily: "var(--font-mono)", fontSize: 10.5, letterSpacing: "0.08em", display: "flex", alignItems: "center", gap: 7 }}>
