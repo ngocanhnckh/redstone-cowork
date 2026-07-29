@@ -131,6 +131,12 @@ export async function processEvent(
         // event firing here, so surface it as an Allow/Deny card the user can answer
         // remotely (the keymap turns Allow→"1", Deny→Escape). Other notifications
         // (e.g. "waiting for your input") stay passive.
+        // AskUserQuestion ALSO emits a permission-shaped notification, but PreToolUse
+        // has already created the real question card (with Claude's own options). Making
+        // a second Allow/Deny card for it is actively harmful: it hides the question, and
+        // because Allow maps to the TUI keystroke "1" it silently picks option 1 — so the
+        // user's actual answer then arrives at a form that has already moved on.
+        if (/permission/i.test(message) && /askuserquestion/i.test(message)) return null;
         if (/permission/i.test(message)) {
           await deps.api.createDecision({
             sessionId: event.session_id,

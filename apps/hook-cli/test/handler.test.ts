@@ -155,6 +155,21 @@ describe("processEvent", () => {
     );
   });
 
+  it("Notification about AskUserQuestion permission → NO permission card", async () => {
+    // Regression: asking a question fires BOTH PreToolUse (which builds the proper
+    // question card with Claude's real options) AND a permission-style Notification.
+    // Surfacing the latter showed an Allow/Deny prompt instead of the question — and
+    // since Allow maps to the TUI keystroke "1", clicking it silently answered the
+    // question with option 1, so the user's real answer then landed on a stale form.
+    const deps = baseDeps();
+    const out = await processEvent(
+      ev("Notification", { message: "Claude needs your permission to use AskUserQuestion" }),
+      deps
+    );
+    expect(deps.api.createDecision).not.toHaveBeenCalled();
+    expect(out).toBeNull();
+  });
+
   it("PostToolUse → resolveLocal called, returns null", async () => {
     const deps = baseDeps();
     const out = await processEvent(ev("PostToolUse", { tool_name: "Bash" }), deps);
