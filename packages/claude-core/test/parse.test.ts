@@ -110,6 +110,23 @@ describe("parseLatestUsage", () => {
   it("returns nulls when no usage is present", () => {
     expect(parseLatestUsage(assistant("hi"))).toEqual({ contextTokens: null, model: null });
   });
+
+  it("skips Claude Code's synthetic notices and reports the last real turn", () => {
+    // Verified against a live transcript: local notices ("You've hit your session
+    // limit…") are recorded as assistant turns with model "<synthetic>" and all-zero
+    // usage. Stopping at one loses the real context size and shows "<synthetic>"
+    // where the model name belongs.
+    const text = [
+      usageLine({ input_tokens: 500, cache_read_input_tokens: 200, output_tokens: 30 }, "claude-opus-5"),
+      usageLine({ input_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0, output_tokens: 0 }, "<synthetic>"),
+    ].join("\n");
+    expect(parseLatestUsage(text)).toEqual({ contextTokens: 700, model: "claude-opus-5" });
+  });
+
+  it("still reports nulls when every turn is synthetic", () => {
+    const text = usageLine({ input_tokens: 0, output_tokens: 0 }, "<synthetic>");
+    expect(parseLatestUsage(text)).toEqual({ contextTokens: null, model: null });
+  });
 });
 
 describe("sumUsage", () => {

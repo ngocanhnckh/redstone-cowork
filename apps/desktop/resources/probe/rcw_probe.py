@@ -286,6 +286,71 @@ _PANE_FMT = "\t".join([
 ])
 
 
+def _process_tree():
+    """pid -> args, and pid -> child pids, from one `ps`."""
+    rc, out, _ = run(["ps", "-eo", "pid=,ppid=,args="], timeout=10)
+    if rc != 0:
+        return ({}, {})
+    args_by_pid = {}
+    kids = {}
+    for line in out.split("\n"):
+        line = line.strip()
+        if not line:
+            continue
+        parts = line.split(None, 2)
+        if len(parts) < 2:
+            continue
+        try:
+            pid = int(parts[0])
+            ppid = int(parts[1])
+        except Exception:
+            continue
+        args_by_pid[pid] = parts[2] if len(parts) > 2 else ""
+        kids.setdefault(ppid, []).append(pid)
+    return (args_by_pid, kids)
+
+
+def _is_claude_cmd(args):
+    if not args:
+        return False
+    exe = args.split()[0]
+    return exe.rsplit("/", 1)[-1] == "claude"
+
+
+def _resume_id(args):
+    """`claude --resume <uuid>` names the exact transcript — the strongest correlation
+    signal there is, and far better than guessing by working directory."""
+    toks = args.split()
+    for i, t in enumerate(toks):
+        if t == "--resume" and i + 1 < len(toks):
+            return toks[i + 1]
+    return None
+
+
+def _find_claude(pane_pid, args_by_pid, kids):
+    """Search a pane's process subtree for the Claude CLI.
+
+    Necessary because `pane_current_command` reports only the pane's FOREGROUND
+    process. The cockpit's own wrapper launches Claude inside a shell command string
+    (`RCW_WRAPPER_ID=… claude …; rcw_ec=$?; …`), so the pane reads as `bash` with
+    claude as its child — matching on the pane command alone misses every
+    wrapper-launched session on the box.
+    """
+    stack = [pane_pid]
+    seen = set()
+    while stack:
+        pid = stack.pop(0)
+        if pid in seen:
+            continue
+        seen.add(pid)
+        args = args_by_pid.get(pid, "")
+        if _is_claude_cmd(args):
+            return (pid, args)
+        for k in kids.get(pid, []):
+            stack.append(k)
+    return (None, None)
+
+
 def m_tmux_list(_p):
     rc, out, err = run(["tmux", "list-panes", "-a", "-F", _PANE_FMT], timeout=10)
     if rc != 0:
@@ -293,6 +358,7 @@ def m_tmux_list(_p):
         if "no server running" in (err or "").lower() or "no server running" in (out or "").lower():
             return {"panes": [], "running": False}
         raise RuntimeError(err.strip() or "tmux list-panes failed (rc=%d)" % rc)
+    args_by_pid, kids = _process_tree()
     panes = []
     for line in out.split("\n"):
         if not line.strip():
@@ -300,15 +366,21 @@ def m_tmux_list(_p):
         f = line.split("\t")
         if len(f) < 8:
             continue
+        pane_pid = _int(f[3])
+        claude_pid, claude_args = _find_claude(pane_pid, args_by_pid, kids)
         panes.append({
             "session": f[0],
             "window": _int(f[1]),
             "pane": _int(f[2]),
-            "pid": _int(f[3]),
+            "pid": pane_pid,
             "cwd": f[4],
             "command": f[5],
             "createdAt": _int(f[6]),
             "attached": f[7] not in ("", "0"),
+            # Resolved from the process subtree, not the pane's foreground command.
+            "claudePid": claude_pid,
+            "claudeArgs": claude_args,
+            "resumeId": _resume_id(claude_args) if claude_args else None,
         })
     return {"panes": panes, "running": True}
 
@@ -488,12 +560,205 @@ def m_telemetry(_p):
     }
 
 
+# transcripts ----------------------------------------------------------------
+#
+# Division of labour, deliberately: Python does what only it can do cheaply — walking
+# the tree, stat'ing, reading byte ranges, and filtering a multi-MB file down to the
+# few lines that matter. All parsing that affects what the user SEES is done in
+# TypeScript by @rcw/claude-core, the same code the on-host agent uses. Reimplementing
+# that here would make the cockpit render differently depending on the backend.
+
+# @rcw/claude-core caps its full-file scan at 80 MB because readTotalUsage() reads the
+# whole transcript into memory. This scan streams line by line and only two integers
+# cross the wire, so the memory argument doesn't apply — and long-running sessions do
+# exceed 80 MB in practice (a real one on the dev box is 202 MB, for which the hosted
+# edition silently reports 0 tokens). The cap here is only a runaway guard.
+MAX_SCAN_BYTES = 4 * 1024 * 1024 * 1024
+TODO_MARKERS = ("TaskCreate", "TaskUpdate", "TodoWrite")
+
+
+def _projects_root():
+    return os.path.join(os.path.expanduser("~"), ".claude", "projects")
+
+
+def m_sessions_scan(p):
+    """Stat every transcript. Cheap enough to call on every tick — no file contents."""
+    root = _projects_root()
+    now = time.time()
+    limit = int((p or {}).get("limit") or 300)
+    files = []
+    try:
+        dirs = os.listdir(root)
+    except Exception:
+        return {"root": root, "files": [], "now": int(now * 1000)}
+    for d in dirs:
+        dpath = os.path.join(root, d)
+        try:
+            names = os.listdir(dpath)
+        except Exception:
+            continue
+        for n in names:
+            if not n.endswith(".jsonl"):
+                continue
+            fpath = os.path.join(dpath, n)
+            try:
+                st = os.stat(fpath)
+            except Exception:
+                continue
+            files.append({
+                "path": fpath,
+                "id": n[:-6],
+                "dir": d,
+                "size": st.st_size,
+                "mtimeMs": int(st.st_mtime * 1000),
+                # Age is computed HERE, against the remote clock. The desktop must never
+                # compare a remote mtime with its own Date.now() — laptops sleep and
+                # drift, and the result is nonsense like "idle for -4 hours".
+                "ageMs": max(0, int((now - st.st_mtime) * 1000)),
+            })
+    files.sort(key=lambda f: f["mtimeMs"], reverse=True)
+    return {"root": root, "files": files[:limit], "now": int(now * 1000)}
+
+
+def m_transcript_head(p):
+    """First bytes of each named transcript. The head never changes, so the desktop
+    asks only for files it hasn't seen before."""
+    paths = (p or {}).get("paths") or []
+    nbytes = int((p or {}).get("bytes") or 16 * 1024)
+    out = {}
+    for path in paths[:200]:
+        out[path] = _read_text(path, nbytes)
+    return {"heads": out}
+
+
+def m_transcript_tail(p):
+    """Tail of a transcript, or the delta since a known offset.
+
+    Passing `fromOffset` (the size at the last read) returns only what was appended,
+    which is what makes watching a live session nearly free."""
+    path = (p or {}).get("path")
+    if not path:
+        raise ValueError("path required")
+    nbytes = int((p or {}).get("bytes") or 768 * 1024)
+    from_offset = (p or {}).get("fromOffset")
+    try:
+        size = os.path.getsize(path)
+    except Exception as exc:
+        raise RuntimeError("stat failed: %s" % exc)
+
+    truncated = False
+    if from_offset is not None:
+        start = int(from_offset)
+        if start > size:
+            # File shrank — rotated or rewritten. Fall back to a bounded tail and tell
+            # the desktop to discard what it had rather than splice mismatched halves.
+            truncated = True
+            start = max(0, size - nbytes)
+    else:
+        start = max(0, size - nbytes)
+
+    chunk = b""
+    if size > start:
+        try:
+            with open(path, "rb") as fh:
+                fh.seek(start)
+                chunk = fh.read(size - start)
+        except Exception as exc:
+            raise RuntimeError("read failed: %s" % exc)
+
+    # Drop a leading partial line whenever we started at a position we did NOT get from
+    # a previous read — i.e. a bounded tail, including the post-rotation fallback.
+    if start > 0 and (from_offset is None or truncated):
+        nl = chunk.find(b"\n")
+        chunk = chunk[nl + 1:] if nl >= 0 else b""
+        start += (nl + 1) if nl >= 0 else len(chunk)
+
+    # Trim to the last COMPLETE line and report the offset that lands on. Claude may be
+    # mid-write, and returning a half-written JSON line would make every delta parse
+    # produce a spurious failure. Offsets are byte offsets — decoding first and
+    # measuring the string would desync on any multi-byte character.
+    nl = chunk.rfind(b"\n")
+    if nl < 0:
+        chunk = b""
+    else:
+        chunk = chunk[:nl + 1]
+    offset = start + len(chunk)
+
+    return {
+        "text": chunk.decode("utf-8", "replace"),
+        "size": size,
+        "offset": offset,
+        "reset": truncated,
+    }
+
+
+def m_transcript_reduce(p):
+    """Full-file aggregation, done here because the alternative is shipping a 160 MB
+    transcript to compute two integers.
+
+    Token totals mirror @rcw/claude-core's sumUsage exactly (cumulative-absolute, cache
+    READS excluded as ~free) — that property is what makes the server-side usage ingest
+    idempotent. Todo lines are only FILTERED here; the event-sourced fold stays in
+    TypeScript so both editions build the same list."""
+    path = (p or {}).get("path")
+    if not path:
+        raise ValueError("path required")
+    try:
+        size = os.path.getsize(path)
+    except Exception as exc:
+        raise RuntimeError("stat failed: %s" % exc)
+    if size > MAX_SCAN_BYTES:
+        return {"tokensInput": 0, "tokensOutput": 0, "todoLines": [], "scanned": False, "size": size}
+
+    tokens_in = 0
+    tokens_out = 0
+    todo_lines = []
+    try:
+        with open(path, "rb") as fh:
+            for raw in fh:
+                try:
+                    line = raw.decode("utf-8", "replace")
+                except Exception:
+                    continue
+                if any(m in line for m in TODO_MARKERS):
+                    if len(todo_lines) < 4000:
+                        todo_lines.append(line.rstrip("\n"))
+                if "usage" not in line:
+                    continue
+                try:
+                    obj = json.loads(line)
+                except Exception:
+                    continue
+                msg = obj.get("message")
+                if not isinstance(msg, dict) or msg.get("role") != "assistant":
+                    continue
+                u = msg.get("usage")
+                if not isinstance(u, dict):
+                    continue
+                tokens_in += (u.get("input_tokens") or 0) + (u.get("cache_creation_input_tokens") or 0)
+                tokens_out += u.get("output_tokens") or 0
+    except Exception as exc:
+        raise RuntimeError("scan failed: %s" % exc)
+
+    return {
+        "tokensInput": tokens_in,
+        "tokensOutput": tokens_out,
+        "todoLines": todo_lines,
+        "scanned": True,
+        "size": size,
+    }
+
+
 METHODS = {
     "probe.ping": (m_ping, "fast"),
     "probe.info": (m_info, "fast"),
     "tmux.list": (m_tmux_list, "fast"),
     "tmux.capturePane": (m_tmux_capture, "slow"),
     "telemetry.sample": (m_telemetry, "slow"),
+    "sessions.scan": (m_sessions_scan, "slow"),
+    "transcript.head": (m_transcript_head, "slow"),
+    "transcript.tail": (m_transcript_tail, "slow"),
+    "transcript.reduce": (m_transcript_reduce, "slow"),
 }
 
 

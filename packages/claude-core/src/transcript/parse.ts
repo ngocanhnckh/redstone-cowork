@@ -370,7 +370,12 @@ export function parseLatestUsage(text: string): { contextTokens: number | null; 
       const u = obj.message?.usage;
       if (obj.message?.role !== "assistant" || !u) continue;
       const ctx = (u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0);
-      return { contextTokens: ctx > 0 ? ctx : null, model: obj.message?.model ?? null };
+      // Claude Code writes its own local notices as assistant turns with
+      // model "<synthetic>" and all-zero usage — e.g. "You've hit your session limit".
+      // Stopping at one of those loses the real context size AND puts "<synthetic>"
+      // in the UI where the model name belongs, so keep walking back to a real turn.
+      if (ctx <= 0) continue;
+      return { contextTokens: ctx, model: obj.message?.model ?? null };
     }
     return empty;
   } catch {
