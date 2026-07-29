@@ -542,7 +542,10 @@ def _mem_darwin():
 
 
 def _net_darwin():
-    rc, out, _ = run(["netstat", "-ib"], timeout=8)
+    # -n is load-bearing: without it netstat resolves names, and on a cold DNS/ARP
+    # cache that took 18s on a real Mac — long enough to blow the request timeout and
+    # make telemetry look broken. We only want byte counters; nothing needs a name.
+    rc, out, _ = run(["netstat", "-ibn"], timeout=8)
     if rc != 0:
         return (0, 0)
     rx = tx = 0

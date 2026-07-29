@@ -19,53 +19,71 @@ const storePath = (): string => path.join(app.getPath("userData"), "direct-mode.
 
 export type ModeChoice = ProviderMode | null;
 
-/** The user's explicit choice, if they've made one. */
-export function readChoice(): ModeChoice {
+type Stored = { mode: ProviderMode; auto?: boolean };
+
+function read(): Stored | null {
   try {
-    const raw = JSON.parse(fs.readFileSync(storePath(), "utf8")) as { mode?: string };
-    if (raw?.mode === "cloud" || raw?.mode === "direct") return raw.mode;
+    const raw = JSON.parse(fs.readFileSync(storePath(), "utf8")) as Stored;
+    if (raw?.mode === "cloud" || raw?.mode === "direct") return raw;
   } catch {
-    // never chosen
+    // not decided yet
   }
   return null;
 }
 
-export function writeChoice(mode: ModeChoice): void {
+/** The recorded backend, whether the user picked it or the app decided at first run. */
+export function readChoice(): ModeChoice {
+  return read()?.mode ?? null;
+}
+
+/** True when the recorded backend was decided FOR the user rather than by them. */
+export function wasAutoDecided(): boolean {
+  return read()?.auto === true;
+}
+
+export function writeChoice(mode: ModeChoice, auto = false): void {
   try {
     if (mode === null) { fs.rmSync(storePath(), { force: true }); return; }
-    fs.writeFileSync(storePath(), JSON.stringify({ mode }), "utf8");
+    fs.writeFileSync(storePath(), JSON.stringify({ mode, auto }), "utf8");
   } catch {
-    // best-effort; the resolved default still works
+    // best-effort; resolveMode() still returns something sensible
   }
 }
 
 /**
- * The effective mode.
+ * Decide the backend ONCE, at the first launch of a direct-capable build, and persist it.
  *
- * 1. An explicit choice always wins.
- * 2. A configured cowork server means cloud — never change an existing install's
- *    backend behind its back.
- * 3. Otherwise direct, which needs no account and no server.
+ * This exists because signing in and choosing a backend are different questions, and
+ * resolving them together got it wrong in both directions:
  *
- * Note the consequence of rule 2, which is easy to trip over: signing in makes the
- * app cloud-backed. That's right for an upgrade (the user already had a server and
- * expects it to keep working) but surprising on a fresh install, where signing in
- * with Jira silently lands you on the hosted backend with no hint direct mode exists.
- * `needsModeChoice()` exists so the UI can surface the decision instead of the app
- * making it quietly.
+ *   * A fresh install that signed in with Jira silently became cloud-backed — the user
+ *     wanted an account for the leaderboard, not to route their sessions through a
+ *     server. In the offline edition, signing in buys team features and nothing else.
+ *   * Deciding lazily on every call meant the answer could CHANGE under the user: sign
+ *     in and your sessions quietly move to a different backend.
+ *
+ * So: decide at first launch, when we can still tell the two cases apart, and never
+ * revisit it. An install that already had a cowork server is an upgrade and must keep
+ * working exactly as before; anything else is new and gets direct, which needs no
+ * account and no server.
  */
+export function initMode(): ProviderMode {
+  const existing = read();
+  if (existing) return existing.mode;
+  const mode: ProviderMode = api.isConfigured() ? "cloud" : "direct";
+  writeChoice(mode, true);
+  return mode;
+}
+
+/** The effective backend. Stable for the life of the install unless the user changes it. */
 export function resolveMode(): ProviderMode {
-  const choice = readChoice();
-  if (choice) return choice;
-  return api.isConfigured() ? "cloud" : "direct";
+  return readChoice() ?? (api.isConfigured() ? "cloud" : "direct");
 }
 
 /**
- * True when the app picked a backend on the user's behalf and they might not expect
- * it — i.e. they're signed in but have never chosen. The UI shows which backend is
- * active and how to change it, rather than leaving them to wonder why direct mode
- * appears to do nothing.
+ * True when the app chose the backend rather than the user. The UI says so, instead of
+ * leaving someone to wonder why direct mode appears to do nothing.
  */
 export function needsModeChoice(): boolean {
-  return readChoice() === null && api.isConfigured();
+  return wasAutoDecided();
 }

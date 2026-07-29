@@ -51,7 +51,10 @@ async function netTotals(): Promise<{ rx: number; tx: number } | null> {
       return { rx, tx };
     }
     if (platform() === "darwin") {
-      const { stdout } = await execFileP("netstat", ["-ib"], { timeout: 4000 });
+      // -n disables name resolution. Without it netstat took 18s on a cold DNS/ARP
+      // cache — well past this 4s timeout, so the sample silently returned nothing.
+      // Only byte counters are read here; no name is ever needed.
+      const { stdout } = await execFileP("netstat", ["-ibn"], { timeout: 4000 });
       const seen = new Set<string>();
       let rx = 0, tx = 0;
       for (const line of stdout.split("\n").slice(1)) {

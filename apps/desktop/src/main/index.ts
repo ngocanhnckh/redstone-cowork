@@ -8,7 +8,7 @@ import { saveConfig, loadConfig, clearConfig, saveDeviceTrust, loadDeviceTrust, 
 import * as api from "./api";
 import { getProvider, setPreferredMode } from "./providers";
 import { directAvailable, directProvider, listHosts, addHost, removeHost, setEnabled } from "./direct";
-import { needsModeChoice, readChoice, resolveMode, writeChoice } from "./mode";
+import { initMode, needsModeChoice, readChoice, resolveMode, writeChoice } from "./mode";
 import { getWorkspaceConfig, saveWorkspaceConfig, getSshHost, setSshHost, isLocalMachine, setServerHosts, warmSshMaster, setSshCustom, getSshCustom } from "./workspace";
 import { getHostIps, getHostConnections, getHostProcesses } from "./host-info";
 import { getCalendarEvents } from "./calendar";
@@ -362,9 +362,9 @@ async function refreshHostTargets(): Promise<void> {
 
 function startForwarding(): void {
   try {
-    // Resolve the backend BEFORE starting: creating the direct provider is what
-    // registers it, and the mode decides which one getProvider() hands back.
-    const mode = resolveMode();
+    // Decide the backend BEFORE starting. initMode() persists the decision on the very
+    // first launch so a later sign-in can't move the user's sessions to another backend.
+    const mode = initMode();
     if (mode === "direct") directProvider();
     setPreferredMode(mode);
     stopStream?.();
@@ -504,7 +504,8 @@ ipcMain.handle(IPC.directMode, () => ({
   implicit: needsModeChoice(),
 }));
 ipcMain.handle(IPC.directModeSet, (_e, a: { mode: "cloud" | "direct" | null }) => {
-  writeChoice(a.mode);
+  writeChoice(a.mode, false); // an explicit pick is never "decided for you"
+
   // Re-resolve immediately so the switch takes effect without a restart.
   startForwarding();
   return { mode: resolveMode() };

@@ -278,11 +278,38 @@ type State = {
   removeTag: (sessionId: string, tag: string) => Promise<void>;
 };
 
+/**
+ * The session you were last looking at, remembered across restarts.
+ *
+ * Claude keeps running in tmux while the app is closed, so reopening should put you
+ * back where you were rather than at whatever happens to be first in the queue.
+ * localStorage, like the widget layout — it's per-profile UI state, not session data.
+ */
+const LAST_FOCUS_KEY = "rcw.lastFocus";
+
+function readLastFocus(): string | null {
+  try {
+    const v = localStorage.getItem(LAST_FOCUS_KEY);
+    return v && v.trim() ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeLastFocus(id: string | null): void {
+  try {
+    if (id) localStorage.setItem(LAST_FOCUS_KEY, id);
+    else localStorage.removeItem(LAST_FOCUS_KEY);
+  } catch {
+    // best-effort; losing this only costs you the restored focus
+  }
+}
+
 export const useStore = create<State>((set, get) => ({
   sessions: [],
   queue: [],
   decisions: [],
-  focusId: null,
+  focusId: readLastFocus(),
   // Restore the last-used cockpit mode (HUD/Flow/Grid) across launches; a last-viewed
   // "history" reopens to Flow (it's a transient browse view, not a home).
   mode: ((): "flow" | "grid" | "history" | "hud" | "agency" => {
@@ -383,7 +410,10 @@ export const useStore = create<State>((set, get) => ({
           queue: q,
           sessions: s,
           decisions: d,
-          focusId: pickFocus(q, s, state.focusId),
+          // Before the first load lands, an empty list means "still connecting", not
+          // "your session is gone" — so hold the focus restored from the last run
+          // rather than letting pickFocus discard it before the session appears.
+          focusId: !state.hasLoaded && s.length === 0 ? state.focusId : pickFocus(q, s, state.focusId),
           pending: newPending,
           undeliveredSends: computeUndelivered(newPending, s, q, d, now),
           workingStale,
@@ -421,6 +451,7 @@ export const useStore = create<State>((set, get) => ({
   },
 
   setFocus: (id: string) => {
+    writeLastFocus(id);
     set({ focusId: id });
   },
 
