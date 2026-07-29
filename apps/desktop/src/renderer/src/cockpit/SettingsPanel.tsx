@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import DirectPanel from "./DirectPanel";
 import { useStore } from "../store";
 import AccessKeysManager from "./AccessKeysManager";
 import ClaudeConfigsManager from "./ClaudeConfigsManager";
@@ -535,6 +536,8 @@ export default function SettingsPanel() {
             </>
           )}
         </div>
+
+        <DirectPanel />
 
         <KeyboardShortcuts />
 

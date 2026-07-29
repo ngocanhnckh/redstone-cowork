@@ -30,6 +30,13 @@ import { requestCalendarPermission } from "./calendar-permission";
 if (!app.isPackaged) {
   app.setPath("userData", `${app.getPath("userData")}-dev`);
 }
+// Explicit override, for a scratch profile that can't disturb an existing install —
+// trying the direct edition, running two editions side by side, or reproducing a bug
+// against a clean slate. Same single-writer reasoning as above: a distinct directory
+// is the only safe way to run a second instance.
+if (process.env.RCW_USER_DATA_DIR) {
+  app.setPath("userData", process.env.RCW_USER_DATA_DIR);
+}
 import { getNetworkMap } from "./network";
 import { getWeather } from "./weather";
 import {

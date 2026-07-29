@@ -55,6 +55,13 @@ declare global {
       serverInstallCommand(): Promise<{ serverUrl: string; command: string; commandRelay: string }>;
       sshSetCustom(a: { address: string; host: string; opts: string[] }): Promise<{ ok: boolean }>;
       sshConfigHosts(): Promise<Array<{ alias: string; hostName: string | null; user: string | null; port: number | null }>>;
+      // Direct (agent-free) edition: backend selection + host book.
+      directMode(): Promise<{ mode: string; choice: string | null; available: boolean }>;
+      directModeSet(mode: "cloud" | "direct" | null): Promise<{ mode: string }>;
+      directHosts(): Promise<unknown[]>;
+      directHostAdd(a: { label?: string; sshHost: string; user?: string | null; port?: number | null; opts?: string[] }): Promise<unknown>;
+      directHostRemove(id: string): Promise<{ ok: boolean }>;
+      directHostEnable(id: string, enabled: boolean): Promise<unknown>;
       recentsList(): Promise<import("../../main/recents").Recent[]>;
       reportBug(message?: string): Promise<{ ok: boolean; to?: string; error?: string }>;
       logError(message: string): void;
