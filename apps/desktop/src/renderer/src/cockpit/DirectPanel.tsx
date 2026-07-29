@@ -25,7 +25,7 @@ type HostEntry = {
   lastError: string | null;
 };
 
-type ModeInfo = { mode: string; choice: string | null; available: boolean };
+type ModeInfo = { mode: string; choice: string | null; available: boolean; implicit: boolean };
 
 type Outcome = { kind: "idle" } | { kind: "busy"; label: string } | { kind: "ok"; msg: string } | { kind: "err"; msg: string };
 
@@ -157,9 +157,17 @@ export default function DirectPanel() {
       </div>
       <OutcomeLine state={modeOutcome} />
 
+      {info?.implicit && (
+        <p style={{ fontSize: 11.5, margin: "10px 2px 0", lineHeight: 1.55, color: "var(--text-soft)" }}>
+          You're signed in, so the cockpit is using the <strong>cowork server</strong>. Sessions come
+          from the agent installed on each machine. Choose Direct SSH above to connect over SSH instead.
+        </p>
+      )}
+
       <p className="faint" style={{ fontSize: 11, margin: "10px 2px 0", lineHeight: 1.55 }}>
         Direct SSH connects to each machine itself — no server in the path and no agent to install.
-        Signing in still enables the leaderboard, targets and shared machines.
+        New sessions start as plain tmux + claude. Signing in still enables the leaderboard,
+        targets and shared machines.
       </p>
 
       {isDirect && (

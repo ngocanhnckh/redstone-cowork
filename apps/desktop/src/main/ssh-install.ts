@@ -24,9 +24,10 @@ const shSingle = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
  *  pre-trusted in ~/.claude.json so claude doesn't block on the first-run trust prompt
  *  (where the session would be invisible to the cockpit). Base64-wrapped so no quoting of
  *  the folder path can break the shell. Prints `RCW_STARTED <session>` on success. */
-export function buildLaunchCommand(opts: { folder: string; danger: boolean; resumeId?: string }): string {
+export function buildLaunchCommand(opts: { folder: string; danger: boolean; resumeId?: string; direct?: boolean }): string {
   const resume = opts.resumeId ? `--resume ${opts.resumeId.replace(/[^a-zA-Z0-9-]/g, "")} ` : "";
   const flags = `${resume}${opts.danger ? "--dangerously-skip-permissions" : ""}`.trim();
+  if (opts.direct) return buildDirectLaunchCommand(opts.folder, flags);
   const script = [
     `set -e`,
     // Put the host's private Node/tmux/Claude (provisioned under ~/.redstone by install.sh,
@@ -52,6 +53,51 @@ export function buildLaunchCommand(opts: { folder: string; danger: boolean; resu
     `tmux new-session -d -s "$S" -c "$FOLDER" "$CLAUDECMD"`,
     `tmux set-option -t "$S" status off`,
     `tmux new-window -d -t "$S" "node $BIN poll --wrapper $ID --tmux $S:0"`,
+    `echo "RCW_STARTED $S"`,
+  ].join("\n");
+  const b64 = Buffer.from(script, "utf8").toString("base64");
+  return `echo ${b64} | base64 -d | bash -l`;
+}
+
+/**
+ * Start a Claude session with NO agent on the host — the direct (offline) edition.
+ *
+ * Same tmux session as the hosted path, and the same `rcw-<id>` naming so anything
+ * keyed off it keeps working. What's gone:
+ *   * the `command -v redstone` gate — there is no agent to require,
+ *   * `redstone hook` — no hooks; the cockpit reads the transcript instead,
+ *   * the hidden `node … poll` window — the desktop drives tmux over SSH itself,
+ *   * the agent self-update, which needed the bundle to exist.
+ *
+ * What stays: `~/.redstone/env` is still sourced if present, because a host onboarded
+ * by the hosted edition keeps its private Node/tmux/Claude there and those are the
+ * user's own toolchain, not an agent. Folder trust is still pre-accepted, or Claude
+ * blocks on the first-run prompt and the session never becomes visible.
+ *
+ * The host genuinely needs `tmux` and `claude`. That is not a middleman client — it
+ * is the thing you are running.
+ */
+function buildDirectLaunchCommand(folder: string, flags: string): string {
+  const script = [
+    `set -e`,
+    `[ -f "$HOME/.redstone/env" ] && . "$HOME/.redstone/env"`,
+    `FOLDER=${shSingle(folder)}`,
+    `mkdir -p "$FOLDER"`,
+    `python3 -c 'import json,os,sys; p=os.path.expanduser("~/.claude.json"); d=(json.load(open(p)) if os.path.exists(p) else {}); d.setdefault("projects",{}).setdefault(sys.argv[1],{})["hasTrustDialogAccepted"]=True; json.dump(d,open(p,"w"))' "$FOLDER" >/dev/null 2>&1 || true`,
+    `cd "$FOLDER"`,
+    // Name what's actually missing. "redstone not installed" was the old message and
+    // it would be a lie here — nothing needs installing, these are the user's tools.
+    `command -v tmux >/dev/null 2>&1 || { echo "RCW_ERR tmux is not installed on this host"; exit 3; }`,
+    `command -v claude >/dev/null 2>&1 || { echo "RCW_ERR claude is not installed on this host"; exit 3; }`,
+    `ID=$(od -An -N4 -tx1 /dev/urandom | tr -d ' \\n')`,
+    `S="rcw-$ID"`,
+    // Keep the pane open on a non-zero exit so a failure is readable instead of the
+    // window just vanishing.
+    `CLAUDECMD="RCW_WRAPPER_ID=$ID claude ${flags}; rcw_ec=\\$?; [ \\$rcw_ec -eq 0 ] || { echo; echo 'claude exited '\\$rcw_ec; echo 'press Enter to close'; read _; }"`,
+    `tmux new-session -d -s "$S" -c "$FOLDER" "$CLAUDECMD"`,
+    `tmux set-option -t "$S" status off`,
+    // OSC 52 so copying in tmux copy-mode reaches the cockpit terminal's clipboard.
+    `tmux set-option -t "$S" set-clipboard on`,
     `echo "RCW_STARTED $S"`,
   ].join("\n");
   const b64 = Buffer.from(script, "utf8").toString("base64");

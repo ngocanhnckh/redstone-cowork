@@ -56,7 +56,7 @@ declare global {
       sshSetCustom(a: { address: string; host: string; opts: string[] }): Promise<{ ok: boolean }>;
       sshConfigHosts(): Promise<Array<{ alias: string; hostName: string | null; user: string | null; port: number | null }>>;
       // Direct (agent-free) edition: backend selection + host book.
-      directMode(): Promise<{ mode: string; choice: string | null; available: boolean }>;
+      directMode(): Promise<{ mode: string; choice: string | null; available: boolean; implicit: boolean }>;
       directModeSet(mode: "cloud" | "direct" | null): Promise<{ mode: string }>;
       directHosts(): Promise<unknown[]>;
       directHostAdd(a: { label?: string; sshHost: string; user?: string | null; port?: number | null; opts?: string[] }): Promise<unknown>;

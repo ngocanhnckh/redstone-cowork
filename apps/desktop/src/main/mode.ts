@@ -46,9 +46,26 @@ export function writeChoice(mode: ModeChoice): void {
  * 2. A configured cowork server means cloud — never change an existing install's
  *    backend behind its back.
  * 3. Otherwise direct, which needs no account and no server.
+ *
+ * Note the consequence of rule 2, which is easy to trip over: signing in makes the
+ * app cloud-backed. That's right for an upgrade (the user already had a server and
+ * expects it to keep working) but surprising on a fresh install, where signing in
+ * with Jira silently lands you on the hosted backend with no hint direct mode exists.
+ * `needsModeChoice()` exists so the UI can surface the decision instead of the app
+ * making it quietly.
  */
 export function resolveMode(): ProviderMode {
   const choice = readChoice();
   if (choice) return choice;
   return api.isConfigured() ? "cloud" : "direct";
+}
+
+/**
+ * True when the app picked a backend on the user's behalf and they might not expect
+ * it — i.e. they're signed in but have never chosen. The UI shows which backend is
+ * active and how to change it, rather than leaving them to wonder why direct mode
+ * appears to do nothing.
+ */
+export function needsModeChoice(): boolean {
+  return readChoice() === null && api.isConfigured();
 }

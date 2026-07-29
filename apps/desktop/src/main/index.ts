@@ -8,7 +8,7 @@ import { saveConfig, loadConfig, clearConfig, saveDeviceTrust, loadDeviceTrust, 
 import * as api from "./api";
 import { getProvider, setPreferredMode } from "./providers";
 import { directAvailable, directProvider, listHosts, addHost, removeHost, setEnabled } from "./direct";
-import { readChoice, resolveMode, writeChoice } from "./mode";
+import { needsModeChoice, readChoice, resolveMode, writeChoice } from "./mode";
 import { getWorkspaceConfig, saveWorkspaceConfig, getSshHost, setSshHost, isLocalMachine, setServerHosts, warmSshMaster, setSshCustom, getSshCustom } from "./workspace";
 import { getHostIps, getHostConnections, getHostProcesses } from "./host-info";
 import { getCalendarEvents } from "./calendar";
@@ -455,7 +455,10 @@ ipcMain.handle(IPC.sessionLaunch, async (e, a: { host: string; sshUser: string; 
   };
   logEntry("info", `[launch] ${a.sshUser}@${a.host}:${a.sshPort || 22} folder=${a.folder} ` +
     `${a.resumeId ? `resume=${a.resumeId}` : "new"} danger=${a.danger} password=${a.password ? "provided" : "none"}`);
-  const command = buildLaunchCommand({ folder: a.folder, danger: a.danger, resumeId: a.resumeId });
+  // In direct mode there is no agent on the host, so launch the agent-free way:
+  // plain tmux + claude, no `redstone` gate and no poller window.
+  const direct = resolveMode() === "direct";
+  const command = buildLaunchCommand({ folder: a.folder, danger: a.danger, resumeId: a.resumeId, direct });
   const extraOpts = getSshCustom(a.host)?.opts ?? [];
   let res = await sshInstall({ host: a.host, sshUser: a.sshUser, sshPort: a.sshPort, command, password: a.password, extraOpts, successMarker: "RCW_STARTED" }, send);
   if (!res.ok && res.authFailed && !a.password) {
@@ -467,7 +470,9 @@ ipcMain.handle(IPC.sessionLaunch, async (e, a: { host: string; sshUser: string; 
   const rcwErr = res.output.match(/RCW_ERR\s+(.+)/);
   // Claim the wrapper for the signed-in agent so this session is owned by them once it
   // attaches (matters on servers several people share). Best-effort — never blocks launch.
-  if (m?.[2]) { try { await api.sessionClaim(m[2]); } catch { /* ignore */ } }
+  // Claiming is a cowork-server concept (it assigns ownership on a shared instance).
+  // There is no server to claim against in direct mode.
+  if (m?.[2] && !direct) { try { await api.sessionClaim(m[2]); } catch { /* ignore */ } }
   // Record the outcome either way — a launch that fails or stalls is exactly the case
   // a bug report needs to explain.
   const secs = Math.round((Date.now() - t0) / 100) / 10;
@@ -494,6 +499,9 @@ ipcMain.handle(IPC.directMode, () => ({
   mode: resolveMode(),
   choice: readChoice(),
   available: directAvailable(),
+  // The app chose for them — the UI says so rather than letting them wonder why
+  // direct mode seems to do nothing.
+  implicit: needsModeChoice(),
 }));
 ipcMain.handle(IPC.directModeSet, (_e, a: { mode: "cloud" | "direct" | null }) => {
   writeChoice(a.mode);
