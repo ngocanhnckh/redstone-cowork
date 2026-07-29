@@ -56,14 +56,6 @@ const CSS = `
   transition: background .15s, border-color .15s; }
 .yia-btn:hover:not(:disabled) { background:#e63b2e; border-color:#e63b2e; }
 .yia-btn:disabled { opacity:.4; cursor:not-allowed; }
-.yia-jira { width:100%; padding:11px 0; margin-top:12px; border-radius:9px; border:1px solid rgba(232,230,225,.4);
-  background: rgb(232 230 225 / .08); color:var(--text);
-  font-family:inherit; font-size:12px; font-weight:700; letter-spacing:.22em; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:9px;
-  transition: box-shadow .15s, background .15s; }
-.yia-jira:hover:not(:disabled) { background: rgb(232 230 225 / .16); }
-.yia-jira:disabled { opacity:.5; cursor:progress; }
-.yia-or { display:flex; align-items:center; gap:10px; margin:14px 0 2px; color: rgb(230 242 244 / .3); font-size:9px; letter-spacing:.3em; }
-.yia-or::before, .yia-or::after { content:""; flex:1; height:1px; background: rgba(232,230,225,.18); }
 .yia-alt { background:none; border:none; color: rgb(230 242 244 / .4); font-family:inherit; font-size:10px;
   letter-spacing:.18em; cursor:pointer; padding:4px 8px; }
 .yia-alt:hover { color: var(--text); }
@@ -85,7 +77,10 @@ function Corners() {
 
 export default function Login({ onConnected }: LoginProps) {
   const [serverUrl, setServerUrl] = useState("https://cowork.chatredstone.com");
-  const [enrollFace, setEnrollFace] = useState(true); // show the face scan + enroll by default
+  // Face enrollment moved to Settings ("Face sign-in"). Turning the camera on before a
+  // first-time user has typed anything asks for biometrics from someone who does not yet
+  // have an account — enrolling is a preference, not a credential.
+  const [showMore, setShowMore] = useState(false); // secondary sign-in methods, collapsed
   const [soundOn, setSoundOn] = useState(() => { try { return loadAppearance().sfxVolume > 0; } catch { return false; } });
   const [mode, setMode] = useState<Mode>("agency");
   const [redstoneOn, setRedstoneOn] = useState(false);
@@ -158,9 +153,10 @@ export default function Login({ onConnected }: LoginProps) {
   // face enrollment. Otherwise agency mode is a plain credential form — no camera,
   // so an agent with no face on file just signs in right away.
   useEffect(() => {
-    if (mode === "agency" && enrollFace && scan === "idle") void startScan();
-    if (!enrollFace && (mode === "agency" || mode === "redstone" || mode === "token")) { stopCam(); setScan("idle"); }
-  }, [mode, scan, enrollFace, startScan, stopCam]);
+    // Only face UNLOCK uses the camera, and that only exists once this device is
+    // already paired — i.e. never on a first-time sign-in.
+    if (mode === "agency" || mode === "redstone" || mode === "token") { stopCam(); setScan("idle"); }
+  }, [mode, stopCam]);
 
   const canSubmit =
     serverUrl.trim().length > 0 && !connecting &&
@@ -210,28 +206,12 @@ export default function Login({ onConnected }: LoginProps) {
     return () => clearTimeout(t);
   }, [mode, startScan, attemptFaceUnlock]);
 
-  // After a full login, silently enroll the live face so next time is face-only.
-  async function maybeEnrollFace(account: { username: string; displayName: string }) {
-    try {
-      if (!enrollFace) return; // opt-in only — otherwise we never touched the camera
-      const existing = await window.cowork.deviceTrust();
-      if (existing?.username === account.username) return; // already paired
-      if (!videoRef.current) return;
-      await loadFaceModels();
-      let descriptor: number[] | null = null;
-      for (let i = 0; i < 4 && !descriptor; i++) {
-        descriptor = await describeFace(videoRef.current);
-        if (!descriptor) await new Promise((r) => setTimeout(r, 350));
-      }
-      if (descriptor) await window.cowork.faceEnroll(descriptor, { username: account.username, displayName: account.displayName });
-    } catch { /* enrollment is best-effort — never blocks sign-in */ }
-  }
-
   // Run after any successful ACCOUNT login: opt-in camera enrollment, then trust this
   // device so the lock screen can face-match against an existing descriptor (e.g. one
   // an admin pre-enrolled from the agent's roster photo). Both are best-effort.
-  async function finishAuth(account: { username: string; displayName: string }) {
-    await maybeEnrollFace(account);
+  async function finishAuth(_account: { username: string; displayName: string }) {
+    // No face capture here any more — Settings › Face sign-in does that on request.
+    // Device trust still runs so that, once enrolled, this machine can face-unlock.
     try { await window.cowork.deviceTrustEstablish(); } catch { /* best-effort */ }
     stopCam();
     onConnected();
@@ -285,14 +265,6 @@ export default function Login({ onConnected }: LoginProps) {
     }
   }
 
-  const scanStatus: Record<ScanPhase, { text: string; color: string }> = {
-    idle: { text: "", color: CYAN },
-    acquiring: { text: "▲ ACQUIRING OPTICS…", color: CYAN },
-    scanning: { text: "SCANNING BIOMETRIC SIGNATURE…", color: CYAN },
-    locked: { text: "◈ IDENTITY CAPTURED — ENTER CREDENTIALS", color: "var(--text-soft)" },
-    denied: { text: "OPTICS OFFLINE — CREDENTIAL ACCESS ONLY", color: "var(--text-soft)" },
-  };
-
   return (
     <div data-app className="yia-root" style={{ background: "radial-gradient(ellipse 120% 90% at 50% 0%, #0a1620 0%, #050a10 55%, #030608 100%)" }}>
       <style>{CSS}</style>
@@ -344,23 +316,25 @@ export default function Login({ onConnected }: LoginProps) {
           </div>
         ) : (
         <form onSubmit={handleSubmit}>
-          {mode === "agency" ? (
+          {/* Primary path: one button. Everything a first-time agent needs is their
+              Jira account, so that's the whole form until they ask for more. */}
+          {jiraOn && mode === "agency" && (
             <>
-              {enrollFace && (
-                <>
-                  <div className="yia-scanwrap">
-                    <span className="yia-ring" />
-                    <span className="yia-ring2" style={{ animationPlayState: scan === "scanning" || scan === "acquiring" ? "running" : "paused" }} />
-                    <div className="yia-cam">
-                      {scan === "denied" ? <span style={{ fontSize: 34, opacity: 0.35 }}>⎚</span> : <video ref={videoRef} muted playsInline />}
-                      {scan === "scanning" && <span className="yia-sweepline" />}
-                    </div>
-                  </div>
-                  <div className="yia-status" style={{ color: scanStatus[scan].color }}>{scanStatus[scan].text}</div>
-                </>
+              <button type="button" className="yia-btn" style={{ marginTop: 22 }} onClick={signInWithJira} disabled={jiraBusy || connecting}>
+                {jiraBusy ? "AWAITING JIRA CONSENT…" : "SIGN IN WITH JIRA"}
+              </button>
+              {!showMore && (
+                <div style={{ textAlign: "center", marginTop: 14 }}>
+                  <button type="button" className="yia-alt" onClick={() => setShowMore(true)}>OTHER WAYS TO SIGN IN</button>
+                </div>
               )}
+            </>
+          )}
 
-              <div style={{ marginBottom: 13 }}>
+          {mode === "agency" ? (
+            (!jiraOn || showMore) && (
+            <>
+              <div style={{ marginBottom: 13, marginTop: 22 }}>
                 <label className="yia-label">AGENT ID</label>
                 {/* eslint-disable-next-line jsx-a11y/no-autofocus */}
                 <input className="yia-input" autoFocus value={username} onChange={(e) => setUsername(e.target.value)}
@@ -371,11 +345,8 @@ export default function Login({ onConnected }: LoginProps) {
                 <input className="yia-input" type="password" value={password} onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••••••" autoComplete="current-password" />
               </div>
-              <label style={{ display: "flex", gap: 7, alignItems: "center", marginTop: 12, fontSize: 10.5, letterSpacing: ".12em", color: "rgb(230 242 244 / .5)", cursor: "pointer" }}>
-                <input type="checkbox" checked={enrollFace} onChange={(e) => setEnrollFace(e.target.checked)} />
-                ENABLE FACE SIGN-IN ON THIS DEVICE (scans your face after login)
-              </label>
             </>
+            )
           ) : mode === "redstone" ? (
             <>
               <div style={{ margin: "22px 0 13px" }}>
@@ -402,30 +373,29 @@ export default function Login({ onConnected }: LoginProps) {
             </div>
           )}
 
-          <button type="submit" className="yia-btn" disabled={!canSubmit}>
-            {connecting ? "AUTHENTICATING…" : mode === "agency" ? "REQUEST ACCESS" : mode === "redstone" ? "SIGN IN" : "CONNECT"}
-          </button>
-
-          {jiraOn && mode === "agency" && (
-            <>
-              <div className="yia-or">OR</div>
-              <button type="button" className="yia-jira" onClick={signInWithJira} disabled={jiraBusy || connecting}>
-                <svg width="15" height="15" viewBox="0 0 32 32" fill="currentColor" aria-hidden><path d="M16.4 2 6 12.4a1.4 1.4 0 0 0 0 2l10.4 10.4 4-4-8.4-8.4 4-4a1.4 1.4 0 0 0 0-2L16.4 2z"/><path opacity=".7" d="M25.6 11.2 20 16.8l-4 4 5.6 5.6a1.4 1.4 0 0 0 2 0l6-6a1.4 1.4 0 0 0 0-2l-4-7.2z"/></svg>
-                {jiraBusy ? "AWAITING JIRA CONSENT…" : "SIGN IN WITH JIRA"}
-              </button>
-            </>
+          {(mode !== "agency" || !jiraOn || showMore) && (
+            <button type="submit" className="yia-btn" disabled={!canSubmit}>
+              {connecting ? "AUTHENTICATING…" : mode === "agency" ? "REQUEST ACCESS" : mode === "redstone" ? "SIGN IN" : "CONNECT"}
+            </button>
           )}
-          {error && <p className="yia-err">⚠ {error}</p>}
+          {error && <p className="yia-err">{error}</p>}
         </form>
         )}
 
+        {/* Alternate methods stay out of the way until asked for. Face unlock is the one
+            exception: if this device is already paired it belongs to a RETURNING user,
+            which is not the first-run case this screen is optimised for. */}
         <div style={{ display: "flex", justifyContent: "center", gap: 4, marginTop: 16, flexWrap: "wrap" }}>
-          {deviceAgent && mode !== "faceunlock" && <button className="yia-alt" onClick={() => { setMode("faceunlock"); setError(""); }}>◈ FACE UNLOCK</button>}
-          {accountsOn && mode !== "agency" && <button className="yia-alt" onClick={() => { setMode("agency"); setError(""); }}>AGENT LOGIN</button>}
-          {redstoneOn && mode !== "redstone" && <button className="yia-alt" onClick={() => { setMode("redstone"); setError(""); }}>REDSTONE SSO</button>}
-          {mode !== "token" && <button className="yia-alt" onClick={() => { setMode("token"); setError(""); }}>INSTANCE TOKEN</button>}
-          <button className="yia-alt" onClick={toggleSound}>{soundOn ? "SOUND ON" : "SOUND OFF"}</button>
-          <button className="yia-alt" onClick={() => setShowServer((s) => !s)}>{showServer ? "HIDE SERVER" : "SERVER"}</button>
+          {deviceAgent && mode !== "faceunlock" && <button className="yia-alt" onClick={() => { setMode("faceunlock"); setError(""); }}>FACE UNLOCK</button>}
+          {(showMore || !jiraOn || mode !== "agency") && (
+            <>
+              {accountsOn && mode !== "agency" && <button className="yia-alt" onClick={() => { setMode("agency"); setError(""); }}>AGENT LOGIN</button>}
+              {redstoneOn && mode !== "redstone" && <button className="yia-alt" onClick={() => { setMode("redstone"); setError(""); }}>REDSTONE SSO</button>}
+              {mode !== "token" && <button className="yia-alt" onClick={() => { setMode("token"); setError(""); }}>INSTANCE TOKEN</button>}
+              <button className="yia-alt" onClick={toggleSound}>{soundOn ? "SOUND ON" : "SOUND OFF"}</button>
+              <button className="yia-alt" onClick={() => setShowServer((s) => !s)}>{showServer ? "HIDE SERVER" : "SERVER"}</button>
+            </>
+          )}
         </div>
       </div>
     </div>

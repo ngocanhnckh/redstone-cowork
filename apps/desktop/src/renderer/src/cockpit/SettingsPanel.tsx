@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import DirectPanel from "./DirectPanel";
+import FaceSignInSetup from "./FaceSignInSetup";
 import { useStore } from "../store";
 import AccessKeysManager from "./AccessKeysManager";
 import ClaudeConfigsManager from "./ClaudeConfigsManager";
@@ -536,6 +537,8 @@ export default function SettingsPanel() {
             </>
           )}
         </div>
+
+        <FaceSignInSetup />
 
         <DirectPanel />
 
