@@ -8,7 +8,8 @@
   "scripts": {
     "build": "turbo run build",
     "test": "turbo run test",
-    "lint": "turbo run lint"
+    "lint": "turbo run lint",
+    "test:force": "turbo run test --force"
   },
   "devDependencies": {
     "turbo": "^2.5.0",

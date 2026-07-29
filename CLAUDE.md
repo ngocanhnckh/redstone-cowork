@@ -24,6 +24,7 @@ Self-hosted AI cowork assistant: the user is the CEO of a simulated company; a v
 ## Conventions
 
 - pnpm + Turborepo; Node 22; tests = Vitest (`pnpm test` at root). API tests use supertest against `AppModule` with in-memory stores.
+- **Bypass the test cache with `pnpm test:force`, never `pnpm test -- --force`.** The `--` form forwards the flag to every package's script (`vitest run --force`), and vitest rejects it as an unknown option — which reads as a failing test suite rather than a bad invocation. A green `pnpm test` that finishes in milliseconds is a cache replay, not a run.
 - Ports: uncommon by design — web `47100`, API `47101` (host side, from `.env`); containers use 3000/3001 internally.
 - Conventional commits (`feat(api): …`, `fix(deploy): …`); TDD for behavior-bearing code (failing test first).
 - Instance auth: single `INSTANCE_TOKEN` bearer; `/health` is the only public endpoint.
