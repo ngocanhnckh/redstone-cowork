@@ -32,12 +32,20 @@ export function setPreferredMode(m: ProviderMode | null): void {
  * Order: an explicit user choice wins; otherwise a configured cowork server means
  * cloud (the status quo — an existing install must never silently change backend);
  * otherwise direct, if it's available.
+ *
+ * Falling back to cloud when direct hasn't registered keeps the hosted path the
+ * safe default: worst case you get "not configured", never a silently dead cockpit.
  */
 export function getProvider(): SessionProvider {
   if (preferred === "direct" && directProvider) return directProvider;
   if (preferred === "cloud") return cloudProvider;
   if (api.isConfigured()) return cloudProvider;
   return directProvider ?? cloudProvider;
+}
+
+/** True when the active backend is the agent-free SSH engine. */
+export function isDirect(): boolean {
+  return getProvider().mode === "direct";
 }
 
 /**

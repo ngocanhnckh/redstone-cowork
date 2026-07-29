@@ -68,6 +68,10 @@ export type DirectSession = {
   paneTarget: string | null;
   live: boolean;
   transcriptPath: string;
+  /** The tool call Claude is blocked on, if any — feeds buildDecisionSpec(). */
+  pendingToolId: string | null;
+  pendingToolName: string | null;
+  pendingToolInput: unknown;
 };
 
 type Cached = {
@@ -225,6 +229,11 @@ export class SessionEngine {
       paneTarget: f.paneTarget,
       live: f.live,
       transcriptPath: f.path,
+      // Only surface the tool once it's actually blocking — a running Bash command is
+      // a pending tool call too, and would otherwise raise a spurious card.
+      pendingToolId: blocked ? state.pendingTool?.id ?? null : null,
+      pendingToolName: blocked ? state.pendingTool?.name ?? null : null,
+      pendingToolInput: blocked ? state.pendingTool?.input ?? null : null,
     };
   }
 }

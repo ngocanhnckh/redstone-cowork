@@ -6,7 +6,9 @@ import { existsSync, writeFileSync, renameSync } from "node:fs";
 import { hostname, release } from "node:os";
 import { saveConfig, loadConfig, clearConfig, saveDeviceTrust, loadDeviceTrust, getDeviceSecret, clearDeviceTrust } from "./config";
 import * as api from "./api";
-import { getProvider } from "./providers";
+import { getProvider, setPreferredMode } from "./providers";
+import { directAvailable, directProvider, listHosts, addHost, removeHost, setEnabled } from "./direct";
+import { readChoice, resolveMode, writeChoice } from "./mode";
 import { getWorkspaceConfig, saveWorkspaceConfig, getSshHost, setSshHost, isLocalMachine, setServerHosts, warmSshMaster, setSshCustom, getSshCustom } from "./workspace";
 import { getHostIps, getHostConnections, getHostProcesses } from "./host-info";
 import { getCalendarEvents } from "./calendar";
@@ -353,6 +355,11 @@ async function refreshHostTargets(): Promise<void> {
 
 function startForwarding(): void {
   try {
+    // Resolve the backend BEFORE starting: creating the direct provider is what
+    // registers it, and the mode decides which one getProvider() hands back.
+    const mode = resolveMode();
+    if (mode === "direct") directProvider();
+    setPreferredMode(mode);
     stopStream?.();
     stopStream = getProvider().start((e) => {
       for (const w of BrowserWindow.getAllWindows()) {
@@ -472,6 +479,25 @@ ipcMain.handle(IPC.sshSetCustom, (_e, a: { address: string; host: string; opts: 
   return { ok: true };
 });
 ipcMain.handle(IPC.sshConfigHosts, () => listSshConfigHosts());
+
+// --- Direct (agent-free) edition -------------------------------------------
+// The host book and backend selection. Read-only handlers stay available in cloud
+// mode too, so Settings can show what direct mode WOULD connect to before switching.
+ipcMain.handle(IPC.directMode, () => ({
+  mode: resolveMode(),
+  choice: readChoice(),
+  available: directAvailable(),
+}));
+ipcMain.handle(IPC.directModeSet, (_e, a: { mode: "cloud" | "direct" | null }) => {
+  writeChoice(a.mode);
+  // Re-resolve immediately so the switch takes effect without a restart.
+  startForwarding();
+  return { mode: resolveMode() };
+});
+ipcMain.handle(IPC.directHosts, () => listHosts());
+ipcMain.handle(IPC.directHostAdd, (_e, a: { label?: string; sshHost: string; user?: string | null; port?: number | null; opts?: string[] }) => addHost(a));
+ipcMain.handle(IPC.directHostRemove, (_e, a: { id: string }) => { removeHost(a.id); return { ok: true }; });
+ipcMain.handle(IPC.directHostEnable, (_e, a: { id: string; enabled: boolean }) => setEnabled(a.id, a.enabled));
 ipcMain.on(IPC.logError, (_e, a: { message: string }) => logEntry("renderer", a?.message ?? ""));
 ipcMain.handle(IPC.reportBug, async (_e, a: { message?: string }) => {
   try {
@@ -1673,7 +1699,9 @@ app.whenReady().then(async () => {
   }
 
   createWindow();
-  if (loadConfig()?.hasToken) {
+  // Direct mode has no cowork token by design, so the old hasToken gate would leave the
+  // cockpit permanently empty. Start whenever EITHER backend has something to talk to.
+  if (loadConfig()?.hasToken || (resolveMode() === "direct" && directAvailable())) {
     startForwarding();
   }
   primeCalendarPermission();

@@ -35,6 +35,13 @@ export const IPC = {
   hostAgentId: "api:host:agent-id",
   serverInstallCommand: "api:servers:install-command",
   sshConfigHosts: "api:ssh:config-hosts",
+  // Direct (agent-free) edition: host book + backend selection.
+  directMode: "direct:mode:get",
+  directModeSet: "direct:mode:set",
+  directHosts: "direct:hosts:list",
+  directHostAdd: "direct:hosts:add",
+  directHostRemove: "direct:hosts:remove",
+  directHostEnable: "direct:hosts:enable",
   reportBug: "app:report-bug",
   logError: "app:log-error",
   recentsList: "app:recents:list",
