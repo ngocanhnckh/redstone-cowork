@@ -3,6 +3,7 @@ import { ProbeChannel } from "./probe-channel";
 import { SessionEngine, type DirectSession } from "./session-engine";
 import { enabledHosts, recordStatus, sshTargetOf, type HostEntry } from "./host-book";
 import { flushNow, intentFor, isResolved, markResolved, prune, updateIntent } from "./store";
+import { btabsFor, deliver, instructDelivery, interruptDelivery, modeDelivery, type Delivery } from "./deliver";
 import type { ProviderEvent, Resolution, SessionProvider } from "../providers/provider";
 import type { ServerHost } from "../workspace";
 
@@ -278,29 +279,88 @@ export class DirectProvider implements SessionProvider {
     return { ok: true };
   }
 
-  // --- writes: require tmux delivery (next phase) --------------------------
+  // --- writes: typed into Claude over tmux ---------------------------------
 
-  private notYet(what: string): never {
-    // Explicit rejection, not a silent no-op: a control that looks like it worked and
-    // didn't is worse than one that says it can't. The cockpit surfaces this inline.
-    throw new Error(`${what} needs tmux delivery, which isn't wired up in direct mode yet`);
+  /**
+   * Resolve a session to the channel and pane that can receive keystrokes.
+   *
+   * Every failure here is explicit. A control that appears to work and silently does
+   * nothing is worse than one that reports why it can't — the cockpit shows these
+   * inline at the button that was pressed.
+   */
+  private targetFor(sessionId: string): { channel: ProbeChannel; target: string; session: DirectSession } {
+    const session = this.sessions.find((s) => s.id === sessionId);
+    if (!session) throw new Error("That session is no longer being tracked.");
+    if (!session.live || !session.paneTarget) {
+      throw new Error("That session has no running Claude to type into — resume it first.");
+    }
+    const rt = [...this.runtimes.values()].find((r) => r.host.label === session.machine);
+    if (!rt) throw new Error(`No connection to ${session.machine}.`);
+    if (rt.channel.getState() !== "ready") {
+      throw new Error(`Not connected to ${session.machine} right now.`);
+    }
+    return { channel: rt.channel, target: session.paneTarget, session };
   }
 
-  async instruct(): Promise<unknown> { return this.notYet("Sending a message"); }
-  async interrupt(): Promise<unknown> { return this.notYet("Interrupting"); }
-  async switchMode(): Promise<unknown> { return this.notYet("Switching mode"); }
+  private async send(sessionId: string, delivery: Delivery): Promise<{ ok: true }> {
+    const { channel, target } = this.targetFor(sessionId);
+    const res = await deliver(channel, target, delivery);
+    if (!res.ok) {
+      const failed = res.steps.find((s) => !s.ok);
+      throw new Error(failed?.err ? `tmux: ${failed.err}` : "Delivery failed part-way.");
+    }
+    // The transcript won't reflect this for a moment; nudge a refresh so the UI moves.
+    setTimeout(() => void this.refresh(), 600);
+    return { ok: true };
+  }
 
-  async resolveDecision(id: string, _resolution: Resolution): Promise<unknown> {
+  async instruct(sessionId: string, text: string): Promise<unknown> {
+    return this.send(sessionId, instructDelivery(text));
+  }
+
+  async interrupt(sessionId: string, text?: string): Promise<unknown> {
+    return this.send(sessionId, interruptDelivery(text));
+  }
+
+  async switchMode(sessionId: string, mode: string): Promise<unknown> {
+    const { session } = this.targetFor(sessionId);
+    const btabs = btabsFor(session.permissionMode, mode);
+    if (btabs === null) {
+      // Already there (or not a real mode) — nothing to type, and saying "switched"
+      // would be a lie the UI then renders as a state change.
+      return { switched: false, mode };
+    }
+    await this.send(sessionId, modeDelivery(btabs));
+    return { switched: true, btabs, mode };
+  }
+
+  async resolveDecision(id: string, resolution: Resolution): Promise<unknown> {
     const d = this.decisions.find((x) => x.id === id);
-    // A completion card is just an acknowledgement — nothing is typed into Claude, so
-    // it can be dismissed today.
-    if (d && d.kind === "completion") {
+    if (!d) throw new Error("That prompt is no longer waiting.");
+
+    // A completion card is only an acknowledgement — nothing is typed into Claude.
+    if (d.kind === "completion" || d.kind === "notification") {
       markResolved(id);
       this.decisions = this.decisions.filter((x) => x.id !== id);
       this.onEvent?.({ type: "poll.tick", payload: null });
       return { ok: true };
     }
-    return this.notYet("Answering");
+
+    await this.send(d.sessionId, {
+      kind: d.kind,
+      options: d.options,
+      resolution: {
+        choice: resolution.choice ?? null,
+        answers: resolution.answers ?? null,
+        custom: resolution.custom ?? null,
+      },
+      body: d.body as Delivery["body"],
+    });
+    // Suppress the card until the host reflects the answer, or the next 4s tick would
+    // re-raise the same question from a transcript that hasn't caught up yet.
+    markResolved(id);
+    this.decisions = this.decisions.filter((x) => x.id !== id);
+    return { ok: true };
   }
 }
 

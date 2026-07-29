@@ -396,6 +396,73 @@ def m_tmux_capture(p):
     return {"text": out}
 
 
+def m_tmux_deliver(p):
+    """Execute a whole keystroke sequence against a pane, sleeping BETWEEN steps here.
+
+    The sleeps must happen on this side. Claude Code's TUI runs a paste-detection
+    heuristic, and an Enter that arrives inside the settle window is swallowed into the
+    paste instead of submitting — the "typed but not sent" bug. Doing the waits on the
+    desktop would add a network round trip to every gap and make the timing depend on
+    link latency, which is exactly how that bug comes back.
+
+    Steps are either {"k": [...send-keys args]} or {"paste": "<text>"}; each may carry
+    "settleMs" to wait afterwards. Execution stops at the first failure so a broken step
+    can't be followed by an Enter that submits something half-typed.
+    """
+    target = (p or {}).get("target")
+    steps = (p or {}).get("steps") or []
+    if not target:
+        raise ValueError("target required")
+
+    results = []
+    for step in steps:
+        if not isinstance(step, dict):
+            continue
+        ok = True
+        err = None
+        if "paste" in step:
+            ok, err = _paste(target, step.get("paste") or "", step.get("buffer") or "rcw")
+        else:
+            keys = step.get("k") or []
+            # `--` so literal text beginning with "-" isn't parsed as a flag.
+            argv = ["tmux", "send-keys", "-t", target]
+            argv += (["-l", "--", keys[1]] if len(keys) >= 2 and keys[0] == "-l" else list(keys))
+            rc, _out, e = run(argv, timeout=20)
+            ok = rc == 0
+            err = (e or "").strip() or None
+        results.append({"ok": ok, "err": err})
+        if not ok:
+            break
+        settle = step.get("settleMs")
+        if settle:
+            time.sleep(min(5000, int(settle)) / 1000.0)
+
+    return {"steps": results, "ok": all(r["ok"] for r in results) and len(results) == len(steps)}
+
+
+def _paste(target, text, buffer_name):
+    """Bracketed paste: load a tmux buffer from STDIN, then paste it with -p.
+
+    Bytes on stdin means no temp file on the remote (the hosted poller writes one), and
+    bracketed paste is atomic and explicitly delimited, so the following Enter always
+    submits rather than being absorbed. Needs tmux >= 3.0 for `load-buffer -`; the
+    handshake advertises caps.loadBufferStdin so the caller can fall back to chunked
+    send-keys on older tmux.
+    """
+    try:
+        data = text.encode("utf-8")
+    except Exception as exc:
+        return (False, "encode failed: %s" % exc)
+    rc, _out, err = run(["tmux", "load-buffer", "-b", buffer_name, "-"], timeout=20, stdin_bytes=data)
+    if rc != 0:
+        return (False, (err or "").strip() or "load-buffer failed")
+    # -p = bracketed paste, -d = delete the buffer afterwards so it doesn't linger.
+    rc, _out, err = run(["tmux", "paste-buffer", "-p", "-d", "-b", buffer_name, "-t", target], timeout=20)
+    if rc != 0:
+        return (False, (err or "").strip() or "paste-buffer failed")
+    return (True, None)
+
+
 def _int(s):
     try:
         return int(s)
@@ -754,6 +821,9 @@ METHODS = {
     "probe.info": (m_info, "fast"),
     "tmux.list": (m_tmux_list, "fast"),
     "tmux.capturePane": (m_tmux_capture, "slow"),
+    # Delivery is "slow" because it sleeps between keystrokes; running it on the reader
+    # thread would stall every other request for the duration of a paste.
+    "tmux.deliver": (m_tmux_deliver, "slow"),
     "telemetry.sample": (m_telemetry, "slow"),
     "sessions.scan": (m_sessions_scan, "slow"),
     "transcript.head": (m_transcript_head, "slow"),

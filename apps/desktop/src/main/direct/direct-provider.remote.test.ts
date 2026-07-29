@@ -98,10 +98,28 @@ maybe(`DirectProvider (remote: ${HOST ?? "unset"})`, () => {
     await provider.removeTag(target, "review");
   }, 60_000);
 
-  it("refuses to type into Claude rather than silently doing nothing", async () => {
-    // Delivery lands in the next phase. A control that appears to work and doesn't is
-    // worse than one that says it can't yet — the cockpit shows this inline.
-    await expect(provider.instruct()).rejects.toThrow(/tmux delivery/);
-    await expect(provider.interrupt()).rejects.toThrow(/tmux delivery/);
+  it("explains why it can't type into a session with no running Claude", async () => {
+    // A dead session can still be inspected, but there's nothing to receive keystrokes.
+    // The message must say so — a control that fails silently is worse than one that
+    // reports why, and the cockpit renders this inline at the button.
+    const sessions = (await provider.getSessions()) as Array<{ id: string; live: boolean }>;
+    const dead = sessions.find((s) => !s.live);
+    if (!dead) return; // every session happens to be live right now
+    await expect(provider.instruct(dead.id, "hi")).rejects.toThrow(/no running Claude/i);
   });
+
+  it("rejects an unknown session rather than pretending to send", async () => {
+    await expect(provider.instruct("not-a-session", "hi")).rejects.toThrow(/no longer being tracked/i);
+  });
+
+  it("treats a no-op mode switch as not switched", async () => {
+    const sessions = (await provider.getSessions()) as Array<{ id: string; live: boolean; permissionMode: string | null }>;
+    const live = sessions.find((s) => s.live);
+    if (!live) return;
+    // Switching to the mode it's already in types nothing; claiming "switched" would
+    // be a lie the UI renders as a state change.
+    const current = live.permissionMode ?? "default";
+    const r = (await provider.switchMode(live.id, current)) as { switched: boolean };
+    expect(r.switched).toBe(false);
+  }, 60_000);
 });
